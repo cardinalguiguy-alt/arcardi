@@ -4282,7 +4282,11 @@ function townHash2(x, y) {
   n ^= n >>> 13; n = Math.imul(n, 0x5bd1e995); n ^= n >>> 15;
   return (n >>> 0) / 4294967295;
 }
-function townNoise(x, y, per, salt) {
+/* ⚠️ 2026-09-25 (phase 4) — EXPORTÉE, INCHANGÉE : `eau.js` lit le MÊME champ
+   (la largeur du haut-fond, `TOWN_SHELF_*`) au pixel, pour que l'anse que la
+   carte élargit soit celle où la cuisson pose sa plage. Une seconde copie du
+   bruit dériverait au premier réglage (§8 de CLAUDE.md). */
+export function townNoise(x, y, per, salt) {
   const gx = Math.floor(x / per), gy = Math.floor(y / per);
   const fx = x / per - gx, fy = y / per - gy;
   const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);

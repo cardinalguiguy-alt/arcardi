@@ -679,7 +679,15 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   MOYENNE des transitions et accusait à tort tout pavage correct (l'intérieur d'une pierre ne
   change pas d'une colonne à l'autre, un joint change beaucoup — la moyenne est tirée vers le
   bas). *Un banc de rendu se vérifie aussi.*
-- **`tools/render-eau.mjs` — 16 contrôles, 16/16 (435 ; 14 à l'origine, 2 ajoutés au 436, chapitre 4 bis élargi aux deux axes au 440).** L'eau de Valley Town et sa berge :
+- **`tools/render-eau.mjs` — 17 contrôles, 17/17 (2026-09-25, phase 4).** ⚠️ **Il mesure l'eau CUITE
+  (`eau.js`)** : il la cuit d'un bloc avant de peindre (le jeu la cuit par tranches et ne la dessine
+  qu'une fois finie — sans cet appel, il mesurait le repli de la 436). La continuité se lit désormais
+  dans le MASQUE de l'eau (le détecteur « bleu dominant » prenait les galets de l'étang clair pour des
+  trous) ; l'étang, clair par décision, garde « la profondeur se voit » (seuil 15) et le **port** reçoit
+  le contrôle du bleu profond (large L < 70 et 45 d'écart au bord), **falsifié** le jour de son écriture
+  (rampe plate : la première écriture passait encore, l'écume et le sable éclaircissant le bord à eux
+  seuls) ; l'écart-type exigé passe de 16 à 10 (le grain au hasard sur toute la surface était la trame
+  que DESSIN.md interdit). Historique : 16 contrôles au 440. L'eau de Valley Town et sa berge :
   l'étang du parc dans son décor, **la même scène quatre minutes plus tard**, le lac du sud, et
   les **seize configurations de coins** à toutes les profondeurs, hors décor. Il appelle
   `A.drawTownWaterTile` / `A.drawTownShoreTile`, c'est-à-dire les fonctions du jeu.

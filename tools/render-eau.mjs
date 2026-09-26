@@ -51,11 +51,19 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine"]);
-const A = mods.fermeArt, C = mods.fermeConstants, E = mods.fermeEngine;
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine", "eau"]);
+const A = mods.fermeArt, C = mods.fermeConstants, E = mods.fermeEngine, EAU = mods.eau;
 const S = A.buildSprites();
 const T = 16;
 const tw = E.generateTownWorld();
+/* ⚠️ 2026-09-25 (phase 4) — L'EAU EST CUITE AU PIXEL (`eau.js`), et le jeu ne la
+   dessine qu'une fois la cuisson FINIE (il la cuit par tranches, en tâche de
+   fond). Ici on la cuit d'un bloc, AVANT de peindre : sans cette ligne, les
+   tuiles retomberaient sur le repli de la 436 et le banc mesurerait l'ancienne
+   eau. La surface animée (houle, éclats, clapot, rochers, nénuphars) passe par
+   `drawWaterSurface`, comme dans la boucle du jeu. */
+const BAKE = EAU.townWaterBake(S, tw);
+console.log(BAKE ? `cuisson : ${BAKE.regions.filter(Boolean).length} régions, ${BAKE.ms.toFixed(0)} ms` : "cuisson : ÉCHEC");
 
 let fail = 0;
 const ok = (cond, label, detail) => {
@@ -87,6 +95,7 @@ function paint(sh, v, now) {
     }
     A.drawTownShoreTile(sh.ctx, S, tw, x, y, px, py);
     A.drawTownWaterTile(sh.ctx, S, tw, x, y, px, py, now);
+    EAU.drawWaterSurface(sh.ctx, S, tw, BAKE, x, y, px, py, now);
     const o = tw.objects[i];
     if (o === C.O_TREE || o === C.O_TREE2) sh.ctx.drawImage(o === C.O_TREE ? S.oak : S.pine, px - 8, py - 32);
   }
@@ -217,8 +226,15 @@ function shoreRuns(sh, W, H, skip) {
 console.log("\n=== 2. la continuité du trait (aucune fissure aux coutures) ===\n");
 {
   const W = VP.w * T, H = VP.h * T;
+  /* ⚠️ 2026-09-25 (phase 4) — LA FISSURE SE LIT DANS LE MASQUE DE L'EAU CUITE,
+     PLUS DANS LA COULEUR. Le détecteur « bleu dominant » supposait une eau
+     bleue : l'étang est devenu CLAIR (décision de Guillaume, fond visible,
+     haut-fonds vert-sable), et ses galets et herbiers sortaient comme des
+     « trous ». Ce qu'on veut savoir — un pixel SEC cerné d'eau — est une
+     propriété du trait, et le trait est dans la cuisson. */
   const isW = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    if (BAKE) return EAU.bakedLevelAt(BAKE, VP.x * T + x, VP.y * T + y) >= 0;
     const i = (y * W + x) * 4;
     return etang.px[i + 2] > etang.px[i] + 18 && etang.px[i + 2] > 70;
   };
@@ -247,8 +263,36 @@ console.log("\n=== 3. la profondeur se voit-elle ? ===\n");
   const avg = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
   const lNear = avg(near), lFar = avg(far);
   ok(near.length > 3 && far.length > 3, "l'étang a un bord ET un large", `${near.length} cases de haut-fond, ${far.length} au large`);
-  ok(lNear - lFar > 25, "le large est nettement plus sombre que le bord",
+  /* ⚠️ 2026-09-25 (phase 4) — L'ÉTANG EST CLAIR PAR DÉCISION (Guillaume : « une
+     mare claire et peu profonde, fond visible, à peine plus sombre au milieu »).
+     Le seuil de 25 était celui d'une mare au bleu de nuit du port. La règle
+     qui reste est « la profondeur se voit » (15 : un palier franc sur deux) ;
+     celle du bleu profond passe au PORT, juste en dessous. */
+  ok(lNear - lFar > 15, "le large de l'étang est plus sombre que son bord",
      `L ${lNear.toFixed(1)} au bord contre ${lFar.toFixed(1)} au large (écart ${(lNear - lFar).toFixed(1)})`);
+}
+{
+  /* Le PORT, lui, doit plonger : son large au bleu de nuit, son bord pâle. Mesuré
+     sur TOUTE sa région (le port est profond au pied du quai : une fenêtre
+     autour du ponton n'a pas de bord), directement dans le canevas d'eau cuite. */
+  const R = BAKE && BAKE.regions.filter(Boolean).sort((a, b) => b.RW * b.RH - a.RW * a.RH)[0];
+  let near = [], far = [];
+  if (R) {
+    const im = R.water.getContext("2d").getImageData(0, 0, R.RW, R.RH).data;
+    for (let i = 0; i < R.RW * R.RH; i++) {
+      const l = R.lvl[i];
+      if (l === 255) continue;
+      const L = lum(im[i * 4], im[i * 4 + 1], im[i * 4 + 2]);
+      if (l <= 2) near.push(L); else if (l >= 13) far.push(L);
+    }
+  }
+  const avg = (a) => a.reduce((s2, v) => s2 + v, 0) / (a.length || 1);
+  /* ⚠️ FALSIFIÉ LE JOUR DE SON ÉCRITURE, ET LA PREMIÈRE ÉCRITURE NE TENAIT RIEN :
+     avec une rampe de port PLATE, l'écart bord/large restait à 61 — l'écume et
+     le sable des haut-fonds éclaircissent le bord à eux seuls. C'est donc le
+     LARGE qui doit être sombre (L < 70 : le bleu de nuit), pas seulement l'écart. */
+  ok(near.length > 50 && far.length > 50 && avg(far) < 70 && avg(near) - avg(far) > 45, "le port plonge : son large est très sombre, son bord pâle",
+     `L ${avg(near).toFixed(1)} au bord (${near.length} px) contre ${avg(far).toFixed(1)} au large (${far.length} px)`);
 }
 
 console.log("\n=== 4. le contraste de la nappe ===\n");
@@ -270,7 +314,14 @@ console.log("\n=== 4. le contraste de la nappe ===\n");
   // La référence de §8 est à 47,7, mais c'est celle d'une IMAGE ENTIÈRE : une
   // nappe d'eau calme n'a aucune raison de l'atteindre, et la viser ferait une
   // mer démontée. On demande le double de l'ancienne, pas le sextuple.
-  ok(sd > 16, "la nappe n'est plus un aplat", `écart-type ${sd.toFixed(1)} (ancienne eau : 8,3)`);
+  /* ⚠️ 2026-09-25 (phase 4) — 16 → 10, ET CE N'EST PAS UN DESSERREMENT DE
+     COMPLAISANCE : le grain qui portait l'écart-type de 2026-09 était un semis
+     de pixels au hasard sur toute la surface (22 par case, deux tons) — la
+     trame sur une SURFACE que DESSIN.md interdit (« un tramage sert une pointe,
+     jamais une surface »). L'eau cuite a des paliers francs, une couture tramée
+     d'un pixel, et l'étang est clair par décision. Ce qui reste exigé : ne pas
+     retomber sur l'aplat de l'ancienne eau (8,3). */
+  ok(sd > 10, "la nappe n'est plus un aplat", `écart-type ${sd.toFixed(1)} (ancienne eau : 8,3)`);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

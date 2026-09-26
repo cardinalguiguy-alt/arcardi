@@ -1,4 +1,46 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-25
+
+## 2026-09-25 (nuit) — PHASE 4 : SOLS ET EAU
+
+Huit décisions, « reco partout » (Guillaume). Tout vu en jeu (échafaudage local, 524×714 : port de jour
+et de nuit, étang, passe, belvédère, place pendant un fondu de zoom sous la pluie).
+- **L'eau est CUITE AU PIXEL** (`eau.js`, module pur) : une région par plan d'eau, deux canevas (berge,
+  eau — l'alpha du second EST le masque des reflets). Profondeur = distance euclidienne exacte à la rive
+  MEUBLE (un quai n'est pas un haut-fond), lissée puis éclairée d'en haut à gauche (cuvette, pas cible),
+  en seize paliers FRANCS à couture tramée d'un pixel (le langage des lampes). La cuisson se fait par
+  tranches de 4 ms par image dès le montage (la carte de la ville est tirée avec les sprites) ; l'eau par
+  case de la 436 reste le repli tant qu'elle n'est pas finie.
+- **Une eau par plan d'eau** : l'étang CLAIR (fond visible, galets, herbiers), le port qui plonge au bleu
+  de nuit, la PASSE ensablée (turquoise sur sable, bancs par plaques, rides), des PLAGES dans les anses que
+  la carte élargit (même bruit que `TOWN_SHELF_VAR`), jamais au pied d'un quai.
+- **Reflets** : arbres, décors debout, joueurs, habitants, rejoués EN MIROIR par leur propre dessin
+  (entrée `rx` de `pushE`), teintés, découpés par l'eau, ondulés ; axe abaissé de la hauteur du quai. Nuit :
+  colonne de lumière brisée sous chaque lampe au bord de l'eau (et la torche portée), éclats de lune sur
+  les crêtes. Éclats de soleil sur les crêtes de la houle (fin du « tiret par case »), courant du fleuve,
+  clapot au pied du quai.
+- **Quai** : parement qui plonge dans l'eau, ligne de flottaison, anneaux, une échelle, enrochement aux
+  bouts ; ponton sur pieux avec tête de tablier et ombre à l'est. Contre la pierre l'eau vient droite (fin
+  du « bruit » au pied du quai).
+- **La houle devient deux trains** (rapide à la rive, lent au large, décision verrouillée du 2026-09-01) :
+  une période par case cisaillait la phase — les carrés de 16 px revenaient par la vague.
+- **Gazon** : les taches ont quitté le pavé de 64 px (fin de la période) pour des plaques SÈCHES et DRUES à
+  l'échelle du monde (isocontour de la rive), usure au bord des allées, verdure près de l'eau, semis rares
+  (trèfle, pâquerettes, cailloux, une taupinière).
+- **Sentiers et dallages** : gravier et terre battue à CONTOUR LIBRE (plus de marches de case), la terre
+  battue a son pavé (fin de la tuile de 16 px de la ferme — le carré beige du §13), gravier et terre se
+  mêlent par le contour, bordure de pavés posés en travers entre deux revêtements durs, le meuble déborde
+  en semis sur la pierre.
+- **Murs de soutènement** : chaperon, chaînes d'angle, contreforts, barbacanes, mousse, lierre, fougères,
+  touffes qui retombent ; chaperon qui tourne sur les côtés ; l'ombre au pied (peinte sous le mur, elle
+  était recouverte depuis le 447) est posée par la case du bas.
+- **Pluie (retour de Guillaume sur la phase 3)** : le rideau se retirait à chaque image d'un fondu de zoom
+  (compte lié à la surface visible) — gouttes rangées en fractions d'écran, compte ajusté à la marge,
+  pixels calés sur l'écran ; même chose pour la neige. Impacts ×3, en RONDS sur l'eau.
+- Menu dev : arrêt « 🦆 Valley Town — l'étang du parc ».
+⚠️ **Pas fait** : bittes d'amarrage ; reflets des ponts, du navire, des fenêtres ; « chemins de désir »
+(l'usure suit les allées, pas les trajets réels) ; reflet de la torche et éclats de lune jamais regardés
+de près. ⚠️ **Coût** : ≈ 9 Mo de canevas neufs (17 retenus), cuisson ≈ 0,4 s de calcul étalé ; mesuré
+sur Mac : 2,4 ms/image au port de jour, 2,65 de nuit, 1,4 sur la place. **Rien vu sur iPad.**
 
 ## 2026-09-25 (fin de journée) — PHASE 3 : LA LUMIÈRE
 
@@ -116,7 +158,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 1 | Échelle unique — **livrée le 2026-09-25, RÈGLE CHANGÉE en cours de route** (Guillaume : « je veux pas de perte de qualité » ; mesuré, les références Gemini sont des peintures sans grille de pixels, les ramener à la grille d'art détruisait du détail). Les trois monuments passent en `grid: "screen"` : une image par cran de zoom, fabriquée depuis la référence d'origine (`tools/lib-mip.mjs`, Lanczos-3 prémultiplié) et posée à 1 px d'image = 1 px d'écran, sans lissage (`drawScreenExactBitmap`). Mesuré : 1,5 à 4,2 fois plus de détail qu'avant, 100 % des pixels exacts en jeu hors surimpressions voulues (halo, embase, pigeons). Escalier détouré et herbes hautes : déjà à 1:1 d'art, conformes. ⚠️ Reste vrai : le monument est plus FIN que le décor en gros pixels (prix accepté). | fondation posée |
 | ✅ | 2 | Correctifs sans parti pris — **livrée le 2026-09-25** (récit juste au-dessus) : détourage du tribunal refait (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit, noms en police pixel avec priorité et fondu (personnages + cartes), lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne, couture verte du fondu de zoom, dix étals différents | fait |
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
-| ⬜ | 4 | Sols et eau : paliers de profondeur, bord de quai, reflets, rampe de l'étang, sable, période du gazon, dallages et leurs jonctions, murs de soutènement | le tapis sous tout le reste, avant de recomposer |
+| ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ⬜ | 5 | Faune : canards, poissons, papillons, chats, mouettes, lucioles — fonctions du temps, non diffusées (règle des pigeons, 433) | a besoin de l'eau (4) et de la nuit (3) |
 | ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |

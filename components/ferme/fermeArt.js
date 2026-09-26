@@ -25,6 +25,11 @@ import { PLANCHE } from "./planche";
 import { PLANCHE2 } from "./planche2";
 /* ZIP 467 — bloc d'escalier du tribunal, importé pixel pour pixel. */
 import { ESCALIER_ASSETS } from "./plancheEscaliers";
+/* 2026-09-25 (phase 4) — l'eau cuite au pixel (`eau.js`) : la tuile d'eau par
+   case ne reste ici qu'en REPLI, et le hachage des coins comme la rampe du port
+   n'ont plus qu'une seule écriture, là-bas. */
+import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau";
+import { townNoise } from "./fermeEngine";
 
 /* ---------------------------------------------------------------- PALETTE ---
    Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles
@@ -902,6 +907,16 @@ export function candySyrupColor(dp) {
    solaire), qui eux emploient `arc`/`stroke` : le rasteriseur les saute et le
    dit dans sa sortie.
    =========================================================================== */
+/* 2026-09-25 (phase 4) — LES TROIS HERBES DE VALLEY TOWN. La commune est celle
+   du 447 (lue dans la maquette de Guillaume, tenue par `verify-sol2`) ; la
+   SÈCHE (plaques au soleil, usure des bords d'allée) monte de six de
+   luminance et jaunit ; la DRUE (près de l'eau, à l'ombre des creux) descend
+   d'autant et bleuit. Des écarts qu'on sent sans les compter. */
+const GRASS_PAL = {
+  base: { base: "#5e9251", m1: "#619553", m2: "#5b8f4f", lit: ["#71a15f", "#78a663"], drk: ["#4f7d4a", "#4b7647"], fl: ["#bcd7b6", "#c9d7a4", "#bcd7b6"] },
+  dry:  { base: "#6b9853", m1: "#6f9b55", m2: "#679451", lit: ["#80a863", "#88ad67"], drk: ["#5b8249", "#577d46"], fl: ["#d9d6b0", "#e3dcaa", "#d9d6b0"] },
+  lush: { base: "#528a4c", m1: "#558d4e", m2: "#4f874a", lit: ["#62985a", "#699d5d"], drk: ["#437345", "#3f6e42"], fl: ["#bcd7c6", "#c2dcb8", "#bcd7c6"] },
+};
 export const SPR_T = 16;
 const SPR_PUPIL = "#16161a", SPR_OUT = "#241f1c";
 
@@ -933,47 +948,61 @@ export const TOWN_HOUSE_WINDOWS = [[16, 58], [70, 58]];
    ══════════════════════════════════════════════════════════════════════════ */
 export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   const RS = S && S.townRoad;
-  const rd = (RS && tw.road) ? tw.road[y * tw.w + x] : C.TR_NONE;
-  if (!rd) return false;
+  if (!RS || !tw.road) return false;
+  const rd = tw.road[y * tw.w + x];
   const T = SPR_T, sup = RS.sup, KW = RS.kerbW;
-  /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
-     les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
-     la différence avec l'ancienne tuile unique est là. */
-  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick
-              : (rd === C.TR_GRAVEL && RS.gravel) ? RS.gravel : RS.cobble;
   const ax = (x % sup) * T, ay = (y % sup) * T;
-  ctx.drawImage(atlas, ax, ay, T, T, px, py, T, T);
-  /* ⚠️ ZIP 437 — LE GRAVIER N'A PAS DE BORDURE, ET IL SORT DONC ICI, AVANT
-     ELLE. Un sentier de parc ou de rive n'est pas bordé de pierres de taille :
-     il se DISSOUT dans l'herbe. On lui pose à la place un semis qui se raréfie
-     vers le bord, du côté de ce qui n'est pas dallé — la même parade que la
-     berge du 435 (« la couverture est une densité, pas un demi-plan »), et pour
-     la même raison : un bord net est un second contour. */
-  if (rd === C.TR_GRAVEL) {
-    const soft = (xx, yy, dx, dy) => {
-      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return true;
-      const gg = tw.ground[yy * tw.w + xx];
-      return !(gg === C.G_PATH || gg === C.G_PATH_STONE || gg === C.G_BRIDGE);
-    };
-    for (let k = 0; k < 22; k++) {
-      const h = waterHash(x * 7 + k, y * 13 + 3);
-      const qx = h % T, qy = (h >>> 5) % T;
-      const nearN = qy < 4 && soft(x, y - 1), nearS = qy >= T - 4 && soft(x, y + 1);
-      const nearW = qx < 4 && soft(x - 1, y), nearE = qx >= T - 4 && soft(x + 1, y);
-      if (!(nearN || nearS || nearW || nearE)) continue;
-      if (((h >>> 11) & 3) === 0) continue;                     // le semis, pas un liseré
-      ctx.fillStyle = "rgba(94,110,62,0.55)";                   // l'herbe qui reprend
-      ctx.fillRect(px + qx, py + qy, 1, 1);
+  /* ⚠️⚠️ 2026-09-25 (phase 4) — LES SENTIERS MEUBLES (gravier, terre battue)
+     ONT UN CONTOUR LIBRE, et c'est le correctif des « chemins en marches de
+     case » de l'audit. Le 437 posait le gravier case par case, avec un semis
+     d'herbe au bord : un sentier qui descend en biais restait un ESCALIER de
+     16 px, semis ou pas. Il est désormais découpé par l'isocontour de la rive
+     (`contourMargin`, eau.js) sur un champ aux COINS (`townSoftField`) : la
+     case du sentier montre l'herbe hors du trait, et l'herbe voisine reçoit le
+     débord (`drawTownGrassTile`) — une diagonale de marches devient une
+     diagonale. Rien ne change à la collision : herbe et sentier se marchent.
+     ⚠️ La TERRE BATTUE (TR_NONE) passe par ici aussi : elle était peinte par
+     l'appelant avec la tuile de 16 px de la ferme. */
+  if (rd === C.TR_GRAVEL || rd === C.TR_NONE) {
+    const SP = S.townSoftPaths;
+    if (!SP || !RS.grass || !RS.gravel || !RS.dirt) {
+      if (rd === C.TR_NONE) return false;
+      ctx.drawImage(RS.gravel, ax, ay, T, T, px, py, T, T);
+      return true;
+    }
+    const F = townSoftField(tw), W1 = tw.w + 1, Cr = F.corner;
+    const cfg = (Cr[y * W1 + x] ? 1 : 0) | (Cr[y * W1 + x + 1] ? 2 : 0) | (Cr[(y + 1) * W1 + x + 1] ? 4 : 0) | (Cr[(y + 1) * W1 + x] ? 8 : 0);
+    const mine = rd === C.TR_GRAVEL ? 1 : 2;
+    if (cfg === 15) ctx.drawImage(mine === 1 ? RS.gravel : RS.dirt, ax, ay, T, T, px, py, T, T);
+    else {
+      ctx.drawImage(RS.grass, ax, ay, T, T, px, py, T, T);
+      if (cfg) {
+        const cell = (mine === 1 ? SP.gravel : SP.dirt)[(y % sup) * sup + (x % sup)][cfg][waterHash(x * 5 + 3, y * 9 + 1) & 1];
+        ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+      }
+    }
+    /* Deux sentiers meubles qui se touchent se MÊLENT par le même contour : les
+       coins que l'AUTRE matière emporte (`corner`, à la majorité) posent sa
+       découpe par-dessus — la couture gravier ↔ terre du §13 (au bord de
+       l'étang) devient une lisière courbe au lieu d'une droite de case. */
+    const other = mine === 1 ? 2 : 1;
+    const oc = (Cr[y * W1 + x] === other ? 1 : 0) | (Cr[y * W1 + x + 1] === other ? 2 : 0) | (Cr[(y + 1) * W1 + x + 1] === other ? 4 : 0) | (Cr[(y + 1) * W1 + x] === other ? 8 : 0);
+    if (oc) {
+      const cell = (other === 1 ? SP.gravel : SP.dirt)[(y % sup) * sup + (x % sup)][oc][waterHash(x * 7 + 1, y * 3 + 5) & 1];
+      ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
     }
     return true;
   }
+  /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
+     les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
+     la différence avec l'ancienne tuile unique est là. */
+  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick : RS.cobble;
+  ctx.drawImage(atlas, ax, ay, T, T, px, py, T, T);
 
   /* ⚠️ HORS-ZIP 2026-09-02 — LE MARQUAGE BLANC POINTILLÉ A ÉTÉ RETIRÉ, PAS
      REMPLACÉ. L'audit du même jour le pointait comme le détail le plus
      anachronique de la ville : une peinture routière du XXe siècle à
-     cinquante mètres du chaume et des guirlandes. Un caniveau central était
-     l'autre option ; on ne le construit pas — c'est un dessin de plus pour un
-     gain que les rebords en pierre de taille (ci-dessous) donnent déjà. */
+     cinquante mètres du chaume et des guirlandes. */
 
   /* LES REBORDS. ⚠️ ILS SE POSENT CONTRE CE QUI N'EST PAS DALLÉ, jamais contre
      « un autre revêtement ». Testé sur le revêtement, un carrefour où le goudron
@@ -992,7 +1021,99 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   if (!paved(x, y + 1)) ctx.drawImage(kb.s, ax, 0, T, KW, px, py + T - KW, T, KW);
   if (!paved(x - 1, y)) ctx.drawImage(kb.w, 0, ay, KW, T, px, py, KW, T);
   if (!paved(x + 1, y)) ctx.drawImage(kb.e, 0, ay, KW, T, px + T - KW, py, KW, T);
+  /* ⚠️⚠️ 2026-09-25 (phase 4) — DEUX REVÊTEMENTS DURS QUI SE RENCONTRENT
+     (goudron, pavés, briques) le font sur une BORDURE CONSTRUITE : une rangée
+     de pavés posés en travers, à plat, comme dans une vraie ville — un ouvrage
+     reste droit (DESSIN.md), mais il est BÂTI, pas tranché. Avant, les deux
+     pavés se coupaient net sur le bord de la case. Une seule des deux cases la
+     porte (celle du revêtement de rang le plus haut), sinon elle serait double.
+     Un revêtement MEUBLE voisin (gravier, terre), lui, déborde en semis sur la
+     pierre (`softSpill`), qui garde son arête. */
+  const F = S.townSoftPaths ? townSoftField(tw) : null;
+  for (const [dx, dy, side] of [[0, -1, "n"], [0, 1, "s"], [-1, 0, "w"], [1, 0, "e"]]) {
+    const xx = x + dx, yy = y + dy;
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h || tw.ground[yy * tw.w + xx] !== C.G_PATH) continue;
+    const nrd = tw.road[yy * tw.w + xx];
+    if (nrd === C.TR_GRAVEL || nrd === C.TR_NONE || nrd === rd || rd < nrd) continue;
+    borderCourse(ctx, x, y, px, py, side);
+  }
+  if (F) softSpill(ctx, tw, F, x, y, px, py, 3);
   return true;
+}
+/* La bordure construite entre deux revêtements durs : des pavés de granit de
+   trois pixels, joints d'un pixel, sur le côté `side` de la case. Le pas suit
+   le MONDE (x ou y absolus) : deux cases voisines la continuent sans couture. */
+function borderCourse(ctx, x, y, px, py, side) {
+  const T = SPR_T, W = 3;
+  const horiz = side === "n" || side === "s";
+  const bx = side === "e" ? px + T - W : px, by = side === "s" ? py + T - W : py;
+  for (let k = 0; k < T; k++) {
+    const w = (horiz ? x * T : y * T) + k;
+    const joint = w % 4 === 3;
+    const tone = waterHash((w / 4) | 0, horiz ? y * 3 + 1 : x * 3 + 2) & 1;
+    ctx.fillStyle = joint ? "#57544e" : tone ? "#8f8b83" : "#9a968d";
+    if (horiz) ctx.fillRect(bx + k, by, 1, W); else ctx.fillRect(bx, by + k, W, 1);
+    if (!joint) {
+      ctx.fillStyle = "#aca89f";                    // l'arête éclairée (nord-ouest) de chaque pavé
+      if (horiz) ctx.fillRect(bx + k, by, 1, 1); else ctx.fillRect(bx, by + k, 1, 1);
+    }
+  }
+}
+/* Le débord d'un revêtement MEUBLE sur son voisin : un semis de ses grains sur
+   trois pixels, qui se raréfie en s'éloignant (DESSIN.md : une usure a un bord
+   flou). `mine` : ce que la case est elle-même (1 gravier · 2 terre · 3 dur) —
+   un meuble ne déborde pas sur son semblable. */
+const SPILL_COL = { 1: ["#bcb29a", "#cdc6b3", "#a89e88"], 2: ["#aa9471", "#98815f", "#b8aa8f"] };
+function softSpill(ctx, tw, F, x, y, px, py, mine) {
+  const T = SPR_T;
+  for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    const xx = x + dx, yy = y + dy;
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) continue;
+    const k = F.kind[yy * tw.w + xx];
+    if (k !== 1 && k !== 2) continue;
+    if (k === mine) continue;
+    const pal = SPILL_COL[k];
+    for (let d = 0; d < 3; d++) for (let q = 0; q < T; q++) {
+      const hx = dx ? (dx < 0 ? d : T - 1 - d) : q, hy = dy ? (dy < 0 ? d : T - 1 - d) : q;
+      const h = waterHash(x * T + hx, y * T + hy);
+      if ((h % 100) >= 55 - d * 17) continue;
+      ctx.fillStyle = pal[(h >>> 8) % pal.length];
+      ctx.fillRect(px + hx, py + hy, 1, 1);
+    }
+  }
+}
+/* Le champ des sentiers meubles, aux COINS de la carte, et la nature de
+   chaque case (0 rien · 1 gravier · 2 terre · 3 dur). Un coin est « sentier »
+   dès qu'un sentier meuble le touche et qu'au moins deux de ses quatre cases
+   sont praticables-dallées : c'est ce qui garde entier un sentier d'une case de
+   large (ses bords ont deux cases sur quatre) tout en adoucissant ses marches
+   (le coin extérieur d'une marche n'en a qu'une). Une case dure compte : le
+   sentier vient jusqu'à la pierre, sans herbe entre les deux. */
+const SOFT_FIELDS = new WeakMap();
+export function townSoftField(tw) {
+  let F = SOFT_FIELDS.get(tw);
+  if (F) return F;
+  const W = tw.w, H = tw.h, W1 = W + 1, G = tw.ground, RD = tw.road;
+  const kind = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const g = G[i];
+    if (g === C.G_PATH) { const rd = RD ? RD[i] : C.TR_NONE; kind[i] = rd === C.TR_GRAVEL ? 1 : rd === C.TR_NONE ? 2 : 3; }
+    else if (g === C.G_PATH_STONE || g === C.G_TOWN_STAIR || g === C.G_BRIDGE) kind[i] = 3;
+  }
+  const corner = new Uint8Array(W1 * (H + 1));
+  for (let cy = 0; cy <= H; cy++) for (let cx = 0; cx <= W; cx++) {
+    let s1 = 0, s2 = 0, h = 0;
+    for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
+      const xx = cx + dx, yy = cy + dy;
+      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+      const k = kind[yy * W + xx];
+      if (k === 1) s1++; else if (k === 2) s2++; else if (k === 3) h++;
+    }
+    if (s1 + s2 >= 1 && s1 + s2 + h >= 2) corner[cy * W1 + cx] = s1 >= s2 ? 1 : 2;
+  }
+  F = { kind, corner };
+  SOFT_FIELDS.set(tw, F);
+  return F;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1083,6 +1204,8 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
   if (!st4(x, y + 1)) ctx.fillRect(px + ((h >>> 8) % 12), py + T - 2, 2, 1);
   ctx.fillStyle = "rgba(70,66,60,0.22)";
   if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 1, T, 1);
+  // 2026-09-25 (phase 4) : un sentier meuble voisin déborde sur la pierre de bord.
+  if (S.townSoftPaths && tw.road) softSpill(ctx, tw, townSoftField(tw), x, y, px, py, 3);
   return true;
 }
 
@@ -1113,6 +1236,117 @@ export function drawTownCliffFace(ctx, S, tw, x, y, px, py, fh) {
   ctx.drawImage(ST.cliff, (x % sup) * T, 0, T, h, px, py, T, h);
   if (fh > h) ctx.drawImage(ST.cliff, (x % sup) * T, ST.cliffH - 1, T, 1, px, py + h, T, fh - h);
   return true;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-25 (phase 4) — LE MUR DE SOUTÈNEMENT, BÂTI ET QUI A VÉCU.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décision de Guillaume (« reco partout ») : un chaperon, des retours qui
+   montrent l'épaisseur, des contreforts sur les grandes longueurs, des
+   barbacanes — et un mur qui a vécu : mousse, lierre, fougères, touffes de la
+   terrasse du dessus qui retombent. Avant : le parement de la planche, un
+   trait clair au sommet, et sur les côtés un trait sombre de 2 px — le mur
+   n'avait pas d'épaisseur.
+   ⚠️ TOUT EST TIRÉ D'UN HACHAGE DE LA CASE : deux joueurs voient le même lierre,
+   et rien ne bouge d'une image à l'autre. ⚠️ ET TOUT RESTE DANS LE PAREMENT :
+   la case d'en dessous est peinte APRÈS (la boucle du sol descend les rangées),
+   un débord y serait effacé — c'est d'ailleurs ce qui arrivait à l'ombre au
+   pied du 447, peinte sous le mur et recouverte aussitôt : elle est désormais
+   posée par la case du bas (`drawTownWallFoot`). */
+const WALL_COPE = ["#d2cdc1", "#bdb8ac", "#a39e93"];
+export function drawTownWallDress(ctx, tw, x, y, px, py, fh) {
+  const T = SPR_T, E = tw.elev, W = tw.w;
+  const faceAt = (xx) => xx >= 0 && xx < W && y + 1 < tw.h && tw.ground[y * W + xx] !== C.G_TOWN_STAIR
+    && Math.abs((E[y * W + xx] - E[(y + 1) * W + xx]) * C.TOWN_ELEV_PX - fh) < 1;
+  const top = py + T;                                   // première rangée du parement
+  // 1. Le chaperon : vu de dessus sur le bord de la terrasse, et son ombre portée sur le haut du parement.
+  for (let k = 0; k < 3; k++) { ctx.fillStyle = WALL_COPE[k]; ctx.fillRect(px, py + T - 3 + k, T, 1); }
+  ctx.fillStyle = "#8e8a80";
+  for (let q = 0; q < T; q++) if ((x * T + q) % 7 === 0) ctx.fillRect(px + q, py + T - 2, 1, 2);
+  ctx.fillStyle = "rgba(38,34,30,0.55)"; ctx.fillRect(px, top, T, 1);
+  const h1 = waterHash(x * 13 + 5, y * 7 + 1), h2 = waterHash(x * 29 + 3, y * 11 + 9), h3 = waterHash(x * 17 + 7, y * 23 + 4);
+  // 2. Les chaînes d'angle, aux extrémités : l'épaisseur du mur qui tourne.
+  for (const side of [-1, 1]) {
+    if (faceAt(x + side)) continue;
+    const bx = side < 0 ? px : px + T - 5;
+    for (let yy = 0, c = 0; yy < fh; yy += 4, c++) {
+      const w = c % 2 ? 3 : 5, x0 = side < 0 ? bx : bx + (5 - w);
+      ctx.fillStyle = "#a8a397"; ctx.fillRect(x0, top + yy + 1, w, Math.min(3, fh - yy - 1));
+      ctx.fillStyle = "#bcb7ab"; ctx.fillRect(x0, top + yy + 1, w, 1);
+      ctx.fillStyle = "#5d5953"; ctx.fillRect(x0, top + yy + 4 > top + fh ? top + fh - 1 : top + yy + 4, w, 1);
+    }
+  }
+  // 3. Un contrefort, sur un mur qui continue des deux côtés, une case sur six.
+  if (fh >= 16 && faceAt(x - 1) && faceAt(x + 1) && h1 % 6 === 0) {
+    ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(px + 5, top + 1, 6, fh - 1);
+    ctx.fillStyle = "rgba(255,255,255,0.20)"; ctx.fillRect(px + 5, top + 1, 1, fh - 1);
+    ctx.fillStyle = "rgba(0,0,0,0.24)"; ctx.fillRect(px + 10, top + 1, 1, fh - 1);
+    ctx.fillStyle = "#c8c3b7"; ctx.fillRect(px + 4, top, 8, 2);
+    ctx.fillStyle = "#9d988c"; ctx.fillRect(px + 4, top + 2, 8, 1);
+  }
+  // 4. Une barbacane, et la traînée d'humidité qu'elle laisse.
+  if (fh >= 14 && h2 % 3 === 0) {
+    const bx = px + 3 + (h2 >>> 4) % 9, by = top + fh - 8;
+    ctx.fillStyle = "#1f1d1a"; ctx.fillRect(bx, by, 2, 2);
+    ctx.fillStyle = "rgba(40,52,40,0.28)"; ctx.fillRect(bx, by + 2, 1, fh - 10 > 0 ? Math.min(6, top + fh - (by + 2)) : 0);
+  }
+  // 5. La mousse au pied : un semis qui s'éclaircit en montant.
+  const MOSS = ["#3f5a34", "#4b6a3c", "#56763f"];
+  for (let r = 0; r < Math.min(7, fh); r++) for (let q = 0; q < T; q++) {
+    const h = waterHash(x * T + q, y * 97 + r * 5);
+    if ((h % 100) >= (7 - r) * 5) continue;
+    ctx.fillStyle = MOSS[(h >>> 8) % 3]; ctx.fillRect(px + q, top + fh - 1 - r, 1, 1);
+  }
+  // 6. Le lierre, sur une case sur cinq : des tiges qui descendent du chaperon.
+  if (h3 % 5 === 0 && fh >= 10) {
+    const LEAF = ["#3e6b36", "#4f8544", "#6aa05a"];
+    const n = 2 + (h3 >>> 4) % 3;
+    for (let k = 0; k < n; k++) {
+      const hk = waterHash(x * 41 + k * 7, y * 53 + k);
+      let sx = px + 1 + (hk % 14);
+      const len = Math.min(fh - 3, 6 + (hk >>> 5) % 14);
+      for (let r = 0; r < len; r++) {
+        if (r > 0 && (waterHash(hk, r) & 7) === 0) sx += (waterHash(hk, r * 3) & 1) ? 1 : -1;
+        sx = Math.max(px, Math.min(px + T - 1, sx));
+        ctx.fillStyle = "#2f5a2c"; ctx.fillRect(sx, top + r, 1, 1);
+        if (r % 2 === 0) { ctx.fillStyle = LEAF[waterHash(hk, r + 50) % 3]; ctx.fillRect(Math.min(px + T - 2, sx + ((r / 2) % 2 ? 0 : -1)), top + r, 2, 2); }
+      }
+    }
+  }
+  // 7. Les touffes de la terrasse qui retombent sur le chaperon.
+  const g0 = tw.ground[y * W + x];
+  if (g0 === C.G_GRASS || g0 === C.G_TOWN_LAWN) for (let k = 0; k < 1 + (h2 >>> 9) % 3; k++) {
+    const hk = waterHash(x * 61 + k * 13, y * 37 + k * 5), tx = px + 1 + hk % 14, len = 2 + (hk >>> 6) % 3;
+    ctx.fillStyle = (hk >>> 9) & 1 ? "#5b8f4f" : "#4b7a44";
+    ctx.fillRect(tx, py + T - 3, 1, len); ctx.fillRect(tx + 1, py + T - 3, 1, Math.max(1, len - 1));
+  }
+  // 8. Une fougère au pied, de loin en loin.
+  if (fh >= 12 && h1 % 7 === 3) {
+    const fx = px + 2 + (h1 >>> 5) % 9, fy = top + fh - 5;
+    ctx.fillStyle = "#3f6f3a"; ctx.fillRect(fx + 2, fy + 1, 1, 4);
+    ctx.fillStyle = "#4f8544"; ctx.fillRect(fx, fy + 2, 2, 1); ctx.fillRect(fx + 3, fy + 2, 2, 1); ctx.fillRect(fx + 1, fy + 1, 1, 1); ctx.fillRect(fx + 3, fy + 1, 1, 1);
+    ctx.fillStyle = "#6aa05a"; ctx.fillRect(fx + 1, fy + 3, 1, 1); ctx.fillRect(fx + 4, fy + 3, 1, 1); ctx.fillRect(fx + 2, fy, 1, 1);
+  }
+}
+/* Le côté d'une terrasse (est ou ouest), vu de dessus : le chaperon qui tourne,
+   au lieu du trait sombre du 425 — c'est lui qui montre que le mur a une
+   ÉPAISSEUR. Joints au pas du monde, comme le chaperon de face. */
+export function drawTownWallSide(ctx, x, y, px, py, side) {
+  const T = SPR_T, bx = side < 0 ? px : px + T - 3;
+  const cols = side < 0 ? ["#a39e93", "#d2cdc1", "#bdb8ac"] : ["#bdb8ac", "#d2cdc1", "#a39e93"];
+  for (let k = 0; k < 3; k++) { ctx.fillStyle = cols[k]; ctx.fillRect(bx + k, py, 1, T); }
+  ctx.fillStyle = "#8e8a80";
+  for (let q = 0; q < T; q++) if ((y * T + q) % 7 === 0) ctx.fillRect(bx, py + q, 3, 1);
+}
+/* L'ombre que le mur porte au pied, sur la case d'EN DESSOUS (la lumière vient
+   du nord-ouest, par-dessus la terrasse). Posée par cette case-là, après son
+   sol : peinte sous le mur, elle était recouverte (voir plus haut). Sa hauteur
+   suit celle du mur (447 : un mur de 48 px et une marche de 10 ne portent pas
+   la même ombre), bornée à 5 px. */
+export function drawTownWallFoot(ctx, px, py, upPx) {
+  const T = SPR_T, oh = Math.max(2, Math.min(5, Math.round(upPx * 0.14)));
+  ctx.fillStyle = "rgba(20,26,16,0.34)"; ctx.fillRect(px, py, T, oh);
+  ctx.fillStyle = "rgba(20,26,16,0.16)"; ctx.fillRect(px, py + oh, T, Math.ceil(oh * 0.8));
 }
 
 /* ⚠️⚠️⚠️ ZIP 447 — LA CONTREMARCHE, ET ELLE N'EST PLUS UN MORCEAU DE FALAISE.
@@ -1278,11 +1512,9 @@ export function drawTownCourtStairBlock(ctx, S, dx = 0, dy = 0) {
    sortie, chez l'hôte comme chez l'invité, sans une seule diffusion. Les
    coordonnées sont celles du coin, pas de la case — c'est ce qui fait que les
    quatre cases qui se le partagent lisent la même réponse. */
-function waterHash(cx, cy) {
-  let n = (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663)) | 0;
-  n ^= n >>> 13; n = Math.imul(n, 0x5bd1e995); n ^= n >>> 15;
-  return n >>> 0;
-}
+/* ⚠️ 2026-09-25 (phase 4) : `waterHash` vit dans `eau.js` (importé en tête de
+   fichier) — la cuisson de l'eau au pixel tire les mêmes variantes, et deux
+   copies d'un hachage divergent en silence (§8 de CLAUDE.md). */
 function townIsWater(tw, x, y) {
   if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return false;   // hors carte = terre
   return tw.ground[y * tw.w + x] === C.G_WATER;
@@ -1308,69 +1540,18 @@ function townWaterCorner(tw, cx, cy) {
    ⚠️ ET IL NE DÉBORDE QUE SUR DE LA BERGE (`tw.shore`). Sans ce garde-fou,
    l'eau baverait sur la promenade en pierre du lac du sud et sur l'allée du
    parc : un quai a une arête franche, c'est ce qui le distingue d'une plage. */
-/* ══════════════════════════════════════════════════════════════════════════
-   2026-09-01 — LA HOULE. Voir le commentaire d'autorité au-dessus de
-   `TOWN_WATER_SWELL` (fermeConstants.js) pour la décision ; ce qui suit est
-   la mécanique. ⚠️ TOUT VIT ICI, PAS DANS LA CLOSURE DU RENDU (piège n°1 de
-   CLAUDE.md) : `drawTownWaterSwellBand` est une fonction de MODULE, appelable
-   par le banc de rendu comme n'importe quelle autre tuile d'eau. */
-const WATER_SWELL_ANGLE = C.TOWN_WATER_SWELL_ANGLE_DEG * Math.PI / 180;
-const WATER_SWELL_COS = Math.cos(WATER_SWELL_ANGLE);
-const WATER_SWELL_SIN = Math.sin(WATER_SWELL_ANGLE);
-const WATER_SWELL_WAVELEN = SPR_T * C.TOWN_WATER_SWELL_WAVELEN_CASES;
-/* ⚠️⚠️ CORRIGÉ EN SÉANCE, VU À L'ÉCRAN : le premier jet approximait la
-   diagonale par un escalier de 4 rectangles — des coins à angle droit, à
-   l'intérieur de la case ET entre deux cases voisines dès qu'elles tombaient
-   dans des paliers différents (« délimitations de zones... angles droits au
-   lieu de courbes », remarque de Guillaume). Un dégradé courbe une case, mais
-   PAS deux cases entre elles : deux tuiles pleines côte à côte, chacune
-   dégradée sur elle-même, recréaient la même arête droite un cran plus loin.
-   ⚠️⚠️⚠️ LA PARADE : un SEUL `ctx.createLinearGradient`, dont les arrêts sont
-   échantillonnés en COORDONNÉES MONDE (pas locales à la case) le long de
-   l'axe de propagation. La phase — donc l'opacité — est une fonction continue
-   du pixel monde ; deux cases voisines évaluent la MÊME fonction à des points
-   proches, donc se raccordent sans couture, exactement comme le fondu de
-   profondeur (`townWaterFadeTile`) recolle deux crans voisins. Le budget
-   « 4 fillRect max » est en fait dépassé dans le bon sens : UN SEUL par case,
-   le dégradé ne coûte rien de plus qu'un remplissage uni. */
-const WATER_SWELL_PEAK_O = 0.12;      // opacité de crête en « v1 » — validée à l'écran par Guillaume
-const WATER_SWELL_PEAK_PHASE = 0.62;  // où, dans le cycle, la crête est la plus nette (creux long, crête brève)
-const WATER_SWELL_SHARPNESS = 3;      // exposant du cosinus relevé : plus haut = crête plus étroite
-const WATER_SWELL_STOPS = 6;          // arrêts du dégradé — assez pour lisser une portion d'onde de 4 cases
-const WATER_SWELL_RADIUS = 15;        // demi-longueur du segment de dégradé, en px, centré sur la case
-function waterSwellOpacityAt(worldU, wavelen, period, now, ampScale) {
-  const phaseRaw = (worldU / wavelen) - (now / period);
-  const phase = ((phaseRaw % 1) + 1) % 1;
-  let ph = ((phase - WATER_SWELL_PEAK_PHASE + 1.5) % 1) - 0.5;   // recentré sur la crête, borné à [-0.5, 0.5)
-  const bump = Math.max(0, Math.cos(ph * Math.PI));                     // 0 sur la moitié du cycle, 1 à la crête
-  return WATER_SWELL_PEAK_O * ampScale * Math.pow(bump, WATER_SWELL_SHARPNESS);
-}
-function drawTownWaterSwellBand(ctx, x, y, px, py, now, d, depthsMax) {
-  const t = d / Math.max(1, depthsMax - 1);
-  const period = C.TOWN_WATER_SWELL_PERIOD_NEAR_MS
-    + (C.TOWN_WATER_SWELL_PERIOD_FAR_MS - C.TOWN_WATER_SWELL_PERIOD_NEAR_MS) * t;
-  const ampScale = 1 - C.TOWN_WATER_SWELL_AMP_FAR_CUT * t;
-  const cx = px + SPR_T / 2, cy = py + SPR_T / 2;
-  const baseU = cx * WATER_SWELL_COS + cy * WATER_SWELL_SIN;   // projection du centre sur l'axe de houle
-  const R = WATER_SWELL_RADIUS;
-  const grad = ctx.createLinearGradient(
-    cx - WATER_SWELL_COS * R, cy - WATER_SWELL_SIN * R,
-    cx + WATER_SWELL_COS * R, cy + WATER_SWELL_SIN * R
-  );
-  let anyVisible = false;
-  for (let i = 0; i <= WATER_SWELL_STOPS; i++) {
-    const tt = i / WATER_SWELL_STOPS;
-    const worldU = baseU + (tt * 2 - 1) * R;
-    const o = waterSwellOpacityAt(worldU, WATER_SWELL_WAVELEN, period, now, ampScale);
-    if (o > 0.003) anyVisible = true;
-    grad.addColorStop(tt, `rgba(220, 240, 246, ${o.toFixed(3)})`);
-  }
-  if (!anyVisible) return;
-  ctx.fillStyle = grad;
-  ctx.fillRect(px, py, SPR_T, SPR_T);
-}
+/* 2026-09-01 — LA HOULE : la mécanique (et son commentaire d'autorité) vit
+   dans `eau.js` depuis la phase 4 (`drawWaterSwellBand`) — la surface de l'eau
+   cuite l'appelle aussi, et une seule écriture de la vague vaut mieux que deux. */
 
 export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
+  /* ⚠️ 2026-09-25 (phase 4) — L'EAU EST CUITE AU PIXEL (`eau.js`) : la case ne
+     fait plus que recopier son carré de 16 px. Tout ce qui BOUGE (houle,
+     éclats, courant, clapot) et ce qui flotte (rochers, nénuphars) passe par
+     `drawWaterSurface`, APRÈS les reflets. La suite de cette fonction est le
+     REPLI (cuisson impossible) — le dessin du 436, intact. */
+  const bake = townWaterBakeReady(tw);   // jamais une cuisson au milieu d'une image : voir eau.js § 3
+  if (bake) return drawBakedWater(ctx, bake, x, y, px, py);
   const SW = S && S.townWater;
   if (!SW || !tw.depth) return false;
   const i = y * tw.w + x, isW = tw.ground[i] === C.G_WATER;
@@ -1483,7 +1664,7 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
         couture entre deux cases (voir le commentaire au-dessus de
         `drawTownWaterSwellBand`, corrigé en séance après une remarque de
         Guillaume sur des arêtes droites bien visibles à l'écran). */
-  if (C.TOWN_WATER_SWELL) drawTownWaterSwellBand(ctx, x, y, px, py, now, d, SW.depths);
+  if (C.TOWN_WATER_SWELL) drawWaterSwellBand(ctx, x * SPR_T, y * SPR_T, px, py, SPR_T, 0, now, d, SW.depths);
   /* 3. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
         reflets animés dans la même case font de la friture. Sa hauteur est
         dérivée de la case pour que deux cases voisines ne battent pas ensemble
@@ -1550,7 +1731,82 @@ export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
   if (!RS || !RS.grass) return false;
   const T = SPR_T, sup = RS.sup;
   ctx.drawImage(RS.grass, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  /* ⚠️ 2026-09-25 (phase 4) — LA PRAIRIE SEULE reçoit ses plaques et ses
+     semis : une pelouse de square (G_TOWN_LAWN) est tondue et arrosée, et le
+     lit d'une case d'eau ou le dessous d'une marche ne se voient pas. */
+  const GL = S.townGrassLayers, g0 = tw.ground[y * tw.w + x];
+  const W1 = tw.w + 1, pos = (y % sup) * sup + (x % sup);
+  const vr = waterHash(x * 5 + 3, y * 9 + 1) & 1;
+  if (GL && g0 === C.G_GRASS) {
+    const F = townGrassField(tw);
+    for (const [layer, arr] of [[GL.dry, F.dry], [GL.lush, F.lush]]) {
+      const c = arr[y * W1 + x] | (arr[y * W1 + x + 1] << 1) | (arr[(y + 1) * W1 + x + 1] << 2) | (arr[(y + 1) * W1 + x] << 3);
+      if (!c) continue;
+      const cell = layer[pos][c][vr];
+      ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+    }
+    // Les petites choses semées : une case sur quarante-cinq, jamais au bord d'une allée (l'herbe y est usée).
+    const h = waterHash(x * 89 + 7, y * 57 + 3);
+    if (h % 45 === 0 && !F.worn[y * tw.w + x]) {
+      const kind = (h >>> 8) % 50 === 0 ? 3 : (h >>> 8) % 3;       // une taupinière pour cinquante semis : un événement, pas un motif
+      const cell = GL.details[kind][(h >>> 13) % 3];
+      ctx.drawImage(cell.img, cell.sx, cell.sy, 8, 8, px + 1 + ((h >>> 16) % 7), py + 1 + ((h >>> 19) % 7), 8, 8);
+    }
+  }
+  /* Le DÉBORD d'un sentier meuble voisin (voir `drawTownRoadTile`) : sur la
+     prairie comme sur la pelouse d'un square, jamais ailleurs. */
+  const SP = S.townSoftPaths;
+  if (SP && (g0 === C.G_GRASS || g0 === C.G_TOWN_LAWN)) {
+    const Cr = townSoftField(tw).corner;
+    const a = Cr[y * W1 + x], b = Cr[y * W1 + x + 1], c2 = Cr[(y + 1) * W1 + x + 1], d = Cr[(y + 1) * W1 + x];
+    if (a || b || c2 || d) {
+      const cfg = (a ? 1 : 0) | (b ? 2 : 0) | (c2 ? 4 : 0) | (d ? 8 : 0);
+      const n1 = (a === 1) + (b === 1) + (c2 === 1) + (d === 1), n2 = (a === 2) + (b === 2) + (c2 === 2) + (d === 2);
+      const cell = (n1 >= n2 ? SP.gravel : SP.dirt)[pos][cfg][vr];
+      ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+    }
+  }
   return true;
+}
+/* Le champ des plaques, aux COINS de la carte (un octet par coin et par
+   couche), calculé une fois par carte :
+   - SÈCHE : un bruit lent (plaques de sept cases environ), plus l'USURE — le
+     long des allées et des rues, par endroits (un second bruit, pour que tout
+     le bord ne soit pas usé du même trait) ;
+   - DRUE : un autre bruit, plus la BERGE (deux cases autour de l'eau) : l'herbe
+     reverdit près de l'eau.
+   `worn` (par case) : la case touche une allée — pas de semis dessus.
+   ⚠️ Aucun tirage : que des hachages et des bruits de coordonnées (la carte se
+   regénère depuis sa graine, §4 de CLAUDE.md), identiques chez les deux joueurs. */
+const GRASS_FIELDS = new WeakMap();
+export function townGrassField(tw) {
+  let F = GRASS_FIELDS.get(tw);
+  if (F) return F;
+  const W = tw.w, H = tw.h, W1 = W + 1, G = tw.ground;
+  const paved = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= W || yy >= H) return false;
+    const g = G[yy * W + xx];
+    return g === C.G_PATH || g === C.G_PATH_STONE || g === C.G_TOWN_STAIR;
+  };
+  const shoreAt = (xx, yy) => xx >= 0 && yy >= 0 && xx < W && yy < H && tw.shore && tw.shore[yy * W + xx] > 0;
+  const dry = new Uint8Array(W1 * (H + 1)), lush = new Uint8Array(W1 * (H + 1)), worn = new Uint8Array(W * H);
+  for (let cy = 0; cy <= H; cy++) for (let cx = 0; cx <= W; cx++) {
+    let nearPath = false, nearShore = false;
+    for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
+      if (paved(cx + dx, cy + dy)) nearPath = true;
+      if (shoreAt(cx + dx, cy + dy)) nearShore = true;
+    }
+    const dN = townNoise(cx, cy, 7.5, 41), lN = townNoise(cx, cy, 9, 43);
+    const wear = nearPath ? 0.62 * (0.5 + 0.5 * townNoise(cx, cy, 3.2, 47)) : 0;
+    dry[cy * W1 + cx] = dN + wear > 0.40 ? 1 : 0;
+    lush[cy * W1 + cx] = !dry[cy * W1 + cx] && lN + (nearShore ? 0.5 : 0) > 0.42 ? 1 : 0;
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    worn[y * W + x] = paved(x - 1, y) || paved(x + 1, y) || paved(x, y - 1) || paved(x, y + 1) ? 1 : 0;
+  }
+  F = { dry, lush, worn };
+  GRASS_FIELDS.set(tw, F);
+  return F;
 }
 
 /* ZIP 437 — LE MASSIF FLEURI, SUR LA PELOUSE. Il se pose APRÈS le sol et AVANT
@@ -1824,6 +2080,13 @@ export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
 /* La berge, sur la TERRE. Elle se pose après le sol et avant l'eau : le trait
    d'eau vient mordre dessus, donc l'ordre est ce qui donne la rive mouillée. */
 export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
+  /* ⚠️ 2026-09-25 (phase 4) — LA BERGE EST CUITE AU PIXEL avec l'eau (`eau.js`) :
+     une densité fonction de la vraie distance à l'eau, au lieu de huit
+     orientations bakées par case — plus de triangle, plus de feston, et le
+     sable des plages. Elle porte aussi les OUVRAGES posés sur l'eau (parement
+     du quai, pieux du ponton). Ce qui suit est le repli. */
+  const bake = townWaterBakeReady(tw);   // jamais une cuisson au milieu d'une image : voir eau.js § 3
+  if (bake) return drawBakedBank(ctx, bake, x, y, px, py);
   const SW = S && S.townWater;
   const b = (SW && tw.shore) ? tw.shore[y * tw.w + x] : 0;
   if (!b) return false;
@@ -11302,82 +11565,141 @@ export function buildSprites() {
      ⚠️ ET LES TOUFFES PASSENT DE 260 À 190, ce qui n'est pas un réglage non
      plus : 190 × 2 px sombres + un tiers de rappel = 506 px sur 4 096, soit les
      12,3 % de la référence. Le compte se DÉRIVE de la densité visée. */
-  function townGrassSurface() {
+  /* ⚠️⚠️ 2026-09-25 (phase 4) — LES PLAQUES ONT QUITTÉ LE PAVÉ, ET C'EST TOUT
+     LE CORRECTIF DE LA « PÉRIODE DU GAZON » (audit du même jour). Le pavé de
+     64 px portait douze disques de deux verts voisins : répétés tous les quatre
+     carreaux, c'étaient EUX qu'on voyait se répéter sur une grande prairie — le
+     brin, lui, est trop fin pour trahir une période (DESSIN.md : « la période
+     prime sur les détails », et c'est la grande forme qui porte la période). Le
+     relief de la pelouse vit désormais À L'ÉCHELLE DU MONDE : des zones plus
+     sèches ou plus drues, dessinées par le même isocontour que la rive
+     (`drawTownGrassTile`, plus bas), jamais deux fois les mêmes.
+     `pal` décline le même pavé en trois herbes (commune, sèche, drue) : même
+     semis, mêmes brins aux mêmes places, seule la palette change — une plaque
+     sèche continue donc le grain de sa voisine au lieu de le couper. */
+  function townGrassSurface(pal) {
     const [c, g] = cv(ROAD_N, ROAD_N);
-    const BASE = "#5e9251", P1 = "#689b58", P2 = "#54864d", P3 = "#629456";
-    P(g, 0, 0, ROAD_N, ROAD_N, BASE);
-    /* LES PLAQUES. Des disques doux de deux verts voisins, assez grands pour
-       qu'on ne les compte pas — c'est le relief de la pelouse, pas un motif. */
-    /* ⚠️⚠️ ZIP 447 — PLUS NOMBREUSES, PLUS PETITES, ET LE TON LE PLUS CLAIR EST
-       PARTI. Le côte-à-côte de `verify-sol2` l'a montré alors qu'aucun des
-       quatre nombres ne le disait : à gauche, huit TACHES RONDES qu'on compte ;
-       à droite, chez Guillaume, un marbrage qu'on ne compte pas. Deux causes,
-       et la seconde est la vraie :
-         — le rayon. Des disques de 17 px sur un pavé de 64 font trois taches
-           par écran ; à 9-12 px elles se recouvrent et redeviennent du relief ;
-         — `P3`, à +16 de luminance sur la base, dessinait des AURÉOLES CLAIRES.
-           La référence ne monte qu'à +8 sur ses aplats — ce qui est au-dessus,
-           chez elle, ce sont des brins, c'est-à-dire des pixels ISOLÉS.
-       *Une plaque se remarque par son rayon, mais elle se TRAHIT par sa
-       luminance.* On garde donc P1/P2, à ±8 et ±10 de la base, et P3 ne sert
-       plus qu'à la moitié d'une plaque sur six. */
-    const PATCH = [[14, 12, 11, P1], [46, 20, 10, P2], [26, 44, 12, P1], [56, 52, 9, P3],
-                   [6, 34, 10, P2], [38, 6, 9, P1], [60, 8, 9, P2], [10, 58, 10, P1],
-                   [34, 28, 11, P2], [50, 38, 9, P1], [20, 6, 8, P2], [44, 60, 9, P1]];
-    for (const [px0, py0, rr, col] of PATCH) {
-      for (let y = py0 - rr; y <= py0 + rr; y++) for (let x = px0 - rr; x <= px0 + rr; x++) {
-        const dx = x - px0, dy = (y - py0) * 1.15;
-        const d = Math.sqrt(dx * dx + dy * dy) / rr;
-        if (d > 1) continue;
-        // ⚠️ Le bord de la plaque est DENTELÉ par une harmonique, jamais un
-        // dégradé alpha : à cette échelle un dégradé fait une auréole de gras.
-        const th = Math.atan2(dy, dx);
-        if (d > 0.82 + 0.18 * Math.sin(th * 3 + px0)) continue;
-        P(g, (x + ROAD_N) % ROAD_N, (y + ROAD_N) % ROAD_N, 1, 1, col);
-      }
+    const P_ = pal || GRASS_PAL.base;
+    P(g, 0, 0, ROAD_N, ROAD_N, P_.base);
+    /* Le souvenir des plaques du 447 : un marbrage À PEINE lisible (±3 de
+       luminance), qui n'a plus de rayon à trahir mais évite le tapis plat. */
+    const r0 = makeRnd(0x9a17);
+    for (let k = 0; k < 900; k++) {
+      const x = (r0() * ROAD_N) | 0, y = (r0() * ROAD_N) | 0;
+      P(g, x, y, 1 + ((r0() * 2) | 0), 1, r0() < 0.5 ? P_.m1 : P_.m2);
     }
     /* LES TOUFFES. Un V de trois pixels : deux brins qui montent en s'écartant.
        Deux tons, l'un clair l'autre sombre, et le sombre est posé UN PIXEL plus
        bas — c'est l'ombre du brin, et c'est ce qui donne du volume à un gazon.
-       ⚠️ La suite d'or (0,618) répartit sans grille et sans paquet ; elle boucle
-       en modulo, donc le pavé se raccorde à lui-même. */
-    /* ⚠️⚠️ SUITE R2, PAS DEUX SUITES D'OR. Premier jet : `x = frac(k·φ)` et
-       `y = frac(k·φ²·7)`. Deux suites unidimensionnelles dont le rapport est
-       presque rationnel ne remplissent pas le plan : elles alignent les points
-       sur des DROITES. Résultat vu sur `render-parc.mjs` : la pelouse rayée
-       verticalement d'un bout à l'autre du parc, pire que la tuile qu'on
-       remplaçait. Les deux constantes ci-dessous sont celles du nombre
-       plastique, faites pour le plan — c'est le même genre d'erreur que la
-       distance de Manhattan prise pour l'euclidienne au 435. */
+       ⚠️ SUITE R2, PAS DEUX SUITES D'OR : deux suites unidimensionnelles dont le
+       rapport est presque rationnel alignent les points sur des DROITES (vu au
+       438 : la pelouse rayée verticalement d'un bout à l'autre du parc). Les
+       deux constantes ci-dessous sont celles du nombre plastique, faites pour le
+       plan. Elles bouclent en modulo : le pavé se raccorde à lui-même.
+       ⚠️ ZIP 447 — les tons de touffe sont lus dans la maquette de Guillaume
+       (`verify-sol2` en tient l'écart). */
     const R2X = 0.7548776662, R2Y = 0.5698402910;
-    /* ⚠️ ZIP 447 — les quatre tons de touffe sont eux aussi lus dans la maquette.
-       L'ancien couple montait à L=156 (`#71bd60`) et descendait à L=88
-       (`#35722d`) : 68 de battement, quand Guillaume en a 45. C'est là que
-       partaient les huit points d'écart-type en trop. */
-    const LIT = ["#71a15f", "#78a663"], DRK = ["#4f7d4a", "#4b7647"];
     for (let k = 1; k <= 190; k++) {
       const x = Math.floor(((k * R2X) % 1) * ROAD_N);
       const y = Math.floor(((k * R2Y) % 1) * ROAD_N);
-      const lit = LIT[k % 2], drk = DRK[k % 2];
+      const lit = P_.lit[k % 2], drk = P_.drk[k % 2];
       P(g, x, y, 1, 2, drk);
       P(g, (x + 1) % ROAD_N, y - 1 < 0 ? ROAD_N - 1 : y - 1, 1, 2, lit);
       if (k % 3 === 0) P(g, (x + 2) % ROAD_N, y, 1, 2, drk);
     }
-    /* Quelques fleurs des champs, très rares : une par case en moyenne serait
-       une prairie, pas une pelouse de ville.
-       ⚠️⚠️ ZIP 447 — ELLES ÉTAIENT JAUNE VIF, ELLES SONT BLANCHES. Vu sur le
-       côte-à-côte, et c'est le défaut qui sautait le plus aux yeux : huit points
-       jaunes sur le pavé du jeu, deux points pâles sur celui de Guillaume. Le
-       `#e8e05a` du 438 est à 61 % de saturation dans une pelouse qui en fait 42,
-       donc l'œil ne voit plus que lui — le §8 en une image (« deux couleurs
-       réglées à l'œil côte à côte ne gardent pas leur écart »). La référence n'a
-       qu'un seul ton de fleur, `#bcd7b6`, à 15 % de saturation, et il n'occupe
-       que 0,1 % de sa surface. On passe donc de onze semis à six. */
-    const FL = ["#bcd7b6", "#c9d7a4", "#bcd7b6"];
+    /* Quelques fleurs des champs, très rares (447 : blanches, pas jaune vif —
+       un jaune à 61 % de saturation dans une pelouse à 42 % était tout ce qu'on
+       voyait). */
+    const FL = P_.fl;
     for (let k = 300; k < 306; k++) {
       const x = Math.floor(((k * R2X) % 1) * ROAD_N), y = Math.floor(((k * R2Y) % 1) * ROAD_N);
       P(g, x, y, 1, 1, FL[k % FL.length]);
       if (k % 2) P(g, (x + 1) % ROAD_N, (y + 1) % ROAD_N, 1, 1, FL[k % FL.length]);
+    }
+    return c;
+  }
+  /* Les plaques du gazon, à l'échelle du monde (voir la note de
+     `townGrassSurface`) — et, depuis la même phase, les SENTIERS de gravier et
+     de terre battue (`townSoftPaths`) : la même découpe sert les deux. Pour
+     chaque position du pavé (16), chaque
+     configuration de coins (15) et chaque variante (2) : la case du pavé de
+     l'herbe sèche (ou drue), découpée par l'isocontour de la rive
+     (`contourMargin`, eau.js — la même courbe, une autre matière), et son bord
+     FONDU par un semis sur deux pixels (DESSIN.md : une usure a un bord flou).
+     960 cases de 16 px, un seul atlas. */
+  function contourOverlay(layerPave, seed) {
+    const put = makeAtlas(T, T, 16 * 15 * 2, 32);
+    const pg = layerPave.getContext("2d").getImageData(0, 0, ROAD_N, ROAD_N).data;
+    const out = [];
+    for (let pos = 0; pos < 16; pos++) {
+      const sx0 = (pos % ROAD_SUP) * T, sy0 = ((pos / ROAD_SUP) | 0) * T;
+      out.push([null]);                     // cfg 0 : rien
+      for (let cfg = 1; cfg < 16; cfg++) {
+        const vrs = [];
+        for (let vr = 0; vr < 2; vr++) {
+          const [c, g] = cv(T, T);
+          const r = makeRnd(seed + pos * 131 + cfg * 17 + vr * 7);
+          for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+            const m = contourMargin(cfg, vr, px, py);
+            const keep = m >= 0.07 || (m >= -0.05 && r() < (m + 0.05) / 0.12);
+            if (!keep) continue;
+            const o = ((sy0 + py) * ROAD_N + sx0 + px) * 4;
+            P(g, px, py, 1, 1, `rgb(${pg[o]},${pg[o + 1]},${pg[o + 2]})`);
+          }
+          vrs.push(put(c));
+        }
+        out[pos].push(vrs);
+      }
+    }
+    return out;
+  }
+  /* Les petites choses semées dans l'herbe, rares : trèfle, pâquerettes,
+     cailloux, une taupinière. 8 × 8 au plus, posées DANS la case (une case
+     voisine peinte après aurait mangé un débord). */
+  function townGrassDetail(kind, vr) {
+    const [c, g] = cv(8, 8), r = makeRnd(0x3d11 + kind * 97 + vr * 13);
+    if (kind === 0) {                                    // le trèfle : trois folioles, en paquet
+      for (let k = 0; k < 3; k++) {
+        const x = 1 + ((r() * 5) | 0), y = 1 + ((r() * 5) | 0);
+        P(g, x, y, 2, 1, "#7ab467"); P(g, x - 1 < 0 ? 0 : x - 1, y + 1, 2, 1, "#6aa55c"); P(g, x + 1, y + 1, 2, 1, "#6aa55c");
+        P(g, x, y + 2, 1, 1, "#4a7d44");
+      }
+    } else if (kind === 1) {                             // les pâquerettes
+      for (let k = 0; k < 2 + ((r() * 2) | 0); k++) {
+        const x = 1 + ((r() * 5) | 0), y = 1 + ((r() * 5) | 0);
+        P(g, x, y - 1, 1, 1, "#f1f0e6"); P(g, x - 1, y, 1, 1, "#f1f0e6"); P(g, x + 1, y, 1, 1, "#f1f0e6"); P(g, x, y + 1, 1, 1, "#e6e4d8");
+        P(g, x, y, 1, 1, "#e8c85a");
+      }
+    } else if (kind === 2) {                             // des cailloux
+      for (let k = 0; k < 2 + ((r() * 2) | 0); k++) {
+        const x = 1 + ((r() * 5) | 0), y = 2 + ((r() * 4) | 0), w = 1 + ((r() * 2) | 0);
+        P(g, x, y, w, 1, "#9c978c"); P(g, x, y + 1, w, 1, "#7a766e");
+      }
+    } else {                                             // la taupinière
+      P(g, 1, 4, 6, 2, "#6b5237"); P(g, 2, 3, 4, 1, "#7d6243"); P(g, 3, 2, 2, 1, "#8b6f4d");
+      P(g, 1, 6, 6, 1, "rgba(40,30,20,0.35)");
+      P(g, 2, 4, 1, 1, "#5a4430"); P(g, 5, 3, 1, 1, "#9a7e5a");
+    }
+    return c;
+  }
+  /* 2026-09-25 (phase 4) — LA TERRE BATTUE A SON PAVÉ. Les allées de maison,
+     les parvis et le champ de foire (259 cases) étaient peints avec la tuile
+     unique de 16 px du chemin de la FERME (zip 232) : un damier de période 16
+     au milieu d'une ville où tout le sol a son pavé de 64 (le carré beige de
+     l'audit, au bord de l'étang). Terre tassée, plus brune que le gravier,
+     quelques cailloux enfoncés et des passages plus clairs. */
+  function townDirtSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x5e21);
+    P(g, 0, 0, ROAD_N, ROAD_N, "#a28b69");
+    for (let i = 0; i < 2200; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#aa9471" : "#98815f");
+    for (let i = 0; i < 260; i++) {
+      const x = (r() * ROAD_N) | 0, y = (r() * ROAD_N) | 0;
+      P(g, x, y, 1 + ((r() * 2) | 0), 1, r() < 0.6 ? "#b8aa8f" : "#8a7454");
+      if (r() < 0.3) P(g, x, (y + 1) % ROAD_N, 1, 1, "rgba(70,56,38,0.35)");
+    }
+    for (let i = 0; i < 18; i++) {
+      const x = (r() * ROAD_N) | 0, y = (r() * ROAD_N) | 0, w = 6 + ((r() * 14) | 0);
+      for (let k = 0; k < w; k++) P(g, (x + k) % ROAD_N, y, 1, 1, "rgba(206,188,156,0.28)");
     }
     return c;
   }
@@ -12129,7 +12451,7 @@ export function buildSprites() {
      profonde. Une eau claire vue de dessus prend la couleur du FOND (vase
      grise, galets), pas celle du ciel — c'est le bleu qui arrive avec la
      profondeur, quand le fond disparaît. */
-  const WAT_STOPS = ["#93aeb0", "#6e94ac", "#4a7ba8", "#356293", "#234771", "#183355"];
+  // ⚠️ 2026-09-25 (phase 4) : `WAT_STOPS` est importée de `eau.js` (une seule écriture).
   const WAT_RAMP = (() => {
     const hex = (s) => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
     const st = WAT_STOPS.map(hex), out = [];
@@ -16809,6 +17131,20 @@ export function buildSprites() {
        entrées à la racine : le rendu en a besoin ENSEMBLE (la surface et son
        rebord), et `sup` voyage avec eux — le jour où la période passe de 4 à 6,
        le rendu n'a rien à savoir. C'est le même raisonnement que `S.birds`. */
+    /* 2026-09-25 (phase 4) — les plaques du gazon à l'échelle du monde, et ce
+       qui se sème dedans. Voir `townGrassSurface` et `drawTownGrassTile`. */
+    townSoftPaths: (() => {
+      const gv = townGravelSurface(), dt = townDirtSurface();
+      return { gravel: contourOverlay(gv, 0x91), dirt: contourOverlay(dt, 0xa3) };
+    })(),
+    townGrassLayers: (() => {
+      const detPut = makeAtlas(8, 8, 12, 12);
+      return {
+        dry: contourOverlay(townGrassSurface(GRASS_PAL.dry), 0x51),
+        lush: contourOverlay(townGrassSurface(GRASS_PAL.lush), 0x73),
+        details: [0, 1, 2, 3].map((k) => [0, 1, 2].map((vr) => detPut(townGrassDetail(k, vr)))),
+      };
+    })(),
     townRoad: {
       sup: ROAD_SUP,
       kerbW: 4,
@@ -16823,8 +17159,11 @@ export function buildSprites() {
       flag: townFlagSurface(),
       // ZIP 437 — le gravier des promenades de parc et de rive.
       gravel: townGravelSurface(),
+      // 2026-09-25 (phase 4) — la terre battue, et les deux sentiers découpés
+      // par l'isocontour de la rive (voir `townSoftPaths`, plus bas).
+      dirt: townDirtSurface(),
       // ZIP 438 — l'herbe de la ville, même pavé de 64 px que les rues.
-      grass: townGrassSurface(),
+      grass: townGrassSurface(GRASS_PAL.base),
     },
     /* ZIP 437 — LES MASSIFS FLEURIS DU PARC ET LA PRAIRIE DES RIVES. Cinq
        espèces × quatre variantes : quatre suffisent parce que la case est

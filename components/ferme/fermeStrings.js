@@ -4960,6 +4960,7 @@ export const FERME_STR = {
       townMarket: "🎪 Valley Town — le champ de foire",   // zip 426
       townLake: "🏞️ Valley Town — le fleuve et le ponton",
       townPasse: "⛵ Valley Town — la passe (sortie vers la mer)",
+      townPond: "🦆 Valley Town — l'étang du parc",
       townCrater: "☄️ Valley Town — le cratère",   // 446 : on ne refait pas un décor qu'on met une minute à atteindre
       court: "⚖️ Tribunal — le hall",
       courtUpper: "🗂️ Tribunal — l'étage",
@@ -6641,6 +6642,7 @@ export const FERME_STR = {
       townMarket: "🎪 Valley Town — the fairground",      // zip 426
       townLake: "🏞️ Valley Town — the river and the pier",
       townPasse: "⛵ Valley Town — the narrows (way out to sea)",
+      townPond: "🦆 Valley Town — the park pond",
       townCrater: "☄️ Valley Town — the crater",
       court: "⚖️ Courthouse — the hall",
       courtUpper: "🗂️ Courthouse — first floor",

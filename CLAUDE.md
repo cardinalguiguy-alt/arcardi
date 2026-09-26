@@ -7,32 +7,40 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-25 — Valley Town : PHASES 0 À 3 de la feuille de route graphique livrées
+### 2026-09-25/26 — Valley Town : PHASES 0 À 4 de la feuille de route graphique livrées
 
 Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec le récit de chaque phase — Guillaume :
 « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on ne les
 détaille pas) ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, Guillaume a
 LEVÉ la règle « un seul changement visuel par livraison »** : une phase se livre d'un bloc.
-**Reste : 4 sols et eau · 5 faune · 6 bâtiments courants · 7 composition · 8 intérieurs.**
-- **Phases 0-2** : outillage, monuments à 1 px d'image = 1 px d'écran, correctifs sans parti pris
-  (détourage du tribunal, noms en police pixel, lanternes éteintes le jour…).
-- **Phase 3, la lumière** (`components/ferme/lumiere.js`, pur) — décisions de Guillaume : UNE nuit pour
-  ferme et ville, nuit de LUNE lisible, murs qui arrêtent la lumière, fenêtres selon l'heure et SEULEMENT
-  dans les maisons habitées, calque du tribunal tiré de sa peinture, éclairs. Le ciel MULTIPLIE la scène
-  selon l'heure ; les lampes s'ajoutent en cinq paliers tramés à la grille de l'art ; ombres des bâtiments ;
-  calques de nuit des trois monuments refaits par `tools/build-monument-glow.mjs` depuis leurs images de
-  JOUR ; lanternes suspendues et lampes à huile qui éclairent enfin ; pluie, neige et éclairs au pixel
-  d'art ; noms et bulles au-dessus de la nuit. Tout vu en jeu (524×714, crans 1 à 5, midi → 1h, aube,
-  orage, torche à la ferme).
-- Bancs le 2026-09-25 : **27/27 `verify-*`** (`verify-lumiere` 71/71, neuf, falsifié 5 fois), **24/24
-  `render-*`**, `no-undef` propre sur les fichiers touchés, bundle et `next build` complet.
-- ⚠️ **Poids** : 12,95 Mo de PNG de monuments sur disque (calques de nuit : 0,88 Mo), seul le cran
-  affiché se télécharge. **Coût de la lumière mesuré sur Mac seulement** (+1,3 ms par image au cran 1,
-  pluie comprise). **Rien de tout ça n'a été vu sur un vrai iPad** (§10, plafond de mémoire WebKit).
+**Reste : 5 faune · 6 bâtiments courants · 7 composition · 8 intérieurs.**
+- **Phases 0-3** : outillage, monuments à 1:1, correctifs sans parti pris, la lumière (`lumiere.js`).
+- **Phase 4, sols et eau** (« reco partout ») — **l'eau est CUITE AU PIXEL** (`components/ferme/eau.js`,
+  pur) : distance exacte à la rive meuble, seize paliers FRANCS à couture d'un pixel, cuvette éclairée
+  d'en haut à gauche ; cuisson par tranches de 4 ms/image dès le montage (la carte de la ville est tirée
+  avec les sprites), l'eau par case de la 436 en repli. Étang CLAIR, port profond, passe ensablée,
+  plages. **Reflets** : les entrées de `pushE` marquées `rx` sont REJOUÉES en miroir dans un tampon
+  (`ctx` est un `let` échangé le temps de l'appel, `reflecting` coupe noms et bulles) ; la nuit, colonnes
+  sous les lampes et la torche, éclats de lune. Quai à parement, ponton sur pieux, houle à DEUX trains
+  (rapide/lent, période unique chacun). Gazon sans période (plaques au monde), sentiers meubles à contour
+  libre, terre battue, bordures entre revêtements durs, murs de soutènement habillés, ombre au pied posée
+  par la case du bas. Arrêt dev « l'étang du parc ». **Pluie** : le rideau ne se retire plus à chaque
+  image d'un fondu de zoom, impacts ×3, en ronds sur l'eau. Tout vu en jeu (524×714, port jour et nuit,
+  étang, passe, belvédère, place sous la pluie pendant un fondu).
+- Bancs le 2026-09-25 : **27/27 `verify-*`** (`verify-pont` : motif appris au 5e argument de `pushE`),
+  **24/24 `render-*`** (`render-eau` 17/17, mesure l'eau cuite, contrôle du port falsifié), `no-undef`
+  propre sur les fichiers touchés, bundle et `next build` complet.
+- ⚠️ **Poids et coût, Mac seulement** : ≈ 9 Mo de canevas neufs (17 retenus), cuisson ≈ 0,4 s de calcul
+  étalé ; 2,4 ms/image au port de jour, 2,65 de nuit, 1,4 sur la place. **Rien vu sur un vrai iPad.**
 - **Pas de manipulation Supabase.** Échecs (2026-09-24) : toujours jamais joués par Guillaume.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **La phase 4**, à juger en jouant : les paliers de l'eau (des courbes de niveau assumées), l'étang
+  clair, les plages et la passe, la force des reflets (`REFL_ALPHA` 0,52, eau.js), les colonnes de nuit,
+  le lierre des murs, les plaques du gazon. **Pas fait** : bittes d'amarrage ; reflets des ponts, du
+  navire, des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets réels) ; reflet
+  de la torche et éclats de lune jamais regardés de près.
 - **Les phases 1 à 3 de Valley Town elles-mêmes**. Phase 3, à juger en jouant : la profondeur de la
   nuit (`SKY_NIGHT`), la teinte des heures, la force des lampes, le tribunal allumé une fenêtre sur
   deux, la fréquence des éclairs (un toutes les ~26 s), une ville presque noire tant qu'elle est peu
@@ -63,15 +71,14 @@ LEVÉ la règle « un seul changement visuel par livraison »** : une phase se l
 
 ### ⏭️ ACTION SUIVANTE
 
-**Phase 4 de la feuille de route graphique de Valley Town : sols et eau** (paliers de profondeur, bord
-de quai, reflets, rampe de l'étang — la dette du §13 —, sable, période du gazon, dallages et leurs
-jonctions — la couture du §13 —, murs de soutènement). C'est de la production créative : **LISTER LES
-DÉCISIONS STRUCTURANTES ET ATTENDRE (§2)** avant d'écrire, puis **poser les questions au fil du
-travail** (demande de Guillaume, 2026-09-25). ⚠️ L'eau se juge AUSSI de nuit maintenant : un reflet de
-lampe sur l'eau est une décision de cette phase, pas de la précédente. Rappeler à Guillaume de jouer les
-phases 1-3 en vraie séance. L'« autre jeu » annoncé après les échecs attend toujours qu'il le nomme.
-⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de poser sa
-collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
+**Phase 5 de la feuille de route graphique de Valley Town : la faune** (canards, poissons — l'étang clair
+de la phase 4 est leur scène —, papillons, chats, mouettes, lucioles ; fonctions du temps, jamais
+diffusées : règle des pigeons, 433). C'est de la production créative : **LISTER LES DÉCISIONS
+STRUCTURANTES ET ATTENDRE (§2)**, puis **poser les questions au fil du travail**. ⚠️ Un animal qui nage
+ou qui vole bas au-dessus de l'eau doit passer par la file `pushE` avec son `rx` pour avoir son reflet.
+Rappeler à Guillaume de jouer les phases 1-4 en vraie séance. L'« autre jeu » annoncé après les échecs
+attend toujours qu'il le nomme. ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son
+sprite AVANT de poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 
@@ -473,6 +480,11 @@ dépôt.
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
   `INVALID_OPERATION: program not valid` dans la console.**
+- ⚠️⚠️ **UN ÉTAT QU'ON RETIRE QUAND SA TAILLE CHANGE SE RETIRE À CHAQUE IMAGE D'UN FONDU** (pluie,
+  2026-09-25, vu par Guillaume). Le nombre de gouttes suivait la surface visible, donc changeait à chaque
+  image d'un zoom — et le tableau était régénéré au hasard : tout le rideau sautait. Ce qui dépend d'un
+  paramètre CONTINU s'AJUSTE à la marge (on ajoute, on retire), et se range dans un repère qui ne bouge
+  pas avec lui (fractions d'écran).
 - ⚠️⚠️ **UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.** Tester avec
   `typeof X !== "undefined"`.
 - ⚠️⚠️ **UN CANEVAS DÉCOUPE EN SILENCE CE QUI DÉPASSE DE SON CADRE** (427) : une feuille de
@@ -559,6 +571,7 @@ dépôt.
 | `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
+| `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
@@ -922,8 +935,9 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler
   deux changements visuels) et c'est **la dette la plus visible du projet** — un joueur qui prend
   le train voit deux niveaux de finition.
-- ⚠️ **AUCUN BANC NE COMPOSE LA LUMIÈRE** (phase 3) : le faux canevas ne sait ni `multiply` ni
-  `lighter` ni `destination-out`. `verify-lumiere` tient la DONNÉE (ciel, horaires, anneaux) et la
+- ⚠️ **AUCUN BANC NE COMPOSE LA LUMIÈRE NI LES REFLETS** (phases 3 et 4) : le faux canevas ne sait ni
+  `multiply` ni `lighter` ni `destination-out`/`destination-in` — la passe des reflets et les colonnes
+  de nuit (`eau.js` § 7) ne se jugent qu'en jeu. `verify-lumiere` tient la DONNÉE (ciel, horaires, anneaux) et la
   GÉOMÉTRIE (ombres) ; le rendu lui-même — calage sur le pixel d'art, teintes, lisibilité — ne se juge
   qu'en jeu. ⚠️ **Pour le tester en jeu** : l'heure se déplace en décalant `Date.now` dans la page (le
   jeu la lit ; 800 ms réelles = 1 min de jeu) ; le changement de JOUR, lui, dépend du minuteur de
@@ -1250,38 +1264,6 @@ Quatre décisions actées avec Guillaume, à respecter le jour où ce chantier s
 commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'abord juger tel quel.
 ⚠️ Ce bloc fixe la DIRECTION, pas le code : le détail d'implémentation (fichiers, fonctions) reste
 à écrire dans `QUETE.md` au moment où le chantier s'ouvre pour de vrai.
-
-- ⚠️ **DETTE GRAPHIQUE, 2026-09-01 — LE CŒUR DE L'ÉTANG DU PARC SE LIT COMME UN BLOC NET, PAS
-  COMME UN DÉGRADÉ.** Mesuré sur le vrai générateur (`TOWN_POND`, pas une supposition) : la
-  profondeur EST un vrai dégradé de crans (00→04→10→14→15 autour du centre), ce n'est donc pas un
-  bug de données. La cause est un compromis déjà arbitré deux fois par le passé (zip 436) :
-  `TOWN_WATER_SHELF` (largeur où la teinte continue de bouger) a été resserré à 1,5 case
-  *spécifiquement pour ce petit étang* (rx=ry=4,6 cases), sinon il n'avait aucune zone « large »
-  du tout. Sur un si petit plan d'eau, cette zone « large » — quasi plate — occupe une grosse part
-  de sa surface visible, et ses crans voisins sont proches sur la rampe de couleur (`WAT_STOPS`,
-  `fermeArt.js`), donc l'œil les lit comme un bloc plutôt qu'un dégradé.
-  Guillaume a choisi la direction : **rendre `WAT_STOPS`/`WAT_RAMP` plus progressive dans le
-  registre foncé** (crans ~8-15, ceux qu'un petit étang atteint réellement), plutôt que de rouvrir
-  le compromis de largeur (déjà rejeté au 436) ou d'agrandir l'étang (change la carte). ⚠️ **NON
-  FAIT** : `WAT_RAMP` sert TOUTE l'eau de la ville et est mesurée par `render-eau.mjs` avec des
-  chiffres de contraste précis (luminance large/bord, écart-type) déjà arbitrés à deux reprises —
-  la corriger sans boucle de réglage visuel risquerait de déplacer le défaut ailleurs sur un grand
-  plan d'eau sans qu'on le voie. Une piste : une courbe gamma sur `k/(WAT_DEPTH-1)` avant de
-  l'indexer dans `WAT_STOPS` (repousse plus de contraste vers les crans profonds sans toucher aux
-  deux couleurs d'extrémité), à valider avec `render-eau.mjs` PUIS à l'écran avant de livrer.
-- ⚠️ **DETTE GRAPHIQUE, 2026-09-01 — DES DÉLIMITATIONS DE ZONE PEINTES SUR DES REBORDS SONT
-  DROITES, PAS COURBES.** Localisé par une capture de Guillaume : **la berge de l'étang du parc**,
-  là où l'allée qui le longe change de revêtement — dallage clair tramé (`G_PATH_STONE`) contre
-  chemin de terre (`G_PATH`). La capture montre une COUTURE VERTICALE NETTE entre les deux
-  revêtements, sans transition ni bordure, exactement le défaut « escalier de 16 px » que la rive
-  eau/terre elle-même a déjà résolu (voir §4, `drawTownShoreTile`, les carrés marcheurs sur les
-  coins). ⚠️ **NON FAIT** : `drawTownRoadTile`/`drawTownFlagTile` (`fermeArt.js`) n'ont
-  apparemment pas ce traitement à la jonction `G_PATH`/`G_PATH_STONE` — à vérifier si c'est un
-  oubli (les deux revêtements gagneraient le même isocontour/kerb que la rive) ou un choix
-  déjà arbitré ailleurs (une allée peut légitimement changer de matière net, comme un trottoir
-  contre un chemin). **Ne pas deviner lequel avant de l'ouvrir** — c'est la question à trancher en
-  premier.
-
 
 - ✅ **LE LAC-OCÉAN — TRANCHÉ ET À MOITIÉ CONSTRUIT LE 2026-08-31.** *« Je veux que l'on considère
   le lake and pier plutôt comme un accès à l'océan, et donc le port de Valley Town »* · *« une

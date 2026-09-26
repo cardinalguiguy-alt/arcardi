@@ -165,6 +165,19 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   citron**. Un ajout sature canal par canal : il faut le regarder sous chaque ciel de la journée, et sa
   force doit suivre l'obscurité (une lampe ne se voit presque pas au soleil couchant). Même séance :
   une lampe dont le vert égale presque le rouge éclaire en **sodium** (jaune-vert), pas en flamme.
+- ⚠️⚠️ **UNE FRÉQUENCE RÉGLÉE CASE PAR CASE CISAILLE DANS LE TEMPS** (phase 4, la houle). Deux cases
+  de périodes différentes s'écartent de t·(1/P₁ − 1/P₂) : un cycle entier en quelques secondes, et chaque
+  case finit par porter sa propre vague — des carrés, sur une eau devenue lisse. **Seule l'AMPLITUDE se
+  règle localement.** Pour « rapide ici, lent là » : deux trains de période UNIQUE sur toute la carte, dont
+  le lieu ne règle que le mélange.
+- ⚠️⚠️ **UNE DISTANCE AU BORD A DES ARÊTES** (phase 4, l'étang). L'axe médian — là où deux rives sont à
+  égale distance — change la pente d'un pixel à l'autre : éclairée telle quelle, une cuvette sort taillée
+  en **cristal**. On lisse la distance (convolution normalisée sur la seule surface) AVANT de l'éclairer.
+- ⚠️⚠️ **LA LIGNE DE NIVEAU D'UNE FONCTION D'UNE SEULE COORDONNÉE EST UNE DROITE** (phase 4, la passe). Un
+  champ qui ne dépend que de x (la distance à la passe) dessine des verticales dès qu'il décide seul — un
+  plafond de profondeur, un seuil de sable : des bandes droites à travers le fleuve. Corollaire, même
+  séance : une règle décidée **case par case** (« pas de plage à trois cases d'un quai ») redessine la
+  grille. On déforme le champ par un bruit lent, ou on le lie à une grandeur à deux dimensions.
 
 ---
 

@@ -1686,7 +1686,7 @@ export const STORM_RAIN_ART_AREA = 600;   // px d'art² par goutte (900 au premi
 export const STORM_RAIN_MAX = 380;        // plafond de gouttes simultanées
 export const STORM_RAIN_SPEED = 150;      // vitesse de chute, px d'ART par seconde
 export const STORM_RAIN_LEN = 5;          // longueur d'une goutte, px d'art
-export const STORM_SPLASH_RATE = 5;       // éclaboussures par seconde et par 10 000 px d'art²
+export const STORM_SPLASH_RATE = 15;      // éclaboussures par seconde et par 10 000 px d'art² (5 → 15 le 2026-09-25, Guillaume : « plus de plocs »)
 export const STORM_SPLASH_MS = 210;       // durée d'une éclaboussure (trois images)
 
 // --- Loups (chantier 2026-07, demande Guillaume : "loups assez détaillés,
@@ -6542,6 +6542,10 @@ export const DEV_TELEPORTS = [
      de la carte par où le monde a une sortie ; il ne peut pas être le plus
      coûteux à atteindre. */
   { key: "townPasse",     zone: "town" },
+  /* 2026-09-25 (phase 4) — L'ÉTANG DU PARC A SON ARRÊT, pour la raison de la
+     passe juste au-dessus : l'eau y a changé de nature (claire, fond visible),
+     et on ne la jugera pas en y marchant depuis la gare à chaque retouche. */
+  { key: "townPond",      zone: "town" },
   /* ⚠️ ZIP 446 — LE CRATÈRE A SON ARRÊT, ET C'EST LA LEÇON DU 425 APPLIQUÉE
      AVANT D'ÊTRE REPAYÉE : il est dans un pré, à l'écart, et y aller à pied
      coûte une bonne minute — donc on ne serait pas allé le regarder à chaque

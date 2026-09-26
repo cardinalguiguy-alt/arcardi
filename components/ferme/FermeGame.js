@@ -64,6 +64,7 @@ const STAR_LEAN_MEM = new Map();
 import { loadBitmap, peekBitmap } from "./bitmapAssets";
 import * as PF from "./pixelFont";
 import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
+import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -1048,6 +1049,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      exacte d'un bâtiment à l'écran — altitude, grossissement, cran d'image —,
      elles la publient au lieu qu'on la recalcule à côté (§8). */
   const lightRendererRef = useRef(null);
+  const waterReflRef = useRef(null);   // 2026-09-25 (phase 4) — les reflets sur l'eau (eau.js § 7) : trois canevas, créés une fois
   const lightFrameRef = useRef(null);
   const rainSplashRef = useRef([]);
   // Zip 302 (demande Guillaume) : montgolfière — position MONDE (en tuiles,
@@ -2236,6 +2238,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setMounted(true);
     spritesRef.current = buildSprites();
     setSpritesReady(true);
+    /* 2026-09-25 (phase 4) — LA CARTE DE LA VILLE EST TIRÉE ICI, AU CHARGEMENT
+       (≈ 70 ms, noyés dans celui des sprites) et plus au premier pas en ville :
+       l'eau cuite au pixel (`eau.js`) peut alors cuire par tranches pendant
+       qu'on est encore à la ferme. La carte est déterministe et mise en cache au
+       niveau du module : aucune différence de jeu, seulement de moment. */
+    if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
     // Masque le chrome ARCARDI (FABs haut/droite, barre de scores, logo) tant
     // que la ferme est ouverte : elle est plein écran et ces boutons (mode
     // agrandi surtout) pourraient interférer avec le rendu / la sortie.
@@ -15304,6 +15312,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townHall") { m.x = C.TOWN_HALL.x + C.TOWN_HALL.w / 2; m.y = C.TOWN_HALL.y + C.TOWN_HALL.h + 2; }
           else if (dk === "townChurch") { m.x = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2; m.y = C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2; }
+          else if (dk === "townPond") { m.x = C.TOWN_PARK.x + (C.TOWN_PARK.w >> 1); m.y = Math.round(C.TOWN_POND.cy) + 1; }   // 2026-09-25 : sur l'allée en croix du parc, à l'est de l'étang
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
              qu'elle est le seul endroit de la ville qu'on n'atteint qu'en
@@ -15567,7 +15576,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     if (phase !== "playing" || !spritesReady) return;
     const canvas = canvasRef.current; if (!canvas) return;
-    const ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
+    /* ⚠️ 2026-09-25 (phase 4) — `let`, ET UNE SEULE RAISON : la passe des
+       REFLETS (`drawTownFrame`) redessine des entrées de la file de dessin dans
+       un tampon, en miroir, et ces dessins écrivent sur `ctx`. Elle l'échange le
+       temps d'un appel, puis le rend — rien d'autre ne l'assigne. `reflecting`
+       dit aux files de noms et de bulles de ne rien prendre pendant ce temps :
+       un nom retourné au fond de l'eau serait un nom de plus. */
+    let ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
+    let reflecting = false;
     const T = C.TILE;
 
     function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; ctx.imageSmoothingEnabled = false; }
@@ -15829,6 +15845,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       nameTagRef.current.dt = dt;   // 2026-09-25 : le pas du fondu des noms (voir queueNameTag)
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
+      /* 2026-09-25 (phase 4) — L'EAU DE LA VILLE CUIT EN TÂCHE DE FOND : quatre
+         millisecondes par image, où que l'on soit (voir eau.js § 3). La carte de
+         la ville est tirée au montage, avec les sprites : la cuisson est donc
+         finie bien avant le premier train, et l'eau par case sert de repli d'ici
+         là. Un appel qui ne fait plus rien dès qu'elle est prête. */
+      if (townWorldRef.current) EAU.townWaterBakeStep(sprites, townWorldRef.current, 4);
 
       /* ⚠️⚠️ ZIP 425 — LA FERME NE PEINT PLUS DERRIÈRE UNE IFRAME DE MINI-JEU.
          ---------------------------------------------------------------------
@@ -19898,9 +19920,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ C'est le §8 de CLAUDE.md pris à l'envers : deux grandeurs DIFFÉRENTES
          écrites dans le même paramètre finissent par diverger de leur intention.
          Le pixel de décalage se dit ici, le rang se dit dans `wy`/`ey`. */
-      const pushE = (wy, ey, fn, liftPx) => draws.push({
+      /* 2026-09-25 (phase 4) — `rx` (facultatif) : la COLONNE de l'objet, et le
+         signe qu'il peut se REFLÉTER dans l'eau (arbres, décors debout,
+         personnages). La passe des reflets rejoue alors cette même entrée en
+         miroir autour de `wy` (sa ligne de sol) : le reflet est dessiné par le
+         dessin de l'objet lui-même, jamais par une seconde copie de son choix
+         de sprite (§8 de CLAUDE.md). */
+      const pushE = (wy, ey, fn, liftPx, rx) => draws.push({
         y: C.townDepthKey(wy, ey),
         fn: () => { ctx.save(); ctx.translate(0, -(ey * EP + (liftPx || 0))); fn(); ctx.restore(); },
+        rb: rx == null ? null : wy, rx, re: ey,
       });
       /* ZIP 427 — LES BULLES DE LA VILLE, EN PASSE FINALE. Même raison qu'à la
          ferme (le tri se fait par ancrage AU SOL, pas par étendue visuelle) :
@@ -19912,7 +19941,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          aurait une bulle trente pixels sous ses pieds. Le décalage est appliqué
          par l'appelant, une fois, au moment de la mise en file. */
       const townBubbles = [];
-      const queueTownBubble = (cx, by, text, major, alpha, reveal) => townBubbles.push({ cx, by, text, major, alpha, reveal });
+      const queueTownBubble = (cx, by, text, major, alpha, reveal) => { if (!reflecting) townBubbles.push({ cx, by, text, major, alpha, reveal }); };
       /* ⚠️⚠️ 2026-09-25 (phase 2) — LE « TRAIT VERT EN TRAVERS DE LA CHAUSSÉE ».
          Vu par l'audit près du parc, retrouvé en jeu le même jour : il n'existe
          QUE pendant un fondu de zoom (on entre ou sort de la zone de dézoom de
@@ -20114,6 +20143,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         else ctx.drawImage(sprites.grass[0], px, py);
 
+        /* 2026-09-25 (phase 4) — L'OMBRE DU MUR QUI DOMINE CETTE CASE (voir
+           `A.drawTownWallFoot`) : posée ici, après le sol, parce que c'est la
+           seule case qui la voit. */
+        {
+          const upPx = (elAt(x, y - 1) - e) * EP;
+          if (upPx > 0.5 && y > 0 && !C.townCourtMainStairCell(x, y - 1)) A.drawTownWallFoot(ctx, px, py, upPx);
+        }
         /* ⚠️⚠️ ZIP 435 — LA BERGE, PUIS LE TRAIT D'EAU, DANS CET ORDRE ET
            APRÈS LE SOL. Les deux vivent dans fermeArt (§ drawTownWaterTile)
            pour que `tools/render-eau.mjs` puisse les REGARDER : c'est le piège
@@ -20164,15 +20200,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ? A.drawTownStairRiser(ctx, sprites, tw, x, y, px, py + T, fh)
             : A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh);
           if (!peint) { ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh); }
-          ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2);          // nez du rebord
-          /* ⚠️ ZIP 447 — L'OMBRE AU PIED SUIT LA HAUTEUR DU MUR, elle ne fait
-             plus 3 px quoi qu'il arrive. Un mur de 48 px et une marche de 10 px
-             portaient la même ombre : la plus haute paraissait donc flotter, et
-             c'est ce genre d'écart qui fait dire « plaqué ». On la borne à 5 px
-             — au-delà, l'ombre devient une flaque et mange le sol. */
-          const oh = Math.max(2, Math.min(5, Math.round(fh * 0.14)));
-          ctx.fillStyle = "rgba(20,26,16,0.34)"; ctx.fillRect(px, py + T + fh, T, oh);
-          ctx.fillStyle = "rgba(20,26,16,0.16)"; ctx.fillRect(px, py + T + fh + oh, T, Math.ceil(oh * 0.8));
+          /* 2026-09-25 (phase 4) — le mur de soutènement est HABILLÉ (chaperon,
+             chaînes d'angle, contreforts, barbacanes, mousse, lierre, fougères) :
+             `A.drawTownWallDress`. Une contremarche garde son nez simple. Son
+             ombre au pied est posée par la case du bas (`drawTownWallFoot`,
+             plus haut) : peinte ici, sous le mur, elle était recouverte par le
+             sol de la rangée suivante — elle ne s'est jamais vue depuis le 447. */
+          if (surMarche) { ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2); }
+          else A.drawTownWallDress(ctx, tw, x, y, px, py, fh);
         }
         /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
            vue de côté, elle n'a pas d'épaisseur.
@@ -20196,9 +20231,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);
               ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP);
             }
-          } else {
-            ctx.fillStyle = "rgba(46,43,38,0.35)"; ctx.fillRect(bx2, py, bw, T);
-          }
+          } else A.drawTownWallSide(ctx, x, y, px, py, sd);   // 2026-09-25 (phase 4) : le chaperon qui tourne
         }
 
         /* ⚠️⚠️ ZIP 427 — LA VOIE FERRÉE DE LA VILLE EST CELLE DE LA FERME,
@@ -20320,7 +20353,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ctx.fillStyle = "rgba(190,150,90,0.75)";
                 for (let c2 = 0; c2 < 3; c2++) ctx.fillRect(x * T + 2 + c2 * 5, (y + 1) * T - 3 + (c2 % 2), 3, 2);
               }
-            });
+            }, 0, x);   // 2026-09-25 (phase 4) : un arbre se reflète dans l'eau
           }
         }
       }
@@ -21800,6 +21833,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
+        /* 2026-09-25 (phase 4) : tout ce qui se tient DEBOUT se reflète ; ce qui
+           est couché au sol ou flotte (nénuphars, pas japonais, pierres plates,
+           massifs) n'a pas de reflet à donner. */
+        const reflX = EAU.WATER_FLAT_PROPS.has(pr.kind) ? null : pr.x;
         pushE(by, elAt(pr.x, pr.y), () => {
           /* ⚠️⚠️ ZIP 439 — LES DÉCORS DE LA PLANCHE PORTENT DÉJÀ LEUR OMBRE, et
              la leur est DESSINÉE (une tache irrégulière qui épouse le pied de
@@ -21835,7 +21872,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.drawImage(img, -img.width / 2, -img.height);
             ctx.restore();
           } else ctx.drawImage(img, cxp - img.width / 2, by - img.height);
-        });
+        }, 0, reflX);
       }
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 431 — LES GUIRLANDES DE FANIONS, TENDUES D'UN ÉTAL À L'AUTRE.
@@ -22141,10 +22178,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                par ne pas répondre la même chose (piège n°1, troisième visage). */
             const em = starNpcEmote("town", res.rid, dx2, dy2);
             if (em && em.say) queueTownBubble(Math.round(dx2 * T) + 8, by0, em.say, false);
-            else if (em) townBubbles.push({ cx: Math.round(dx2 * T) + 8, by: by0, emote: em });
+            else if (em && !reflecting) townBubbles.push({ cx: Math.round(dx2 * T) + 8, by: by0, emote: em });
             const line = em ? null : townActLine(res);
             if (line) queueTownBubble(Math.round(dx2 * T) + 8, by0, line, res.act === "talk");
-          }, pLift);
+          }, pLift, Math.floor(dx2 + 0.5));   // 2026-09-25 (phase 4) : un habitant se reflète aussi
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -22357,7 +22394,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            aucune donnée de véhicule ne circule, et personne ne voit un camarade
            traverser la ville debout à vitesse de cheval. */
         if (p.taxi) pushE((p.y + 0.5) * T, pe, () => drawTaxiAt(p, p.taxi, null), pl);
-        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false), pl);
+        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false), pl, Math.floor(p.x + 0.5));
       }
       /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ; la
          cloche, elle, est une hauteur d'IMAGE et part dans `myLift` — c'est la
@@ -22380,7 +22417,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          donnerait un fermier debout sur le toit — et comme sa position est
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
-      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift);
+      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, Math.floor(m.x + 0.5));
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 456 — LA POSTURE DU CRATÈRE SE VOIT ENFIN.
          ╚══════════════════════════════════════════════════════════════════════
@@ -22589,6 +22626,67 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             C.FISH[h.fish] && C.FISH[h.fish].color));
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-25 (phase 4) — LA SURFACE DE L'EAU, AVANT TOUT CE QUI SE TIENT
+         ║ DEBOUT. (Le rendu est dans `eau.js`, `drawWaterSurface`.)
+         ╚══════════════════════════════════════════════════════════════════════
+         La boucle du sol n'a posé que l'eau CUITE (immobile). Tout ce qui bouge
+         dessus — houle, éclats, courant du fleuve, clapot au pied du quai — et
+         ce qui flotte (rochers, nénuphars) se pose ICI, une fois la file de
+         dessin remplie et avant qu'elle ne s'exécute : un éclat est à la
+         surface, donc devant le reflet d'un arbre (passe des reflets, juste
+         au-dessus) et derrière le passant du quai.
+         ⚠️ MÊME CALAGE QUE LE SOL PENDANT UN FONDU DE ZOOM (`zmFrac`, le « trait
+         vert » de la phase 2) : chaque case reçoit sa transformation, calée sur
+         des pixels d'écran entiers, sinon la houle aurait ses propres coutures.
+         ⚠️ Tant que la cuisson n'est pas finie, rien ici : l'eau par case de la
+         436 porte encore sa propre animation. */
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-25 (phase 4) — LES REFLETS (le rendu est dans `eau.js` § 7).
+         ╚══════════════════════════════════════════════════════════════════════
+         Les entrées de la file marquées `rx` (arbres, décors debout, joueurs,
+         habitants) sont REJOUÉES en miroir dans un tampon, `ctx` échangé le
+         temps de l'appel, `reflecting` levé pour que les files de noms et de
+         bulles n'en prennent rien. ⚠️ Rien n'est enregistré dans la lumière :
+         son cadre n'est ouvert qu'après (`openLightFrame`), ses fonctions
+         d'enregistrement ne font donc rien ici.
+         L'axe du miroir descend sous la ligne de sol de la hauteur de ce qui
+         porte l'objet au-dessus de l'eau : le parement d'un quai, le tablier du
+         ponton, le talus d'une allée, la berge. */
+      {
+        const bakeR = EAU.townWaterBakeReady(tw);
+        if (bakeR) {
+          if (!waterReflRef.current) waterReflRef.current = EAU.makeWaterReflector((w2, h2) => { const c = document.createElement("canvas"); c.width = w2; c.height = h2; return c; });
+          const items = [];
+          for (const d of draws) if (d.rb != null && d.re < 0.01) items.push(d);
+          if (items.length) {
+            const M0 = ctx.getTransform();
+            const axisOffOf = (d) => EAU.waterAxisOffset(tw, d.rx, Math.floor((d.rb - 1) / T));
+            waterReflRef.current.draw(ctx, { zm: M0.a, Rx: -M0.e, Ry: -M0.f, W: canvas.width, H: canvas.height }, bakeR, items, now, axisOffOf, (d, g) => {
+              const saved = ctx;
+              ctx = g; reflecting = true;
+              try { d.fn(); } finally { ctx = saved; reflecting = false; }
+            });
+          }
+        }
+      }
+      {
+        const bakeW = EAU.townWaterBakeReady(tw);
+        if (bakeW) {
+          for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
+            if (tw.ground[y * tw.w + x] !== C.G_WATER) continue;
+            const px = x * T, py = y * T;          // l'eau est toujours à l'altitude 0
+            if (zmFrac) {
+              const L = Math.round(px * zm) - camSx, R = Math.round((px + T) * zm) - camSx;
+              const Tp = Math.round(py * zm) - camSy, B = Math.round((py + T) * zm) - camSy;
+              const sx = (R - L) / T, sy = (B - Tp) / T;
+              ctx.setTransform(sx, 0, 0, sy, L - px * sx, Tp - py * sy);
+            }
+            EAU.drawWaterSurface(ctx, sprites, tw, bakeW, x, y, px, py, now);
+          }
+          if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -22603,6 +22701,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          qui restent lisibles la nuit (ils passaient sous le voile). */
       {
         const lights = [], heads = [];
+        /* 2026-09-25 (phase 4) : les reflets de nuit sur l'eau (voir plus bas). */
+        const waterNight = [];
+        const waterNear = (cx, cy) => {
+          for (let dy = 1; dy <= 4; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const xx = cx + dx, yy = cy + dy;
+            if (xx >= 0 && yy >= 0 && xx < tw.w && yy < tw.h && tw.ground[yy * tw.w + xx] === C.G_WATER) return true;
+          }
+          return false;
+        };
         /* hors-zip — LA TORCHE PORTÉE SUIT AUSSI LA CASE EN HAUTEUR. Signalé
            par Guillaume : « le rayon de la zone éclairée par la torche bug
            quand il y a le dézoom ». Le halo d'un lampadaire est déjà corrigé de
@@ -22645,9 +22752,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const hx = img && gl ? pr.x * T + T / 2 - img.width / 2 + gl.x : (pr.x + 0.5) * T;
           lights.push({ x: hx / T, y: pr.y + 0.5 - lift / T, r: lk[1] });
           if (img && gl) heads.push({ x: hx, y: (pr.y + 1) * T - img.height + gl.y - lift, r: gl.r });
+          /* 2026-09-25 (phase 4) — SON REFLET, si l'eau est à ses pieds : le verre
+             renvoyé par le miroir de `eau.js` (§ 7), là où la colonne de lumière
+             tombera. Une lampe de la Haute-Ville (lift > 0) ne donne sur aucune eau. */
+          if (img && gl && !lift && waterNear(pr.x, pr.y)) {
+            const base = (pr.y + 1) * T, axis = base + EAU.waterAxisOffset(tw, pr.x, pr.y);
+            waterNight.push({ x: hx, y: 2 * axis - (base - img.height + gl.y), c: EAU.WATER_LAMP_RGB, k: 1 });
+          }
         }
+        // La torche portée se reflète aussi, depuis la main de son porteur.
+        const torchRefl = (px2, py2, e2) => {
+          if (e2 || !waterNear(Math.floor(px2 + 0.5), Math.floor(py2 + 0.5))) return;
+          const cx2 = Math.floor(px2 + 0.5), cy2 = Math.floor(py2 + 0.5), base = (py2 + 1) * T;
+          const axis = base + EAU.waterAxisOffset(tw, cx2, cy2);
+          waterNight.push({ x: px2 * T + 12, y: 2 * axis - (base - 21), c: EAU.WATER_TORCH_RGB, k: torchFlicker(3) });
+        };
+        if (torchOnRef.current) torchRefl(m.x, m.y, myE);
+        for (const p of playersRef.current.values()) if (p.torch && (p.zone || "farm") === "town") torchRefl(p.x, p.y, playerElevTown(tw, p));
         for (const wl of townWinLights) lights.push(wl);
-        drawLight(lights, heads);
+        drawLight(lights, heads, waterNight);
       }
       flushNameTags();
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
@@ -25110,7 +25233,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        garde l'ancienne écriture, dans la même file et avec la même priorité. */
     function mkLabelCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
     function queueNameTag(p, isSelf, wx, wy) {
-      if (!p.name) return;
+      if (reflecting || !p.name) return;   // 2026-09-25 (phase 4) : pas de nom dans un reflet
       const M = ctx.getTransform(), m = meRef.current;
       const tag = {
         key: p.id || p.name, name: String(p.name), color: isSelf ? "#ffffff" : "#ffe9a8",
@@ -25694,7 +25817,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
        À appeler avec la transformation de la CAMÉRA en place (celle de la
        boucle de dessin) ; elle est rendue telle quelle. */
-    function drawLight(lights, heads) {
+    function drawLight(lights, heads, waterNight) {
       const lf = lightFrameRef.current || { occluders: [], glows: [], screenGlows: [], lights: [], heads: [] };
       lightFrameRef.current = null;
       const sky = skyNow();
@@ -25719,6 +25842,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       lightRendererRef.current.draw(ctx, { zm, Rx, Ry, W: canvas.width, H: canvas.height }, {
         sky, night: nightAlpha() / LUM.NIGHT_MAX, lights: allLights, heads: allHeads, occluders, glows, screenGlows,
       });
+      /* 2026-09-25 (phase 4) — L'EAU LA NUIT : les colonnes des lampes et les
+         éclats de lune, APRÈS la lumière (le ciel a multiplié la scène, elles
+         s'y ajoutent). La ville seule : `waterNight` n'est passé que par elle. */
+      if (waterNight && waterReflRef.current) {
+        const bakeN = EAU.townWaterBakeReady(townWorldRef.current);
+        if (bakeN) waterReflRef.current.night(ctx, { zm, Rx, Ry, W: canvas.width, H: canvas.height }, bakeN, waterNight, performance.now(), nightAlpha() / LUM.NIGHT_MAX);
+      }
     }
     /* La torche vacille : une pure fonction du temps et du porteur, donc deux
        torches côte à côte ne battent pas ensemble. */
@@ -25738,7 +25868,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = "source-over";
-      const px = (ax, ay) => ctx.fillRect(Math.floor(ax) * zm + phx, Math.floor(ay) * zm + phy, zm, zm);
+      /* ⚠️ 2026-09-25 (retour de Guillaume : « le zoom/dézoom quand il pleut fait
+         bugger l'image ») — PENDANT UN FONDU DE ZOOM, L'ÉCHELLE N'EST PAS
+         ENTIÈRE : un pixel d'art posé à `X·zm` tombait sur un demi-pixel d'écran,
+         et le navigateur en lissait les bords. Chaque pixel se cale donc sur des
+         pixels d'écran ENTIERS (ses deux bords arrondis, pas sa taille) — la
+         parade du « trait vert » de la phase 2. À échelle entière, rien ne change. */
+      const px = (ax, ay) => {
+        const X = Math.floor(ax), Y = Math.floor(ay);
+        const L = Math.round(X * zm + phx), R = Math.round((X + 1) * zm + phx);
+        const Tp = Math.round(Y * zm + phy), B = Math.round((Y + 1) * zm + phy);
+        ctx.fillRect(L, Tp, R - L, B - Tp);
+      };
+      /* Un pixel d'art ancré au MONDE (une éclaboussure), même calage. */
+      const pxW = (wx, wy) => {
+        const L = Math.round(wx * M.a + M.e), R = Math.round((wx + 1) * M.a + M.e);
+        const Tp = Math.round(wy * M.a + M.f), B = Math.round((wy + 1) * M.a + M.f);
+        ctx.fillRect(L, Tp, R - L, B - Tp);
+      };
+      /* ⚠️⚠️ LE RIDEAU NE SE RETIRE PLUS À CHAQUE CRAN DE ZOOM — c'était le défaut
+         vu par Guillaume. Le nombre de gouttes suit la surface visible en px
+         d'art, donc il change à CHAQUE image d'un fondu de zoom ; le code d'avant
+         jetait alors tout le tableau et en retirait un neuf au hasard : la pluie
+         entière sautait d'une image à l'autre. Les gouttes sont désormais rangées
+         en FRACTIONS de l'écran (elles restent à leur place quand l'échelle
+         change) et le compte s'ajuste à la marge : on en ajoute ou on en retire,
+         on ne retire jamais le rideau. Même correction pour la neige, plus bas. */
+      const adjust = (arr, want, make) => {
+        if (arr.length > want) arr.length = want;
+        while (arr.length < want) arr.push(make());
+        return arr;
+      };
       /* Jour orageux (chantier 2026-07, « une journée grise d'orage sur sept ») :
          le gris est désormais dans le CIEL (`LUM.STORM_SKY`) ; ici, la pluie.
          Une goutte est un trait de pixels d'art, penché d'un pixel tous les
@@ -25748,34 +25908,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (E.isStormyDay(sharedRef.current.day || 1)) {
         const sky = skyNow(), sl = LUM.lum(sky);
         const want = Math.min(C.STORM_RAIN_MAX, Math.round(Wa * Ha / C.STORM_RAIN_ART_AREA));
-        let drops = rainDropsRef.current;
-        if (!drops || drops.length !== want) {
-          drops = rainDropsRef.current = Array.from({ length: want }, () => ({ x: Math.random() * Wa, y: Math.random() * Ha, sp: 0.75 + Math.random() * 0.5 }));
-        }
+        const drops = rainDropsRef.current = adjust(rainDropsRef.current || [], want,
+          () => ({ u: Math.random(), v: Math.random(), sp: 0.75 + Math.random() * 0.5 }));
         const cr = Math.round(150 + 80 * sl), cg = Math.round(165 + 75 * sl), cb = Math.round(195 + 55 * sl);
         const LEN = C.STORM_RAIN_LEN;
         for (let i = 0; i < LEN; i++) {
           ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.55 * (1 - i / LEN) + 0.12).toFixed(3)})`;
-          for (const d of drops) px(d.x + i / 3, d.y - i);
+          for (const d of drops) px(d.u * Wa + i / 3, d.v * Ha - i);
         }
         for (const d of drops) {
-          d.y += C.STORM_RAIN_SPEED * dt * d.sp; d.x -= C.STORM_RAIN_SPEED * dt * d.sp / 3;
-          if (d.y > Ha + LEN) { d.y = -Math.random() * 8; d.x = Math.random() * (Wa + Ha / 3); }
+          d.v += C.STORM_RAIN_SPEED * dt * d.sp / Ha; d.u -= C.STORM_RAIN_SPEED * dt * d.sp / 3 / Wa;
+          if (d.v * Ha > Ha + LEN) { d.v = -Math.random() * 8 / Ha; d.u = Math.random() * (1 + Ha / 3 / Wa); }
         }
-        // Les éclaboussures, en px monde.
+        /* Les éclaboussures, en px monde. ⚠️ 2026-09-25 (Guillaume : « ajouter plus
+           de plocs ») : trois fois plus nombreuses (`STORM_SPLASH_RATE`), et celles
+           qui tombent sur l'EAU font des RONDS — une couronne de gouttes sur l'eau
+           serait une éclaboussure posée sur une vitre. L'eau se lit au pixel près
+           dans la cuisson de la ville (eau.js), à la case ailleurs. */
         const sp = rainSplashRef.current, now2 = performance.now();
+        const zoneNow = (meRef.current && meRef.current.zone) || "farm";
+        const wgrid = zoneNow === "town" ? townWorldRef.current : zoneNow === "farm" ? worldRef.current : null;
+        const bake = zoneNow === "town" && wgrid ? EAU.townWaterBakeReady(wgrid) : null;
+        const onWater = (wx, wy) => {
+          if (!wgrid) return false;
+          if (bake) return EAU.bakedLevelAt(bake, wx, wy) >= 0;
+          const x = Math.floor(wx / T), y = Math.floor(wy / T);
+          return x >= 0 && y >= 0 && x < wgrid.w && y < wgrid.h && wgrid.ground[y * wgrid.w + x] === C.G_WATER;
+        };
         let n = Wa * Ha / 10000 * C.STORM_SPLASH_RATE * dt;
         while (n > 0) {
-          if (n >= 1 || Math.random() < n) sp.push({ x: Math.floor((Math.random() * canvas.width - M.e) / M.a), y: Math.floor((Math.random() * canvas.height - M.f) / M.a), t: now2 });
+          if (n >= 1 || Math.random() < n) {
+            const x = Math.floor((Math.random() * canvas.width - M.e) / M.a), y = Math.floor((Math.random() * canvas.height - M.f) / M.a);
+            sp.push({ x, y, t: now2, w: onWater(x, y) });
+          }
           n -= 1;
         }
+        /* Au sol : l'impact, la couronne, les gouttelettes qui retombent. Sur
+           l'eau : un rond qui s'élargit, écrasé comme tout ce qui est couché au
+           sol dans cette vue (deux fois plus large que haut). */
         const SPL = [[[0, 0]], [[-1, -1], [1, -1], [0, 0]], [[-2, 0], [2, 0], [-1, -2], [1, -2]]];
+        const RING = [[[0, 0]], [[-1, 0], [1, 0]], [[-2, 0], [2, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]],
+                      [[-3, 0], [3, 0], [-2, -1], [2, -1], [-2, 1], [2, 1], [0, -1], [0, 1]]];
+        const RING_MS = C.STORM_SPLASH_MS * 1.9;
         for (let i = sp.length - 1; i >= 0; i--) {
-          const age = now2 - sp[i].t;
-          if (age >= C.STORM_SPLASH_MS || sp.length > 400) { sp.splice(i, 1); continue; }
-          const fr = Math.min(2, Math.floor(age / (C.STORM_SPLASH_MS / 3)));
-          ctx.fillStyle = `rgba(${cr + 15},${cg + 15},${cb + 10},${(0.6 - fr * 0.15).toFixed(2)})`;
-          for (const [ox, oy] of SPL[fr]) ctx.fillRect((sp[i].x + ox) * zm + M.e, (sp[i].y + oy) * zm + M.f, zm, zm);
+          const age = now2 - sp[i].t, life = sp[i].w ? RING_MS : C.STORM_SPLASH_MS;
+          if (age >= life || sp.length > 700) { sp.splice(i, 1); continue; }
+          if (sp[i].w) {
+            const fr = Math.min(3, Math.floor(age / (RING_MS / 4)));
+            ctx.fillStyle = `rgba(${cr + 30},${cg + 30},${cb + 25},${(0.5 - fr * 0.1).toFixed(2)})`;
+            for (const [ox, oy] of RING[fr]) pxW(sp[i].x + ox, sp[i].y + oy);
+          } else {
+            const fr = Math.min(2, Math.floor(age / (C.STORM_SPLASH_MS / 3)));
+            ctx.fillStyle = `rgba(${cr + 15},${cg + 15},${cb + 10},${(0.6 - fr * 0.15).toFixed(2)})`;
+            for (const [ox, oy] of SPL[fr]) pxW(sp[i].x + ox, sp[i].y + oy);
+          }
         }
       } else if (rainSplashRef.current.length) rainSplashRef.current.length = 0;
       // Teinte de saison, et la neige d'hiver (zip 235, Guillaume : « when it's
@@ -25787,17 +25973,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (se.key === "winter") {
         const want = Math.min(C.SNOW_MAX, Math.round(Wa * Ha / C.SNOW_ART_AREA));
-        let fl = snowFlakesRef.current;
-        if (!fl || fl.length !== want) {
-          fl = snowFlakesRef.current = Array.from({ length: want }, () => ({ x: Math.random() * Wa, y: Math.random() * Ha, sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 6 }));
-        }
+        const fl = snowFlakesRef.current = adjust(snowFlakesRef.current || [], want,
+          () => ({ u: Math.random(), v: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 6 }));
         const sl = LUM.lum(skyNow());
         ctx.fillStyle = `rgba(${Math.round(170 + 70 * sl)},${Math.round(178 + 68 * sl)},${Math.round(200 + 55 * sl)},0.9)`;
         for (const d of fl) {
-          d.y += C.SNOW_SPEED * dt * d.sp;
-          d.x += d.sw * dt;
-          if (d.y > Ha + 1) { d.y = -1; d.x = Math.random() * Wa; }
-          px(d.x, d.y);
+          d.v += C.SNOW_SPEED * dt * d.sp / Ha;
+          d.u += d.sw * dt / Wa;
+          if (d.v * Ha > Ha + 1) { d.v = -1 / Ha; d.u = Math.random(); }
+          px(d.u * Wa, d.v * Ha);
         }
         // Fin voile blanc, pour vendre un peu de couverture au sol.
         ctx.fillStyle = "rgba(240, 246, 255, 0.09)";

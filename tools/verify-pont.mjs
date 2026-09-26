@@ -210,7 +210,11 @@ title("4. garde-fou de source : la flèche n'est pas une altitude");
   /* Et la réciproque : la flèche doit bien être passée QUELQUE PART, sinon on
      a « corrigé » le tri en supprimant le dos d'âne — ce qui passerait les
      quatre chapitres au vert pour un pont redevenu plat. */
-  const lifts = (src.match(/pushE\([^;]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*\)/g) || []).length;
+  /* ⚠️ 2026-09-25 (phase 4) : `pushE` a gagné un 5e argument FACULTATIF, la
+     colonne d'un objet qui se reflète dans l'eau (`rx`). Le décalage d'image
+     reste le 4e — le motif accepte donc ce 5e argument derrière lui, sans quoi
+     il cessait de compter les passants reflétables (4 au lieu de 7). */
+  const lifts = (src.match(/pushE\([^;]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*(,\s*Math\.floor\([^)]*\))?\s*\)/g) || []).length;
   ok(lifts >= 6, "…et elle est bien passée en décalage d'image à tout ce qui marche dessus",
     lifts + " appel(s) avec un décalage");
 }
