@@ -288,11 +288,24 @@ export function faunaWorld(tw) {
   // Les papillons : une maison par massif fleuri, une sur trois.
   const FLOWER_PROPS = new Set(["lavender", "clump", "goldBush", "flowerTrough", "flowerCart", "roseBox", "planter", "potPink"]);
   const flowers = [];
-  for (const p of tw.props || []) if (FLOWER_PROPS.has(p.kind)) flowers.push({ x: p.x + 0.5, y: p.y + 0.55, h: p.kind === "flowerCart" || p.kind === "flowerTrough" ? 0.55 : 0.3 });
-  if (tw.bloom) for (let i = 0; i < N; i++) if (tw.bloom[i] && fh(i, 71, 3) % 5 === 0) flowers.push({ x: i % W + 0.5, y: ((i / W) | 0) + 0.6, h: 0.2 });
+  /* `g` : la fleur est dans un PARC ou un JARDIN (les deux rectangles du parc,
+     ou un parterre `bloom`) — voir la densité des maisons ci-dessous. */
+  const inPark = (x, y) => inRect(x, y, C.TOWN_PARK) || (C.TOWN_PARK_NORTH && inRect(x, y, C.TOWN_PARK_NORTH));
+  for (const p of tw.props || []) if (FLOWER_PROPS.has(p.kind)) flowers.push({ x: p.x + 0.5, y: p.y + 0.55, h: p.kind === "flowerCart" || p.kind === "flowerTrough" ? 0.55 : 0.3, g: inPark(p.x, p.y) });
+  if (tw.bloom) for (let i = 0; i < N; i++) if (tw.bloom[i] && fh(i, 71, 3) % 5 === 0) flowers.push({ x: i % W + 0.5, y: ((i / W) | 0) + 0.6, h: 0.2, g: true });
   flowers.sort((a, b) => a.y - b.y || a.x - b.x);
+  /* ⚠️ 2026-09-26 (nuit), Guillaume après vingt minutes de jeu : « diviser par
+     trois la population de papillons hors parcs et jardins, et par deux dans
+     les parcs et jardins ». Une maison sur trois fleurs comme avant, puis on
+     n'en garde qu'une sur deux au jardin, une sur trois ailleurs — par un
+     tirage à part (graine 19), pour que les maisons gardées restent celles
+     d'hier et ne se déplacent pas. */
   const bflyHomes = [];
-  flowers.forEach((f, i) => { if (fh(Math.round(f.x * 2), Math.round(f.y * 2), 17) % 3 === 0) bflyHomes.push({ id: i, x: f.x, y: f.y }); });
+  flowers.forEach((f, i) => {
+    if (fh(Math.round(f.x * 2), Math.round(f.y * 2), 17) % 3 !== 0) return;
+    if (fh(Math.round(f.x * 2), Math.round(f.y * 2), 19) % 6 >= (f.g ? 3 : 2)) return;
+    bflyHomes.push({ id: i, x: f.x, y: f.y, g: f.g });
+  });
   const flowerGrid = new Map();
   for (const f of flowers) { const k = ((f.y / 4) | 0) * 1000 + ((f.x / 4) | 0); (flowerGrid.get(k) || flowerGrid.set(k, []).get(k)).push(f); }
 
@@ -392,19 +405,39 @@ function endHeading(p) {
   }
   return { hx: 1, hy: 0 };
 }
-export function slotMove(t, slotLen, targetOf, pathOf, speed, maxFrac) {
+/* `ramp` (s, facultatif) : 2026-09-26 (nuit), Guillaume trouvait le chat et
+   les colverts « saccadés ». Avec l'ancien profil (`easeIO` sur TOUT le
+   trajet), une bête accélérait pendant la moitié du chemin puis freinait
+   pendant l'autre : jamais d'allure, et une pointe à π/2 fois la croisière —
+   le chat passait au TROT au milieu de chaque marche (pointe 1,96 > seuil de
+   course 1,9) puis revenait au pas. Avec `ramp`, le profil est un TRAPÈZE :
+   on démarre et on s'arrête en `ramp` secondes, entre les deux on garde
+   l'allure. Sans `ramp` (les carpes), rien ne change. Le vrai `B.v`, s'il
+   existe, remplace la vitesse de croisière pour ce créneau. */
+export function slotMove(t, slotLen, targetOf, pathOf, speed, maxFrac, ramp) {
   const k = Math.floor(t / slotLen), u = t - k * slotLen;
   const A = targetOf(k - 1), B = targetOf(k);
   const path = pathOf(A, B);
   const L = pathLen(path);
-  let v = speed;
-  if (L / v > slotLen * maxFrac) v = L / (slotLen * maxFrac);
-  const Tt = L > 1e-3 ? L / v : 0;
+  let v = B.v || speed;
+  const r = ramp || 0;
+  // Au trapèze, le trajet dure L/v + r ; on accélère si le créneau est trop court.
+  if (L / v + r > slotLen * maxFrac) v = L / Math.max(0.5, slotLen * maxFrac - r);
+  const trap = r > 0 && L > v * r;
+  const Tt = L > 1e-3 ? (trap ? L / v + r : L / v) : 0;
   if (u < Tt) {
-    const e = easeIO(u / Tt);
-    const q = along(path, L * e);
-    const spd = (L / Tt) * (Math.PI / 2) * Math.sin(Math.PI * (u / Tt));
-    return { x: q.x, y: q.y, hx: q.hx, hy: q.hy, moving: true, spd, k, restT: -1, restLen: slotLen - Tt, B, A };
+    let sDist, spd;
+    if (trap) {
+      if (u < r) { sDist = v * u * u / (2 * r); spd = v * u / r; }
+      else if (u < Tt - r) { sDist = v * r / 2 + v * (u - r); spd = v; }
+      else { const w = Tt - u; sDist = L - v * w * w / (2 * r); spd = v * w / r; }
+    } else {
+      sDist = L * easeIO(u / Tt);
+      spd = (L / Tt) * (Math.PI / 2) * Math.sin(Math.PI * (u / Tt));
+    }
+    const q = along(path, sDist);
+    // `dist` : le chemin fait depuis le départ — la foulée s'y lit (voir faunaCats).
+    return { x: q.x, y: q.y, hx: q.hx, hy: q.hy, moving: true, spd, dist: sDist, k, restT: -1, restLen: slotLen - Tt, B, A };
   }
   const h = L > 1e-3 ? endHeading(path) : { hx: A.hx || 1, hy: 0 };
   return { x: B.x, y: B.y, hx: h.hx, hy: h.hy, moving: false, spd: 0, k, restT: u - Tt, restLen: slotLen - Tt, B, A };
@@ -478,11 +511,31 @@ function duckMembers(site, season) {
   if (site.lake) return [["hen"], [drake, 1.3, 0.8], [drake, 2.6, 0.9]];
   return [[drake], ["hen", 1.0, 0.7]];
 }
-function duckLeader(fw, env, site, si, t) {
+/* ⚠️ « MOINS RÉGULIER » (2026-09-26, nuit, Guillaume en jeu) : les quatre
+   groupes changeaient de cap ENSEMBLE, toutes les 17 s pile, à la même
+   vitesse. Chaque groupe a désormais son créneau (15 à 19 s) et son décalage,
+   chaque trajet sa vitesse (0,32 à 0,72 case/s), et la nage ondule un peu
+   (voir `duckSway`). */
+const duckSlotOf = (si) => DUCK_SLOT - 2 + ((si * 7) % 5);
+const duckOffOf = (si) => si * 6.1;
+function duckSway(fw, st, tt, seed, v) {
+  if (!st.moving) return st;
+  const e = clamp(st.spd / v, 0, 1);
+  let ox = Math.sin(tt * 0.71 + seed) * 0.2 * e, oy = Math.sin(tt * 0.53 + seed * 1.7) * 0.13 * e;
+  // Jamais contre la rive : l'ondulation s'éteint CONTINÛMENT à son approche (à terre, elle vaut zéro).
+  const q = clamp((fw.wdist(st.x + ox, st.y + oy) - 0.55) / 0.3, 0, 1) * clamp((fw.wdist(st.x, st.y) - 0.55) / 0.3, 0, 1);
+  return { ...st, x: st.x + ox * q, y: st.y + oy * q };
+}
+function duckLeader(fw, env, site, si, t0) {
   const W = fw.W, margin = 0.7;
   const seed = 101 + si * 17;
+  const SL = duckSlotOf(si), t = t0 + duckOffOf(si);
   const targetOf = (k) => {
-    const tm = tminAt(env, (k * DUCK_SLOT) * 1000);
+    const P = duckTarget(k);
+    return { ...P, v: DUCK_SPEED * (0.58 + ((fh(seed, k, 71) >>> 5) % 100) / 100 * 0.72) };
+  };
+  const duckTarget = (k) => {
+    const tm = tminAt(env, (k * SL - duckOffOf(si)) * 1000);
     const asleep = duckAsleep(tm) && site.roost.length;
     /* À TERRE, un créneau sur cinq environ, de jour et hors orage : la place
        est tirée sur la berge du groupe (voir faunaWorld). Tirage INDÉPENDANT
@@ -512,7 +565,8 @@ function duckLeader(fw, env, site, si, t) {
     const a2 = A.land ? { x: A.ex, y: A.ey } : A, b2 = B.land ? { x: B.ex, y: B.ey } : B;
     return [...pre, ...wp(a2, b2), ...post];
   };
-  return slotMove(t, DUCK_SLOT, targetOf, pathOf, DUCK_SPEED, 0.6);
+  const st = slotMove(t, SL, targetOf, pathOf, DUCK_SPEED, 0.6, 1.4);
+  return duckSway(fw, st, t, seed, st.B.v || DUCK_SPEED);
 }
 function segOk(fw, A, B) {
   const L = Math.hypot(B.x - A.x, B.y - A.y), n = Math.max(1, Math.ceil(L / 0.2));
@@ -626,7 +680,13 @@ export function faunaDucks(fw, env) {
         else pose = kind + ((st.moving ? Math.floor(t * 5 + mi) : Math.floor(t * 0.8 + mi)) & 1 ? "W2" : "W");
       } else {
         // En nageant : le coup de patte au rythme de la vitesse (≈ 2 Hz en croisière).
-        if (st.moving) pose = kind === "duck" ? ((Math.floor(t * (1.4 + 1.5 * Math.min(1, st.spd / DUCK_SPEED)) + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
+        /* ⚠️ 2026-09-26 (nuit) — LA CADENCE NE MULTIPLIE PLUS LE TEMPS ABSOLU.
+           `floor(t × f(vitesse))`, avec `t` de l'ordre de 10⁵ s : le moindre
+           changement de vitesse déplaçait l'index de milliers d'images, donc la
+           pose tirait AU HASARD à chaque image pendant toute l'accélération —
+           c'était le « saccadé » vu en jeu. Le coup de patte suit maintenant le
+           chemin parcouru (plus une part lente et constante du temps). */
+        if (st.moving) pose = kind === "duck" ? ((Math.floor((st.dist || 0) * 3.2 + t * 1.3 + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
         if (!st.moving) {
           if (kind === "duck") { const rp = duckRestPose(seed, t, asleep); pose = rp.pose; splash = rp.ring; }
           else pose = asleep ? kind : (Math.floor(t * 1.1 + mi) & 1 ? kind + "2" : kind);
@@ -832,7 +892,11 @@ export function lampMotes(env, heads) {
       const p = pos(t), q = pos(t - 0.045);
       const near = clamp(1 - p.r / (R0 * 3.2), 0.15, 1);
       const flick = Math.sin(t * 38 + i * 2.7) > -0.3 ? 1 : 0.45;
-      out.push({ id: seed + ":" + i, x: p.x, y: p.y, x2: q.x, y2: q.y, k: vis * near * flick, mote: true });
+      /* La robe : du jaune-blanc (la phalène pâle qui accroche la lumière) au
+         brun-noir (la noctuelle, une silhouette sur le halo) — 2026-09-26 (nuit),
+         Guillaume : « des couleurs de pixel différentes, du jaune blanc au marron
+         noir ». Un index dans `MOTE_COLORS` (lumiere.js), tiré par insecte. */
+      out.push({ id: seed + ":" + i, x: p.x, y: p.y, x2: q.x, y2: q.y, k: vis * near * flick, mote: true, c: (h >>> 24) % 7 });
     }
   }
   return out;
@@ -906,8 +970,11 @@ export function faunaJumps(fw, env, view) {
    de 8h à 13h, deux d'entre eux tournent au-dessus de l'étal de poisson.
    La nuit : posés ou sur l'eau, la tête sous l'aile. */
 const GULL_SLOT = 38, GULL_FLY = 3.0;
-export const GULL_COUNT = 10;
-function gullSpecies(i) { return i >= 7 ? "laughing" : "herring"; }
+/* 2026-09-26 (nuit) — 10 → 6, Guillaume en jeu : « moins de mouettes /
+   goélands ». Quatre goélands, deux rieuses (même proportion qu'avant) ; les
+   deux de l'étal (i < 2) et les trois du pêcheur (i < 3) restent. */
+export const GULL_COUNT = 6;
+function gullSpecies(i) { return i >= 4 ? "laughing" : "herring"; }
 function gullSlotTarget(fw, env, i, k) {
   const tm = tminAt(env, ((k * GULL_SLOT) - i * 4.3) * 1000);
   const night = gullAsleep(tm);
@@ -1095,15 +1162,21 @@ export function faunaCats(fw, env, tw) {
   const t = env.t;
   for (const cat of fw.cats) {
     const tt = t + cat.idx * 23;
-    const st = slotMove(tt, CAT_SLOT, (k) => catTarget(fw, env, cat, k), (A, B) => catPath(fw, tw, A, B), CAT_WALK, 0.55);
+    const st = slotMove(tt, CAT_SLOT, (k) => catTarget(fw, env, cat, k), (A, B) => catPath(fw, tw, A, B), CAT_WALK, 0.55, 0.45);
     const tm = tminAt(env, env.nowMs);
     let pose, face = st.hx < -0.05 ? -1 : st.hx > 0.05 ? 1 : ((fh(cat.idx, st.k, 3) & 1) ? 1 : -1);
     if (st.moving) {
+      /* ⚠️ La foulée se lit sur le CHEMIN PARCOURU (`st.dist`), jamais sur
+         `tt × cadence(vitesse)` — voir la note des colverts : ce produit faisait
+         tirer une image au hasard à chaque rafraîchissement dès que la vitesse
+         variait, donc pendant tout le trajet avec l'ancien profil. Pattes
+         calées sur le sol : 4,2 images par case au pas (5,2 Hz à 1,25 case/s). */
       const vertical = Math.abs(st.hy) > Math.abs(st.hx) * 1.3;
       const run = st.spd > 1.9;
-      if (vertical) pose = (st.hy > 0 ? "down" : "up") + (Math.floor(tt * 4) & 1);
-      else if (run) pose = "run" + (Math.floor(tt * 7) & 1);
-      else pose = "walk" + [0, 1, 2, 1][Math.floor(tt * 5.2 * Math.max(0.6, st.spd / CAT_WALK)) & 3];
+      const d = st.dist || 0;
+      if (vertical) pose = (st.hy > 0 ? "down" : "up") + (Math.floor(d * 3.2) & 1);
+      else if (run) pose = "run" + (Math.floor(d * 3.6) & 1);
+      else pose = "walk" + [0, 1, 2, 1][Math.floor(d * 4.16) & 3];
     } else {
       const p = catRestPose(cat, tt, tm, st.B);
       pose = p === "groom" ? "groom" + (Math.floor(tt * 2.6) & 1) : p === "sleep" ? "sleep" + (Math.floor(tt * 0.8) & 1) : p;

@@ -22425,9 +22425,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const foodF = townFoodRef.current && townFoodRef.current.until > nowP ? townFoodRef.current : null;
           /* Un atlas lu au point d'ancrage (le pied, ou la ligne de flottaison),
              retourné pour regarder à gauche. Pixel entier, échelle 1. */
+          /* ⚠️ 2026-09-26 (nuit) — CALÉ SUR LE PIXEL D'ÉCRAN, PAS SUR LE PIXEL
+             D'ART. Un colvert à 0,5 case/s avance d'un pixel d'art toutes les
+             ~120 ms : arrondi à l'art, il sautait de `zm` pixels d'écran d'un
+             coup (3 à 4), et Guillaume le voyait « saccadé », le chat aussi.
+             Le sprite reste net (ses pixels tombent chacun sur `zm` pixels
+             d'écran entiers) ; seule sa position gagne la finesse de l'écran.
+             À échelle fractionnaire (fondu de zoom) on garde le pixel d'art. */
+          const snapF = zm >= 2 && Math.abs(zm - Math.round(zm)) < 1e-3 ? (v) => Math.round(v * zm) / zm : Math.round;
           const blitF = (cell, gx, gy, face, alpha) => {
             if (!cell) return;
-            const X = Math.round(gx) - (face < 0 ? cell.w - cell.ax : cell.ax), Y = Math.round(gy) - cell.ay;
+            const X = snapF(gx) - (face < 0 ? cell.w - cell.ax : cell.ax), Y = snapF(gy) - cell.ay;
             const a0 = ctx.globalAlpha;
             if (alpha != null && alpha < 1) ctx.globalAlpha = a0 * alpha;
             if (face < 0) { ctx.save(); ctx.translate(X + cell.w, Y); ctx.scale(-1, 1); ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, 0, 0, cell.w, cell.h); ctx.restore(); }
@@ -22436,7 +22444,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           };
           const groundShadow = (gx, gy, w, a) => {
             ctx.globalAlpha = a; ctx.fillStyle = "#1a1a1a";
-            ctx.fillRect(Math.round(gx - w / 2), Math.round(gy) - 1, Math.round(w), 2);
+            ctx.fillRect(snapF(gx - w / 2), snapF(gy) - 1, Math.round(w), 2);
             ctx.globalAlpha = 1;
           };
           // ── Les colverts.
@@ -22462,7 +22470,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // La ligne d'eau : un trait clair au ras du corps, qui dit « il flotte ».
               ctx.globalAlpha = 0.45; ctx.fillStyle = "#dcecf2";
               const w = cell ? Math.max(3, cell.w - 6) : 6;
-              ctx.fillRect(Math.round(gx - w / 2), Math.round(gy), w, 1);
+              ctx.fillRect(snapF(gx - w / 2), snapF(gy), w, 1);
               ctx.globalAlpha = 1;
             });
             pushE(gy, 0, () => blitF(cell, gx, gy, d.face), 0, Math.floor(d.x));

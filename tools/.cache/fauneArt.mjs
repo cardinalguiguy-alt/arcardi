@@ -12,8 +12,8 @@
    ⚠️⚠️ L'ÉCHELLE (décision n° 5 de Guillaume, 2026-09-26 : « le travail sur
    l'échelle est nécessaire pour un rendu réaliste ») : UNE seule échelle pour
    toutes les bêtes, calée sur le chat familier que les joueurs promènent déjà
-   en ville (≈ 11 px affichés). Chat ≈ 12 px tête comprise, colvert ≈ 13 bec
-   compris, goéland ≈ 13, pigeon ≈ 9, carpe ≈ 10. Seuls les insectes sont
+   en ville (≈ 11 px affichés). Chat ≈ 12 px tête comprise, colvert ≈ 16 bec
+   compris (troisième jet, voir § 1), goéland ≈ 13, pigeon ≈ 9, carpe ≈ 10. Seuls les insectes sont
    agrandis pour qu'on les voie. ⚠️ Et TOUT EST AU PIXEL NATIF : les pigeons
    étaient dessinés en 16 px puis réduits aux deux tiers au rendu, ce qui
    sautait un pixel sur trois — exactement ce que la phase 1 a banni des
@@ -147,7 +147,17 @@ function packAtlas(items) {
    la tête qui se tourne, la tête plongée d'un coup, le barbotage en trois
    temps (on bascule, on reste cul en l'air en pédalant, on se redresse), la
    toilette en deux gestes, le battement d'ailes dressé sur l'eau, le sommeil
-   qui respire. Les ENCHAÎNEMENTS sont dans `faune.js` (duckRestPose). */
+   qui respire. Les ENCHAÎNEMENTS sont dans `faune.js` (duckRestPose).
+   ⚠️ 2026-09-26, TROISIÈME JET, Guillaume : « il n'est pas assez détaillé,
+   cherche des photos de mâles et femelles ». Redessiné sur photos (voir
+   `DUCK_PAL`) : 14 px de corps (16 cerne compris, la longueur du goéland
+   argenté — le vrai rapport), une tête ronde à reflet, les flancs pâles
+   vermiculés sous les tertiaires, la boucle et la queue blanche du mâle, la
+   joue claire et la raie de l'œil de la cane, un cerne teinté au lieu du noir.
+   Et six poses À TERRE (marcher, brouter, se tenir, se coucher) : ils sortent
+   de l'étang. ⚠️ Deux retours opposés (« trop grand » à 17, « pas assez
+   détaillé » à 14) : si la taille gêne en jeu, c'est la palette qu'on garde
+   et le dessin qu'on resserre, pas l'inverse. */
 const DUCK_POSES = {
   /* ── SUR L'EAU. La ligne de flottaison est sous la dernière rangée. */
   swim: [

@@ -7,27 +7,27 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 (soir) — Valley Town : phases 0 à 5 livrées, puis RETOUCHES DE LA FAUNE (hors phases)
+### 2026-09-26 (nuit) — Valley Town : phases 0 à 5 livrées, puis RETOUCHES DE LA FAUNE après vingt minutes de jeu
 
-Checklist (✅/⬜) en tête de `components/ferme/README.md`, récit de chaque livraison juste au-dessus —
-Guillaume : « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS ; monde,
+Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume
+(2026-09-26, nuit) ; récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde,
 végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel
 par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo).
-- **Dernière livraison (hors phases, demandée par Guillaume)** : colverts redessinés sur PHOTOS (16 px
-  cerne compris = le goéland, vrai rapport ; cerne teinté), qui SORTENT de l'étang sur la berge (un créneau
-  sur cinq de 7h à 20h ; `odist`/`duckLand`/`site.bank` dans `faunaWorld`, six poses à terre) ; lucioles
-  34 → 22 au parc, douze essaims dans les clairières du bois du sud-est ; insectes autour des lampadaires
-  allumés (`lampMotes`, densité variable par lampe et dans la nuit). Vu en jeu (étang le matin, étang et
-  bois à 23h).
-- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 57/57, contrôles neufs falsifiés), **24/24
-  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). **Rien vu sur un vrai iPad**
-  (phases 3 à 5). **Pas de manipulation Supabase.**
+- **Dernière livraison (retouches rapides, « reco partout »)** : chat et colverts fluides (foulée liée au
+  chemin parcouru, profil de vitesse en trapèze, position au pixel d'écran), colverts moins réguliers,
+  papillons ÷2 au jardin et ÷3 ailleurs, goélands 10 → 6, insectes des lampes en sept robes.
+- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 61/61, contrôle de cadence falsifié), **24/24
+  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). **Rien vu sur un vrai iPad.**
+  **Pas de manipulation Supabase.**
+- ⚠️ Constaté en vérifiant : la faune lit la saison RÉELLE (`E.seasonOf()`, fin septembre = automne) quand
+  le bandeau dit « Été » — à régler avec l'item « saison du menu dev » de la liste.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
 - **Les retouches de la faune** : la taille du colvert (16 px, après « trop grand » à 17 et « pas assez
   détaillé » à 14), la cane qui broute (tête brun sur brun), la fréquence des sorties, les insectes des
-  lampes (discrets exprès).
+  lampes (discrets exprès) ; et la fluidité du chat et des colverts (2026-09-26, nuit : mesurée au banc,
+  pas à l'écran en mouvement).
 - **Les phases 1 à 5 de Valley Town**, à jouer. Phase 5 : les enchaînements des colverts, la taille des
   bêtes, la fréquence des gestes gratuits (le chat qui salue, les goélands du pêcheur), les papillons
   (assez visibles ?), la synchronisation des lucioles certaines nuits. **Pas fait en phase 5** : l'éclat
@@ -50,18 +50,18 @@ par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition 
 
 ### ⏭️ ACTION SUIVANTE
 
-**La météo de Valley Town et de la ferme** (demandée par Guillaume le 2026-09-26, détail dans la note
-« Météo » sous la checklist de `components/ferme/README.md`) : pluie qui MONTE au lieu de tomber violente
-d'emblée, orages SECS (éclairs sans pluie, léger assombrissement), plus de pluie en automne qu'en été,
-plus de variété ; et **commander la météo de la journée au menu dev** (la rotation revient le
-lendemain). ⚠️ Aujourd'hui la météo est `E.isStormyDay(day)` (tout ou rien, un jour sur 7) : la variété
-doit rester une PURE FONCTION du jour (§3), et le forçage dev doit être PARTAGÉ (arbitré par l'hôte,
-porté par l'état commun) sinon les deux joueurs verraient deux ciels — **proposer la forme avant de
-coder**, c'est un changement d'état partagé. Ensuite : **phase 6** (bâtiments courants, dont les maisons
-« cheap » à refaire et l'éclairage des fenêtres, y compris celui des grands bâtiments, plus réaliste).
-Rappeler à Guillaume de jouer les phases 1-5. L'« autre jeu » annoncé après les échecs attend toujours
-qu'il le nomme. ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de
-poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
+**La suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
+l'ordre accepté (« reco partout ») : (1) les colverts qui écartent les nénuphars (décalage LOCAL qui revient
+seul, zéro message) et qui dorment sur la berge la nuit, bec dans le dos — **chercher des photos avant de
+dessiner** ; (2) **la météo** (note « Météo » sous la checklist : pluie qui MONTE, orages SECS, plus de
+pluie à l'automne, forçage au menu dev — pure fonction du jour, forçage PARTAGÉ arbitré par l'hôte :
+**proposer la forme avant de coder**) ; (3) les nouveautés à état sauvegardé : lait et fidélité du chat,
+épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte chacune, aucune
+migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant de coder**.
+Puis **phase 6** (maisons « cheap » à refaire, éclairage des fenêtres, grands bâtiments compris). Rappeler
+à Guillaume de jouer les phases 1-5. L'« autre jeu » annoncé après les échecs attend qu'il le nomme.
+⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
+vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 
@@ -472,6 +472,11 @@ dépôt.
   image d'un zoom — et le tableau était régénéré au hasard : tout le rideau sautait. Ce qui dépend d'un
   paramètre CONTINU s'AJUSTE à la marge (on ajoute, on retire), et se range dans un repère qui ne bouge
   pas avec lui (fractions d'écran).
+- ⚠️⚠️ **`floor(t × cadence)` AVEC `t` ABSOLU ET UNE CADENCE QUI VARIE TIRE UNE IMAGE AU HASARD**
+  (faune, 2026-09-26) : `t` vaut ~10⁵ s, donc la moindre variation de la cadence déplace l'index de
+  milliers d'images, à chaque rafraîchissement — c'était le « saccadé » du chat et des colverts, invisible
+  en relisant. Une phase dont la vitesse change s'INTÈGRE (distance parcourue, ou accumulateur), elle ne
+  se multiplie jamais par le temps absolu.
 - ⚠️⚠️ **UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.** Tester avec
   `typeof X !== "undefined"`.
 - ⚠️⚠️ **UN CANEVAS DÉCOUPE EN SILENCE CE QUI DÉPASSE DE SON CADRE** (427) : une feuille de

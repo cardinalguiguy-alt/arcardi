@@ -40,7 +40,16 @@ ok("deux bancs de carpes", fw.fishSites.length === 2, fw.fishSites.map((s) => s.
 ok("un quai et un ponton pour les goélands", fw.quay.length > 20 && fw.pier.length > 4, `${fw.quay.length} places de quai, ${fw.pier.length} de ponton, ${fw.floats.length} cases d'eau libre`);
 ok("trois chats, chacun avec au moins 4 places", fw.cats.length === 3 && fw.cats.every((c) => c.spots.length >= 4), fw.cats.map((c) => c.coat + ":" + c.spots.length).join(" "));
 ok("les places des chats sont praticables", fw.cats.every((c) => c.spots.every((s) => walk(s.x, s.y))));
-ok("des maisons de papillons", fw.bflyHomes.length > 40, `${fw.bflyHomes.length} maisons sur ${fw.flowers.length} fleurs`);
+/* 2026-09-26 (nuit) : Guillaume a divisé la population par 2 au parc et au jardin,
+   par 3 ailleurs (97 maisons → 39) — on tient qu'il en reste des deux sortes, et
+   que la part des jardins a MONTÉ (elle ne peut que monter si la coupe est juste). */
+{
+  const gH = fw.bflyHomes.filter((h) => h.g).length, gF = fw.flowers.filter((f) => f.g).length;
+  ok("des maisons de papillons, au jardin et ailleurs", fw.bflyHomes.length > 25 && gH > 5 && fw.bflyHomes.length - gH > 5,
+     `${fw.bflyHomes.length} maisons sur ${fw.flowers.length} fleurs, dont ${gH} au parc ou au jardin`);
+  ok("la coupe épargne les jardins (÷2 contre ÷3)", gH / fw.bflyHomes.length > gF / fw.flowers.length,
+     `jardins : ${(100 * gH / fw.bflyHomes.length).toFixed(0)} % des maisons contre ${(100 * gF / fw.flowers.length).toFixed(0)} % des fleurs`);
+}
 ok("des zones de lucioles", fw.ffZones.length >= 5, fw.ffZones.map((z) => z.key).join(" "));
 ok("de l'eau profonde pour les sauts", fw.deep.length > 50, `${fw.deep.length} cases`);
 
@@ -189,6 +198,37 @@ console.log("§4 — Le partage : deux clients, le même instant, les mêmes bê
   const fw2 = F.faunaWorld(tw2);
   const b = JSON.stringify([F.faunaDucks(fw2, env), F.faunaGulls(fw2, env), F.faunaCats(fw2, env, tw2), F.faunaFish(fw2, env)]);
   ok("mêmes positions au bit près (carte regénérée, cache vidé)", a === b, `${a.length} octets comparés`);
+}
+
+/* 2026-09-26 (nuit) — LA CADENCE DES PATTES. « Saccadé » (Guillaume) venait
+   d'un `floor(t × cadence(vitesse))` : `t` vaut ~10⁵ s, donc la moindre
+   variation de vitesse tirait une pose AU HASARD à chaque image. On compte les
+   changements de pose par seconde de marche (chat) et de nage (colvert) :
+   une vraie foulée en fait ≤ 6, le tirage au hasard ~15. */
+{
+  // Une pose qui ne dure qu'UNE image (à 30 images/s) est un tirage, pas un pas.
+  const blips = (pick, poseOf) => {
+    const st = new Map(); let runs = 0, one = 0;
+    for (let f = 0; f < 30 * 900; f++) {
+      const env = envAt(T0 + f * 1000 / 30, "summer");
+      for (const a of pick(env)) {
+        const s0 = st.get(a.id);
+        if (!a.moving) { st.delete(a.id); continue; }
+        const p = poseOf(a);
+        if (!s0) { st.set(a.id, { p, n: 1, first: true }); continue; }
+        if (s0.p === p) { s0.n++; continue; }
+        if (!s0.first) { runs++; if (s0.n === 1) one++; }
+        st.set(a.id, { p, n: 1, first: false });
+      }
+    }
+    return { runs, one, pct: runs ? 100 * one / runs : 100 };
+  };
+  const rc = blips((env) => F.faunaCats(fw, env, tw), (c) => c.pose);
+  ok("chat : la foulée ne tire pas au hasard (moins de 3 % de poses d'une seule image)", rc.runs > 50 && rc.pct < 3, `${rc.one} sur ${rc.runs} poses (${rc.pct.toFixed(1)} %)`);
+  const rd = blips((env) => F.faunaDucks(fw, env).filter((d) => d.kind === "duck" && !d.land), (d) => d.pose);
+  ok("colvert : le coup de patte ne tire pas au hasard (moins de 3 % de poses d'une seule image)", rd.runs > 50 && rd.pct < 3, `${rd.one} sur ${rd.runs} poses (${rd.pct.toFixed(1)} %)`);
+  const cs = new Set(F.lampMotes(envAt(T0 + 13 * 3600e3, "summer"), Array.from({ length: 40 }, (_, i) => ({ x: i * 50, y: 100, r: 2 }))).map((m) => m.c));
+  ok("insectes des lampes : plusieurs robes, du pâle au sombre", cs.size >= 5 && [...cs].every((c) => c >= 0 && c < 7), [...cs].sort().join(","));
 }
 
 console.log("§5 — Les réactions");

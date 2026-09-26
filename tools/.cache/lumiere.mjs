@@ -264,6 +264,9 @@ export function pointInShadow(lx, ly, rect, px, py) {
    ⚠️ Trois canevas pour tout le jeu (tampon, brouillon d'une source, halo),
    plus un par anneau en cache — jamais un par source ni par image (§10 : sur
    iPad, c'est le NOMBRE de canevas qui tue, pas leur taille). */
+/* Les robes des insectes des lampadaires, du plus pâle au plus sombre
+   (`lampMotes`, faune.js, tire l'index). */
+const MOTE_COLORS = ["#fff0c4", "#f2dc9a", "#d6b67a", "#a8845a", "#6e5238", "#443022", "#241910"];
 export function makeLightRenderer(makeCanvas) {
   const rings = new Map();
   let L = null, Lg = null, S = null, Sg = null;
@@ -379,11 +382,21 @@ export function makeLightRenderer(makeCanvas) {
          pixel d'art et, quand il file, sa traînée d'un pixel. Pas de halo : ils
          ne brillent pas, ils ACCROCHENT la lumière de la lampe. */
       if (sp.mote) {
+        /* ⚠️ DEUX MODES SELON LA ROBE (2026-09-26, nuit) : un insecte brun-noir
+           AJOUTÉ à la scène (`lighter`) n'ajoute presque rien — il serait
+           invisible ; il se peint donc par-dessus (`source-over`), en silhouette
+           sur le halo, plein (k porte déjà la distance au verre). Les pâles
+           gardent l'additif : ils ACCROCHENT la lumière, et peints par-dessus à
+           demi-opacité ils ternissaient (vu en jeu). */
         const X = Math.round(sp.x), Y = Math.round(sp.y), X2 = Math.round(sp.x2), Y2 = Math.round(sp.y2);
-        ctx.fillStyle = "#fff0c4";
-        if (X2 !== X || Y2 !== Y) { ctx.globalAlpha = 0.35 * k; ctx.fillRect(X2 * zm - view.Rx, Y2 * zm - view.Ry, zm, zm); }
-        ctx.globalAlpha = 0.85 * k;
+        const ci = sp.c | 0, dark = ci >= 4;
+        if (dark) ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = MOTE_COLORS[ci] || MOTE_COLORS[0];
+        const a = dark ? Math.min(1, 1.3 * k) : 0.85 * k;
+        if (X2 !== X || Y2 !== Y) { ctx.globalAlpha = 0.4 * a; ctx.fillRect(X2 * zm - view.Rx, Y2 * zm - view.Ry, zm, zm); }
+        ctx.globalAlpha = a;
         ctx.fillRect(X * zm - view.Rx, Y * zm - view.Ry, zm, zm);
+        if (dark) ctx.globalCompositeOperation = "lighter";
         continue;
       }
       const R = sp.refl ? 1 : 2;

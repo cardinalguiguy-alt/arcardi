@@ -1,5 +1,33 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (nuit) — RETOUCHES RAPIDES APRÈS VINGT MINUTES DE JEU
+
+Guillaume a joué vingt minutes et noté ses retours (liste sous la checklist) ; « reco partout, commence par
+les retouches rapides ». Fait :
+- **Fluidité (chat, colverts)** — trois causes, toutes corrigées. (1) ⚠️ **La cause principale** : l'image
+  de marche du chat et le coup de patte du colvert se calculaient en `floor(t × cadence(vitesse))`, avec `t`
+  le temps absolu (~10⁵ s) : dès que la vitesse variait, l'index sautait de milliers d'images et la pose
+  était tirée AU HASARD à chaque rafraîchissement — pendant tout le trajet, puisque l'ancien profil faisait
+  varier la vitesse tout du long. La foulée suit maintenant le CHEMIN PARCOURU (`st.dist`, rendu par
+  `slotMove`). (2) `slotMove` accepte un profil en TRAPÈZE (`ramp` : démarrage et arrêt courts, allure
+  tenue entre les deux) ; l'ancien (`easeIO` sur tout le trajet) faisait passer le chat au trot au milieu
+  de chaque marche (pointe à 1,96 > seuil de course). Les carpes gardent l'ancien. (3) Les bêtes se posent
+  au pixel d'ÉCRAN et non plus au pixel d'art (`snapF`, FermeGame.js) : un colvert avançait par sauts de
+  3-4 pixels d'écran toutes les ~120 ms.
+- **Colverts moins réguliers** : chaque groupe a son créneau (15 à 19 s) et son décalage — les quatre
+  changeaient de cap ensemble toutes les 17 s —, chaque trajet sa vitesse (0,32 à 0,72 case/s), et la nage
+  ondule un peu (`duckSway`, éteinte continûment près de la rive).
+- **Papillons** ÷2 au parc et aux parterres, ÷3 ailleurs (97 maisons → 39), par un tirage à part pour que
+  les maisons gardées restent en place. **Goélands** 10 → 6 (4 goélands, 2 rieuses). **Insectes des
+  lampes** : sept robes du jaune-blanc au brun-noir ; les sombres se peignent en `source-over` (en
+  additif ils n'ajoutaient rien), les pâles gardent l'additif (peints par-dessus, ils ternissaient — vu en
+  jeu).
+- `verify-faune` 58 → 61 : la cadence (moins de 3 % de poses d'une seule image — l'ancienne formule en
+  donnait 9 % au chat et 33 % au colvert : falsifié), les robes des insectes, la coupe des papillons.
+⚠️ **Vu en jeu** (échafaudage local) : l'étang au matin, la place et ses lampes à 23 h en été forcé ;
+**pas** mesuré à l'écran le pas du colvert en mouvement (ils se reposaient), seulement au banc. **Pas de
+manipulation Supabase.**
+
 ## 2026-09-26 (soir) — RETOUCHES DE LA FAUNE (hors phases)
 
 Trois demandes de Guillaume après avoir vu la phase 5, livrées ensemble (vu en jeu, échafaudage local :
@@ -236,6 +264,23 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5)** : plus de VARIÉTÉ d'intempéries — une pluie qui ne tombe pas violente d'emblée (ni systématiquement), un orage qui MONTE (il n'arrive pas d'un coup), des orages SECS (éclairs sans pluie, avec un léger assombrissement), plus de pluie en automne qu'en été ; et au menu dev, COMMANDER la météo pour la journée en cours (la rotation normale revient le lendemain).
+**Retours de Guillaume après 20 min de jeu (2026-09-26, nuit) — à faire, rien de codé** :
+- ✅ **Chat moins saccadé** (fait, voir le récit en tête). ⬜ Il n'est pas forcément peureux, ça dépend de
+  la façon dont on l'approche (le câlin quand on reste calme à côté plaît, à garder). **Lui donner du
+  lait** (si on en a) et le **fidéliser** : le chat errant revient ensuite nous voir régulièrement.
+- ✅ **Papillons** : population divisée par 3 hors des parcs et jardins, par 2 dedans.
+- ✅ **Colverts moins saccadés et moins réguliers.** ⬜ Ils **écartent les nénuphars** qu'ils heurtent en
+  passant ; ⬜ la nuit, beaucoup (pas tous) **dorment sur la berge, le bec dans le dos** (chercher des
+  références photo).
+- ✅ **Goélands et mouettes** : moins nombreux (10 → 6).
+- ✅ **Insectes des lampadaires** : sept robes, du jaune-blanc au brun-noir.
+- ⬜ **Épuisette** à acheter (chez Pierre ou au marché) : tenter d'attraper les carpes (à relâcher, la
+  mairie en interdit la pêche) ou chasser les papillons, avec un **compteur de papillons** (collection).
+- ⬜ **Reflet du pont** (déjà dans les restes de la phase 4, ci-dessous : re-demandé en jouant).
+- ⬜ **Menu dev** : la saison forcée ne change pas réellement la saison (seulement celle de la faune, et
+  localement) — « pour plus tard ». ⚠️ Constaté en vérifiant : la faune lit `E.seasonOf()` (la date RÉELLE :
+  fin septembre = automne, donc peu d'insectes et peu de papillons) pendant que le bandeau affiche « Été ».
+  Deux saisons coexistent ; à unifier avec ce chantier.
 **Restes de la phase 4, à reprendre (Guillaume, 2026-09-26 : « pour y revenir plus tard »)** : bittes d'amarrage ; reflets des ponts, du navire et des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets) ; reflet de la torche et éclats de lune jamais regardés de près.
 Reporté exprès : détail des personnages (non voulu ; un cerne seulement si, après 7, ils se perdent),
 canevas `devicePixelRatio` (le flou ne touche que le texte, réglé en 2), neige au sol et flaques
