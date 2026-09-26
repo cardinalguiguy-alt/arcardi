@@ -1,4 +1,48 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-25
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
+
+## 2026-09-26 — PHASE 5 : LA FAUNE
+
+Décisions de Guillaume : routines PARTAGÉES sans message + réactions locales ; six espèces aux lieux
+proposés, papillons « petits et détaillés », vol calculé ; gestes gratuits sans récompense (le
+gameplay — bocal de lucioles, chat adopté, carpes pêchées à vue — est GARDÉ EN RÉSERVE) ; présence
+modulée par la saison ; lucioles qui éclairent et CLIGNOTENT ; ville seulement, pas de son. Vu en jeu
+(échafaudage local, 724×863 : étang de 7h à 23h, port, marché, place, parc à midi).
+- **`faune.js` (pur)** : chaque bête suit des CRÉNEAUX dont la cible est tirée indépendamment (jamais de
+  chaîne à rejouer, jamais de saut) ; la carte donne les lieux (bassins de l'étang, roselières du lac
+  lues sur roseaux et nénuphars, quai et ponton, étals, tombes, bancs, massifs fleuris) ; les heures se
+  lisent sur `dayStartAt`. Réactions locales en DÉCALAGE qui revient à zéro (`faunaReact*`).
+- **Colverts** (4 groupes : famille de l'étang, un couple, deux roselières) : la cane mène, les suiveurs
+  la suivent EN RETARD sur sa route (la file des canetons tombe de là), s'égaillent au repos et se
+  rassemblent avant qu'elle reparte ; répertoire de 14 poses et ses ENCHAÎNEMENTS (coup de patte, tête
+  qui tourne, tête plongée, barbotage en trois temps avec les pattes qui pédalent, toilette, battement
+  d'ailes, sommeil qui respire) ; ronds dans l'eau, sillage, reflets ; canetons au printemps, jeunes
+  l'été, mâle en ÉCLIPSE l'été ; dortoir près des roseaux la nuit ; ils s'écartent d'un passant, restent
+  dans l'eau, viennent aux miettes d'un banc, gardent leur espace vital.
+- **Carpes** (étang clair) : peintes au pixel sous la surface (avant les reflets), lentes, ombre sur le
+  fond, gobent en surface, montent aux miettes. **Sauts** au port (poisson argenté + ronds).
+- **Goélands et mouettes rieuses** (capuchon chocolat printemps-été, tête blanche l'hiver) : posés sur le
+  quai et le ponton, sur l'eau, ou en vol circulaire vu d'en haut, avec leur ombre et leur reflet ;
+  transferts en arc ; s'envolent devant un passant et reviennent ; rappliquent quand on pêche au port ;
+  tournent au-dessus de l'étal de poisson les matins de marché ; dorment la nuit.
+- **Trois chats** (roux au marché, noir à l'église, tricolore au port) : marchent par le vrai chemin de
+  la ville, se reposent (assis, miche, toilette, de face, roulés en boule l'après-midi), s'abritent
+  l'orage ; fuient un joueur qui fonce dessus puis reviennent ; un chat « ami » vient se frotter aux
+  jambes d'un joueur IMMOBILE (assis sur un banc compris), puis s'assoit à côté.
+- **Papillons** (six espèces, 5 à 7 px, une marque chacune) : vitesse 1,2-2 cases/s, battement 7-11 Hz,
+  sautillement au battement, écarts latéraux, grande boucle, vol plané du paon et du vulcain, ailes
+  ouvertes au soleil ; ils partent en s'élevant quand la densité baisse (jamais ne s'éteignent).
+- **Lucioles** : dérive lente, éclair lent (≈ 1 s) toutes les 6-10 s, lumière minuscule au sol et éclat
+  après le ciel (`sparks`, lumiere.js), reflet sur l'eau ; certaines nuits l'étang se synchronise.
+- **Pigeons et colombes redessinés au pixel natif** (fin de la réduction ×2/3 au rendu qui sautait un
+  pixel sur trois). Menu dev : saison de la faune forcée (locale), « se poser à côté d'un chat ».
+- **Hors phase, demandé en cours de route et fait** : les reflets des arbres AU-DESSUS de l'écran
+  (la file de dessin commence `TOWN_REFL_ROWS` = 6 rangées plus haut que la vue).
+⚠️ **Retours de Guillaume déjà appliqués en séance** : colverts trop grands (17 → 13 px) et trop peu
+animés (6 → 14 poses et leurs enchaînements), carpes trop rapides (0,3 → 0,12 case/s), lucioles plus
+lentes (« plus dreamy »). ⚠️ **Pas fait** : éclat des yeux des chats la nuit, papillons en couple qui se
+poursuivent, chats qui réagissent aux chiens des joueurs, faune de la ferme (sa mise à niveau).
+⚠️ **Coût** : 0,05 ms/image de simulation (mesuré sous Node), `faunaWorld` 17 ms une fois ; un atlas
+pour toute la faune + 18 canevas de pigeons (comme avant). **Rien vu sur iPad.**
 
 ## 2026-09-25 (nuit) — PHASE 4 : SOLS ET EAU
 
@@ -159,10 +203,12 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 2 | Correctifs sans parti pris — **livrée le 2026-09-25** (récit juste au-dessus) : détourage du tribunal refait (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit, noms en police pixel avec priorité et fondu (personnages + cartes), lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne, couture verte du fondu de zoom, dix étals différents | fait |
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
-| ⬜ | 5 | Faune : canards, poissons, papillons, chats, mouettes, lucioles — fonctions du temps, non diffusées (règle des pigeons, 433) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie | après la grille (1) et la lumière (3), avant la composition |
+| ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
+| ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
+**Météo, demandée par Guillaume le 2026-09-26 (après la phase 5)** : plus de VARIÉTÉ d'intempéries — une pluie qui ne tombe pas violente d'emblée (ni systématiquement), un orage qui MONTE (il n'arrive pas d'un coup), des orages SECS (éclairs sans pluie, avec un léger assombrissement), plus de pluie en automne qu'en été ; et au menu dev, COMMANDER la météo pour la journée en cours (la rotation normale revient le lendemain).
+**Restes de la phase 4, à reprendre (Guillaume, 2026-09-26 : « pour y revenir plus tard »)** : bittes d'amarrage ; reflets des ponts, du navire et des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets) ; reflet de la torche et éclats de lune jamais regardés de près.
 Reporté exprès : détail des personnages (non voulu ; un cerne seulement si, après 7, ils se perdent),
 canevas `devicePixelRatio` (le flou ne touche que le texte, réglé en 2), neige au sol et flaques
 réfléchissantes (après 3–4), mise à niveau de la FERME (après 4, elle réutilisera les sols).

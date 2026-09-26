@@ -7,78 +7,64 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-25/26 — Valley Town : PHASES 0 À 4 de la feuille de route graphique livrées
+### 2026-09-26 — Valley Town : PHASES 0 À 5 de la feuille de route graphique livrées
 
 Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec le récit de chaque phase — Guillaume :
 « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on ne les
 détaille pas) ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, Guillaume a
 LEVÉ la règle « un seul changement visuel par livraison »** : une phase se livre d'un bloc.
-**Reste : 5 faune · 6 bâtiments courants · 7 composition · 8 intérieurs.**
-- **Phases 0-3** : outillage, monuments à 1:1, correctifs sans parti pris, la lumière (`lumiere.js`).
-- **Phase 4, sols et eau** (« reco partout ») — **l'eau est CUITE AU PIXEL** (`components/ferme/eau.js`,
-  pur) : distance exacte à la rive meuble, seize paliers FRANCS à couture d'un pixel, cuvette éclairée
-  d'en haut à gauche ; cuisson par tranches de 4 ms/image dès le montage (la carte de la ville est tirée
-  avec les sprites), l'eau par case de la 436 en repli. Étang CLAIR, port profond, passe ensablée,
-  plages. **Reflets** : les entrées de `pushE` marquées `rx` sont REJOUÉES en miroir dans un tampon
-  (`ctx` est un `let` échangé le temps de l'appel, `reflecting` coupe noms et bulles) ; la nuit, colonnes
-  sous les lampes et la torche, éclats de lune. Quai à parement, ponton sur pieux, houle à DEUX trains
-  (rapide/lent, période unique chacun). Gazon sans période (plaques au monde), sentiers meubles à contour
-  libre, terre battue, bordures entre revêtements durs, murs de soutènement habillés, ombre au pied posée
-  par la case du bas. Arrêt dev « l'étang du parc ». **Pluie** : le rideau ne se retire plus à chaque
-  image d'un fondu de zoom, impacts ×3, en ronds sur l'eau. Tout vu en jeu (524×714, port jour et nuit,
-  étang, passe, belvédère, place sous la pluie pendant un fondu).
-- Bancs le 2026-09-25 : **27/27 `verify-*`** (`verify-pont` : motif appris au 5e argument de `pushE`),
-  **24/24 `render-*`** (`render-eau` 17/17, mesure l'eau cuite, contrôle du port falsifié), `no-undef`
-  propre sur les fichiers touchés, bundle et `next build` complet.
-- ⚠️ **Poids et coût, Mac seulement** : ≈ 9 Mo de canevas neufs (17 retenus), cuisson ≈ 0,4 s de calcul
-  étalé ; 2,4 ms/image au port de jour, 2,65 de nuit, 1,4 sur la place. **Rien vu sur un vrai iPad.**
-- **Pas de manipulation Supabase.** Échecs (2026-09-24) : toujours jamais joués par Guillaume.
+**Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo, ci-dessous).
+- **Phase 5, la faune** — `faune.js` (comportement, pur) + `fauneArt.js` (dessins en données, un atlas) :
+  colverts (4 groupes, 14 poses et leurs enchaînements), carpes sous l'eau claire, sauts au port,
+  goélands et mouettes rieuses (vol vu d'en haut), trois chats (marché, église, port), papillons (six
+  espèces), lucioles qui éclairent et clignotent. **Routines = pures fonctions du temps partagé et de la
+  carte (les deux joueurs voient les mêmes bêtes, zéro message), réactions locales en décalage qui
+  revient à zéro.** Pigeons redessinés au pixel natif (fin du ×2/3 au rendu). Menu dev : saison de la
+  faune forcée (locale), se poser à côté d'un chat. Retours de Guillaume appliqués EN SÉANCE : colverts
+  plus petits et plus animés, carpes et lucioles plus lentes.
+- **Hors phase, fait** : les reflets des arbres au-dessus de l'écran (la file de dessin de la ville
+  commence 6 rangées plus haut que la vue, `TOWN_REFL_ROWS`).
+- Bancs le 2026-09-26 : **28/28 `verify-*`** (`verify-faune` 49/49, neuf, falsifié deux fois), **24/24
+  `render-*`**, `no-undef` propre sur les fichiers touchés, bundle et `next build` (`✓ Compiled`).
+- ⚠️ **Coût** : 0,05 ms/image de simulation (Node), 17 ms une fois au chargement de la ville. **Rien vu
+  sur un vrai iPad** (phases 3 à 5). **Pas de manipulation Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **La phase 4**, à juger en jouant : les paliers de l'eau (des courbes de niveau assumées), l'étang
-  clair, les plages et la passe, la force des reflets (`REFL_ALPHA` 0,52, eau.js), les colonnes de nuit,
-  le lierre des murs, les plaques du gazon. **Pas fait** : bittes d'amarrage ; reflets des ponts, du
-  navire, des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets réels) ; reflet
-  de la torche et éclats de lune jamais regardés de près.
-- **Les phases 1 à 3 de Valley Town elles-mêmes**. Phase 3, à juger en jouant : la profondeur de la
-  nuit (`SKY_NIGHT`), la teinte des heures, la force des lampes, le tribunal allumé une fenêtre sur
-  deux, la fréquence des éclairs (un toutes les ~26 s), une ville presque noire tant qu'elle est peu
-  peuplée. ⚠️ **Limite connue** : un personnage ou un arbre DEVANT une fenêtre allumée s'éclaire à la
-  forme de la fenêtre (le tampon ignore l'ordre de dessin). ⚠️ Phase 2 : un personnage caché derrière
-  un bâtiment garde son nom visible (voulu, pour retrouver un ami) — à confirmer avec lui.
-- Le perron du tribunal (ressenti de la montée), le schéma du zoom manuel (cinq crans, cette
-  amplitude), le rétrécissement des pets ancré sur le maître — le récit vit autour de
-  `courtDepthScale`/`TOWN_COURT_DEPTH_MARGIN` (fermeConstants.js) et `PERCH_POINTS_T` (FermeGame.js).
-- Eduardo qui s'arrête et redirige vers le port (`starYardHookActive`, FermeGame.js), jamais vu en
-  partie : fenêtre étroite (lui + Tristan + 4 artisans + jour ≥3).
-- Le belvédère enrichi (piliers, télescope, jardinières ; fermeEngine.js après les lampadaires) —
-  vu à l'écran par Claude seulement.
-- Plus anciens : tronc du pin (`richTrunk`), bois du sud-est, cœur de ville et fontaine, bouton
-  « changer de ferme », collision résidents/buissons (2026-09-21) ; chantier naval, repousse des
-  buissons, verdure ×1,8 de Valley Town (2026-09-16).
-- **À décider avec lui, jamais seul (§2)** : quel bâtiment après le tribunal (refonte graphique
-  avec Gemini) ; traduction des métiers (`job` de `TOWN_RESIDENTS` affiché brut en anglais — une
-  table `jobFr` suffit) ; combler ou non le jour entre les arcs-boutants de l'église (on y voit le
-  dallage du parvis — c'est peindre, donc un parti pris) ; sécurité et synchro multi de la ferme
-  (`components/ferme/SECURITE.md`, RIEN codé, migration à valider).
+- **Les phases 1 à 5 de Valley Town**, à jouer. Phase 5 : les enchaînements des colverts, la taille des
+  bêtes, la fréquence des gestes gratuits (le chat qui salue, les goélands du pêcheur), les papillons
+  (assez visibles ?), la synchronisation des lucioles certaines nuits. **Pas fait en phase 5** : l'éclat
+  des yeux des chats la nuit, les papillons en couple, les chats face aux chiens des joueurs, la faune de
+  la ferme. Phase 4, pas fait : bittes d'amarrage ; reflets des ponts, du navire, des fenêtres ; chemins
+  de désir. Phase 3 : ⚠️ un personnage DEVANT une fenêtre allumée s'éclaire à sa forme (limite connue).
+- Le perron du tribunal, le zoom manuel, les pets ancrés sur le maître, Eduardo et le port
+  (`starYardHookActive`), le belvédère enrichi ; plus anciens : pin, bois du sud-est, cœur de ville,
+  « changer de ferme », chantier naval, repousse des buissons.
+- **À décider avec lui, jamais seul (§2)** : quel bâtiment après le tribunal (Gemini) ; traduction des
+  métiers (`job` de `TOWN_RESIDENTS`, une table `jobFr`) ; le jour entre les arcs-boutants de l'église ;
+  sécurité et synchro multi de la ferme (`components/ferme/SECURITE.md`, RIEN codé).
 - ⚠️ Dette Google Cloud d'Où's That, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE (il se
   connecte lui-même, aucun identifiant transmis) : facturation dans l'EEE ; clé dédiée ; restriction
   à **Maps Embed API seule** ; référents limités aux domaines Arcardi ; aucune API payante sur ce
   projet ; rapport de facturation à zéro. Un budget d'alerte n'est pas un plafond. Close seulement
   après lecture des écrans réels, jamais par déduction depuis `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
-- §13 tient le reste (îles, transport du bois, mariage/cadastre/coiffure, ferme peuplée à deux).
+- §13 tient le reste (îles, transport du bois, mariage/cadastre/coiffure, ferme peuplée à deux, et les
+  projets mis en réserve le 2026-09-26).
 
 ### ⏭️ ACTION SUIVANTE
 
-**Phase 5 de la feuille de route graphique de Valley Town : la faune** (canards, poissons — l'étang clair
-de la phase 4 est leur scène —, papillons, chats, mouettes, lucioles ; fonctions du temps, jamais
-diffusées : règle des pigeons, 433). C'est de la production créative : **LISTER LES DÉCISIONS
-STRUCTURANTES ET ATTENDRE (§2)**, puis **poser les questions au fil du travail**. ⚠️ Un animal qui nage
-ou qui vole bas au-dessus de l'eau doit passer par la file `pushE` avec son `rx` pour avoir son reflet.
-Rappeler à Guillaume de jouer les phases 1-4 en vraie séance. L'« autre jeu » annoncé après les échecs
-attend toujours qu'il le nomme. ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son
-sprite AVANT de poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
+**La météo de Valley Town et de la ferme** (demandée par Guillaume le 2026-09-26, détail dans la note
+« Météo » sous la checklist de `components/ferme/README.md`) : pluie qui MONTE au lieu de tomber violente
+d'emblée, orages SECS (éclairs sans pluie, léger assombrissement), plus de pluie en automne qu'en été,
+plus de variété ; et **commander la météo de la journée au menu dev** (la rotation revient le
+lendemain). ⚠️ Aujourd'hui la météo est `E.isStormyDay(day)` (tout ou rien, un jour sur 7) : la variété
+doit rester une PURE FONCTION du jour (§3), et le forçage dev doit être PARTAGÉ (arbitré par l'hôte,
+porté par l'état commun) sinon les deux joueurs verraient deux ciels — **proposer la forme avant de
+coder**, c'est un changement d'état partagé. Ensuite : **phase 6** (bâtiments courants, dont les maisons
+« cheap » à refaire et l'éclairage des fenêtres, y compris celui des grands bâtiments, plus réaliste).
+Rappeler à Guillaume de jouer les phases 1-5. L'« autre jeu » annoncé après les échecs attend toujours
+qu'il le nomme. ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de
+poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 
@@ -480,6 +466,10 @@ dépôt.
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
   `INVALID_OPERATION: program not valid` dans la console.**
+- ⚠️⚠️ **UN EFFET QUI SE DESSINE AILLEURS QUE SON OBJET (un reflet, une ombre longue) N'EXISTE QUE SI LA
+  FILE DE DESSIN CONNAÎT L'OBJET HORS CADRE** (2026-09-26, vu par Guillaume : le reflet d'un arbre
+  apparaissait d'un coup quand le pied du tronc entrait à l'écran). La vue découpée à l'écran n'est pas
+  la bonne marge : c'est la portée de l'effet qui la donne (`TOWN_REFL_ROWS`).
 - ⚠️⚠️ **UN ÉTAT QU'ON RETIRE QUAND SA TAILLE CHANGE SE RETIRE À CHAQUE IMAGE D'UN FONDU** (pluie,
   2026-09-25, vu par Guillaume). Le nombre de gouttes suivait la surface visible, donc changeait à chaque
   image d'un zoom — et le tableau était régénéré au hasard : tout le rideau sautait. Ce qui dépend d'un
@@ -572,6 +562,7 @@ dépôt.
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
+| `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
@@ -1235,6 +1226,12 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   (résidents jamais vus se comporter à deux clients) : construire un système de relations sur un
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
+
+⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-26, À NE PAS PERDRE** : (1) le GAMEPLAY de la
+faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
+MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs
+fenêtres (phase 6) ; (3) l'éclairage des fenêtres des GRANDS bâtiments, plus travaillé, réaliste, beau ;
+(4) les restes de la phase 4 (liste dans le bloc ⏭️ REPRISE). La météo est l'ACTION SUIVANTE.
 
 ✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :
 bloc ⏭️ REPRISE et `QUETE.md`, autorité 2026-09-13 bis). ⚠️ **Le vandale reste anonyme, jamais

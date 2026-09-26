@@ -65,6 +65,8 @@ import { loadBitmap, peekBitmap } from "./bitmapAssets";
 import * as PF from "./pixelFont";
 import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
 import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
+import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
+import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -1225,6 +1227,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      jeu n'en vaut pas la chandelle. ⚠️ SI GUILLAUME VEUT QUE LE CAMARADE VOIE
      LE MÊME ATTROUPEMENT, c'est un `send` de trois nombres et rien d'autre. */
   const townFoodRef = useRef(null);
+  /* 2026-09-26 (phase 5) — LA FAUNE : l'état LOCAL des réactions (les routines,
+     elles, sont de pures fonctions du temps, voir faune.js), le suivi de
+     l'immobilité des joueurs (un chat vient saluer celui qui ne bouge plus),
+     les petits effets (le cœur du chat), et le forçage de saison du menu dev
+     (réservé à la faune : les saisons durent une semaine réelle). */
+  const faunaLocalRef = useRef({});
+  const faunaThreatRef = useRef(new Map());
+  const faunaFxRef = useRef([]);
+  const faunaSeasonRef = useRef(null);
   const crumbNextRef = useRef(0);   // zip 439 : anti-rafale du pain (voir throwCrumbs)
   /* ZIP 441 — L'ÉGLISE. ⚠️ CES TROIS-LÀ SONT DES REFS ET PAS DES ÉTATS : ils
      sont lus par la BOUCLE DE RENDU, qui vit dans une closure à dépendances
@@ -14041,6 +14052,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setDevMenuOpen(false);
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
+  /* 2026-09-26 (phase 5) — LA FAUNE AU MENU DEV. Deux outils, et aucun ne
+     donne quoi que ce soit : (1) forcer la SAISON de la faune seule (une saison
+     dure une semaine réelle : sans ça, on ne verrait les canetons qu'au
+     printemps, et les lucioles qu'une semaine sur quatre) — c'est un état
+     LOCAL, les autres joueurs gardent la vraie saison ; (2) se poser à côté
+     d'un des trois chats, là où sa routine le met en ce moment (ils se
+     promènent : un arrêt fixe tomberait à côté). */
+  function devFaunaSeason(k) {
+    faunaSeasonRef.current = k || null;
+    pushToast(L.devFaunaSeasonToast(k || null));
+  }
+  function devStandByCat(idx) {
+    const m = meRef.current, tw = townWorldRef.current;
+    if (!m || m.zone !== "town" || !tw) { pushToast(L.devFaunaNeedTown); return; }
+    const fw = FAU.faunaWorld(tw);
+    const shF = sharedRef.current, dayF = shF.day || 1;
+    const env = FAU.faunaEnv({ nowMs: Date.now(), dayStartAt: shF.dayStartAt, day: dayF, seasonKey: faunaSeasonRef.current || E.seasonOf().key, stormy: E.isStormyDay(dayF) });
+    const c = FAU.faunaCats(fw, env, tw).find((q) => q.idx === idx);
+    if (!c) return;
+    keysRef.current = {};
+    // On se pose deux cases à côté, sur une case praticable (la collision le vérifie à la première marche).
+    for (const dx of [2, -2, 0]) {
+      const ax = c.x + dx - C.BODY_CX, ay = c.y + 1.2 - C.BODY_FY;
+      if (E.townBoxFree(tw, ax, ay)) { m.x = ax; m.y = ay; break; }
+    }
+    m.dir = 0; m.moving = false;
+    sendPos();
+    setDevMenuOpen(false);
+  }
   /* 463 — UN BOUTON DE TEST QUI PLACE, MAIS N'ACCORDE RIEN. L'apprivoisement
      solo dure une vraie minute : sans moyen reproductible de retrouver le
      prochain petit cratère et la posture exacte, le test visuel finit par
@@ -19960,7 +20000,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          la transformation reste celle posée plus haut. */
       const zmFrac = Math.abs(zm - Math.round(zm)) > 1e-6;
       const camSx = Math.round(cam.x * zm), camSy = Math.round(cam.y * zm);
-      for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
+      /* ⚠️⚠️ 2026-09-26 — LES REFLETS DE CE QUI EST AU-DESSUS DE L'ÉCRAN (vu par
+         Guillaume : « quand un arbre n'apparaît pas encore à l'écran, son reflet
+         n'apparaît pas non plus […] il apparaît d'un coup quand le pied du tronc
+         entre à l'écran »). Un reflet tombe SOUS l'objet, de toute sa hauteur :
+         un arbre planté juste au-dessus du bord haut de l'écran est invisible,
+         mais son reflet, lui, est dans le cadre. La boucle commence donc
+         `TOWN_REFL_ROWS` rangées plus haut que la vue — assez pour l'arbre le
+         plus haut (64 px) plus l'axe du quai. Ce qui s'y dessine hors cadre est
+         découpé par le canevas ; ce qui compte, c'est que la file de dessin
+         CONNAISSE l'objet, pour que la passe des reflets le rejoue. */
+      const TOWN_REFL_ROWS = 6;
+      const yR0 = Math.max(0, y0 - TOWN_REFL_ROWS);
+      for (let y = yR0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const bakedCourtStair = C.townCourtMainStairCell(x, y);
         const e = tw.elev[i], oy = -e * EP;
@@ -21108,7 +21160,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
             }
             if (!im) return;
-            const BIRD_SCALE = 1 / 1.5;
+            const BIRD_SCALE = 1;   // 2026-09-26 (phase 5) : le pigeon est DESSINÉ à sa taille (fauneArt.js), plus aucune réduction au rendu
             const bdw = im.width * BIRD_SCALE, bdh = im.height * BIRD_SCALE;
             const behindK = bb.grounded ? 1 : 0.82 + 0.18 * Math.max(0, bb.depth); // un peu plus petit côté "loin"
             const dwB = bdw * behindK, dhB = bdh * behindK;
@@ -21481,7 +21533,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                revient à supprimer le seul repère qui disait que le monument est
                grand. Même valeur que les pigeons de la place (BIRD_DRAW_SCALE)
                et que ceux de l'église : un seul oiseau, partout. */
-            const BIRD_SCALE = 1 / 1.5;
+            const BIRD_SCALE = 1;   // 2026-09-26 (phase 5) : le pigeon est DESSINÉ à sa taille (fauneArt.js), plus aucune réduction au rendu
             const bdw = im.width * BIRD_SCALE, bdh = im.height * BIRD_SCALE;
             const behindK = bb.grounded ? 1 : 0.82 + 0.18 * Math.max(0, bb.depth);
             const dwB = bdw * behindK, dhB = bdh * behindK;
@@ -21699,7 +21751,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-09-25 (phase 3) : le seuil vit dans `LUM.lampLit`, que la lumière lit aussi.
       const townLampLit = (pr) => LUM.lampLit(pr.x, pr.y, lampNa);
       for (const pr of (tw.props || [])) {
-        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
+        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
         if (pr.kind === "tallGrass") { drawTownTallGrass(pr); continue; }
         /* ⚠️⚠️⚠️ ZIP 439 — LE PONT SE DESSINE EN DEUX MOITIÉS, ET LE JOUEUR
@@ -22184,6 +22236,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }, pLift, Math.floor(dx2 + 0.5));   // 2026-09-25 (phase 4) : un habitant se reflète aussi
         }
       }
+      // 2026-09-26 (phase 5) : remplis par la passe de la faune (plus bas), lus par
+      // la passe de l'eau (les carpes, sous la surface) et par la lumière (les lucioles).
+      const faunaUnder = [], faunaGlow = [];
+      let faunaEnvNow = null;
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 433 — LES PIGEONS ET LES COLOMBES.
          ╚══════════════════════════════════════════════════════════════════════
@@ -22305,9 +22361,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ctx.globalAlpha = 1;
               }
               // Guillaume 2026-08 : les pigeons et colombes mangeaient trop de
-              // place sur la place de Valley Town — réduits d'1,5 au dessin,
-              // uniquement ici (une seule échelle, pas une seconde géométrie).
-              const BIRD_DRAW_SCALE = 1 / 1.5;
+              // place — réduits d'1,5 AU RENDU. ⚠️ 2026-09-26 (phase 5) : ils sont
+              // désormais DESSINÉS à cette taille (et un peu moins), au pixel natif
+              // (fauneArt.js) : une réduction au rendu sautait un pixel sur trois.
+              const BIRD_DRAW_SCALE = 1;
               const dw = im.width * BIRD_DRAW_SCALE, dh = im.height * BIRD_DRAW_SCALE;
               const py = Math.round(gy - bb.alt * T) - im.ground * BIRD_DRAW_SCALE;
               const px3 = Math.round(gx - dw / 2);
@@ -22319,6 +22376,198 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               } else ctx.drawImage(im, px3, py, dw, dh);
               ctx.globalAlpha = 1;
             });
+          }
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-26 (phase 5) — LA FAUNE DE VALLEY TOWN.
+         ╚══════════════════════════════════════════════════════════════════════
+         Les ROUTINES viennent de `faune.js` (pures fonctions du temps partagé et
+         de la carte : les deux joueurs voient les mêmes bêtes, sans un message) ;
+         les RÉACTIONS (fuite, bonjour du chat, miettes, goélands du pêcheur) sont
+         calculées ici, chez chacun, à partir des positions des joueurs qui
+         circulent déjà. Les dessins sont dans `fauneArt.js`.
+         ⚠️ CE QUI NAGE OU VOLE AU-DESSUS DE L'EAU PASSE PAR `pushE` AVEC SON `rx` :
+         c'est ce qui lui donne son reflet (phase 4). Les carpes, elles, sont SOUS
+         la surface : elles se peignent avant les reflets (`faunaUnder`, plus bas).
+         ⚠️ Le pas de temps est bridé comme celui des pigeons : un onglet qui
+         revient ne doit pas téléporter une réaction. */
+      {
+        const fw = FAU.faunaWorld(tw);
+        const FAS = sprites.fauna;
+        if (fw && FAS) {
+          const shF = sharedRef.current;
+          const dayF = shF.day || 1;
+          const env = FAU.faunaEnv({ nowMs: Date.now(), dayStartAt: shF.dayStartAt, day: dayF,
+            seasonKey: faunaSeasonRef.current || E.seasonOf().key, stormy: E.isStormyDay(dayF) });
+          faunaEnvNow = env;
+          const fdt = Math.min(dt, 0.05);
+          const nowP = performance.now();
+          const view = { x0: x0 - 1, x1: x1 + 1, y0: y0 - 1, y1: yBot + 1 };
+          const inView = (x, y, mx) => x >= x0 - mx && x <= x1 + 1 + mx && y >= y0 - mx && y <= yBot + 1 + mx;
+          /* Les joueurs, en PIEDS (la ligne de contact), et depuis quand chacun ne
+             bouge plus. Un joueur assis sur un banc est immobile — donc un chat
+             peut venir s'asseoir à côté de lui. */
+          const TR = faunaThreatRef.current;
+          const threats = [];
+          const track = (id, ax, ay) => {
+            const fx = C.footX(ax), fy = C.footY(ay);
+            let r = TR.get(id);
+            if (!r) { r = { x: fx, y: fy, since: nowP }; TR.set(id, r); }
+            const moved = Math.hypot(fx - r.x, fy - r.y) > 0.015;
+            if (moved) r.since = nowP;
+            r.x = fx; r.y = fy;
+            threats.push({ id, x: fx, y: fy, moving: moved || nowP - r.since < 300, still: (nowP - r.since) / 1000 });
+          };
+          if (!m.sleeping) track("me", m.x, m.y);
+          for (const p of playersRef.current.values()) if (p.zone === "town" && !p.sleeping) track(p.id, p.x, p.y);
+          const SL = faunaLocalRef.current;
+          const foodF = townFoodRef.current && townFoodRef.current.until > nowP ? townFoodRef.current : null;
+          /* Un atlas lu au point d'ancrage (le pied, ou la ligne de flottaison),
+             retourné pour regarder à gauche. Pixel entier, échelle 1. */
+          const blitF = (cell, gx, gy, face, alpha) => {
+            if (!cell) return;
+            const X = Math.round(gx) - (face < 0 ? cell.w - cell.ax : cell.ax), Y = Math.round(gy) - cell.ay;
+            const a0 = ctx.globalAlpha;
+            if (alpha != null && alpha < 1) ctx.globalAlpha = a0 * alpha;
+            if (face < 0) { ctx.save(); ctx.translate(X + cell.w, Y); ctx.scale(-1, 1); ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, 0, 0, cell.w, cell.h); ctx.restore(); }
+            else ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, X, Y, cell.w, cell.h);
+            ctx.globalAlpha = a0;
+          };
+          const groundShadow = (gx, gy, w, a) => {
+            ctx.globalAlpha = a; ctx.fillStyle = "#1a1a1a";
+            ctx.fillRect(Math.round(gx - w / 2), Math.round(gy) - 1, Math.round(w), 2);
+            ctx.globalAlpha = 1;
+          };
+          // ── Les colverts.
+          const ducks = FAU.faunaDucks(fw, env);
+          FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt);
+          for (const d of ducks) {
+            if (!inView(d.x, d.y, 2)) continue;
+            const cell = d.kind === "duck" ? (FAS.duck[d.robe] && FAS.duck[d.robe][d.pose]) : FAS.duckling[d.pose];
+            const gx = d.x * T, gy = d.y * T;
+            const hx = d.face, spd = d.moving ? Math.min(1, 0.4 + (d.spd || 0.5)) : 0;
+            const ring = d.ring;
+            pushE(gy - 3, 0, () => {
+              FART.drawWake(ctx, gx - hx * 2, gy, hx, 0, spd, d.kind === "duck" ? 4 : 2);
+              // Le rond d'un geste qui touche l'eau (tête plongée, barbotage, battement d'ailes).
+              if (ring >= 0 && ring < 1) FART.drawRipple(ctx, gx + hx * 2, gy, 2 + ring * 7, (1 - ring) * 0.55);
+              // La ligne d'eau : un trait clair au ras du corps, qui dit « il flotte ».
+              ctx.globalAlpha = 0.45; ctx.fillStyle = "#dcecf2";
+              const w = cell ? Math.max(3, cell.w - 6) : 6;
+              ctx.fillRect(Math.round(gx - w / 2), Math.round(gy), w, 1);
+              ctx.globalAlpha = 1;
+            });
+            pushE(gy, 0, () => blitF(cell, gx, gy, d.face), 0, Math.floor(d.x));
+          }
+          // ── Les carpes (sous l'eau : peintes avant les reflets) et leurs gobages.
+          const fish = FAU.faunaFish(fw, env);
+          FAU.faunaReactFish(SL, fw, fish, foodF, fdt);
+          for (const f of fish) {
+            if (!inView(f.x, f.y, 1)) continue;
+            faunaUnder.push(f);
+            if (f.z < 0.22) {
+              const ph = ((env.t + (f.id.length * 7.3)) % 2.6) / 2.6;
+              if (ph < 0.6) {
+                const hx = f.hx, hy = f.hy;
+                pushE(f.y * T - 4, 0, () => FART.drawRipple(ctx, f.x * T + hx * 4, f.y * T + hy * 4, 1 + ph * 6, (1 - ph / 0.6) * 0.6));
+              }
+            }
+          }
+          // ── Les poissons qui sautent au port.
+          for (const j of FAU.faunaJumps(fw, env, view)) {
+            const gx = j.x * T, gy = j.y * T, age = j.age;
+            pushE(gy - 4, 0, () => {
+              FART.drawRipple(ctx, gx - j.face * 5, gy, 1 + age * 5, Math.max(0, 0.7 - age * 0.35));
+              if (age > 0.8) FART.drawRipple(ctx, gx + j.face * 5, gy, 1 + (age - 0.8) * 5, Math.max(0, 0.7 - (age - 0.8) * 0.4));
+            });
+            if (age < 0.8) {
+              const u = age / 0.8, pose = u < 0.33 ? "rise" : u < 0.66 ? "top" : "dive";
+              const dx = (u - 0.5) * 10 * j.face, hgt = Math.sin(Math.PI * u) * 9;
+              pushE(gy, 0, () => blitF(FAS.jump[pose], gx + dx, gy - hgt, j.face), 0, Math.floor(j.x));
+            }
+          }
+          // ── Les papillons.
+          const bfl = FAU.faunaButterflies(fw, env, view);
+          FAU.faunaReactButterflies(SL, bfl, threats, fdt, env.t);
+          for (const b of bfl) {
+            if (!inView(b.x, b.y, 1)) continue;
+            const cell = FAS.bfly[b.sp] && FAS.bfly[b.sp]["o" + b.open];
+            const gx = b.x * T, gy = b.y * T, be = elAt(Math.floor(b.x), Math.floor(b.y));
+            const liftPx = b.alt * T + (b.bob || 0);
+            pushE(gy, be, () => {
+              if (b.flying) { ctx.globalAlpha = 0.16 * b.a; ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.round(gx) - 1, Math.round(gy), 2, 1); ctx.globalAlpha = 1; }
+              blitF(cell, gx, gy - liftPx, 1, b.a);
+            }, 0, Math.floor(b.x));
+          }
+          // ── Les goélands et les mouettes rieuses.
+          const gulls = FAU.faunaGulls(fw, env);
+          let fisher = null;
+          if ((rodArmedRef.current || (fishHaulRef.current && fishHaulRef.current.town)) && !m.sleeping) {
+            const fx = C.footX(m.x), fy = C.footY(m.y);
+            if (fy > C.TOWN_LAKE.y - 5 && fw.wdist(fx, fy + 1.5) > -1) fisher = { x: fx, y: fy + 0.5 };
+          }
+          FAU.faunaReactGulls(SL, fw, gulls, threats, fisher, fdt, Math.random);
+          for (const g of gulls) {
+            if (!inView(g.x, g.y - (g.alt || 0), 3)) continue;
+            const gx = g.x * T, gy = g.y * T;
+            if (g.mode === "fly" || g.mode === "soar") {
+              const altPx = (g.alt || 0) * T;
+              const flapping = g.flap >= 0.5 || (g.flap > 0 && Math.sin(env.t * 0.9 + g.i * 2.1) > 0.2);
+              const span = g.sp === "herring" ? 22 : 16;
+              pushE(gy - 2, 0, () => FART.drawFlyShadow(ctx, gx, gy, span, g.alt || 0, 1));
+              // Haut dans le ciel, l'oiseau passe devant tout ; au ras de l'eau, il se trie comme le reste.
+              const key = (g.alt || 0) > 1.2 ? gy + 4000 : gy;
+              pushE(key, 0, () => FART.drawGullFlight(ctx, gx, gy - altPx, g.hx || 1, g.hy || 0, env.t * 18.8 + g.i * 1.7, flapping, g.sp), 0, Math.floor(g.x));
+            } else {
+              const cell = FAS.gull[g.sp] && FAS.gull[g.sp][g.pose || "stand"];
+              const ge = elAt(Math.floor(g.x), Math.floor(g.y));
+              if (g.mode === "float") {
+                pushE(gy - 3, 0, () => { ctx.globalAlpha = 0.4; ctx.fillStyle = "#dcecf2"; ctx.fillRect(Math.round(gx) - 4, Math.round(gy), 8, 1); ctx.globalAlpha = 1; });
+                pushE(gy, 0, () => blitF(cell, gx, gy, g.face || 1), 0, Math.floor(g.x));
+              } else {
+                pushE(gy, ge, () => { groundShadow(gx, gy, 8, 0.16); blitF(cell, gx, gy, g.face || 1); }, 0, Math.floor(g.x));
+              }
+            }
+          }
+          // ── Les chats.
+          const navF = E.townNav(tw);
+          const walkableF = (x, y) => {
+            const tx = Math.floor(x), ty = Math.floor(y);
+            return !!navF && tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h && !!navF.walk[ty * tw.w + tx];
+          };
+          const cats = FAU.faunaCats(fw, env, tw);
+          FAU.faunaReactCats(SL, cats, threats, fdt, walkableF, Math.random);
+          for (const c of cats) {
+            if (c.heart) faunaFxRef.current.push({ kind: "heart", x: c.x, y: c.y, t0: nowP });
+            if (!inView(c.x, c.y, 2)) continue;
+            const cell = FAS.cat[c.coat] && FAS.cat[c.coat][c.pose];
+            const gx = c.x * T, gy = c.y * T, ce = elAt(Math.floor(c.x), Math.floor(c.y));
+            pushE(gy, ce, () => { groundShadow(gx, gy, 9, 0.18); blitF(cell, gx, gy, c.face); }, 0, Math.floor(c.x));
+          }
+          // ── Les petits effets : le cœur du chat qui dit bonjour.
+          faunaFxRef.current = faunaFxRef.current.filter((fx) => nowP - fx.t0 < 1400);
+          for (const fx of faunaFxRef.current) {
+            const u = (nowP - fx.t0) / 1400, fe = elAt(Math.floor(fx.x), Math.floor(fx.y));
+            pushE(fx.y * T + 0.5, fe, () => {
+              const hx = Math.round(fx.x * T), hy = Math.round(fx.y * T - 14 - u * 8);
+              ctx.globalAlpha = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+              ctx.fillStyle = "#e0485a";
+              ctx.fillRect(hx - 2, hy, 2, 1); ctx.fillRect(hx + 1, hy, 2, 1);
+              ctx.fillRect(hx - 2, hy + 1, 5, 1); ctx.fillRect(hx - 1, hy + 2, 3, 1); ctx.fillRect(hx, hy + 3, 1, 1);
+              ctx.fillStyle = "#f59aa8"; ctx.fillRect(hx - 1, hy, 1, 1);
+              ctx.globalAlpha = 1;
+            });
+          }
+          // ── Les lucioles : elles ne se DESSINENT pas, elles ÉCLAIRENT (passe de lumière).
+          const bakeF = EAU.townWaterBakeReady(tw);
+          for (const f of FAU.faunaFireflies(fw, env, view)) {
+            if (f.k < 0.03 || !inView(f.x, f.y, 1)) continue;
+            const fe = elAt(Math.floor(f.x), Math.floor(f.y));
+            const gx = f.x * T, gy = f.y * T - fe * EP, altPx = f.alt * T;
+            faunaGlow.push({ x: gx, y: gy - altPx, k: f.k });
+            // Au-dessus de l'eau : son reflet, plus pâle, sous la surface.
+            if (bakeF && !fe && EAU.bakedLevelAt(bakeF, Math.round(gx), Math.round(gy)) >= 0) faunaGlow.push({ x: gx, y: gy + altPx, k: f.k * 0.4, refl: true });
           }
         }
       }
@@ -22653,6 +22902,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          L'axe du miroir descend sous la ligne de sol de la hauteur de ce qui
          porte l'objet au-dessus de l'eau : le parement d'un quai, le tablier du
          ponton, le talus d'une allée, la berge. */
+      /* 2026-09-26 (phase 5) — LES CARPES, SOUS LA SURFACE : après l'eau cuite
+         (le fond), avant les reflets et la houle (qui passent par-dessus, comme
+         sur une vraie eau claire). Pâlies avec la profondeur. */
+      if (faunaUnder.length) {
+        if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
+        for (const f of faunaUnder) {
+          try { FART.drawCarp(ctx, f.x * T, f.y * T, f.hx, f.hy, f.swim, f.color, f.z, 0.95 - 0.3 * f.z); }   // l'étang est CLAIR : on les voit, plus pâles au fond
+          catch (e) { console.error("[FERME] carpe ignorée", e); }
+        }
+      }
       {
         const bakeR = EAU.townWaterBakeReady(tw);
         if (bakeR) {
@@ -22770,7 +23029,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (torchOnRef.current) torchRefl(m.x, m.y, myE);
         for (const p of playersRef.current.values()) if (p.torch && (p.zone || "farm") === "town") torchRefl(p.x, p.y, playerElevTown(tw, p));
         for (const wl of townWinLights) lights.push(wl);
-        drawLight(lights, heads, waterNight);
+        /* 2026-09-26 (phase 5) — les lucioles : une lumière minuscule au sol (au
+           plus faible), et leur éclat (`sparks`) posé après le ciel. */
+        for (const g of faunaGlow) if (!g.refl) lights.push({ x: g.x / T, y: g.y / T, r: 0.32, c: "firefly", k: g.k * 0.5 });
+        drawLight(lights, heads, waterNight, faunaGlow);
       }
       flushNameTags();
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
@@ -25817,7 +26079,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
        À appeler avec la transformation de la CAMÉRA en place (celle de la
        boucle de dessin) ; elle est rendue telle quelle. */
-    function drawLight(lights, heads, waterNight) {
+    function drawLight(lights, heads, waterNight, sparks) {
       const lf = lightFrameRef.current || { occluders: [], glows: [], screenGlows: [], lights: [], heads: [] };
       lightFrameRef.current = null;
       const sky = skyNow();
@@ -25840,7 +26102,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const allHeads = (heads || []).slice();
       for (const h of lf.heads) allHeads.push({ x: wx(h.sx), y: wy(h.sy), r: h.rs / zm, k: h.k });
       lightRendererRef.current.draw(ctx, { zm, Rx, Ry, W: canvas.width, H: canvas.height }, {
-        sky, night: nightAlpha() / LUM.NIGHT_MAX, lights: allLights, heads: allHeads, occluders, glows, screenGlows,
+        sky, night: nightAlpha() / LUM.NIGHT_MAX, lights: allLights, heads: allHeads, occluders, glows, screenGlows, sparks: sparks || [],
       });
       /* 2026-09-25 (phase 4) — L'EAU LA NUIT : les colonnes des lampes et les
          éclats de lune, APRÈS la lumière (le ciel a multiplié la scène, elles
@@ -36902,6 +37164,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-hint">{L.devBuildHint}</div>
                 <div className="ferme-dev-grid">
                   <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devBuild" })}>{L.devBuildBtn}</button>
+                </div>
+                {/* 2026-09-26 (phase 5) — la faune : saison forcée (locale) et les trois chats. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
+                <div className="ferme-dev-hint">{L.devFaunaHint}</div>
+                <div className="ferme-dev-grid">
+                  {[null, "spring", "summer", "autumn", "winter"].map(k => (
+                    <button key={"devfauna-" + (k || "auto")} className="ferme-dev-btn" onClick={() => devFaunaSeason(k)}>{L.devFaunaSeason(k)}</button>
+                  ))}
+                  {[0, 1, 2].map(i => (
+                    <button key={"devcat-" + i} className="ferme-dev-btn" onClick={() => devStandByCat(i)}>{L.devFaunaCat(i)}</button>
+                  ))}
                 </div>
               </div>
               {/* ╔══════════════════════════════════════════════════════════════

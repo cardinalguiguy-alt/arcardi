@@ -186,6 +186,8 @@ export const LIGHT_COLORS = {
   window: [0.62, 0.42, 0.10],
   door: [0.60, 0.42, 0.12],
   head: [1.0, 0.95, 0.78],
+  // 2026-09-26 (phase 5) — la luciole : un jaune-VERT froid (≈ 560 nm), pas une flamme.
+  firefly: [0.50, 0.78, 0.12],
 };
 /* Les pixels RGBA d'un anneau de rayon `R` (px d'art) : couleur pleine, alpha
    = palier. Taille (2R+1)². Pur — le banc le mesure. */
@@ -365,6 +367,21 @@ export function makeLightRenderer(makeCanvas) {
       ctx.globalAlpha = 0.34 * nk * (hd.k == null ? 1 : hd.k);
       const hx = Math.round(hd.x) - R, hy = Math.round(hd.y) - R;
       ctx.drawImage(ring(R, "lamp"), 0, 0, 2 * R + 1, 2 * R + 1, hx * zm - view.Rx, hy * zm - view.Ry, (2 * R + 1) * zm, (2 * R + 1) * zm);
+    }
+    /* 2026-09-26 (phase 5) — LES LUCIOLES : un point vif sur la grille de l'art
+       et un petit halo en paliers, AJOUTÉS après le ciel (sinon la nuit les
+       éteindrait comme le reste). `k` porte l'éclair : elles ne brillent pas en
+       continu (décision de Guillaume : « un petit halo qui clignote légèrement »). */
+    if (nk > 0.02) for (const sp of frame.sparks || []) {
+      const k = Math.max(0, Math.min(1, sp.k)) * nk;
+      if (k < 0.02) continue;
+      const R = sp.refl ? 1 : 2;
+      const hx = Math.round(sp.x) - R, hy = Math.round(sp.y) - R;
+      ctx.globalAlpha = 0.55 * k;
+      ctx.drawImage(ring(R, "firefly"), 0, 0, 2 * R + 1, 2 * R + 1, hx * zm - view.Rx, hy * zm - view.Ry, (2 * R + 1) * zm, (2 * R + 1) * zm);
+      ctx.globalAlpha = (sp.refl ? 0.6 : 1) * k;
+      ctx.fillStyle = sp.refl ? "#b6d86a" : "#eaff8a";
+      ctx.fillRect(Math.round(sp.x) * zm - view.Rx, Math.round(sp.y) * zm - view.Ry, zm, zm);
     }
     ctx.restore();
   }

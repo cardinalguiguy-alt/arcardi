@@ -30,6 +30,7 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
    n'ont plus qu'une seule écriture, là-bas. */
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau.mjs";
 import { townNoise } from "./fermeEngine.mjs";
+import { buildFaunaSprites } from "./fauneArt.mjs";
 
 /* ---------------------------------------------------------------- PALETTE ---
    Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles
@@ -15129,261 +15130,12 @@ export function buildSprites() {
     }
   }
 
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 433 — LES PIGEONS ET LES COLOMBES DE VALLEY TOWN.
-     ╚══════════════════════════════════════════════════════════════════════════
-     Demande de Guillaume : « des colombes et des pigeons qui sont par terre sur
-     la place centrale et qui s'envolent élégamment quand on se rapproche trop
-     d'elles […] détaille bien les oiseaux, ils doivent être beaux (pas trop
-     grands) ».
-
-     ⚠️ L'ÉCHELLE D'ABORD, c'est elle qui décide de tout le reste. Un fermier
-     fait 23 px peints ; un pigeon fait 0,25 m contre 1,75 m, soit 3 px. À trois
-     pixels ce n'est plus un oiseau, c'est une poussière. On tient donc les deux
-     bouts : **7 px de haut, 11 de long, soit 0,30 fermier** — assez pour lire
-     une tête, un œil et une barre d'aile, assez peu pour qu'un vol de neuf
-     oiseaux ne mange pas la place. C'est la même arbitrage que `render-echelle`
-     fait pour les décors, mais dans l'autre sens : ici on grossit exprès.
-
-     ⚠️ SEPT POSES, ET AUCUNE N'EST DÉCORATIVE :
-       · `stand` / `peck` / `alert` — au sol. `alert` (cou tendu, tête haute) est
-         la pose qui rend l'envol LISIBLE : sans elle, l'oiseau passe de « il
-         picore » à « il est en l'air » sans que le joueur comprenne que c'est
-         lui qui l'a fait fuir. C'est le même rôle que le ralentissement du taxi
-         dans les virages — l'intention se montre AVANT le mouvement.
-       · `down` / `mid` / `up` — le battement, dans cet ordre. Trois images
-         suffisent si l'amplitude est franche : une aile à mi-course qui ne
-         serait qu'une interpolation des deux autres ne se voit pas.
-       · `glide` — les ailes tenues, à peine relevées. C'est elle qu'on voit le
-         plus longtemps : le battement ne dure qu'au décollage.
-
-     ⚠️ DEUX ESPÈCES, UNE SEULE GÉOMÉTRIE. La colombe n'est pas « un pigeon
-     blanc » : elle est plus fine, plus claire, et son aile ne porte pas de
-     barres. Mais son squelette est le MÊME code — deux dessins d'un même
-     oiseau finiraient par diverger (§8 de CLAUDE.md), et une volée mélangée se
-     lit précisément parce que les silhouettes sont parentes.
-     ══════════════════════════════════════════════════════════════════════════ */
-  /* ⚠️ LES DEUX PALETTES SONT RELEVÉES SUR LES RÉFÉRENCES, pas inventées : le
-     biset est GRIS BLEUTÉ (pas gris neutre), son aile est plus sombre que son
-     corps, son col vire du VERT au VIOLET, son œil est ORANGE cerclé et ses
-     pattes sont ROSE VIF — sur la photo, c'est la seule couleur saturée de
-     l'animal, et c'est pour ça qu'on la voit à trente mètres.
-     ⚠️ La colombe n'est pas « un pigeon blanc » : son blanc est LÉGÈREMENT
-     BLEUTÉ dans les ombres (référence : les ombres des ailes tirent sur le
-     lilas, jamais sur le beige), elle n'a ni barres alaires ni col irisé, et
-     son bec est fin et sombre. */
-  const BIRD_PAL = {
-    pigeon: {
-      back: "#5d6a7e", body: "#79879b", lit: "#98a5b6", dark: "#3f4a5b",
-      breast: "#9ba3ad", neck: "#3f8f7a", neck2: "#8a5f96",
-      head: "#6b7688", beak: "#33312f", cere: "#e6e2da",
-      eye: "#141414", iris: "#e2761f", leg: "#e8756a", bar: true,
-    },
-    dove: {
-      back: "#dcd9e2", body: "#efedf4", lit: "#ffffff", dark: "#b3b0c0",
-      breast: "#f7f5fa", neck: "#e4e1ea", neck2: "#d6d3e0",
-      head: "#f4f2f8", beak: "#4a453e", cere: "#f0eef4",
-      eye: "#141414", iris: "#c98f6a", leg: "#e0a091", bar: false,
-    },
-  };
-  /* ⚠️⚠️ LE CADRE EST PLUS GRAND QUE LE DESSIN, D'UN PIXEL SUR CHAQUE BORD, ET
-     L'ORDRE EST LE SUJET : on dessine serré, on RECADRE, PUIS on cerne. Cerné
-     dans son cadre juste, le liseré d'un sprite qui touche le bord est lui-même
-     découpé — l'oiseau perd son contour du côté du bec et de la queue, et rien
-     ne le dit (§4 de CLAUDE.md : un canevas découpe en silence). C'est le même
-     piège que l'enseigne du taxi et le drapeau de la mairie, payé une troisième
-     fois dans ce zip ; `render-oiseaux.mjs` refuse désormais toute pose qui
-     touche son bord. */
-  function padOutline(src, groundRow, col) {
-    const PAD = 2;                       // ⚠️ DEUX, PAS UN : le liseré occupe le premier
-    const [c, g] = cv(src.width + PAD * 2, src.height + PAD * 2);   // et il ne doit pas non
-    g.drawImage(src, PAD, PAD);                                     // plus toucher le bord
-    outlineSprite(g, c.width, c.height, col);
-    // La ligne de sol est celle du LISERÉ, pas celle des pattes : c'est lui qui
-    // pose sur la pierre, et c'est lui qu'on voit.
-    c.ground = groundRow + PAD + 1;
-    return c;
-  }
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ AU SOL — CINQ POSES. Canevas 15×9, l'oiseau POSE sur la rangée 8.
-     ╚══════════════════════════════════════════════════════════════════════════
-     Il regarde à DROITE ; le rendu retourne pour la gauche.
-
-     ⚠️⚠️ REFAIT SUR LES RÉFÉRENCES DE GUILLAUME (« améliore leur position
-     standing […] le détail des ailes, mais aussi le corps »). Le premier jet
-     était un ovale de douze pixels avec une tête dessus. La photo de pigeon
-     biset dit exactement ce qui manquait, et ce n'est pas du détail :
-
-       1. ⚠️⚠️ **UN PIGEON EST LONG ET BAS, PAS ROND.** Corps + queue font plus
-          de DEUX FOIS la hauteur. Le sprite est donc passé de 12 à 15 px de
-          long À HAUTEUR CONSTANTE — on gagne l'allure sans grossir l'oiseau,
-          ce qui est exactement la contrainte (« pas trop grands »).
-       2. **LE JABOT DÉBORDE EN AVANT ET EN BAS DES PATTES.** C'est lui qui
-          donne au pigeon son air important et son déséquilibre vers l'avant.
-       3. **LA QUEUE EST LONGUE, POINTUE, ET DÉPASSE LOIN DERRIÈRE**, un tiers
-          de l'animal. Un moignon horizontal donne un poussin.
-       4. **DEUX BARRES ALAIRES ÉPAISSES ET SOMBRES** sur la moitié basse de
-          l'aile repliée, et la pointe des rémiges qui CROISE la base de la
-          queue. C'est la marque du biset, celle qu'on reconnaît sans savoir.
-       5. **LES PATTES SONT ROSE VIF.** Sur la référence, c'est la seule couleur
-          saturée de l'animal ; deux pixels corail, et l'oiseau cesse d'être une
-          silhouette grise.
-       6. **LE COL IRISÉ VERT PUIS VIOLET**, juste sous la tête.
-     ⚠️ Et la tête reste PETITE et posée en arrière du jabot, séparée par un
-     creux de nuque : une tête dans l'alignement du corps donne un jouet.
-
-     LES CINQ POSES, et chacune répond à un comportement de `flockStep` :
-       · `stand` — au repos ;
-       · `peck`  — le cou plonge, bec au sol, EN AVANT du corps ;
-       · `walk`  — une patte en avant, l'autre en appui, corps porté devant :
-                   sans elle, un pigeon qui se déplace GLISSE, et rien ne dit
-                   mieux « animal de ferme scripté » ;
-       · `alert` — cou dressé : l'avertissement avant l'envol ;
-       · `puff`  — la parade : jabot gonflé au maximum, tête rentrée dans les
-                   épaules, queue basse et étalée qui traîne au sol.
-     ══════════════════════════════════════════════════════════════════════════ */
-  function birdGroundSprite(kind, pose) {
-    const p = BIRD_PAL[kind];
-    const [c, g] = cv(16, 9);
-    const peck = pose === "peck", alert = pose === "alert";
-    const walk = pose === "walk", puff = pose === "puff";
-    const F = walk ? 1 : 0;                       // en marche, le corps porte d'un pixel devant
-    /* ---- 1. LA QUEUE. ⚠️ ELLE PART SOUS LE CORPS ET DÉPASSE LOIN DERRIÈRE,
-       sur DEUX rangées seulement : une queue aussi épaisse que le corps se
-       confond avec lui et l'oiseau devient un pain. Sur la référence, elle est
-       fine, pointue, et clairement décalée vers le bas. */
-    if (puff) { P(g, 0, 6, 6, 2, p.dark); P(g, 1, 6, 5, 1, p.back); P(g, 0, 7, 3, 1, "#2f3844"); }
-    else { P(g, 0, 5, 6, 2, p.dark); P(g, 1, 5, 5, 1, p.back); P(g, 0, 7, 3, 1, "#2f3844"); }
-    /* ---- 2. LE CORPS, et son dos éclairé. */
-    P(g, 4 + F, 3, 8, 4, p.body);
-    P(g, 5 + F, 3, 6, 1, p.lit);
-    /* ---- 3. LE JABOT : il déborde en AVANT et descend BAS, jusqu'au niveau
-       des pattes. C'est ce déséquilibre vers l'avant qui fait l'allure du
-       pigeon, bien plus que n'importe quel détail de plumage. */
-    const bx = (puff ? 9 : 10) + F, bw = puff ? 4 : 3;
-    P(g, bx, puff ? 2 : 3, bw, puff ? 5 : 4, p.breast);
-    P(g, bx, puff ? 2 : 3, bw, 1, p.lit);
-    /* ---- 4. L'AILE REPLIÉE, en quatre tons du haut vers le bas : couvertures
-       claires, puis LES DEUX BARRES sombres du biset. Elles ne traversent pas
-       tout le flanc — elles s'arrêtent avant le jabot, comme sur la photo. */
-    P(g, 4 + F, 4, 7, 1, p.back);
-    if (p.bar) { P(g, 4 + F, 5, 6, 1, "#39434f"); P(g, 5 + F, 6, 5, 1, "#2c3540"); }
-    else { P(g, 4 + F, 5, 6, 1, p.back); P(g, 5 + F, 6, 5, 1, p.dark); }
-    P(g, 2 + F, 5, 3, 1, p.dark);                 // les rémiges croisent la base de la queue
-    P(g, 3 + F, 6, 2, 1, p.dark);
-    /* ---- 5. LA TÊTE. ⚠️⚠️ ELLE EST AU-DESSUS DU CORPS, PAS DEDANS, et il doit
-       rester du VIDE derrière elle : c'est ce creux de nuque, et lui seul, qui
-       transforme un galet gris en oiseau. Le premier jet la posait dans la
-       silhouette et donnait un sous-marin. */
-    /* ⚠️ EN PICORANT, LA TÊTE PASSE SOUS ET DEVANT LE JABOT, pas dedans. Mon
-       avant-dernier jet la posait à mi-hauteur du jabot : elle y disparaissait
-       entièrement, et la pose « picore » ne se distinguait plus de « debout ».
-       Le bec doit arriver AU SOL — c'est le seul repère qui dise ce qu'il fait. */
-    const hx = (peck ? 12 : puff ? 9 : 10) + F;
-    const hy = alert ? 0 : peck ? 5 : 1;
-    if (alert) { P(g, 11, 1, 2, 3, p.head); }                                // cou dressé
-    else if (peck) { P(g, 11 + F, 4, 2, 2, p.head); }                        // cou plongeant
-    else if (puff) { P(g, 10, 3, 2, 1, p.head); P(g, 9, 3, 4, 1, p.dark); }  // cou rentré dans la collerette
-    else { P(g, 11 + F, 3, 1, 1, p.head); }                                  // la nuque
-    P(g, hx, hy, 3, 2, p.head);
-    P(g, hx, hy, 3, 1, p.lit);
-    P(g, hx, hy + 2, 1, 1, p.neck);               // le col : vert…
-    P(g, hx + 1, hy + 2, 1, 1, p.neck2);          // …puis violet, un pixel chacun
-    P(g, hx + 1, hy, 1, 1, p.eye);
-    P(g, hx + 2, hy, 1, 1, p.iris);               // l'œil orange cerclé
-    P(g, hx + 3, hy, 1, 1, p.cere);               // la cire blanche, au-dessus du bec
-    P(g, hx + 3, hy + 1, 1, 1, p.beak);
-    /* ---- 6. LES PATTES, ROSE VIF. Sur la photo, c'est la seule couleur
-       saturée de l'animal, et c'est pour ça qu'on la voit à trente mètres.
-       ⚠️ En marche elles sont ÉCARTÉES ET DÉCALÉES : c'est ça, un pas. Deux
-       pattes côte à côte qui glissent, c'est un jouet à roulettes. */
-    if (walk) {
-      P(g, 6, 7, 1, 1, p.leg); P(g, 5, 8, 3, 1, p.leg);          // l'arrière, posée
-      P(g, 10, 7, 1, 1, p.leg); P(g, 10, 8, 3, 1, p.leg);        // l'avant, en appui
-    } else if (puff) {
-      P(g, 7, 7, 1, 1, p.leg); P(g, 9, 7, 1, 1, p.leg);
-      P(g, 6, 8, 3, 1, p.leg); P(g, 9, 8, 3, 1, p.leg);
-    } else {
-      const l0 = peck ? 6 : 7, l1 = peck ? 8 : 9;
-      P(g, l0, 7, 1, 1, p.leg); P(g, l1, 7, 1, 1, p.leg);
-      P(g, l0 - 1, 8, 3, 1, p.leg); P(g, l1, 8, 3, 1, p.leg);
-    }
-    return padOutline(c, 8, "#2b2530");
-  }
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ EN VOL — QUATRE POSES. Canevas 19×15, corps ancré sur la rangée 11.
-     ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️ LE CORPS NE BOUGE PAS D'UNE POSE À L'AUTRE : c'est l'AILE qui bat, pas
-     l'oiseau qui monte et descend. Un corps qui suit l'aile donne un vol de
-     papillon — sautillant, jamais élégant.
-
-     ⚠️⚠️ REFAIT SUR LES RÉFÉRENCES (les colombes au trait, et la colombe
-     détaillée). Ce qu'elles disent, et que le premier jet ratait complètement :
-       1. **L'ENVERGURE ÉCRASE LE CORPS.** Sur toutes les références, une aile
-          seule est plus longue que le corps entier. Le sprite passe donc de 16
-          à 19 px de large, et l'aile occupe DIX colonnes contre six.
-       2. **L'AILE EST POINTUE, PAS ARRONDIE** : elle s'affine régulièrement du
-          moignon à la pointe, et la pointe est un seul pixel.
-       3. ⚠️⚠️ **LES RÉMIGES SONT SÉPARÉES.** C'est LE détail de toutes les
-          références : au bout de l'aile, les longues plumes s'écartent en
-          éventail et on voit le ciel entre elles. On dessine donc l'aile pleine,
-          puis on ÉVIDE un pixel entre les dernières plumes — le seul endroit du
-          fichier où l'on retire de la matière pour ajouter du détail.
-       4. **LA QUEUE EST LONGUE ET EN ÉVENTAIL**, presque aussi longue que le
-          corps, et elle s'étale par le bas.
-     ══════════════════════════════════════════════════════════════════════════ */
-  function birdFlySprite(kind, pose) {
-    const p = BIRD_PAL[kind];
-    const [c, g] = cv(19, 15);
-    /* La plume : une suite de colonnes [x, y, hauteur]. Les trois dernières
-       sont les rémiges — plus sombres, et évidées une sur deux. */
-    const feather = (cols) => {
-      cols.forEach(([x, y, h], i) => {
-        const tip = i >= cols.length - 4;
-        P(g, x, y, 1, h, tip ? p.dark : p.back);
-        P(g, x, y, 1, 1, tip ? p.body : p.lit);
-        if (h > 1) P(g, x, y + h - 1, 1, 1, p.dark);   // bord de fuite : il détache l'aile du corps
-      });
-      for (let i = cols.length - 3; i < cols.length; i += 2) {
-        if (i < 1) continue;
-        const [x, y, h] = cols[i];
-        if (h > 1) g.clearRect(x, y + h - 1, 1, 1);    // le ciel entre les rémiges
-      }
-    };
-    /* ---- L'AILE LOINTAINE : un liseré derrière le corps, décalé. Sans elle
-       l'oiseau n'a qu'une aile, et à cette taille ça se voit tout de suite. */
-    const FAR = {
-      up:    [[9, 4, 2], [8, 3, 2], [7, 2, 2], [6, 1, 2]],
-      mid:   [[7, 5, 2], [6, 5, 2], [5, 4, 2], [4, 4, 1]],
-      down:  [[9, 10, 2], [8, 11, 2], [7, 12, 2], [6, 13, 1]],
-      glide: [[7, 6, 2], [6, 6, 2], [5, 6, 1], [4, 6, 1]],
-    }[pose];
-    for (const [x, y, h] of FAR) P(g, x, y, 1, h, p.dark);
-    /* ---- LA QUEUE, longue et en éventail, puis le corps fuselé et le cou
-       tendu : la silhouette en vol est ÉTIRÉE, c'est ce qui la distingue de la
-       boule posée au sol. */
-    P(g, 0, 8, 6, 2, p.dark); P(g, 1, 8, 5, 1, p.back);
-    P(g, 0, 10, 4, 1, "#2f3844"); P(g, 1, 11, 2, 1, "#2f3844");
-    P(g, 4, 7, 9, 4, p.body);
-    P(g, 5, 7, 7, 1, p.lit);
-    P(g, 5, 10, 7, 1, p.dark);
-    P(g, 10, 8, 3, 2, p.breast);
-    P(g, 12, 5, 3, 2, p.head);                     // tête tendue vers l'avant
-    P(g, 12, 5, 3, 1, p.lit);
-    P(g, 12, 7, 1, 1, p.neck); P(g, 13, 7, 1, 1, p.neck2);
-    P(g, 13, 5, 1, 1, p.eye); P(g, 14, 5, 1, 1, p.iris);
-    P(g, 15, 5, 1, 1, p.cere); P(g, 15, 6, 2, 1, p.beak);
-    P(g, 7, 11, 3, 1, p.leg);                      // pattes repliées sous le ventre
-    /* ---- L'AILE PROCHE, par-dessus le corps : c'est elle qu'on lit. Dix
-       colonnes, effilées jusqu'à un pixel, rémiges évidées. */
-    feather({
-      up:    [[8, 4, 4], [7, 3, 4], [6, 2, 4], [5, 1, 3], [4, 0, 3], [3, 0, 2], [2, 1, 2], [1, 2, 1]],
-      mid:   [[8, 5, 4], [7, 5, 3], [6, 4, 3], [5, 4, 3], [4, 3, 2], [3, 3, 2], [2, 2, 2], [1, 3, 1], [0, 4, 1]],
-      down:  [[8, 10, 4], [7, 11, 4], [6, 12, 3], [5, 12, 3], [4, 13, 2], [3, 13, 2], [2, 14, 1], [1, 14, 1]],
-      glide: [[9, 5, 3], [8, 5, 3], [7, 5, 3], [6, 4, 3], [5, 4, 2], [4, 4, 2], [3, 4, 2], [2, 4, 1], [1, 5, 1], [0, 5, 1]],
-    }[pose]);
-    return padOutline(c, 11, "#2b2530");
-  }
+  /* ⚠️ 2026-09-26 (phase 5) — LES PIGEONS ET LES COLOMBES DU 433 SONT REDESSINÉS
+     AU PIXEL NATIF dans `fauneArt.js` (§ 2), avec toute la faune de la ville :
+     ils étaient dessinés en 16 px puis réduits aux deux tiers au rendu, ce qui
+     sautait un pixel sur trois (ce que la phase 1 a banni des monuments). Les
+     six règles du 433 (long et bas, jabot, queue pointue, deux barres, pattes
+     rose vif, col irisé) y sont reprises en tête du dessin. */
 
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 432 — LES DEUX VUES DE TROIS QUARTS (le virage). REFAITES AU 433.
@@ -17658,22 +17410,11 @@ house: house(),
      les miroirs de leurs symétriques (voir taxiQuarterSprite). */
   S.taxi = { e: taxiSprite("e"), s: taxiSprite("s"), n: taxiSprite("n"),
              ne: taxiQuarterSprite(false), se: taxiQuarterSprite(true) };
-  /* Les pigeons et les colombes de la place (433). Même contrat que le taxi :
-     on dessine le profil DROIT, le rendu retourne pour la gauche. */
-  S.birds = {};
-  for (const kind of ["pigeon", "dove"]) {
-    S.birds[kind] = {
-      stand: birdGroundSprite(kind, "stand"),
-      peck: birdGroundSprite(kind, "peck"),
-      walk: birdGroundSprite(kind, "walk"),
-      puff: birdGroundSprite(kind, "puff"),
-      alert: birdGroundSprite(kind, "alert"),
-      down: birdFlySprite(kind, "down"),
-      mid: birdFlySprite(kind, "mid"),
-      up: birdFlySprite(kind, "up"),
-      glide: birdFlySprite(kind, "glide"),
-    };
-  }
+  /* Toute la faune de Valley Town (phase 5, `fauneArt.js`) : un atlas, plus
+     les pigeons et colombes en canevas autonomes (`S.birds`, même contrat
+     qu'au 433 : profil droit, `ground`). */
+  S.fauna = buildFaunaSprites();
+  S.birds = S.fauna.birds;
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.

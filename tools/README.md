@@ -21,6 +21,8 @@ code d'avant la passe. L'inventaire présent sur disque compte désormais **23 b
 des buissons, `verify-buissons` et `render-buissons`) ; les bancs antérieurs n'ont pas été renommés ni supprimés par ces livraisons.
 L'audit des **échecs (2026-09-24)** ajoute `verify-echecs.mjs` — **68/68**, falsifié deux fois (voir
 son entrée) : **24 bancs de contrôle** sur disque ce jour-là (compté en listant `tools/`).
+La **phase 5 (2026-09-26)** ajoute `verify-faune.mjs` — **49/49**, falsifié deux fois : **28 bancs de
+contrôle et 24 de rendu** sur disque (compté en listant `tools/`).
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -274,6 +276,19 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   ⚠️ Avant de réécrire un script de fabrication, regénérer l'ANCIEN et le comparer au PNG versionné :
   le 2026-09-25, l'église et l'hôtel de ville se reproduisaient au pixel près, le tribunal NON (388 px
   gommés à la main) — la gomme vit maintenant dans son script.
+
+- **`tools/verify-faune.mjs` — 49 contrôles, 49/49 (2026-09-26, phase 5 : la faune).** Il JOUE
+  `components/ferme/faune.js` sur la vraie carte : une journée entière plus la nuit d'après, image
+  par image (30 601 images, printemps et été), et borne le pas de chaque bête par sa vitesse physique
+  — **c'est lui qui interdit la téléportation** ; les habitats (canard et carpe loin de la rive, chat
+  sur une case praticable, goéland posé à terre ou dans l'eau) ; les heures, les saisons et l'orage
+  (papillons, lucioles, canetons) ; le PARTAGE (deux clients, carte regénérée : mêmes bêtes au bit
+  près) ; les réactions (canards talonnés jamais hors de l'eau, chat qui fuit puis revient, chat qui
+  salue un joueur immobile) ; et les tailles des dessins (`fauneArt.js`) avec leurs RAPPORTS.
+  ⚠️ **Il a trouvé quatre défauts le jour de son écriture** (canetons qui sautaient d'un demi-pas au
+  bord de l'eau, goéland qui glissait en fin de pas, carpe contre la rive, chat trop apprivoisé pour
+  fuir). ⚠️ **Falsifié deux fois** : remettre le seuil des canetons (48/49), retirer le garde « jamais
+  hors de l'eau » (48/49 — après avoir durci le scénario, qui au premier jet ne pouvait pas échouer).
 
 - **`tools/verify-echecs.mjs` — 68 contrôles, 68/68 (2026-09-24, audit échecs).** Les décisions
   du jeu d'échecs vivaient dans `ChessGame.js`, du JSX qu'aucun banc ne peut appeler — et c'est là
