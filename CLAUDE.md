@@ -57,7 +57,15 @@ LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs.**
 
 ### ⏭️ ACTION SUIVANTE
 
-**La suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
+**PHASE 6a — LES MAISONS, EN COURS (2026-09-26, Guillaume : « continue les phases »).** Décisions :
+maisons en **bitmap Gemini** (comme les monuments, `grid: "screen"`), **pierre et colombages** gardés,
+**tailles variées dès maintenant** (étroite 4, standard 6, large 8 cases), phase 6 en **trois
+livraisons** (6a maisons + leurs fenêtres de nuit · 6b gare, quai, boutiques · 6c fenêtres de nuit des
+monuments). Dix prompts Gemini remis (fond magenta uni, vue de face comme `refs/hdv.jpg`) : **on attend
+les PNG de Guillaume**. À leur arrivée : détourage, repères (pied, porte, emprise) mesurés sur le PNG,
+`TOWN_BITMAPS`, taille par parcelle (par RANG, aucune migration), générateur et collision, calque de nuit
+par `build-monument-glow`, R à la porte qui tourne DANS la famille de taille. Ensuite seulement :
+**la suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
 l'ordre accepté (« reco partout ») : (1) les nouveautés à état sauvegardé — lait et fidélité du chat,
 épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte chacune, aucune
 migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant de coder** ;
