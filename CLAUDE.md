@@ -7,29 +7,25 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 (nuit) — Valley Town : 6a commencée, maisons peintes S1 et N1, maison hantée
+### 2026-09-26 (nuit, suite) — Valley Town : 6a, N2 livrée (simple, riche)
 
-Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume ;
-récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune,
-bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est
-LEVÉE.** **Reste : 6a (sept modèles de maisons à venir) · 6b gare/quai/commerces · 7 composition · 8 intérieurs.**
-- **Dernière livraison** (images Gemini de Guillaume, « caveman on ») : les dix façades procédurales
-  remplacées en ville par des maisons PEINTES — S1 (simple, enrichie, riche), N1 (simple, riche) — et une
-  N1 en ruine, maison hantée au fond du bois de l'est (lueur froide au pignon une nuit sur trois).
-  Largeur et quartier DÉDUITS de la position de la parcelle ; image calée sur la porte ; échelle unique
-  déduite de la porte des anciennes maisons (26 px d'art) ; emprise = le mur peint, posée en passe finale
-  du générateur. Tout vit dans `TOWN_HOUSE_MODELS` (fermeConstants.js) ; fabrication :
-  `node tools/build-maison-sprites.mjs` (planche `tools/out/maisons.png`). Méthode de prompt et
-  intégration d'un nouveau modèle : `refs/prompts-maisons.md`.
-- Bancs ce jour-là : **29/29 `verify-*`** (`verify-vallee` 260, `verify-lumiere` 86 — ajouts falsifiés),
-  **24/24 `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`).
-  Vu en jeu : vieille ville de jour, S1 riches du parc, porte à l'échelle du personnage, maison habitée de
-  nuit, maison hantée de jour et sa lueur. **Pas vu** : la terrasse, les S1 enrichies (lac), R à sa porte,
-  deux joueurs. **Pas de manipulation Supabase** (rien de persisté, aucune migration).
+Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md` (phase 6), récit en tête du même
+fichier. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Reste : 6a (N3, S2 à S4,
+W1 à W3) · 6b gare/quai/commerces · 7 composition · 8 intérieurs.**
+- **En jeu** : S1 (trois versions), N1 et N2 (simple, riche), la maison hantée (N1 en ruine). Tout vit
+  dans `TOWN_HOUSE_MODELS` (fermeConstants.js) ; fabrication `node tools/build-maison-sprites.mjs`
+  (planche `tools/out/maisons.png`) ; prompts et intégration : `refs/prompts-maisons.md`.
+- **Dernière livraison** : N2 peinte avec **N1 en 4e référence** et la porte demandée à gauche → même
+  emprise que N1 du premier coup. La riche, sortie sur fond BLANC, est détourée par remplissage depuis le
+  bord (le magenta garde sa clé : les autres images sortent identiques à l'octet).
+- Bancs ce jour-là : **29/29 `verify-*`** (`verify-vallee` 260), **24/24 `render-*`**, `no-undef` propre,
+  bundle, `next build` (`✓ Compiled`). Vu en jeu : N2 simple et riche de jour. **Pas vu** : N2 de nuit en
+  jeu, R à sa porte, deux joueurs. **Pas de manipulation Supabase** (rien de persisté, aucune migration).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **La nuit du 2026-09-26 (6a)** : les maisons peintes en ville — la répartition par quartier (riche :
+- **La nuit du 2026-09-26 (6a)** : N2 (volets verts, riche à glycine et topiaires), et les maisons peintes en ville — la répartition par quartier (riche :
   centre et terrasse ; enrichie : lac et artisans), les étroites de la vieille ville, l'échelle (porte =
   personnage), la maison hantée et la fréquence de sa lueur (`LUM.ruinGhostOn`).
 - **Le soir du 2026-09-26** : les vitraux en couleurs (composition dessinée : fond bleu, bordure rubis,
@@ -65,13 +61,13 @@ LEVÉE.** **Reste : 6a (sept modèles de maisons à venir) · 6b gare/quai/comme
 
 ### ⏭️ ACTION SUIVANTE
 
-**Continuer la 6a avec les images de Guillaume** : N2, N3, S2 à S4, W1 à W3 (prompts prêts,
-`refs/prompts-maisons.md`). Chaque modèle : relever porte / pied / mur / cadre / vitres sur l'image
-simple → entrée de `TOWN_HOUSE_MODELS` → `build-maison-sprites` → planche → jeu. ⚠️ Tous les modèles d'une
-largeur doivent avoir la MÊME emprise (tenu par `verify-vallee`) : sinon, arbitrer avec lui (recadrer
-l'image, ou changer de largeur). Les parcelles LARGES n'existent pas encore : les créer (par position,
-comme les étroites) le jour où W1 arrive. Puis **6b**. Le cheval de bataille reste : lui faire JOUER
-phases 1-5, météo, 6c et 6a en vraie séance.
+**Continuer la 6a avec les images de Guillaume** : N3, puis S2 à S4, W1 à W3 (prompts prêts,
+`refs/prompts-maisons.md` ; étroites avec `maison-n1.jpg` en 4e référence). Chaque modèle : relever porte /
+pied / mur / vitres sur l'image simple (vitre = verre mesuré + 4 px ; lanterne = son verre seul) → entrée
+de `TOWN_HOUSE_MODELS` → `build-maison-sprites` → planche → jeu. ⚠️ Tous les modèles d'une largeur ont
+la MÊME emprise (tenu par `verify-vallee`) : sinon, arbitrer avec lui. Les parcelles LARGES n'existent pas
+encore : les créer (par position, comme les étroites) le jour où W1 arrive. Puis **6b**. Le cheval de
+bataille reste : lui faire JOUER phases 1-5, météo, 6c et 6a en vraie séance.
 ⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`, fermeArt.js) sont
 encore fabriquées au chargement sans plus être dessinées en ville — `verify-lumiere` lit leurs fenêtres ;
 les retirer demande de réécrire cette section du banc.
@@ -1257,8 +1253,8 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-26, À NE PAS PERDRE** : (1) le GAMEPLAY de la
 faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
 MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs
-fenêtres (phase 6) ; (3) ✅ l'éclairage des fenêtres des GRANDS bâtiments (6c, 2026-09-26 soir) ;
-(4) les restes de la phase 4 (liste dans le bloc ⏭️ REPRISE).
+fenêtres (phase 6) ; (3) les restes de la phase 4 (bittes d'amarrage,
+reflets du navire et des fenêtres, chemins de désir).
 
 ✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :
 bloc ⏭️ REPRISE et `QUETE.md`, autorité 2026-09-13 bis). ⚠️ **Le vandale reste anonyme, jamais

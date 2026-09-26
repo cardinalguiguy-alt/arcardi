@@ -24,6 +24,11 @@ planche `tools/out/maisons.png`, puis le jeu (menu dev, « les maisons de la vie
 1. **Simple** — joindre, dans cet ordre, `refs/hdv.jpg`, `refs/eglise-nouvelle.jpg`,
    `refs/tributribu.jpg` (les trois monuments du jeu, TOUS DE FACE) et `refs/maison-s1.jpg` en 4e ;
    prompt = BASE avec la ligne de la maison à la place de `<HOUSE>`.
+   ⚠️ **Étroites (N2, N3) : `refs/maison-n1.jpg` en 4e à la place de S1** (2026-09-26). Tous les modèles
+   d'une largeur doivent avoir la même emprise (`townHouseModelFoot`, tenu par `verify-vallee`) : elle
+   dépend de la largeur du mur ET de la place de la porte dans ce mur. Pour retomber sur celle de N1
+   (cases 2..5), la porte doit être au quart gauche de la façade — d'où « exactly as wide as the fourth
+   image » et « door on the LEFT » dans les lignes N2/N3.
 2. **Enrichie** — dans la même conversation, la passe ENRICHIE ci-dessous.
 3. **Riche** — dans la même conversation, en RE-JOIGNANT l'image simple (sinon Gemini part de
    l'enrichie), la passe RICHE ci-dessous.
@@ -31,6 +36,8 @@ planche `tools/out/maisons.png`, puis le jeu (menu dev, « les maisons de la vie
 ⚠️ Plus de `duplex.png` : premier essai (2026-09-26), Gemini a recopié son angle isométrique et rendu
 une maison de trois quarts ; les matériaux sont décrits dans le texte. S1 en 4e image sert l'échelle,
 le détail et le rendu — PAS ses couleurs, sinon les dix maisons prennent la même teinte.
+⚠️ N2 riche est sortie sur fond BLANC (2026-09-26) : `build-maison-sprites` sait la détourer (remplissage
+depuis le bord), mais le magenta reste la demande — un fond blanc mange les pâquerettes qui le touchent.
 Si une image sort encore de trois quarts, relance dans la même conversation :
 `Same house, but strictly from the front like the references: only the front façade, no side wall, no corner, no perspective.`
 
@@ -68,8 +75,8 @@ BACKGROUND: flat, uniform, pure magenta #FF00FF everywhere around the house. No 
 
 ## Étroites (4 cases)
 - **N1** a tall narrow house, about 55% as wide as it is tall. Its gable end faces the street, under a steep dark slate roof. Stone ground floor with an arched wooden front door. Two jettied half-timbered upper floors (dark oak beams, warm ochre infill), each overhanging the one below. One small chimney.
-- **N2** a tall narrow house squeezed between two neighbours, only two windows wide, clearly taller than wide (about 55% as wide as it is tall), in pale dressed stone. Hipped roof in brown flat tiles with a single dormer. Sage-green wooden shutters on every window. Half-timbering only in the small attic gable of the dormer. A plain wooden door with a stone lintel.
-- **N3** a tall narrow stone house squeezed between two neighbours, only two windows wide, clearly taller than wide (about 55% as wide as it is tall), with a small round stair turret on one front corner topped by a pointed conical slate cap with a little iron finial. Narrow slit windows climbing the turret. The top floor is half-timbered with grey-green beams and cream infill. Dark slate roof, one chimney.
+- **N2** a tall narrow house squeezed between two neighbours, in pale dressed stone, clearly taller than wide and exactly as wide as the house in the fourth image. Two windows wide on the upper floors. On the ground floor the front door is on the LEFT, under the left column of windows, with one window on the right: the door is NOT centred. Hipped roof in brown flat tiles with a single dormer. Sage-green wooden shutters on every window. Half-timbering only in the small attic gable of the dormer. A plain wooden door with a stone lintel. Do not copy the shape of the fourth house: no jetty, no gable facing the street.
+- **N3** a tall narrow stone house squeezed between two neighbours, clearly taller than wide and exactly as wide as the house in the fourth image, two windows wide, with a small round stair turret on its front RIGHT corner topped by a pointed conical slate cap with a little iron finial. Narrow slit windows climbing the turret. On the ground floor the front door is on the LEFT, not centred. The top floor is half-timbered with grey-green beams and cream infill. Dark slate roof, one chimney. Do not copy the shape of the fourth house: no jetty, no gable facing the street.
 
 ## Standard (6 cases)
 - **S1** about as wide as it is tall. Its eaves run parallel to the street, so the roof ridge is a horizontal line seen from the front. Rubble-stone ground floor. Half-timbered upper floor with Saint Andrew's crosses (oxblood-red beams, ochre infill). Blue-grey slate roof with two dormers, and a stone chimney rising at the right end of the roof. Wooden front door slightly left of centre.

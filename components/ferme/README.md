@@ -1,5 +1,23 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (nuit, suite) — 6a : N2, LA MAISON DE PIERRE PÂLE AUX VOLETS VERTS
+
+Images de Guillaume (simple et riche, pas d'enrichie), puis « caveman on ».
+- **N1 en 4e référence au lieu de S1** pour les étroites (`refs/prompts-maisons.md`), et la porte demandée
+  « à GAUCHE » : Gemini a recopié la plinthe de N1 au pixel près (pied 945) et N2 tombe sur la MÊME
+  emprise (cases 2..5), tenue par `verify-vallee`. Le mur déborde de 0,4 case à gauche de la collision
+  (N1 : 0,2 à droite) — sous le seuil de `townHouseModelFoot`.
+- **La riche est sortie sur fond BLANC** malgré le prompt. `build-maison-sprites` la détoure par
+  REMPLISSAGE depuis le bord (la pierre pâle est à ~80 du blanc : la clé par distance l'aurait rendue à
+  moitié transparente), plus les poches de fond enfermées de 20 px et plus (girouette, entre un vase et le
+  mur) ; le magenta garde sa clé, les sept autres images sortent identiques à l'octet.
+- **La lanterne de la simple n'allume que son verre** : la pierre chaude passe le test de `lanternGlass`,
+  un premier jet allumait un carré de mur. La riche n'a pas de lanterne (une plaque de laiton).
+- Les huit parcelles étroites alternent N1/N2 par rang ; R à sa porte passe de l'un à l'autre.
+- **Vu en jeu** : N2 simple de jour, porte à l'échelle du personnage, N2 riche sur l'herbe (bords
+  propres). **Pas vu** : N2 de nuit en jeu (seulement la planche), R à sa porte. Bancs : 29/29
+  `verify-*` (`verify-vallee` 260), 24/24 `render-*`, `no-undef`, bundle, `next build` compilé.
+
 ## 2026-09-26 (nuit) — 6a, PREMIÈRE LIVRAISON : LES MAISONS PEINTES (S1 et N1) ET LA MAISON HANTÉE
 
 Guillaume a produit les images avec Gemini dans la soirée (méthode et prompts : `refs/prompts-maisons.md`),
@@ -393,7 +411,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1 (trois versions), N1 (simple, riche) et la maison hantée sont en jeu (récit en tête) ; restent N2, N3, S2 à S4, W1 à W3 (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs`). ⬜ 6b attend ses images. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1 (trois versions), N1 et N2 (simple, riche) et la maison hantée sont en jeu (récit en tête) ; restent N3, S2 à S4, W1 à W3 (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs`). ⬜ 6b attend ses images. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 ✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).

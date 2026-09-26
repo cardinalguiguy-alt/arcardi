@@ -71,14 +71,59 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
     const samp = [[], [], []];
     for (let y = 5; y < 40; y++) for (let x = 5; x < 150; x++) for (let c = 0; c < 3; c++) samp[c].push(src[(y * SW + x) * 4 + c]);
     const bg = samp.map(a => a.sort((p, q) => p - q)[a.length >> 1]);
+    const distAt = (x, y) => {
+      const o = (y * SW + x) * 4;
+      return Math.hypot(src[o] - bg[0], src[o + 1] - bg[1], src[o + 2] - bg[2]);
+    };
+    /* 1 bis. ⚠️ UN FOND CLAIR NE SE DÉTOURE PAS PAR DISTANCE SEULE (N2 riche,
+       2026-09-26 : Gemini l'a rendue sur BLANC malgré le prompt). La pierre pâle
+       est à ~80 du blanc, les voilages et les pâquerettes plus près encore : la
+       rampe les rendrait à moitié transparents au milieu de la façade. On ne
+       détoure que le fond RELIÉ au bord (remplissage, seuil 24 : le bruit JPEG
+       du blanc reste sous 10), plus un anneau de 2 px pour le bord mélangé ;
+       tout le reste est opaque. Le magenta garde la clé par distance : aucune
+       maison n'en porte, et c'est elle qui a été jugée en jeu. */
+    const magentaBg = bg[1] < 80 && bg[0] > 150 && bg[2] > 150;
+    let keyed = null;
+    if (!magentaBg) {
+      const FLOOD_T = 24, seen = new Uint8Array(SW * SH), stack = [];
+      const push = (x, y) => { const i = y * SW + x; if (!seen[i] && distAt(x, y) < FLOOD_T) { seen[i] = 1; stack.push(i); } };
+      for (let x = 0; x < SW; x++) { push(x, 0); push(x, SH - 1); }
+      for (let y = 0; y < SH; y++) { push(0, y); push(SW - 1, y); }
+      while (stack.length) {
+        const i = stack.pop(), x = i % SW, y = (i / SW) | 0;
+        if (x > 0) push(x - 1, y); if (x < SW - 1) push(x + 1, y);
+        if (y > 0) push(x, y - 1); if (y < SH - 1) push(x, y + 1);
+      }
+      /* Les poches de fond ENFERMÉES (entre un vase et le mur, dans la
+         girouette, derrière la descente d'eau) : le remplissage ne les atteint
+         pas. Une poche de 20 px et plus est du fond ; les pâquerettes, elles,
+         n'ont aucun îlot blanc de plus de 6 px (mesuré sur N2 riche). */
+      const pocket = new Uint8Array(SW * SH);
+      for (let s0 = 0; s0 < SW * SH; s0++) {
+        if (seen[s0] || pocket[s0] || distAt(s0 % SW, (s0 / SW) | 0) >= FLOOD_T) continue;
+        const comp = [s0]; pocket[s0] = 1;
+        for (let k = 0; k < comp.length; k++) {
+          const i = comp[k], x = i % SW, y = (i / SW) | 0;
+          for (const j of [x > 0 ? i - 1 : -1, x < SW - 1 ? i + 1 : -1, y > 0 ? i - SW : -1, y < SH - 1 ? i + SW : -1])
+            if (j >= 0 && !seen[j] && !pocket[j] && distAt(j % SW, (j / SW) | 0) < FLOOD_T) { pocket[j] = 1; comp.push(j); }
+        }
+        if (comp.length >= 20) for (const i of comp) seen[i] = 1;
+      }
+      keyed = seen;
+      for (let pass = 0; pass < 2; pass++) {
+        const nx = keyed.slice();
+        for (let y = 1; y < SH - 1; y++) for (let x = 1; x < SW - 1; x++) {
+          const i = y * SW + x;
+          if (!keyed[i] && (keyed[i - 1] || keyed[i + 1] || keyed[i - SW] || keyed[i + SW])) nx[i] = 1;
+        }
+        keyed = nx;
+      }
+    }
     // 2. Le cadre, et ce qui en déborderait (un cadre trop serré couperait la maison).
     const [cx0, cy0, CW, CH] = V.crop;
     let outside = 0;
-    const alphaAt = (x, y) => {
-      const o = (y * SW + x) * 4;
-      const d = Math.hypot(src[o] - bg[0], src[o + 1] - bg[1], src[o + 2] - bg[2]);
-      return smooth(KEY_LO, KEY_HI, d);
-    };
+    const alphaAt = (x, y) => (keyed && !keyed[y * SW + x]) ? 1 : smooth(KEY_LO, KEY_HI, distAt(x, y));
     for (let y = 2; y < SH - 2; y++) for (let x = 2; x < SW - 2; x++) {
       if (x >= cx0 && x < cx0 + CW && y >= cy0 && y < cy0 + CH) continue;
       if (alphaAt(x, y) > 0.5) outside++;
@@ -104,8 +149,9 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
        lierre de la ruine. Près du fond (5 px), on retire la part « magenta »
        d'un pixel : ce que le rouge ET le bleu ont en commun au-dessus du vert.
        Un vrai violet posé au bord (une fleur) grisonne : c'est le prix, et les
-       prompts n'en veulent plus. */
-    {
+       prompts n'en veulent plus. Sur fond blanc, aucun liseré à retirer — et
+       la glycine de N2 riche touche le bord : on n'y touche pas. */
+    if (magentaBg) {
       let near = new Uint8Array(CW * CH);
       for (let i = 0; i < CW * CH; i++) near[i] = day[3][i] < 0.5 ? 1 : 0;
       for (let pass = 0; pass < 5; pass++) {

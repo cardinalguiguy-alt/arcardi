@@ -5098,6 +5098,27 @@ export const TOWN_HOUSE_MODELS = {
           ruine:  { src: "refs/n1destroy.jpg", crop: [65, 11, 970, 974],
                     wins: [{ x: 290, y: 238, w: 84, h: 92, ghost: 1 }] },
         } },
+  /* 2026-09-26 — N2, la maison de pierre pâle aux volets verts. Peinte avec N1
+     en 4e référence (`refs/prompts-maisons.md`) : même plinthe au pixel près
+     (pied 945), même emprise (cases 2..5 — le mur déborde de 0,4 case à gauche,
+     sous le seuil de `townHouseModelFoot`). Les vitres sont le verre mesuré
+     + 4 px, comme N1. La riche a des jardinières sous chaque fenêtre (d'où les
+     `hv`) et PAS de lanterne (une plaque de laiton à sa place) — sa vitre de
+     lampe allumerait le laiton. Elle est sortie sur fond BLANC : détourée par
+     remplissage depuis le bord (`build-maison-sprites`). Pas d'enrichie. */
+  n2: { size: "narrow", door: 391, foot: 945, wall: [177, 909],
+        wins: [
+          { x: 504, y: 218, w: 78, h: 72, hv: { riche: 52 } },                            // lucarne (garde-corps chez la riche)
+          { x: 336, y: 443, w: 108, h: 120, hv: { riche: 78 } },                          // étage
+          { x: 672, y: 443, w: 108, h: 120, hv: { riche: 78 } },
+          { x: 672, y: 723, w: 108, h: 102, hv: { riche: 64 }, g: 1 },                    // au-dessus des fleurs
+          // La lanterne : son VERRE seul — la pierre pâle et chaude passe le test de `lanternGlass`.
+          { x: 507, y: 763, w: 29, h: 20, lamp: 1, only: ["simple"] },
+        ],
+        variants: {
+          simple: { src: "refs/maison-n2.jpg",       crop: [88, 4, 886, 978] },
+          riche:  { src: "refs/maison-n2-riche.jpg", crop: [88, 2, 892, 978] },
+        } },
 };
 /* Les modèles d'une largeur, dans l'ordre où R les fait défiler. */
 export const TOWN_HOUSE_SIZES = ["narrow", "std"];
