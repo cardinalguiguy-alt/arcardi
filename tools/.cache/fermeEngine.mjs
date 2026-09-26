@@ -4809,6 +4809,12 @@ export function generateTownWorld() {
      terrasse n'ont pas de rue en dessous — elles ont un à-pic. Sans ce test,
      leur allée descendait le vide en pavés flottants. */
   for (const hsn of C.TOWN_HOUSES) {
+    /* ⚠️ 2026-09-26 (phase 6a) : ce rectangle-ci n'est PLUS l'emprise finale —
+       il RÉSERVE la parcelle pendant la génération, exactement comme avant,
+       pour que tout ce qui se pose ensuite (et consulte `solid`) tombe au même
+       endroit. L'emprise du mur peint est posée par la passe finale (voir « LES
+       MAISONS PEINTES » en fin de fonction). Poser la vraie tout de suite a
+       déplacé 717 cases de la carte, à l'autre bout de la ville. */
     rect({ x: hsn.x, y: hsn.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }, (x, y, i) => { solid[i] = 1; });
     const doorX = hsn.x + 2, doorY = hsn.y + C.TOWN_HOUSE_H;
     const e0 = inMap(doorX, doorY) ? elev[id(doorX, doorY)] : 0;
@@ -7626,6 +7632,61 @@ export function generateTownWorld() {
         objects[i] = C.O_NONE; objHp.delete(i);
       }
     }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-26 (phase 6a) — LES MAISONS PEINTES : L'EMPRISE DU MUR.
+     ───────────────────────────────────────────────────────────────────────
+     La parcelle réservée plus haut (6 × 3) devient l'emprise du mur peint :
+     6 cases décalées d'une vers l'est pour les standard (la porte de S1 n'est
+     pas au milieu de sa façade), 4 pour les étroites. Elle vient de la LARGEUR
+     de la parcelle (`C.townHouseFoot`), jamais du modèle qu'un joueur choisit
+     avec R. ⚠️ EN DERNIER ET SANS TIRAGE (§4) : poser la vraie emprise pendant
+     la génération déplaçait 717 cases ailleurs sur la carte. Les cases libérées
+     n'ont rien reçu (elles étaient réservées) : elles redeviennent du jardin.
+     La case gagnée à l'est (S1) était du gazon de jardin : on y retire ce qui
+     aurait pu y pousser. */
+  for (const hsn of C.TOWN_HOUSES) {
+    rect({ x: hsn.x, y: hsn.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }, (x, y, i) => { if (!hedge[i]) solid[i] = 0; });
+    const f = C.townHouseFoot(hsn);
+    rect(f, (x, y, i) => {
+      solid[i] = 1;
+      if (objects[i] === C.O_TREE || objects[i] === C.O_TREE2 || objects[i] === C.O_STUMP) { objects[i] = C.O_NONE; objHp.delete(i); }
+    });
+    for (let k = props.length - 1; k >= 0; k--) {
+      const p = props[k];
+      if (p.x >= f.x && p.x < f.x + f.w && p.y >= f.y && p.y < f.y + f.h) props.splice(k, 1);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-26 (phase 6a) — LA MAISON HANTÉE, DANS LE BOIS DE L'EST.
+     ───────────────────────────────────────────────────────────────────────
+     Guillaume : une N1 en ruine, « loin à l'est de Valley Town, près de la
+     partie sauvage ». Posée APRÈS tout le décor, sans un tirage (§4 : la ville
+     se regénère depuis sa graine) : on RETIRE ce que le bois y avait planté.
+     · l'emprise du mur bloque (`townHouseFoot`, la même que les N1) ;
+     · rien ne pousse DANS la maison ni devant sa façade (deux rangées) : un
+       arbre planté là se dessinerait devant elle et la cacherait ;
+     · l'allée jusqu'à la rue du sud est dégagée de ses arbres mais reste en
+       HERBE — un chemin que plus personne n'entretient, ses herbes hautes
+       comprises (elles se traversent).
+     Derrière et autour, le bois reste : c'est lui qui la rend abandonnée. */
+  {
+    const R = C.TOWN_RUIN, f = C.townHouseFoot(R);
+    const clearTree = (x, y) => { if (!inMap(x, y)) return; const i = id(x, y); if (objects[i] === C.O_TREE || objects[i] === C.O_TREE2 || objects[i] === C.O_STUMP) { objects[i] = C.O_NONE; objHp.delete(i); } };
+    for (let y = R.y; y < R.y + C.TOWN_HOUSE_H + 2; y++) for (let x = R.x + 1; x < R.x + C.TOWN_HOUSE_W + 1; x++) clearTree(x, y);
+    // Les décors qu'elle recouvre, décombres des flancs compris (une case de
+    // part et d'autre du mur) — et leur case redevient libre, sans quoi un
+    // buisson retiré laisserait un mur invisible (verify-vallee l'a vu).
+    for (let k = props.length - 1; k >= 0; k--) {
+      const p = props[k];
+      if (p.x >= f.x - 1 && p.x < f.x + f.w + 1 && p.y >= f.y && p.y < f.y + f.h) { props.splice(k, 1); if (!hedge[id(p.x, p.y)]) solid[id(p.x, p.y)] = 0; }
+    }
+    rect(f, (x, y, i) => { solid[i] = 1; });
+    const doorX = R.x + 2, doorY = R.y + C.TOWN_HOUSE_H;
+    const street = C.TOWN_ST_ROWS.find((r) => r >= doorY && r - doorY <= 8);
+    for (let y = doorY; y < (street === undefined ? doorY + 3 : street); y++) for (const dx of [0, 1]) clearTree(doorX + dx, y);
   }
 
   const soft = new Uint8Array(W * H);

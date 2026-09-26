@@ -1,5 +1,33 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (nuit) — 6a, PREMIÈRE LIVRAISON : LES MAISONS PEINTES (S1 et N1) ET LA MAISON HANTÉE
+
+Guillaume a produit les images avec Gemini dans la soirée (méthode et prompts : `refs/prompts-maisons.md`),
+puis « caveman on ». Décisions du soir : trois versions par maison — simple, ENRICHIE (plus de caractère,
+jamais « older and poorer »), riche — de même silhouette ; réparties PAR QUARTIER ; N1 sans enrichie ; une
+N1 en ruine, maison hantée, loin à l'est près de la partie sauvage.
+- **Les dix façades procédurales du zip 235 ne sont plus dessinées en ville** : chaque parcelle pose une
+  image peinte (`C.TOWN_HOUSE_MODELS`, `C.townHouseLook`). La LARGEUR se déduit de la position (étroite :
+  la vieille ville autour du marché, 8 parcelles ; standard : les 19 autres ; la large attend W1-W3), le
+  QUARTIER aussi (riche : le centre marché-place-parc et la terrasse ; enrichie : le lac et les artisans ;
+  simple : le reste). Rien ne circule, aucune migration, aucun champ neuf.
+- **L'image se cale sur la PORTE de la parcelle** (là où le générateur perce l'allée) et sur le pied du
+  mur ; **l'échelle se déduit de la porte des anciennes maisons (26 px d'art)** — premier jet calé sur la
+  largeur, vu en jeu : des portes plus petites qu'un personnage.
+- **L'emprise bloquante est celle du mur peint** (S1 : 6 cases décalées d'une vers l'est, sa porte n'étant
+  pas au milieu ; N1 : 4 cases), posée par une passe finale du générateur, sans tirage. ⚠️ Premier jet
+  posé pendant la génération : 717 cases déplacées ailleurs sur la carte (§4 de `CLAUDE.md`).
+- **R à sa porte** fait défiler les modèles de SA largeur ; tant qu'il n'y en a qu'un, un message le dit.
+- **La nuit** : chaque vitre du calque est allumée à l'heure de `LUM.windowLit`, une par une (découpe
+  dans le calque natif, aucun canevas de plus), la lanterne de porte brûle chez qui habite là.
+- **La maison hantée** (`C.TOWN_RUIN`, au fond du bois de l'est, allée envahie jusqu'à la rue du sud) :
+  une nuit sur trois, par bouffées de six minutes, une lueur froide au pignon (`LUM.ruinGhostOn`).
+- **Menu dev** : deux arrêts, « les maisons de la vieille ville » et « la maison hantée ».
+- **Vu en jeu** : la vieille ville de jour (N1 simples et riches), les S1 riches du parc, la porte à
+  l'échelle du personnage, une maison habitée de nuit (fenêtre et lanterne allumées, les autres noires), la
+  maison hantée de jour et sa lueur un soir de jour 4 à 22 h 32. **Pas vu** : la terrasse, les enrichies du
+  lac, R à sa porte, deux joueurs. Bancs : 29/29 `verify-*`, 24/24 `render-*`, `next build` compilé.
+
 ## 2026-09-26 (soir, suite) — 6c : LA VIE DES MONUMENTS LA NUIT ; LE REFLET DU PONT ; LE CHAT QU'ON NOURRIT ; L'ÉPUISETTE
 
 Guillaume : « continue les phases » ; la 6a (maisons) et la 6b (gare, commerces) attendent ses images
@@ -365,7 +393,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). ⬜ 6a et 6b attendent les PNG de Guillaume (prompts : `refs/prompts-maisons.md`).** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1 (trois versions), N1 (simple, riche) et la maison hantée sont en jeu (récit en tête) ; restent N2, N3, S2 à S4, W1 à W3 (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs`). ⬜ 6b attend ses images. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 ✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).

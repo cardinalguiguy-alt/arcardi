@@ -7,26 +7,31 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 (soir) — Valley Town : phases 0 à 5, météo, puis 6c, reflet du pont, lait du chat, épuisette
+### 2026-09-26 (nuit) — Valley Town : 6a commencée, maisons peintes S1 et N1, maison hantée
 
 Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume ;
 récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune,
 bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est
-LEVÉE.** **Reste : 6a maisons · 6b gare/quai/commerces (les deux attendent les PNG Gemini de Guillaume,
-prompts dans `refs/prompts-maisons.md`) · 7 composition · 8 intérieurs.**
-- **Dernière livraison, d'un bloc** : **6c** (baies des monuments dans `lumiere.js` — `MONUMENT_WINDOWS`,
-  lue par le script de cuisson ET par le jeu ; vitraux en couleurs ; pièces qui s'éteignent à l'heure ;
-  cierges qui vacillent) ; **reflet du pont** ; **le chat qu'on nourrit** (lait une fois par jour et par
-  chat, adopté après trois jours, vient à vous, rapporte un gardon) ; **l'épuisette** (300 or au marché,
-  carpes et papillons relâchés, carnet par joueur). Tout l'état neuf vit dans `f.inv`.
-- Bancs ce jour-là : **29/29 `verify-*`** (`verify-lumiere` 83, `verify-vallee` 255, `verify-faune` 74 —
-  les ajouts falsifiés), **24/24 `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`).
-  Vu en jeu : les trois monuments de nuit, le reflet, l'achat, le carnet, une carpe prise. **Pas vu** : le
-  lait (la traite scriptée n'a pas abouti), le chat adopté (banc seulement), un papillon attrapé. **Pas de
-  manipulation Supabase** (champs de plus dans le JSON du fermier ; aucune migration).
+LEVÉE.** **Reste : 6a (sept modèles de maisons à venir) · 6b gare/quai/commerces · 7 composition · 8 intérieurs.**
+- **Dernière livraison** (images Gemini de Guillaume, « caveman on ») : les dix façades procédurales
+  remplacées en ville par des maisons PEINTES — S1 (simple, enrichie, riche), N1 (simple, riche) — et une
+  N1 en ruine, maison hantée au fond du bois de l'est (lueur froide au pignon une nuit sur trois).
+  Largeur et quartier DÉDUITS de la position de la parcelle ; image calée sur la porte ; échelle unique
+  déduite de la porte des anciennes maisons (26 px d'art) ; emprise = le mur peint, posée en passe finale
+  du générateur. Tout vit dans `TOWN_HOUSE_MODELS` (fermeConstants.js) ; fabrication :
+  `node tools/build-maison-sprites.mjs` (planche `tools/out/maisons.png`). Méthode de prompt et
+  intégration d'un nouveau modèle : `refs/prompts-maisons.md`.
+- Bancs ce jour-là : **29/29 `verify-*`** (`verify-vallee` 260, `verify-lumiere` 86 — ajouts falsifiés),
+  **24/24 `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`).
+  Vu en jeu : vieille ville de jour, S1 riches du parc, porte à l'échelle du personnage, maison habitée de
+  nuit, maison hantée de jour et sa lueur. **Pas vu** : la terrasse, les S1 enrichies (lac), R à sa porte,
+  deux joueurs. **Pas de manipulation Supabase** (rien de persisté, aucune migration).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **La nuit du 2026-09-26 (6a)** : les maisons peintes en ville — la répartition par quartier (riche :
+  centre et terrasse ; enrichie : lac et artisans), les étroites de la vieille ville, l'échelle (porte =
+  personnage), la maison hantée et la fréquence de sa lueur (`LUM.ruinGhostOn`).
 - **Le soir du 2026-09-26** : les vitraux en couleurs (composition dessinée : fond bleu, bordure rubis,
   médaillons ; à juger à l'écran), les horaires des pièces (`monumentWindowLevel`), le reflet du pont
   (`TOWN_BRIDGE_REFL_UP`), la portée de l'épuisette (1,3 papillon / 2,6 carpe), les chances (55 / 40 %),
@@ -60,15 +65,16 @@ prompts dans `refs/prompts-maisons.md`) · 7 composition · 8 intérieurs.**
 
 ### ⏭️ ACTION SUIVANTE
 
-**Les PNG Gemini de Guillaume décident de la suite.** S'ils sont là (`refs/maison-<code>.png`) : **6a** —
-détourage, repères (pied, porte, emprise) mesurés sur le PNG, `TOWN_BITMAPS` `grid: "screen"`, taille par
-parcelle (étroite 4 / standard 6 / large 8, par RANG, aucune migration), générateur et collision, calque
-de nuit par `build-monument-glow` (ajouter les maisons à `MONUMENT_WINDOWS` ou une table sœur), R à la
-porte qui tourne DANS la famille de taille ; puis **6b** (gare, quai, commerces, enseignes VIERGES — le
-nom s'écrit au rendu). S'ils ne sont pas là : lui rappeler de jouer phases 1-5, météo et les nouveautés du
-soir, et proposer la **phase 7 (composition)** — la plus risquée, à cadrer avec lui avant tout code.
-L'« autre jeu » annoncé après les échecs attend qu'il le nomme ; le son de la pluie et du vent attend un
-chantier son dédié ; la boutique d'objets de plage (moyen terme) reprendra l'épuisette.
+**Continuer la 6a avec les images de Guillaume** : N2, N3, S2 à S4, W1 à W3 (prompts prêts,
+`refs/prompts-maisons.md`). Chaque modèle : relever porte / pied / mur / cadre / vitres sur l'image
+simple → entrée de `TOWN_HOUSE_MODELS` → `build-maison-sprites` → planche → jeu. ⚠️ Tous les modèles d'une
+largeur doivent avoir la MÊME emprise (tenu par `verify-vallee`) : sinon, arbitrer avec lui (recadrer
+l'image, ou changer de largeur). Les parcelles LARGES n'existent pas encore : les créer (par position,
+comme les étroites) le jour où W1 arrive. Puis **6b**. Le cheval de bataille reste : lui faire JOUER
+phases 1-5, météo, 6c et 6a en vraie séance.
+⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`, fermeArt.js) sont
+encore fabriquées au chargement sans plus être dessinées en ville — `verify-lumiere` lit leurs fenêtres ;
+les retirer demande de réécrire cette section du banc.
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
 
@@ -352,7 +358,9 @@ dépôt.
   sauvegardée : elle est regénérée puis rejouée case par case — un `rnd()` inséré au milieu de la
   génération déplace les rochers de TOUTES les fermes existantes et fait « repousser » ailleurs les
   arbres coupés, sans une erreur. Un décor neuf s'y pose par HACHAGE de case, en dernier, et un banc
-  compare l'empreinte d'avant. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
+  compare l'empreinte d'avant. ⚠️ **Changer une case de `solid` en cours de génération déplace autant
+  qu'un tirage** (les refus changent) : 717 cases de Valley Town pour une emprise de maison (2026-09-26) —
+  une emprise qui change se pose en passe FINALE. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
   violé 400 jours plus tard par la repousse des ARBRES : *une règle entre deux objets se vérifie chez
   les deux qui peuvent naître*, pas seulement chez le nouveau venu.
 - ⚠️⚠️⚠️ **UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL

@@ -5025,6 +5025,160 @@ export const TOWN_COURT_SPRITE = {
 };
 
 /* ╔══════════════════════════════════════════════════════════════════════════
+   ║ PHASE 6a (2026-09-26) — LES MAISONS PEINTES (Gemini), EN TROIS VERSIONS.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décisions de Guillaume, le même soir : pierre et colombages ; trois largeurs
+   de parcelle (étroite, standard, large — la large attend ses images) ; pour
+   CHAQUE maison trois versions de la même silhouette — `simple`, `enrichie`
+   (plus de caractère, JAMAIS plus pauvre : « je veux pas de version older et
+   poorer »), `riche` — réparties PAR QUARTIER ; N1 n'a pas d'enrichie ; et une
+   N1 en RUINE, maison hantée, loin à l'est dans le bois (`TOWN_RUIN`).
+   Références et méthode de prompt : `refs/prompts-maisons.md`. Fabrication :
+   `tools/build-maison-sprites.mjs` (détourage du magenta, calque de nuit).
+
+   ⚠️⚠️ UNE SEULE ÉCHELLE POUR TOUTES LES MAISONS (`TOWN_HOUSE_SCALE`), jamais une
+   échelle par maison ajustée à sa parcelle : c'est la PORTE qui doit garder la
+   même hauteur partout — à 6 cases, celle de S1 tient à peine un personnage.
+   Gemini peint toutes les maisons à ~970 px de haut ; une N1 « ajustée » à ses
+   4 cases aurait eu une porte de 16 px d'art, plus petite qu'un enfant.
+   ⚠️ LES REPÈRES SONT EN PX DE LA RÉFÉRENCE (le .jpg), relevés sur la version
+   SIMPLE — Gemini retouche l'image sans la recadrer, donc les trois versions
+   ont la porte au même pixel (mesuré : ±2 px). `door` : l'axe de la porte ;
+   `foot` : le pied du mur (il tombe sur la ligne entre l'emprise et la rangée
+   de la porte) ; `wall` : le mur du rez-de-chaussée, d'où se DÉRIVE l'emprise
+   bloquante (`townHouseModelFoot`) — jamais les étages en encorbellement, qui
+   débordent au-dessus du jardin. `crop` (par version) : le cadre gardé dans
+   la référence, x, y, largeur, hauteur. `wins` : les vitres (rectangles de
+   VERRE, à l'intérieur des cadres) — `g` : au rez-de-chaussée (elles posent une
+   flaque de lumière devant la maison), `lamp` : la lanterne de la porte,
+   `only` : n'existe que dans ces versions (la lucarne ajoutée à N1 riche : sans
+   `only`, le script aurait allumé les ardoises de la simple au même endroit) ;
+   `hv` : la hauteur de verre d'une version — les jardinières des riches mordent
+   le bas des vitres, et allumées elles sortaient en fleurs jaunes (planche du
+   2026-09-26). Lues par `townHouseWins`, pour le script ET pour le jeu.
+   ⚠️ LA PORTE NE BOUGE JAMAIS : l'image se cale sur `x + TOWN_HOUSE_W / 2`, là où
+   le générateur perce l'allée. Une porte qui suivrait le modèle choisi (R)
+   déplacerait l'allée — donc la carte — au gré d'une préférence de joueur. */
+/* ⚠️ L'ÉCHELLE SE DÉDUIT DE LA PORTE, PAS DE LA LARGEUR. Premier jet : S1 posée
+   sur ses 6 cases (96/1028) — vue en jeu le soir même, sa porte faisait 23 px
+   d'art et celle de N1 20, plus petites qu'un personnage : des maisons de
+   poupée. La porte des maisons procédurales qu'elles remplacent faisait 26 px
+   (`bDoor`, fermeArt.js) : c'est la proportion que le jeu a toujours eue, on la
+   garde. Le cadre de porte de S1 fait 248 px dans sa référence (662 → 910). */
+export const TOWN_HOUSE_SCALE = 26 / 248;   // px d'ART par px de référence
+export const TOWN_HOUSE_MODELS = {
+  s1: { size: "std", door: 399, foot: 948, wall: [102, 998],
+        wins: [
+          { x: 288, y: 234, w: 62, h: 62 }, { x: 742, y: 234, w: 62, h: 62 },          // lucarnes
+          { x: 280, y: 420, w: 84, h: 112, hv: { riche: 80 } },                          // étage (celle du milieu :
+          { x: 500, y: 420, w: 94, h: 114, hv: { riche: 80, enrichie: 100 } },           //  enrichie et riche seulement,
+          { x: 730, y: 420, w: 86, h: 112, hv: { riche: 80 } },                           //  le verre y suffit)
+          { x: 202, y: 696, w: 48, h: 114, g: 1 }, { x: 618, y: 696, w: 268, h: 92, g: 1 },
+          { x: 486, y: 668, w: 72, h: 110, lamp: 1 },
+        ],
+        variants: {
+          simple:   { src: "refs/maison-s1.jpg",          crop: [29, 9, 1032, 972] },
+          enrichie: { src: "refs/maison-s1-enrichie.jpg", crop: [28, 9, 1034, 974] },
+          riche:    { src: "refs/maison-s1-riche.jpg",    crop: [28, 6, 1035, 978] },
+        } },
+  n1: { size: "narrow", door: 393, foot: 945, wall: [206, 882],
+        wins: [
+          { x: 290, y: 238, w: 84, h: 92, hv: { riche: 70 } },                             // pignon
+          { x: 296, y: 470, w: 88, h: 92, hv: { riche: 72 } },                             // étage
+          { x: 698, y: 458, w: 82, h: 104, hv: { riche: 84 } },
+          { x: 704, y: 240, w: 80, h: 40, only: ["riche"] },                              // la lucarne de la riche
+          { x: 674, y: 724, w: 104, h: 114, g: 1 },
+          { x: 492, y: 720, w: 60, h: 88, lamp: 1 },
+        ],
+        variants: {
+          simple: { src: "refs/maison-n1.jpg",       crop: [88, 4, 886, 978] },
+          riche:  { src: "refs/maison-n1-riche.jpg", crop: [88, 4, 887, 978] },
+          /* La maison hantée : ses vitres sont brisées, rien ne s'y allume —
+             sauf, certaines nuits, une lueur froide au pignon (`ghost`). */
+          ruine:  { src: "refs/n1destroy.jpg", crop: [65, 11, 970, 974],
+                    wins: [{ x: 290, y: 238, w: 84, h: 92, ghost: 1 }] },
+        } },
+};
+/* Les modèles d'une largeur, dans l'ordre où R les fait défiler. */
+export const TOWN_HOUSE_SIZES = ["narrow", "std"];
+export const townHouseModelsOf = (size) => Object.keys(TOWN_HOUSE_MODELS).filter(k => TOWN_HOUSE_MODELS[k].size === size);
+/* L'emprise bloquante d'un modèle, en cases, relative à la parcelle : les cases
+   dont le mur du rez-de-chaussée couvre plus de 40 %. S1 → 1..6, N1 → 2..5. */
+export function townHouseModelFoot(m) {
+  const L = TOWN_HOUSE_W / 2 + (m.wall[0] - m.door) * TOWN_HOUSE_SCALE / 16;
+  const R = TOWN_HOUSE_W / 2 + (m.wall[1] - m.door) * TOWN_HOUSE_SCALE / 16;
+  const x0 = Math.floor(L + 0.6), x1 = Math.ceil(R - 0.4);
+  return { dx: x0, w: x1 - x0 };
+}
+/* ⚠️ LA LARGEUR ET LE QUARTIER SE DÉDUISENT DE LA POSITION DE LA PARCELLE —
+   aucun état, aucun message, aucune migration (§3 : ce qui se déduit ne se
+   diffuse pas). La collision d'une parcelle ne dépend donc JAMAIS du modèle
+   que son propriétaire choisit avec R : elle vient de sa largeur, et tous les
+   modèles d'une largeur ont la même emprise (tenu par `verify-vallee`).
+   · ÉTROITE : la vieille ville autour du marché (les rangées nord et sud) ;
+   · quartier RICHE : le centre (marché, place, parc) et la terrasse de la
+     haute-ville — « les belles adresses » depuis le 425 ;
+   · quartier ENRICHI : la rangée face au lac et le quartier des artisans ;
+   · SIMPLE : le reste. */
+export const TOWN_HOUSE_RICH_AREA = { x: 40, y: 56, w: 96, h: 50 };
+const inRectXY = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+export function townHouseSize(hsn) {
+  if (hsn.model) return TOWN_HOUSE_MODELS[hsn.model].size;
+  const mk = TOWN_MARKET;
+  return hsn.x < mk.x + mk.w + 6 && hsn.y >= mk.y - 14 && hsn.y <= mk.y + mk.h + 4 ? "narrow" : "std";
+}
+export function townHouseDistrict(hsn) {
+  if (hsn.y >= TOWN_LAKE.y - 14 || hsn.x >= TOWN_ARTISANS.x) return "enrichie";
+  if (inRectXY(TOWN_HOUSE_RICH_AREA, hsn.x, hsn.y) || inRectXY(TOWN_UPPER, hsn.x, hsn.y)) return "riche";
+  return "simple";
+}
+/* L'emprise bloquante d'une parcelle (ou de la ruine), en cases absolues. */
+export function townHouseFoot(hsn) {
+  const m = TOWN_HOUSE_MODELS[hsn.model || townHouseModelsOf(townHouseSize(hsn))[0]];
+  const f = townHouseModelFoot(m);
+  return { x: hsn.x + f.dx, y: hsn.y, w: f.w, h: TOWN_HOUSE_H };
+}
+/* Le modèle et la version dessinés sur une parcelle : `style` est la façade
+   choisie avec R (un entier quelconque, ramené au nombre de modèles de SA
+   largeur) ; la version vient du quartier, et retombe sur `simple` quand le
+   modèle ne l'a pas (N1 n'a pas d'enrichie). */
+export function townHouseLook(hsn, style) {
+  if (hsn.model) return { model: hsn.model, variant: hsn.variant };
+  const list = townHouseModelsOf(townHouseSize(hsn));
+  const model = list[(((style | 0) % list.length) + list.length) % list.length];
+  const want = townHouseDistrict(hsn);
+  return { model, variant: TOWN_HOUSE_MODELS[model].variants[want] ? want : "simple" };
+}
+export const townHouseBitmapKey = (model, variant) => `house_${model}_${variant}`;
+/* Les vitres d'une version, hauteur résolue — la SEULE lecture de `wins`/`hv`/
+   `only` : le script de fabrication cuit ces rectangles, le jeu allume les
+   mêmes, un par un, à l'heure de `LUM.windowLit`. */
+export function townHouseWins(model, variant) {
+  const m = TOWN_HOUSE_MODELS[model], v = m.variants[variant];
+  return (v.wins || m.wins).filter(w => !w.only || w.only.includes(variant))
+    .map(w => ({ ...w, h: (w.hv && w.hv[variant]) || w.h }));
+}
+/* La maison hantée (Guillaume, 2026-09-26) : une N1 en ruine, loin à l'est,
+   dans le bois qui prolonge le coin sauvage. Elle n'est PAS une parcelle de
+   `TOWN_HOUSES` — le rang y désigne un propriétaire, et personne n'habite là.
+   Posée par la dernière passe du générateur (aucun tirage). Porte en y + 3,
+   à 8 rangées de la rue du sud (150) : son allée envahie la rejoint. */
+export const TOWN_RUIN = { x: 206, y: 139, model: "n1", variant: "ruine" };
+/* Les entrées de `TOWN_BITMAPS` des maisons, dérivées des repères : une image
+   par cran, taille d'écran = cadre × échelle × cran. Le calque de nuit existe
+   pour toute version qui a une vitre à allumer. */
+function townHouseBitmaps() {
+  const out = {};
+  for (const [mk, m] of Object.entries(TOWN_HOUSE_MODELS)) for (const [vk, v] of Object.entries(m.variants)) {
+    const key = townHouseBitmapKey(mk, vk), base = `/town/maison-${mk}-${vk}`;
+    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, zooms: [1, 2, 3, 4, 5],
+                 disp: v.crop[2] * TOWN_HOUSE_SCALE, dispH: v.crop[3] * TOWN_HOUSE_SCALE, grow: 1, smooth: false,
+                 house: { model: mk, variant: vk } };
+  }
+  return out;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-09-25 (phase 0 de la feuille de route graphique) — LES BITMAPS DE LA
    ║ VILLE, DÉCLARÉS À UN SEUL ENDROIT.
    ╚══════════════════════════════════════════════════════════════════════════
@@ -5109,6 +5263,8 @@ export const TOWN_BITMAPS = {
      conformes par construction (`disp` nul = natif). Le cisaillement du vent
      n'est pas une échelle : c'est une animation, et il reste permis. */
   tallGrass:  { prefix: "/town/grass-tall-", disp: null, grow: 1, smooth: false },
+  /* Les maisons peintes (phase 6a) : voir `TOWN_HOUSE_MODELS` plus haut. */
+  ...townHouseBitmaps(),
 };
 /* L'image d'un bitmap `grid: "screen"` pour le cran de zoom `z` : ses URL et sa
    taille EXACTE en px d'écran. ⚠️ LA SEULE DÉFINITION de cette taille — le
@@ -6558,6 +6714,12 @@ export const DEV_TELEPORTS = [
      passe juste au-dessus : l'eau y a changé de nature (claire, fond visible),
      et on ne la jugera pas en y marchant depuis la gare à chaque retouche. */
   { key: "townPond",      zone: "town" },
+  /* 2026-09-26 (phase 6a) — LES MAISONS PEINTES ont leurs deux arrêts, pour la
+     raison du 425 : on ne jugera pas les images en traversant la ville à chaque
+     retouche. La vieille ville (rangée nord du marché : quatre maisons, deux
+     étroites simples puis deux riches) et la maison hantée, au fond du bois. */
+  { key: "townHouses",    zone: "town" },
+  { key: "townRuin",      zone: "town" },
   /* ⚠️ ZIP 446 — LE CRATÈRE A SON ARRÊT, ET C'EST LA LEÇON DU 425 APPLIQUÉE
      AVANT D'ÊTRE REPAYÉE : il est dans un pré, à l'écart, et y aller à pied
      coûte une bonne minute — donc on ne serait pas allé le regarder à chaque

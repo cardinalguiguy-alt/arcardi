@@ -258,6 +258,15 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   le faux canevas ne compose pas — vu en jeu seulement (§10 de `CLAUDE.md`). La planche
   `tools/out/monuments-nuit.png` (écrite par `tools/build-monument-glow.mjs`) montre les trois monuments
   de jour et de nuit : c'est elle qu'on regarde avant le jeu.
+- **`build-maison-sprites.mjs` (phase 6a, 2026-09-26) — pas un banc, un script de fabrication**, comme
+  `build-monument-glow` : les maisons peintes (Gemini) détourées de leur fond magenta, une image par cran,
+  jour et calque de nuit, depuis `TOWN_HOUSE_MODELS`. Sa planche `tools/out/maisons.png` (chaque version de
+  jour puis de nuit) est ce qu'on regarde avant le jeu. Les recettes de lumière d'une vitre vivent depuis ce
+  jour dans `lib-glow.mjs`, partagées avec `build-monument-glow` (sorti au bit près, vérifié : aucun PNG
+  modifié en le relançant). Ce qui TIENT les maisons : `verify-densite` (tailles des 60 images),
+  `verify-vallee` (une emprise par largeur, solide sur la carte, une image par parcelle, la porte de la
+  maison hantée atteinte) et `verify-lumiere` (la lueur de la maison hantée : jamais de jour, une nuit sur
+  trois, par bouffées — falsifié).
 - **Ajouts de la phase 2 à trois bancs existants** : `render-parc` (les trois lanternes ÉTEINTES n'ont
   plus un pixel de lumière et ne changent QUE des pixels de lumière ; aucun arbre ne cache plus de 10 %
   d'une lanterne, mesuré sur les vrais sprites dans le vrai monde — le magnolia du parc en cachait 55 % ;

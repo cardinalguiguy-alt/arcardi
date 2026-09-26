@@ -147,6 +147,38 @@ for (const cx of C.TOWN_ST_COLS) {
     if (!reach(dx, dy) && !reach(dx + 1, dy)) bad.push(`#${hi}(${h.x},${h.y})`);
   }
   ok(`les ${C.TOWN_HOUSES.length} portes de maison sont accessibles`, bad.length === 0, bad.join(" "));
+  /* 2026-09-26 (phase 6a) — la maison hantée n'a pas de propriétaire, mais on
+     doit pouvoir aller jusqu'à sa porte : son allée envahie traverse le bois. */
+  const R = C.TOWN_RUIN, rx = R.x + 2, ry = R.y + C.TOWN_HOUSE_H;
+  ok("la porte de la maison hantée est accessible", reach(rx, ry) || reach(rx + 1, ry), `(${rx},${ry})`);
+}
+/* 2026-09-26 (phase 6a) — LES MAISONS PEINTES. La collision d'une parcelle vient
+   de sa LARGEUR, jamais du modèle choisi avec R : tous les modèles d'une même
+   largeur doivent donc avoir la même emprise, sinon changer de façade ferait
+   passer à travers un mur (ou buter sur du vide). Et l'emprise doit être
+   exactement ce que le générateur a posé. */
+{
+  for (const size of C.TOWN_HOUSE_SIZES) {
+    const feet = C.townHouseModelsOf(size).map(k => JSON.stringify(C.townHouseModelFoot(C.TOWN_HOUSE_MODELS[k])));
+    ok(`largeur « ${size} » : ${feet.length} modèle(s), une seule emprise`, feet.length > 0 && new Set(feet).size === 1, feet.join(" "));
+  }
+  let bad = [], cells = 0;
+  for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) {
+    const f = C.townHouseFoot(h);
+    for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) { cells++; if (!tw.solid[idx(x, y)]) bad.push(`(${x},${y})`); }
+    // la porte (x+3) tombe DANS l'emprise, sinon l'image n'est pas calée sur l'allée
+    if (!(h.x + C.TOWN_HOUSE_W / 2 > f.x && h.x + C.TOWN_HOUSE_W / 2 < f.x + f.w)) bad.push(`porte hors emprise (${h.x},${h.y})`);
+  }
+  ok("chaque emprise de maison peinte est solide sur la carte", bad.length === 0, `${cells} cases lues ; ${bad.slice(0, 8).join(" ")}`);
+  const sizes = {}, looks = {};
+  for (const h of C.TOWN_HOUSES) {
+    sizes[C.townHouseSize(h)] = (sizes[C.townHouseSize(h)] || 0) + 1;
+    const l = C.townHouseLook(h, 0), k = `${l.model}/${l.variant}`;
+    looks[k] = (looks[k] || 0) + 1;
+    if (!C.TOWN_BITMAPS[C.townHouseBitmapKey(l.model, l.variant)]) bad.push(`image absente ${k}`);
+  }
+  ok("chaque parcelle a une image pour sa largeur et son quartier", bad.length === 0,
+     `${Object.entries(sizes).map(([k, v]) => `${v} ${k}`).join(", ")} · ${Object.entries(looks).map(([k, v]) => `${v}× ${k}`).join(", ")}`);
 }
 // Les repères que le joueur DOIT pouvoir atteindre.
 const spots = [
@@ -213,7 +245,8 @@ for (let y = C.TOWN_COURT_WING_ROW + 1; y <= C.TOWN_COURT.y + C.TOWN_COURT.h - 1
   if (!span) continue;
   for (let k = 1; k <= C.TOWN_COURT_RAMP_MARGIN; k++) { mark(span.x0 - k, y); mark(span.x1 + k, y); }
 }
-for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TOWN_HOUSE_H);
+// 2026-09-26 (phase 6a) : l'emprise du mur PEINT (celle que pose le générateur), ruine comprise.
+for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) { const f = C.townHouseFoot(h); markRect({ x: f.x, y: f.y }, f.w, f.h); }
 for (const p of tw.props) mark(p.x, p.y);
 /* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.
    Les marquer depuis les mêmes rectangles que la collision évite de réinventer
@@ -271,7 +304,8 @@ section("Valley Town — géométrie");
   const allB = [
     ...[C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]
       .map((b, k) => [["église", "mairie", "tribunal", "boutique", "salon", "gare"][k], b]),
-    ...C.TOWN_HOUSES.map((h, k) => [`maison#${k}`, { x: h.x, y: h.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }]),
+    ...C.TOWN_HOUSES.map((h, k) => [`maison#${k}`, C.townHouseFoot(h)]),
+    ["maison hantée", C.townHouseFoot(C.TOWN_RUIN)],
   ];
   /* ⚠️⚠️ 2026-09-21 — UNE EXCEPTION NOMMÉE, MÊME FAMILLE QUE `WALKABLE`
      JUSTE AU-DESSUS : desserrer un contrôle sans dire pourquoi est le geste

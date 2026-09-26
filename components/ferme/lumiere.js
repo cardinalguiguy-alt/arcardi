@@ -179,6 +179,19 @@ export function windowLit(house, win, tmin, nightA, asleep) {
   return tmin < offAt;
 }
 
+/* ── 2 ter. LA LUEUR DE LA MAISON HANTÉE (phase 6a, 2026-09-26) ─────────────
+   Guillaume : une N1 en ruine au fond du bois de l'est, « genre maison hantée
+   abandonnée ». Personne n'y habite, rien ne s'y allume — sauf, une nuit sur
+   trois, une lueur froide au pignon, par bouffées de six minutes de jeu, entre
+   21 h et 4 h. Une pure fonction du jour et de l'heure : les deux joueurs la
+   voient au même moment, sans un message. Le vacillement est au rendu. */
+export function ruinGhostOn(day, tmin) {
+  if (hash32(day * 31 + 5, 911) % 3 !== 0) return false;
+  const t = ((tmin % 1440) + 1440) % 1440;
+  if (!(t >= 21 * 60 || t < 4 * 60)) return false;
+  return hash32(day * 131 + 7, Math.floor(tmin / 6)) % 4 === 0;
+}
+
 /* ── 2 bis. LES FENÊTRES DES MONUMENTS (phase 6c, 2026-09-26) ─────────────
    Guillaume : « l'éclairage des fenêtres des grands bâtiments doit être plus
    travaillé, plus réaliste, plus beau » — puis « un peu tout ça » (fenêtres
@@ -419,7 +432,7 @@ export function pointInShadow(lx, ly, rect, px, py) {
                                           { img, x, y, w, h } en px monde
      glows    [{ img, x, y, w, h, k }]    calques de nuit en px monde, ajoutés
                                           au TAMPON (maisons : même grille)
-     screenGlows [{ img, x, y, w, h, k }] calques de nuit en px ÉCRAN (monuments
+     screenGlows [{ img, x, y, w, h, k, src? }] calques de nuit en px ÉCRAN (monuments
                                           à 1:1, phase 1), ajoutés APRÈS
    ⚠️ Trois canevas pour tout le jeu (tampon, brouillon d'une source, halo),
    plus un par anneau en cache — jamais un par source ni par image (§10 : sur
@@ -520,7 +533,11 @@ export function makeLightRenderer(makeCanvas) {
     const lift = 1 - lum(sky);
     for (const gl of frame.screenGlows || []) {
       ctx.globalAlpha = Math.max(0, Math.min(1, gl.k * lift));
-      if (ctx.globalAlpha > 0.01) ctx.drawImage(gl.img, gl.x, gl.y, gl.w, gl.h);
+      if (ctx.globalAlpha <= 0.01) continue;
+      // `src` : un morceau du calque (une fenêtre de maison peinte, phase 6a),
+      // découpé dans l'image NATIVE — jamais en coordonnées d'écran (§4).
+      if (gl.src) ctx.drawImage(gl.img, gl.src[0], gl.src[1], gl.src[2], gl.src[3], gl.x, gl.y, gl.w, gl.h);
+      else ctx.drawImage(gl.img, gl.x, gl.y, gl.w, gl.h);
     }
     // Le halo des verres, sur la grille de l'art : c'est ce qui fait qu'une
     // lampe BRILLE au lieu d'être seulement moins sombre que la rue.

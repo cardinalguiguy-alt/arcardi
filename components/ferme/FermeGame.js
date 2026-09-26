@@ -180,7 +180,14 @@ function composeMonumentGlow(key, glowImg, mip, tmin, day) {
 }
 /* `glowOpts` (facultatif) : `{ key, tmin, day, flick }` — le monument, l'heure
    et le jour du jeu (pour éteindre ses pièces vides) et le vacillement des
-   cierges (1 hors de l'église). */
+   cierges (1 hors de l'église).
+   ⚠️ 2026-09-26 (phase 6a) — `rects` : les MAISONS peintes allument leurs
+   fenêtres une à une (`LUM.windowLit`, une pure fonction de l'heure). Plutôt
+   qu'un canevas composé par maison (vingt-sept de plus — §10, c'est le NOMBRE
+   de canevas qui tue une tablette), on ne pose du calque que les rectangles
+   des vitres allumées, en fractions de l'image : découpe dans l'image NATIVE du
+   calque (le repère qu'exige un `drawImage` à neuf arguments, §4), pose en px
+   écran. La fonction rend ces morceaux (`glowParts`) pour la lumière. */
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
@@ -197,14 +204,28 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   ctx.imageSmoothingEnabled = !exact;   // transitoire seulement — voir la note
   if (!exact) ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, left, top, dw, dh);
-  let glowImg = null;
-  if (mip.glow && nightA > 0.01) {
+  let glowImg = null, glowParts = null;
+  if (mip.glow && nightA > 0.01 && !(glowOpts && glowOpts.rects && !glowOpts.rects.length)) {
     glowImg = loadBitmap(mip.glow);
-    if (glowImg && glowOpts) glowImg = composeMonumentGlow(glowOpts.key, glowImg, mip, glowOpts.tmin, glowOpts.day);
-    if (glowImg) { ctx.globalAlpha = Math.min(1, nightA * (glowOpts ? glowOpts.flick : 1)); ctx.drawImage(glowImg, left, top, dw, dh); }
+    if (glowImg && glowOpts && glowOpts.key) glowImg = composeMonumentGlow(glowOpts.key, glowImg, mip, glowOpts.tmin, glowOpts.day);
+    if (glowImg) {
+      ctx.globalAlpha = Math.min(1, nightA * (glowOpts && glowOpts.flick != null ? glowOpts.flick : 1));
+      if (glowOpts && glowOpts.rects) {
+        const gw = glowImg.naturalWidth || glowImg.width, gh = glowImg.naturalHeight || glowImg.height;
+        glowParts = [];
+        for (const q of glowOpts.rects) {
+          const x0 = Math.max(0, Math.floor(q.x * gw)), y0 = Math.max(0, Math.floor(q.y * gh));
+          const x1 = Math.min(gw, Math.ceil((q.x + q.w) * gw)), y1 = Math.min(gh, Math.ceil((q.y + q.h) * gh));
+          if (x1 <= x0 || y1 <= y0) continue;
+          const part = { src: [x0, y0, x1 - x0, y1 - y0], sx: left + x0 * dw / gw, sy: top + y0 * dh / gh, sw: (x1 - x0) * dw / gw, sh: (y1 - y0) * dh / gh };
+          ctx.drawImage(glowImg, x0, y0, x1 - x0, y1 - y0, part.sx, part.sy, part.sw, part.sh);
+          glowParts.push(part);
+        }
+      } else ctx.drawImage(glowImg, left, top, dw, dh);
+    }
   }
   ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
-  return { img, glowImg, left, top, dw, dh };
+  return { img, glowImg, glowParts, left, top, dw, dh };
 }
 // Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
 // convention que `ferme_lastcode` (essai/catch, préférence par machine).
@@ -15528,6 +15549,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townHall") { m.x = C.TOWN_HALL.x + C.TOWN_HALL.w / 2; m.y = C.TOWN_HALL.y + C.TOWN_HALL.h + 2; }
           else if (dk === "townChurch") { m.x = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2; m.y = C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2; }
+          // 2026-09-26 (phase 6a) : dans la rue, devant la porte de la maison n°1 (ruine : sur son allée).
+          else if (dk === "townHouses") { const h = C.TOWN_HOUSES[1]; m.x = h.x + 3; m.y = h.y + C.TOWN_HOUSE_H + 3; }
+          else if (dk === "townRuin") { const h = C.TOWN_RUIN; m.x = h.x + 3; m.y = h.y + C.TOWN_HOUSE_H + 3; }
           else if (dk === "townPond") { m.x = C.TOWN_PARK.x + (C.TOWN_PARK.w >> 1); m.y = Math.round(C.TOWN_POND.cy) + 1; }   // 2026-09-25 : sur l'allée en croix du parc, à l'est de l'étang
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
@@ -15953,10 +15977,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (hsn) {
             const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
             if (Math.abs(meRef.current.x + 0.5 - doorX) <= 1.6 && Math.abs(meRef.current.y - doorY) <= 1.4) {
+              /* 2026-09-26 (phase 6a) : R fait défiler les modèles PEINTS de la
+                 largeur de sa parcelle (jamais une autre largeur : la collision
+                 ne suit pas une préférence). Tant qu'une largeur n'a qu'un
+                 modèle, on le dit plutôt que de laisser croire à une touche
+                 cassée. */
+              const nModels = C.townHouseModelsOf(C.townHouseSize(hsn)).length;
+              if (nModels < 2) { pushToast(L.townHouseStyleOnly); return; }
               const cur = facadeStylesRef.current[me.id] || 0;
-              const nxt = (cur + 1) % C.TOWN_HOUSE_STYLES;
+              const nxt = (cur + 1) % nModels;
               facadeStylesRef.current = { ...facadeStylesRef.current, [me.id]: nxt };
-              pushToast(L.townHouseStyleChangeBtn(nxt + 1));
+              pushToast(L.townHouseStyleChangeBtn(nxt + 1, nModels));
               // Zip 250 (demande Guillaume) : la préférence de style est
               // mémorisée en localStorage (par machine, comme ferme_lastcode)
               // pour survivre à un rechargement / une nouvelle session.
@@ -22276,78 +22307,95 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (`LUM.windowLit`) ; un propriétaire qui dort a ses fenêtres noires. */
       const townWinLights = [];
       const winNa = nightAlpha(), winTmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      const houseWall = sprites.townHouseWall;
-      for (let hi = 0; hi < owners.length; hi++) {
-        const hsn = owners[hi];
-        // Style: owner's saved choice if any, else deterministic default.
-        const styleMap = facadeStylesRef.current || {};
-        const styleIdx = (hsn.ownerId && typeof styleMap[hsn.ownerId] === "number")
-          ? styleMap[hsn.ownerId] : hi % C.TOWN_HOUSE_STYLES;
-        // Zip 250: fallback d'image blindé (jamais `undefined` passé à
-        // drawImage) — voir aussi le try/catch par-draw plus bas.
-        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || (sprites.houses && sprites.houses[hi % sprites.houses.length]) || null;
-        const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
-        const houseE = elAt(hsn.x, hsn.y + C.TOWN_HOUSE_H - 1);
-        const litWins = [];
-        if (hsn.ownerId && winNa > 0) {
-          const asleep = sleepingOwnerIds.has(hsn.ownerId);
-          A.TOWN_HOUSE_WINDOWS.forEach(([wx0, wy0], wi) => {
-            if (!LUM.windowLit(hi, wi, winTmin, winNa, asleep)) return;
-            litWins.push([wx0, wy0]);
-            if (houseWall) townWinLights.push({
-              x: (bx + wx0 + A.HOUSE_WINDOW.w / 2) / T,
-              y: (by - 96 + houseWall.base) / T + 0.35 - houseE * EP / T,
-              r: C.TOWN_WINDOW_LIGHT_RADIUS, c: "window", k: 0.6,
+      /* ╔══════════════════════════════════════════════════════════════════
+         ║ 2026-09-26 (phase 6a) — LES MAISONS PEINTES (Gemini).
+         ╚══════════════════════════════════════════════════════════════════
+         Les dix façades procédurales du zip 235 sont remplacées par des images
+         peintes, une par modèle et par version (`C.TOWN_HOUSE_MODELS`). Le
+         modèle vient de la LARGEUR de la parcelle et de la façade choisie avec
+         R ; la version (simple, enrichie, riche) du QUARTIER — tout se déduit
+         de la position, rien ne circule (`C.townHouseLook`). L'image est calée
+         sur la PORTE de la parcelle (là où le générateur perce l'allée) et sur
+         le pied de son mur, à l'échelle UNIQUE des maisons.
+         Les fenêtres s'allument une à une, à l'heure de `LUM.windowLit`, comme
+         celles d'avant ; la lanterne de la porte brûle toute la nuit chez qui
+         habite là. La maison hantée (`C.TOWN_RUIN`) passe par ici aussi : pas
+         de plaque, pas de lanterne, et certaines nuits une lueur froide au
+         pignon — personne n'habite là. */
+      const houseLit = monumentLit(), houseDay = sharedRef.current.day || 1;
+      const queueTownHouse = (hsn, look, o) => {
+        const M = C.TOWN_HOUSE_MODELS[look.model], V = M.variants[look.variant];
+        const SB = C.TOWN_BITMAPS[C.townHouseBitmapKey(look.model, look.variant)];
+        const k = C.TOWN_HOUSE_SCALE, [c0, c1, cw, ch] = V.crop;
+        const doorWX = (hsn.x + C.TOWN_HOUSE_W / 2) * T, footWY = (hsn.y + C.TOWN_HOUSE_H) * T;
+        const cxW = doorWX + (c0 + cw / 2 - M.door) * k, byW = footWY + (c1 + ch - M.foot) * k;
+        const topW = footWY + (c1 - M.foot) * k;
+        const wallL = doorWX + (M.wall[0] - M.door) * k, wallR = doorWX + (M.wall[1] - M.door) * k;
+        const houseE = elAt(hsn.x + 2, hsn.y + C.TOWN_HOUSE_H - 1);
+        const wins = C.townHouseWins(look.model, look.variant);
+        const rects = [];
+        if (o.owned && winNa > 0) {
+          let wi = 0;
+          for (const w of wins) {
+            const lit = w.lamp ? true : LUM.windowLit(o.hi, wi++, winTmin, winNa, o.asleep);
+            if (!lit || w.ghost) continue;
+            rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
+            if (w.g || w.lamp) townWinLights.push({
+              x: (doorWX + (w.x + w.w / 2 - M.door) * k) / T,
+              y: footWY / T + 0.35 - houseE * EP / T,
+              r: w.lamp ? 1.6 : C.TOWN_WINDOW_LIGHT_RADIUS, c: w.lamp ? "lamp" : "window", k: w.lamp ? 0.5 : 0.6,
             });
-          });
-        }
-        // 425 : deux parcelles sont sur la terrasse — elles suivent son altitude.
-        pushE(by, houseE, () => {
-          if (img) {
-            const hCx = bx + img.width / 2;
-            // Zip 272 (demande Guillaume, screenshots à l'appui) : les
-            // canevas des maisons (house()/houseLvl2/houseLvl3 et leurs
-            // variantes Valley Town, `townHouseVariant` — « même canevas
-            // 96x96 et même ancrage bas que house() ») ont 8px de marge
-            // TRANSPARENTE en bas (mur/porte s'arrêtent à y=88 sur un
-            // canevas de 96) ; `by` (bas du canevas) tombe donc 8px sous le
-            // bas visuel réel du mur, d'où l'écart/flottement de l'ombre.
-            const houseShadowGy = by - 8;
-            drawBuildingShadowConnected(ctx, hCx, houseShadowGy, img.width / 2);
-            ctx.drawImage(img, bx, by - 96);
-            drawBuildingFooting(ctx, hCx, houseShadowGy, img.width / 2);
-            // 2026-09-25 (phase 3) : l'emprise du MUR (pas celle des six cases :
-            // le toit déborde, le mur non) et la silhouette, pour la lumière.
-            if (houseWall) lightBuilding(bx + houseWall.x0, hsn.y * T, bx + houseWall.x1, by - 96 + houseWall.base,
-              img, bx, by - 96, img.width, img.height);
-            const wg = sprites.townHouseWindowGlow;
-            if (wg) for (const [wx0, wy0] of litWins) {
-              ctx.drawImage(wg, bx + wx0, by - 96 + wy0);
-              lightGlow(wg, bx + wx0, by - 96 + wy0, wg.width, wg.height, 1);
-            }
           }
-          const label = hsn.ownerName || L.townSaleSign;
-          ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-          const tx2 = bx + T * C.TOWN_HOUSE_W / 2, ty2 = by - 96 + 12;
-          const wpx = ctx.measureText(label).width + 8;
-          ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx2 - wpx / 2, ty2 - 8, wpx, 11);
-          ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, 10);
-          ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx2, ty2);
-          // Les « Zzz », au-dessus des fenêtres, quand le propriétaire dort.
-          // Mêmes décalages et même respiration que la maison de la ferme :
-          // deux fenêtres, un sinus déphasé par l'abscisse.
-          if (hsn.ownerId && sleepingOwnerIds.has(hsn.ownerId)) {
+        }
+        let glowA = houseLit;
+        if (o.ruin) {
+          // La lueur du pignon (`LUM.ruinGhostOn` : une nuit sur trois, par bouffées), qui vacille.
+          const on = winNa > 0.2 && LUM.ruinGhostOn(houseDay, winTmin);
+          glowA = on ? houseLit * (0.55 + 0.45 * Math.abs(Math.sin(now / 170) * Math.sin(now / 430 + 1.3))) : 0;
+          if (on) for (const w of wins) if (w.ghost) rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
+        }
+        pushE(footWY, houseE, () => {
+          drawBuildingShadowConnected(ctx, (wallL + wallR) / 2, footWY, (wallR - wallL) / 2);
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1 });
+          if (r) {
+            // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
+            lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
+            if (r.glowImg && r.glowParts) for (const q of r.glowParts) lightScreenGlow(r.glowImg, q.sx, q.sy, q.sw, q.sh, glowA, q.src);
+          }
+          if (o.label) {
+            ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+            const tx2 = doorWX, ty2 = topW + 12;
+            const wpx = ctx.measureText(o.label).width + 8;
+            ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx2 - wpx / 2, ty2 - 8, wpx, 11);
+            ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, 10);
+            ctx.fillStyle = "#1d1d1d"; ctx.fillText(o.label, tx2, ty2);
+          }
+          // Les « Zzz », au-dessus des deux premières fenêtres d'étage, quand le propriétaire dort.
+          if (o.asleep) {
             ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
-            for (const off of [{ dx: 23, dy: 58 }, { dx: 75, dy: 58 }]) {
-              const bob = Math.sin(now / 260 + off.dx) * 2;
-              const zx = bx + off.dx, zy = by - 96 + off.dy - 6 + bob;
-              ctx.fillStyle = "#00000090"; ctx.fillText("Zzz", zx + 1, zy + 1);
-              ctx.fillStyle = "#ffffff"; ctx.fillText("Zzz", zx, zy);
+            const ups = wins.filter(w => !w.g && !w.lamp && !w.ghost).slice(1, 3);
+            for (const w of ups) {
+              const wx = doorWX + (w.x + w.w / 2 - M.door) * k;
+              const bob = Math.sin(now / 260 + wx) * 2;
+              const zy = footWY + (w.y - M.foot) * k - 4 + bob;
+              ctx.fillStyle = "#00000090"; ctx.fillText("Zzz", wx + 1, zy + 1);
+              ctx.fillStyle = "#ffffff"; ctx.fillText("Zzz", wx, zy);
             }
           }
           ctx.textAlign = "left";
         });
+      };
+      for (let hi = 0; hi < owners.length; hi++) {
+        const hsn = owners[hi];
+        // La façade : le choix du propriétaire (R à sa porte), sinon le rang.
+        const styleMap = facadeStylesRef.current || {};
+        const styleIdx = (hsn.ownerId && typeof styleMap[hsn.ownerId] === "number") ? styleMap[hsn.ownerId] : hi;
+        queueTownHouse(hsn, C.townHouseLook(hsn, styleIdx), {
+          hi, owned: !!hsn.ownerId, asleep: !!(hsn.ownerId && sleepingOwnerIds.has(hsn.ownerId)),
+          label: hsn.ownerName || L.townSaleSign,
+        });
       }
+      queueTownHouse(C.TOWN_RUIN, C.townHouseLook(C.TOWN_RUIN), { ruin: true });
       // Station sign (ride back to the farm), reusing the farm's ad board sprite.
       draws.push({ y: (C.TOWN_STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.TOWN_STATION_SIGN.x * T - 1, C.TOWN_STATION_SIGN.y * T - 6) });
       /* ╔════════════════════════════════════════════════════════════════════
@@ -26289,9 +26337,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       lf.glows.push({ img, k, ...scrRect(x, y, w, h) });
     }
     /* Un calque de nuit à 1 px d'image = 1 px d'écran (monuments, phase 1). */
-    function lightScreenGlow(img, sx, sy, sw, sh, k) {
+    // `src` (facultatif, phase 6a) : le rectangle à découper dans l'image
+    // NATIVE — une fenêtre allumée d'une maison peinte, pas tout son calque.
+    function lightScreenGlow(img, sx, sy, sw, sh, k, src) {
       const lf = lightFrameRef.current; if (!lf || !(k > 0.01)) return;
-      lf.screenGlows.push({ img, sx, sy, sw, sh, k });
+      lf.screenGlows.push({ img, sx, sy, sw, sh, k, src });
     }
     /* Une source déclarée depuis une fermeture de dessin, en px ÉCRAN : `sx, sy`
        le point au sol, `r` en cases ; `head` (facultatif) : le verre allumé,
@@ -26382,7 +26432,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         mask: m ? { img: m.img, x: wx(m.sx), y: wy(m.sy), w: m.sw / zm, h: m.sh / zm } : null,
       }));
       const glows = lf.glows.map((g) => ({ img: g.img, k: g.k, x: wx(g.sx), y: wy(g.sy), w: g.sw / zm, h: g.sh / zm }));
-      const screenGlows = lf.screenGlows.map((g) => ({ img: g.img, k: g.k, x: g.sx, y: g.sy, w: g.sw, h: g.sh }));
+      const screenGlows = lf.screenGlows.map((g) => ({ img: g.img, k: g.k, x: g.sx, y: g.sy, w: g.sw, h: g.sh, src: g.src }));
       const T = C.TILE;
       const allLights = (lights || []).map((l) => ({ x: l.x * T, y: l.y * T, r: l.r || C.LAMP_LIGHT_RADIUS, c: l.c || "lamp", k: l.k }));
       for (const l of lf.lights) allLights.push({ x: wx(l.sx), y: wy(l.sy), r: l.r, c: l.c, k: l.k });

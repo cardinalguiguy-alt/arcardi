@@ -4970,6 +4970,8 @@ export const FERME_STR = {
       townLake: "🏞️ Valley Town — le fleuve et le ponton",
       townPasse: "⛵ Valley Town — la passe (sortie vers la mer)",
       townPond: "🦆 Valley Town — l'étang du parc",
+      townHouses: "🏘️ Valley Town — les maisons de la vieille ville",
+      townRuin: "🏚️ Valley Town — la maison hantée",
       townCrater: "☄️ Valley Town — le cratère",   // 446 : on ne refait pas un décor qu'on met une minute à atteindre
       court: "⚖️ Tribunal — le hall",
       courtUpper: "🗂️ Tribunal — l'étage",
@@ -4997,7 +4999,8 @@ export const FERME_STR = {
     mazePrizeToast: (gold) => `🏆 Prix du labyrinthe : +${gold} or !`,
     candySpeedToast: "🍬 Bonbon vitesse : +50 % pendant 1 min !",
     sleepInHouseToast: "🛏️ Bonne nuit à Valley Town.",
-    townHouseStyleChangeBtn: (n) => `Style de façade : ${n} / 10 (R pour changer)`,
+    townHouseStyleChangeBtn: (n, total) => `Façade : ${n} / ${total} (R pour changer)`,
+    townHouseStyleOnly: "Une seule façade de cette taille pour l'instant — d'autres arrivent.",
     meetAtHallBtn: "Rejoindre à la mairie",
     seasonRotate: (name) => `🌦️ Nouvelle saison : ${name}.`,
     // --- Zip 236 : sac personnel ---
@@ -6695,6 +6698,8 @@ export const FERME_STR = {
       townLake: "🏞️ Valley Town — the river and the pier",
       townPasse: "⛵ Valley Town — the narrows (way out to sea)",
       townPond: "🦆 Valley Town — the park pond",
+      townHouses: "🏘️ Valley Town — the old-town houses",
+      townRuin: "🏚️ Valley Town — the haunted house",
       townCrater: "☄️ Valley Town — the crater",
       court: "⚖️ Courthouse — the hall",
       courtUpper: "🗂️ Courthouse — first floor",
@@ -6718,7 +6723,8 @@ export const FERME_STR = {
     mazePrizeToast: (gold) => `🏆 Maze prize: +${gold} gold!`,
     candySpeedToast: "🍬 Speed candy: +50% for 1 min!",
     sleepInHouseToast: "🛏️ Sleep well in Valley Town.",
-    townHouseStyleChangeBtn: (n) => `Facade style: ${n} / 10 (R to change)`,
+    townHouseStyleChangeBtn: (n, total) => `Facade: ${n} / ${total} (R to change)`,
+    townHouseStyleOnly: "Only one facade of this size for now — more are coming.",
     meetAtHallBtn: "Meet at townhall",
     seasonRotate: (name) => `🌦️ New season: ${name}.`,
     // --- Zip 236: personal bag ---

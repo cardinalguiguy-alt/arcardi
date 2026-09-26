@@ -366,5 +366,26 @@ const S = A.buildSprites();
   }
 }
 
+/* 2026-09-26 (phase 6a) — LA LUEUR DE LA MAISON HANTÉE. Une nuit sur trois,
+   jamais le jour, par bouffées : ni une lampe qui brûle toute la nuit (ce
+   serait une maison habitée), ni une lueur qu'on ne verrait jamais. */
+{
+  let nights = 0, day = 0, slotsOn = 0, slotsNight = 0;
+  for (let d = 1; d <= 300; d++) {
+    let any = false;
+    for (let t = 0; t < 1440; t += 6) {
+      const on = LM.ruinGhostOn(d, t);
+      if (t >= 5 * 60 && t < 20 * 60 && on) day++;
+      if (t >= 21 * 60 || t < 4 * 60) { slotsNight++; if (on) slotsOn++; }
+      if (on) any = true;
+    }
+    if (any) nights++;
+  }
+  ok(day === 0, "la lueur de la maison hantée ne se montre jamais de jour", `${day} créneau(x) de jour`);
+  ok(nights > 60 && nights < 140, "…une nuit sur trois environ", `${nights}/300 nuits`);
+  const part = slotsOn / Math.max(1, slotsNight);
+  ok(part > 0.03 && part < 0.2, "…et par bouffées, pas toute la nuit", `${(100 * part).toFixed(1)} % des créneaux de nuit (sur ${slotsNight} lus)`);
+}
+
 console.log(`\n${n - fail}/${n} contrôles passent.`);
 process.exit(fail ? 1 : 0);
