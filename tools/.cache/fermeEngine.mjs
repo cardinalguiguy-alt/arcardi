@@ -3384,14 +3384,8 @@ export function bakeryItemPrice(bk, item) {
   return Math.max(1, Math.round(def * pct / 100));
 }
 
-// Météo (chantier 2026-07, demande Guillaume) : true si `day` est un jour
-// orageux/pluvieux (voir C.STORM_EVERY_N_DAYS). Dérivé du compteur `day`
-// existant plutôt que d'un tirage aléatoire : même résultat pour tous les
-// joueurs de la ferme sans rien synchroniser de plus, et prévisible d'une
-// session à l'autre.
-export function isStormyDay(day) {
-  return C.STORM_EVERY_N_DAYS > 0 && (day | 0) % C.STORM_EVERY_N_DAYS === 0;
-}
+// Météo : `isStormyDay` (un jour d'orage sur sept, 2026-07) a été remplacée le
+// 2026-09-26 par `meteo.js` — des épisodes qui montent, selon la saison.
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 430 — LE MARCHÉ DE VALLEY TOWN.
@@ -11161,9 +11155,29 @@ export function finalizeVote(votes, rnd) {
 // swaps wolves for snow leopards, autumn tints foliage and biases visitor
 // orders toward pumpkins, spring spawns flowers/fruit/berry bushes (see
 // FermeGame.js + classifyBuyOffer below).
-export function seasonOf() {
-  const idx = Math.floor(Math.max(0, Date.now() - C.SEASON_EPOCH) / C.SEASON_REAL_MS);
+/* ⚠️⚠️ 2026-09-26 (météo) — LA SAISON FORCÉE PAR LE MENU DEV, ET ELLE EST
+   PARTAGÉE. Jusqu'ici le menu forçait la saison de la FAUNE seule, chez un
+   seul joueur : deux saisons coexistaient à l'écran (le bandeau lisait la
+   vraie, les colverts la forcée). `sharedRef.current.forcedSeason` est la
+   source de vérité (arbitrée par l'hôte, diffusée dans `p.state`, persistée) ;
+   cette variable de module n'en est que le reflet, écrit par
+   `applyForcedSky` (FermeGame.js) et par personne d'autre — le motif exact
+   de `setForcedPassageKey` (392). Tout lecteur d'`E.seasonOf()` (arbres,
+   buissons, miel, vergers, neige, météo, faune, bandeau) suit donc le forçage.
+   ⚠️ L'argument est ignoré : ne jamais y passer un NUMÉRO DE JOUR (le bandeau
+   le faisait). Pour la saison à un instant donné : `seasonAt(ms)`. */
+let forcedSeasonKey = null;
+export function setForcedSeason(k) {
+  forcedSeasonKey = C.SEASONS.some(s => s.key === k) ? k : null;
+  return forcedSeasonKey;
+}
+export function seasonAt(ms) {
+  if (forcedSeasonKey) return C.SEASONS.find(s => s.key === forcedSeasonKey);
+  const idx = Math.floor(Math.max(0, ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS);
   return C.SEASONS[idx % C.SEASONS.length];
+}
+export function seasonOf() {
+  return seasonAt(Date.now());
 }
 
 // Host normalization at load: the pre-built station must stand on clear

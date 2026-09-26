@@ -4742,7 +4742,16 @@ export const FERME_STR = {
     chatToolUp: (name, lvl) => `${name} au niveau ${lvl} !`,
     chatSell: (gain, total) => `Vente : +${gain} or ! Caisse commune : ${total} or`,
     chatNewDay: (day) => `Jour ${day}, bonne journée à la ferme !`,
-    chatStormyDay: "Le ciel se couvre... orage et pluie toute la journée, prends un imperméable !",
+    /* 2026-09-26 — la prévision du jour, collée à « Jour N » (meteo.js). */
+    chatForecast: (k, part) => {
+      const when = { morning: "ce matin", afternoon: "cet après-midi", evening: "ce soir", night: "cette nuit" }[part] || "aujourd'hui";
+      return ({
+        overcast: `Ciel gris ${when}.`, shower: `Quelques averses ${when}.`, rain: `La pluie arrive ${when}, et elle va durer.`,
+        storm: `Un orage monte ${when}, prends un imperméable !`, dryStorm: `Orage de chaleur ${when} : des éclairs, pas une goutte.`,
+        hail: `Gare à la grêle ${when} !`, snowLight: `Quelques flocons ${when}.`, snow: `Il neigera ${when}.`, snowHeavy: `Tempête de neige ${when} !`,
+      })[k] || "";
+    },
+    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
     chatJoin: (name) => `${name} rejoint la ferme.`,
     chatLeave: (name) => `${name} a quitté la ferme.`,
     // Effets flottants
@@ -5067,9 +5076,13 @@ export const FERME_STR = {
     devMoneyBtn: (n) => `+${n} or`,
     devMoneyChat: (who, n) => `🛠️ ${who} s'est attribué ${n} or.`,
     devFaunaSection: "Faune de Valley Town",
-    devFaunaHint: "Forcer la saison de la FAUNE seule (chez toi seulement) pour voir canetons, papillons ou lucioles sans attendre la bonne semaine ; ou se poser à côté d'un des trois chats. Les lucioles sortent la nuit, de 21h15 à 1h30.",
-    devFaunaSeason: (k) => ({ spring: "🌸 Printemps", summer: "☀️ Été", autumn: "🍂 Automne", winter: "❄️ Hiver" }[k] || "🔄 Saison réelle"),
-    devFaunaSeasonToast: (k) => k ? `🛠️ Faune : saison forcée (${({ spring: "printemps", summer: "été", autumn: "automne", winter: "hiver" })[k]}).` : "🛠️ Faune : la vraie saison est rétablie.",
+    devFaunaHint: "Se poser à côté d'un des trois chats. La saison de la faune se force plus haut (« Météo et saison »). Les lucioles sortent la nuit, de 21h15 à 1h30.",
+    devSkySection: "Météo et saison",
+    devSkyHint: (now) => `Pour TOUT LE MONDE (arbitré par l'hôte). La météo commandée vaut pour la journée en cours, puis la rotation reprend ; elle arrive progressivement (un orage met une à deux minutes à monter). La saison forcée tient jusqu'à « Saison réelle » : arbres, buissons, neige, faune, miel et vergers la suivent. Maintenant : ${now}.`,
+    devWeatherBtn: (k) => ({ clear: "☀️ Beau", overcast: "☁️ Couvert", shower: "🌦️ Averse", rain: "🌧️ Pluie", storm: "⛈️ Orage", dryStorm: "🌩️ Orage sec", hail: "🧊 Grêle", snowLight: "🌨️ Neige fine", snow: "🌨️ Neige", snowHeavy: "❄️ Tempête de neige" }[k] || "🔄 Rotation"),
+    devSeasonBtn: (k) => ({ spring: "🌸 Printemps", summer: "☀️ Été", autumn: "🍂 Automne", winter: "❄️ Hiver" }[k] || "🔄 Saison réelle"),
+    devWeatherChat: (who, k) => k ? `🛠️ ${who} a commandé la météo du jour : ${({ clear: "beau temps", overcast: "ciel couvert", shower: "averse", rain: "pluie", storm: "orage", dryStorm: "orage sec", hail: "grêle", snowLight: "neige fine", snow: "neige", snowHeavy: "tempête de neige" })[k]}.` : `🛠️ ${who} a rendu la météo à sa rotation.`,
+    devSeasonChat: (who, k) => k ? `🛠️ ${who} a forcé la saison : ${({ spring: "printemps", summer: "été", autumn: "automne", winter: "hiver" })[k]}.` : `🛠️ ${who} a rétabli la vraie saison.`,
     devFaunaCat: (i) => ["🐈 Le chat roux (marché)", "🐈‍⬛ Le chat noir (église)", "🐈 La tricolore (port)"][i],
     devFaunaNeedTown: "🛠️ Les chats vivent à Valley Town : prends d'abord le train.",
     devBuildSection: "Constructions & cultures",
@@ -6454,7 +6467,15 @@ export const FERME_STR = {
     chatToolUp: (name, lvl) => `${name} upgraded to level ${lvl}!`,
     chatSell: (gain, total) => `Sale: +${gain} gold! Shared pot: ${total} gold`,
     chatNewDay: (day) => `Day ${day}, have a great day on the farm!`,
-    chatStormyDay: "The sky is turning grey... storm and rain all day, grab a raincoat!",
+    chatForecast: (k, part) => {
+      const when = { morning: "this morning", afternoon: "this afternoon", evening: "this evening", night: "tonight" }[part] || "today";
+      return ({
+        overcast: `Grey skies ${when}.`, shower: `A few showers ${when}.`, rain: `Rain is coming ${when}, and it will last.`,
+        storm: `A storm is building ${when}, grab a raincoat!`, dryStorm: `Heat lightning ${when}: flashes, not a drop.`,
+        hail: `Watch out for hail ${when}!`, snowLight: `A few flakes ${when}.`, snow: `It will snow ${when}.`, snowHeavy: `Snowstorm ${when}!`,
+      })[k] || "";
+    },
+    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
     chatJoin: (name) => `${name} joined the farm.`,
     chatLeave: (name) => `${name} left the farm.`,
     fxWood: (n) => `+${n} wood`,
@@ -6748,9 +6769,13 @@ export const FERME_STR = {
     devMoneyBtn: (n) => `+${n} gold`,
     devMoneyChat: (who, n) => `🛠️ ${who} gave themselves ${n} gold.`,
     devFaunaSection: "Valley Town wildlife",
-    devFaunaHint: "Force the WILDLIFE season only (on your screen only) to see ducklings, butterflies or fireflies without waiting for the right week; or stand next to one of the three cats. Fireflies come out at night, 9:15 pm to 1:30 am.",
-    devFaunaSeason: (k) => ({ spring: "🌸 Spring", summer: "☀️ Summer", autumn: "🍂 Autumn", winter: "❄️ Winter" }[k] || "🔄 Real season"),
-    devFaunaSeasonToast: (k) => k ? `🛠️ Wildlife: season forced (${k}).` : "🛠️ Wildlife: real season restored.",
+    devFaunaHint: "Stand next to one of the three cats. The wildlife season is forced above (\"Weather and season\"). Fireflies come out at night, 9:15 pm to 1:30 am.",
+    devSkySection: "Weather and season",
+    devSkyHint: (now) => `For EVERYONE (the host decides). Ordered weather lasts for the current day, then the rotation resumes; it arrives gradually (a storm takes one to two minutes to build). A forced season holds until "Real season": trees, bushes, snow, wildlife, honey and orchards follow it. Now: ${now}.`,
+    devWeatherBtn: (k) => ({ clear: "☀️ Clear", overcast: "☁️ Overcast", shower: "🌦️ Shower", rain: "🌧️ Rain", storm: "⛈️ Storm", dryStorm: "🌩️ Dry storm", hail: "🧊 Hail", snowLight: "🌨️ Light snow", snow: "🌨️ Snow", snowHeavy: "❄️ Snowstorm" }[k] || "🔄 Rotation"),
+    devSeasonBtn: (k) => ({ spring: "🌸 Spring", summer: "☀️ Summer", autumn: "🍂 Autumn", winter: "❄️ Winter" }[k] || "🔄 Real season"),
+    devWeatherChat: (who, k) => k ? `🛠️ ${who} ordered today's weather: ${({ clear: "clear skies", overcast: "overcast", shower: "shower", rain: "rain", storm: "storm", dryStorm: "dry storm", hail: "hail", snowLight: "light snow", snow: "snow", snowHeavy: "snowstorm" })[k]}.` : `🛠️ ${who} returned the weather to its rotation.`,
+    devSeasonChat: (who, k) => k ? `🛠️ ${who} forced the season: ${k}.` : `🛠️ ${who} restored the real season.`,
     devFaunaCat: (i) => ["🐈 The ginger cat (market)", "🐈‍⬛ The black cat (church)", "🐈 The calico (harbour)"][i],
     devFaunaNeedTown: "🛠️ The cats live in Valley Town: take the train first.",
     devBuildSection: "Constructions & crops",

@@ -67,6 +67,7 @@ import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ci
 import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
 import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
 import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
+import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui montent, selon la saison, forçage partagé
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -961,6 +962,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const planOpenRef = useRef(false);
   const [timberOpen, setTimberOpen] = useState(false); // 454 — les commandes de bois à Tristan
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
+  const [forcedSkyUi, setForcedSkyUi] = useState({ weather: null, season: null }); // 2026-09-26 : miroir RENDABLE du forçage météo/saison (voir applyForcedSky)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
   // l'ancien enchaînement automatique E->dépôt/E->lancement par un vrai menu
@@ -1066,6 +1068,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // à chaque frame pour éviter un scintillement aléatoire.
   const rainDropsRef = useRef(null);
   const snowFlakesRef = useRef(null); // zip 235: winter fullscreen snowfall (screen-space, same idea as rainDropsRef)
+  const hailRef = useRef(null);       // 2026-09-26 : les grêlons (même rangement que les gouttes, en fractions d'écran)
   const passageIdxRef = useRef(-1);   // zip 235: last known passage-world index (rotates weekly)
   const passageAppliedIdxRef = useRef(-1);
   const facadeStylesRef = useRef({}); // zip 235: farmerId -> town façade style index (client-side pref, broadcast via pos)
@@ -1235,7 +1238,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const faunaLocalRef = useRef({});
   const faunaThreatRef = useRef(new Map());
   const faunaFxRef = useRef([]);
-  const faunaSeasonRef = useRef(null);
+  const thunderRef = useRef({ last: 0, day: 0 }); // 2026-09-26 : le dernier instant où l'on a cherché des éclairs (voir thunderTick)
   const crumbNextRef = useRef(0);   // zip 439 : anti-rafale du pain (voir throwCrumbs)
   /* ZIP 441 — L'ÉGLISE. ⚠️ CES TROIS-LÀ SONT DES REFS ET PAS DES ÉTATS : ils
      sont lus par la BOUCLE DE RENDU, qui vit dans une closure à dépendances
@@ -2513,6 +2516,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // qu'en créant une ferme neuve après avoir forcé une terre sur une autre :
     // la variable de module du moteur serait restée sur l'ancien forçage.
     applyForcedWorld(saved && saved.forcedWorld);
+    applyForcedSky(saved && saved.forcedWeather, saved && saved.forcedSeason); // 2026-09-26, même raison que la ligne du dessus
     minimapDirtyRef.current = true;
     restoredRef.current = true;
     // Filet identique à applySnapshot (non-hôte) : l'hôte est aussi un joueur
@@ -2688,6 +2692,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // littéral ci-dessus parce que applyForcedWorld doit aussi mettre le moteur
     // à jour, et que sharedRef.current vient tout juste d'être remplacé.
     applyForcedWorld(payload.forcedWorld);
+    applyForcedSky(payload.forcedWeather, payload.forcedSeason); // 2026-09-26
     // Chantier "sucrerie déplaçable" : même conversion qu'à loadFarmByCode
     // (voir ce commentaire), au cas où ce snapshot proviendrait encore d'un
     // état pré-chantier (reprise/rejoin sur une ferme jamais rechargée
@@ -3316,6 +3321,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // AUCUNE migration Supabase. Absent d'une sauvegarde antérieure = null =
       // rotation normale, ce qui est exactement le bon comportement.
       forcedWorld: s.forcedWorld || null,
+      // 2026-09-26 : la météo commandée (valable le seul jour qu'elle nomme) et
+      // la saison forcée, par le menu dev. Même chemin que `forcedWorld`, même
+      // raison ; AUCUNE migration Supabase (un champ de plus dans le JSON).
+      forcedWeather: s.forcedWeather || null,
+      forcedSeason: s.forcedSeason || null,
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -3603,6 +3613,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // voit la terre basculer sans explication croit à un bug de rotation.
       broadcastChat("🛠️", spec ? L.devWorldChat(f.name, lang === "en" ? spec.nameEn : spec.name)
                                 : L.devRotationChat(f.name));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ═══ 2026-09-26 — COMMANDER LA MÉTÉO DU JOUR, FORCER LA SAISON. ═══════
+       Même famille que `devWorld` juste au-dessus : l'invité demande, l'hôte
+       pose, persiste et diffuse dans `p.state` (aucun message dédié, §3).
+       ⚠️ L'heure de départ (`at`) est prise ICI, par l'hôte, et voyage avec le
+       forçage : le temps commandé MONTE à partir de ce moment-là chez tout le
+       monde (voir `meteo.js`, § 5). Un champ absent de la requête = inchangé. */
+    if (req.kind === "devSky") {
+      let wf = s.forcedWeather || null, sf = s.forcedSeason || null;
+      if ("weather" in req) wf = req.weather && WX.WX_KINDS.includes(req.weather)
+        ? { day: s.day || 1, kind: req.weather, at: E.gameTimeMin(s.dayStartAt, Date.now()) } : null;
+      if ("season" in req) sf = req.season || null;
+      applyForcedSky(wf, sf);
+      dirtyRef.current = true;
+      persistFnRef.current && persistFnRef.current();
+      out.state = shareState();
+      if ("weather" in req) broadcastChat("🛠️", L.devWeatherChat(f.name, s.forcedWeather ? s.forcedWeather.kind : null));
+      if ("season" in req) broadcastChat("🛠️", L.devSeasonChat(f.name, s.forcedSeason));
       hostFlushOut(out, f, null);
       return;
     }
@@ -7943,12 +7973,76 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setForcedWorldUi(k);
     return k;
   }
+  /* ------------------------------------------------------------------
+     2026-09-26 — LA MÉTÉO COMMANDÉE ET LA SAISON FORCÉE : UN SEUL CHEMIN,
+     exactement celui d'`applyForcedWorld` juste au-dessus, et pour la même
+     raison : `sharedRef.current.forcedWeather/forcedSeason` sont la source de
+     vérité (arbitrés par l'hôte, diffusés par `shareState`, persistés par
+     `currentSnapshot`), la variable de module du moteur (`E.setForcedSeason`)
+     n'en est que le reflet, et l'état React n'est que le miroir qui fait
+     redessiner le menu. Appelée par les quatre mêmes entrées.
+     ⚠️ La météo commandée nomme SON jour : le lendemain, `weatherNow` ne la lit
+     plus et la rotation normale revient d'elle-même (demande de Guillaume) —
+     rien à effacer, donc rien à oublier d'effacer. ------------------------ */
+  function applyForcedSky(weather, season) {
+    const s = sharedRef.current;
+    s.forcedWeather = WX.normalizeForce(weather);
+    s.forcedSeason = E.setForcedSeason(season || null);
+    setForcedSkyUi(u => (u.weather === s.forcedWeather && u.season === s.forcedSeason) ? u
+      : { weather: s.forcedWeather, season: s.forcedSeason });
+  }
+  /* Le temps qu'il fait à l'instant `ms` (maintenant par défaut) — `meteo.js`.
+     ⚠️ La saison d'une journée est celle de son DÉBUT (`seasonAt(dayStartAt)`) :
+     une saison qui bascule en pleine journée ne doit pas retirer au hasard
+     l'averse en cours. */
+  function weatherNow(ms) {
+    const sh = sharedRef.current;
+    return WX.weatherAtMs(ms == null ? Date.now() : ms, sh.dayStartAt || Date.now(), sh.day || 1,
+      (ds) => E.seasonAt(ds).key, sh.forcedWeather || null);
+  }
+  /* ⚠️ Nommée `faunaEnvLive` et pas `faunaEnvNow` : la boucle de la ville a une
+     VARIABLE `faunaEnvNow` (l'environnement de l'image, passé à la lumière), qui
+     masquait la fonction — « n'est pas une fonction » à la première image en
+     ville, invisible au lint et au bundle (2026-09-26, trouvé en jeu).
+     L'environnement de la faune : la météo s'y lit À L'HEURE DE CHAQUE
+     CRÉNEAU (`stormAt`), jamais à l'heure courante — voir l'en-tête de
+     `meteo.js` ; `calm` (0..1, maintenant) module papillons, lucioles et
+     insectes des lampes, qui s'effacent peu à peu quand l'averse monte. */
+  function faunaEnvLive() {
+    const sh = sharedRef.current, day = sh.day || 1, now = Date.now();
+    const wetNow = WX.wetness(weatherNow(now));
+    return FAU.faunaEnv({ nowMs: now, dayStartAt: sh.dayStartAt, day, seasonKey: E.seasonOf().key,
+      stormy: wetNow >= WX.SHELTER_AT, calm: 1 - Math.min(1, wetNow / WX.SHELTER_AT),
+      stormAt: (ms) => WX.wetness(weatherNow(ms)) >= WX.SHELTER_AT });
+  }
+  /* LE TONNERRE (décision de Guillaume : le son du monde maléfique ; la pluie
+     et le reste attendent un chantier son). Chaque image, on cherche les
+     éclairs tombés depuis la dernière (`LUM.strikesIn`, le MÊME tirage que
+     l'éclat du ciel) et on programme leur coup avec le retard de la distance.
+     ⚠️ Rien n'est cherché au-delà de deux secondes en arrière : un onglet qui
+     revient ne doit pas déverser dix tonnerres d'un coup. ⚠️ Et aucun son dans
+     un monde sans ciel dehors (le passage sombre) — dans les intérieurs de la
+     ville, le coup est assourdi. */
+  function thunderTick(W, zone) {
+    const tr = thunderRef.current, now = Date.now(), day = sharedRef.current.day || 1;
+    const from = Math.max(tr.last || 0, now - 2000);
+    tr.last = now;
+    if (zone === "evil" || document.hidden) return;
+    const odds = WX.boltOdds(W);
+    if (!(odds > 0)) return;
+    const indoor = zone !== "farm" && zone !== "town";
+    for (const st of LUM.strikesIn(from, now, day, odds)) {
+      const th = WX.thunderFor(W.near, st.u);
+      const vol = th.volume * (indoor ? 0.45 : 1);
+      setTimeout(() => sfxPlayFile(C.THUNDER_SRC, { volume: vol }), Math.max(0, th.delayMs - (now - st.at)));
+    }
+  }
   /* ⚠️ ZIP 441 — `churchCandles` VOYAGE DANS LE MÊME `p.state` QUE L'OR ET LE
      JOUR, exactement comme `forcedWorld` au 392, et pour la même raison : c'est
      un scalaire partagé qui change rarement. Un canal à lui coûterait un
      `send` de plus par changement (§3 : seul le NOMBRE de send est facturé),
      un champ de plus à réconcilier, et un point de divergence de plus. */
-  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0 }; }
+  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0, forcedWeather: s.forcedWeather || null, forcedSeason: s.forcedSeason || null }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
   // -------- Tous : application des deltas reçus --------
@@ -8082,7 +8176,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // le moteur à jour ; le changement d'index qui en découle est ensuite
     // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
     // qui purge les breloques, les monstres et le cache de carte toute seule.
-    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
       if (r) r.pets = p.farmer.pets; // zip 247: everyone sees everyone's pets, not just the owner
@@ -8865,6 +8959,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
+        /* 2026-09-26 — le bandeau de l'HÔTE : il n'apprenait le jour que par un
+           `p.state` (applyDeltas), que l'hôte ne se renvoie pas (`newday` part en
+           `self:false`) — il affichait « Jour 1 » toute la journée 2. Vu en
+           vérifiant la prévision du matin. */
+        setHud(h => ({ ...h, day: s.day }));
         /* ⚠️⚠️ ZIP 441 — LES CIERGES BRÛLENT PENDANT LA NUIT, ET C'EST CE QUI
            LEUR ÉVITE D'ÊTRE PERSISTÉS. Un compte qui ne se remet jamais à zéro
            finit à douze le troisième soir et n'y bouge plus : le geste cesse
@@ -8905,10 +9004,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // nature et restaurer l'énergie (voir E.newDay).
         dirtyRef.current = true;
         channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals, fertilizerShop: shop } });
-        broadcastChat("☀", L.chatNewDay(s.day));
-        if (E.isStormyDay(s.day)) {
-          broadcastChat("⛈", L.chatStormyDay);
-        }
+        /* 2026-09-26 — LA PRÉVISION DU JOUR, DANS LE MÊME MESSAGE QUE « Jour N »
+           (un chat de plus serait un `send()` de plus, §3) : ce qu'annonce le
+           ciel, et quand (meteo.js, `forecast`). Une météo commandée au menu
+           dev ne se prévoit pas : elle est annoncée par le menu lui-même. */
+        const fc = WX.forecast(s.day, E.seasonAt(s.dayStartAt).key);
+        broadcastChat(fc ? L.wxEmoji(fc.kind) : "☀", L.chatNewDay(s.day) + (fc ? " " + L.chatForecast(fc.kind, fc.part) : ""));
       }
     }, 1000);
     const saveTimer = setInterval(() => {
@@ -14052,23 +14153,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setDevMenuOpen(false);
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
-  /* 2026-09-26 (phase 5) — LA FAUNE AU MENU DEV. Deux outils, et aucun ne
-     donne quoi que ce soit : (1) forcer la SAISON de la faune seule (une saison
-     dure une semaine réelle : sans ça, on ne verrait les canetons qu'au
-     printemps, et les lucioles qu'une semaine sur quatre) — c'est un état
-     LOCAL, les autres joueurs gardent la vraie saison ; (2) se poser à côté
-     d'un des trois chats, là où sa routine le met en ce moment (ils se
-     promènent : un arrêt fixe tomberait à côté). */
-  function devFaunaSeason(k) {
-    faunaSeasonRef.current = k || null;
-    pushToast(L.devFaunaSeasonToast(k || null));
-  }
+  /* 2026-09-26 (phase 5) — LA FAUNE AU MENU DEV : se poser à côté d'un des
+     trois chats, là où sa routine le met en ce moment (ils se promènent : un
+     arrêt fixe tomberait à côté). Ne donne rien. (Le forçage de la saison de
+     la faune seule, local, a été remplacé le soir même par la saison forcée
+     PARTAGÉE — `devSetSky`.) */
   function devStandByCat(idx) {
     const m = meRef.current, tw = townWorldRef.current;
     if (!m || m.zone !== "town" || !tw) { pushToast(L.devFaunaNeedTown); return; }
     const fw = FAU.faunaWorld(tw);
-    const shF = sharedRef.current, dayF = shF.day || 1;
-    const env = FAU.faunaEnv({ nowMs: Date.now(), dayStartAt: shF.dayStartAt, day: dayF, seasonKey: faunaSeasonRef.current || E.seasonOf().key, stormy: E.isStormyDay(dayF) });
+    const env = faunaEnvLive();
     const c = FAU.faunaCats(fw, env, tw).find((q) => q.idx === idx);
     if (!c) return;
     keysRef.current = {};
@@ -15891,6 +15985,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          finie bien avant le premier train, et l'eau par case sert de repli d'ici
          là. Un appel qui ne fait plus rien dès qu'elle est prête. */
       if (townWorldRef.current) EAU.townWaterBakeStep(sprites, townWorldRef.current, 4);
+      /* 2026-09-26 — le tonnerre, UNE fois par image et avant toute branche de
+         zone : on l'entend aussi dans l'église ou le tribunal (assourdi), qui
+         n'ont pas de ciel à dessiner (voir thunderTick). */
+      thunderTick(weatherNow(epochNow), m.zone || "farm");
 
       /* ⚠️⚠️ ZIP 425 — LA FERME NE PEINT PLUS DERRIÈRE UNE IFRAME DE MINI-JEU.
          ---------------------------------------------------------------------
@@ -22403,10 +22501,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const fw = FAU.faunaWorld(tw);
         const FAS = sprites.fauna;
         if (fw && FAS) {
-          const shF = sharedRef.current;
-          const dayF = shF.day || 1;
-          const env = FAU.faunaEnv({ nowMs: Date.now(), dayStartAt: shF.dayStartAt, day: dayF,
-            seasonKey: faunaSeasonRef.current || E.seasonOf().key, stormy: E.isStormyDay(dayF) });
+          const env = faunaEnvLive(); // 2026-09-26 : la météo s'y lit à l'heure de chaque créneau
           faunaEnvNow = env;
           const fdt = Math.min(dt, 0.05);
           const nowP = performance.now();
@@ -26092,12 +26187,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           l.head ? { sx, sy: r.top + l.y * r.dh, rs: l.head * r.dw / SB.disp, k: lit } : null);
       }
     }
-    /* Le ciel de cette image : l'heure, l'orage, l'éclair (lumiere.js). */
+    /* Le temps de cette image (meteo.js), calculé une fois : le ciel, la pluie
+       et la lumière le lisent chacun plusieurs fois par image. */
+    let wxMemo = { at: -1, W: null };
+    function wxFrame() {
+      const n = Date.now();
+      if (n - wxMemo.at > 30 || !wxMemo.W) wxMemo = { at: n, W: weatherNow(n) };
+      return wxMemo.W;
+    }
+    /* Le ciel de cette image : l'heure, l'assombrissement du temps qu'il fait,
+       l'éclair — pâle quand l'orage est loin (`flashGain`). */
     function skyNow() {
-      const day = sharedRef.current.day || 1;
-      const stormy = E.isStormyDay(day);
-      const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      return LUM.skyLight(tmin, stormy, stormy ? LUM.flashAt(Date.now(), day) : 0);
+      const day = sharedRef.current.day || 1, W = wxFrame(), n = Date.now();
+      const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, n);
+      const odds = WX.boltOdds(W);
+      return LUM.skyLight(tmin, W.dark, odds > 0 ? LUM.flashAt(n, day, odds) * WX.flashGain(W) : 0);
     }
     /* `lights` : { x, y (CASES, déjà remontées de l'altitude), r (cases), c, k }.
        `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
@@ -26188,93 +26292,161 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         while (arr.length < want) arr.push(make());
         return arr;
       };
-      /* Jour orageux (chantier 2026-07, « une journée grise d'orage sur sept ») :
-         le gris est désormais dans le CIEL (`LUM.STORM_SKY`) ; ici, la pluie.
-         Une goutte est un trait de pixels d'art, penché d'un pixel tous les
-         trois, plus vive en tête ; au sol, des éclaboussures de trois images,
-         ancrées au MONDE (elles ne glissent pas quand la caméra bouge). La
-         couleur suit la lumière du ciel : la nuit, la pluie est sombre. */
-      if (E.isStormyDay(sharedRef.current.day || 1)) {
-        const sky = skyNow(), sl = LUM.lum(sky);
-        const want = Math.min(C.STORM_RAIN_MAX, Math.round(Wa * Ha / C.STORM_RAIN_ART_AREA));
-        const drops = rainDropsRef.current = adjust(rainDropsRef.current || [], want,
-          () => ({ u: Math.random(), v: Math.random(), sp: 0.75 + Math.random() * 0.5 }));
-        const cr = Math.round(150 + 80 * sl), cg = Math.round(165 + 75 * sl), cb = Math.round(195 + 55 * sl);
-        const LEN = C.STORM_RAIN_LEN;
-        for (let i = 0; i < LEN; i++) {
-          ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.55 * (1 - i / LEN) + 0.12).toFixed(3)})`;
-          for (const d of drops) px(d.u * Wa + i / 3, d.v * Ha - i);
-        }
-        for (const d of drops) {
-          d.v += C.STORM_RAIN_SPEED * dt * d.sp / Ha; d.u -= C.STORM_RAIN_SPEED * dt * d.sp / 3 / Wa;
-          if (d.v * Ha > Ha + LEN) { d.v = -Math.random() * 8 / Ha; d.u = Math.random() * (1 + Ha / 3 / Wa); }
-        }
-        /* Les éclaboussures, en px monde. ⚠️ 2026-09-25 (Guillaume : « ajouter plus
-           de plocs ») : trois fois plus nombreuses (`STORM_SPLASH_RATE`), et celles
-           qui tombent sur l'EAU font des RONDS — une couronne de gouttes sur l'eau
-           serait une éclaboussure posée sur une vitre. L'eau se lit au pixel près
-           dans la cuisson de la ville (eau.js), à la case ailleurs. */
-        const sp = rainSplashRef.current, now2 = performance.now();
-        const zoneNow = (meRef.current && meRef.current.zone) || "farm";
-        const wgrid = zoneNow === "town" ? townWorldRef.current : zoneNow === "farm" ? worldRef.current : null;
-        const bake = zoneNow === "town" && wgrid ? EAU.townWaterBakeReady(wgrid) : null;
-        const onWater = (wx, wy) => {
-          if (!wgrid) return false;
-          if (bake) return EAU.bakedLevelAt(bake, wx, wy) >= 0;
-          const x = Math.floor(wx / T), y = Math.floor(wy / T);
-          return x >= 0 && y >= 0 && x < wgrid.w && y < wgrid.h && wgrid.ground[y * wgrid.w + x] === C.G_WATER;
-        };
-        let n = Wa * Ha / 10000 * C.STORM_SPLASH_RATE * dt;
+      /* ⚠️⚠️ 2026-09-26 — LA MÉTÉO EST UN DEGRÉ, PLUS UN JOUR (meteo.js). Chaque
+         précipitation suit l'intensité de SON canal : le nombre de gouttes, de
+         grêlons et de flocons s'AJUSTE à la marge (`adjust`) quand l'averse
+         monte ou retombe — jamais un rideau retiré d'un coup. La pluie change
+         aussi de NATURE en montant : la bruine tombe courte, lente et pâle,
+         l'averse d'orage longue, vive et penchée par le vent. La couleur suit
+         la lumière du ciel : la nuit, la pluie est sombre. */
+      const W = wxFrame();
+      const sky = skyNow(), sl = LUM.lum(sky);
+      const cr = Math.round(150 + 80 * sl), cg = Math.round(165 + 75 * sl), cb = Math.round(195 + 55 * sl);
+      const sp = rainSplashRef.current, now2 = performance.now();
+      const zoneNow = (meRef.current && meRef.current.zone) || "farm";
+      const wgrid = zoneNow === "town" ? townWorldRef.current : zoneNow === "farm" ? worldRef.current : null;
+      const bake = zoneNow === "town" && wgrid ? EAU.townWaterBakeReady(wgrid) : null;
+      /* L'eau se lit au pixel près dans la cuisson de la ville (eau.js), à la
+         case ailleurs : une éclaboussure sur l'eau fait un ROND. */
+      const onWater = (wx, wy) => {
+        if (!wgrid) return false;
+        if (bake) return EAU.bakedLevelAt(bake, wx, wy) >= 0;
+        const x = Math.floor(wx / T), y = Math.floor(wy / T);
+        return x >= 0 && y >= 0 && x < wgrid.w && y < wgrid.h && wgrid.ground[y * wgrid.w + x] === C.G_WATER;
+      };
+      /* Pose `rate` impacts par seconde et par 10 000 px d'art², en px monde. */
+      const scatter = (rate, kind) => {
+        let n = Wa * Ha / 10000 * rate * dt;
         while (n > 0) {
           if (n >= 1 || Math.random() < n) {
             const x = Math.floor((Math.random() * canvas.width - M.e) / M.a), y = Math.floor((Math.random() * canvas.height - M.f) / M.a);
-            sp.push({ x, y, t: now2, w: onWater(x, y) });
+            sp.push({ x, y, t: now2, w: onWater(x, y), k: kind });
           }
           n -= 1;
         }
-        /* Au sol : l'impact, la couronne, les gouttelettes qui retombent. Sur
-           l'eau : un rond qui s'élargit, écrasé comme tout ce qui est couché au
-           sol dans cette vue (deux fois plus large que haut). */
+      };
+      /* LA PLUIE. Une goutte est un trait de pixels d'art, plus vive en tête,
+         penchée d'un pixel tous les 3 (vent fort) à 6 (air calme). */
+      {
+        const k = W.rain;
+        const want = k > 0.005 ? Math.min(C.STORM_RAIN_MAX, Math.round(Wa * Ha / C.STORM_RAIN_ART_AREA * k)) : 0;
+        const drops = rainDropsRef.current = adjust(rainDropsRef.current || [], want,
+          () => ({ u: Math.random(), v: Math.random(), sp: 0.75 + Math.random() * 0.5 }));
+        if (drops.length) {
+          const LEN = Math.max(2, Math.round(C.STORM_RAIN_LEN * (0.4 + 0.6 * k)));
+          const slant = 1 / (3 + 3 * (1 - W.wind));
+          const spd = C.STORM_RAIN_SPEED * (0.62 + 0.38 * k);
+          const a0 = 0.55 + 0.45 * k;
+          for (let i = 0; i < LEN; i++) {
+            ctx.fillStyle = `rgba(${cr},${cg},${cb},${((0.55 * (1 - i / LEN) + 0.12) * a0).toFixed(3)})`;
+            for (const d of drops) px(d.u * Wa + i * slant, d.v * Ha - i);
+          }
+          for (const d of drops) {
+            d.v += spd * dt * d.sp / Ha; d.u -= spd * dt * d.sp * slant / Wa;
+            if (d.v * Ha > Ha + LEN) { d.v = -Math.random() * 8 / Ha; d.u = Math.random() * (1 + Ha * slant / Wa); }
+          }
+          /* Les éclaboussures (Guillaume, 2026-09-25 : « plus de plocs ») suivent
+             l'intensité : quelques-unes sous la bruine, une pluie de plocs sous
+             l'orage. */
+          scatter(C.STORM_SPLASH_RATE * k, "r");
+        }
+      }
+      /* LA GRÊLE (automne, hiver) : des grêlons de 1 ou 2 px d'art, presque
+         blancs, qui tombent deux fois plus vite que la pluie avec une courte
+         traînée, et REBONDISSENT au sol. */
+      {
+        const k = W.hail;
+        const want = k > 0.005 ? Math.min(C.HAIL_MAX, Math.round(Wa * Ha / C.HAIL_ART_AREA * k)) : 0;
+        const stones = hailRef.current = adjust(hailRef.current || [], want,
+          () => ({ u: Math.random(), v: Math.random(), sp: 0.8 + Math.random() * 0.4, sz: Math.random() < 0.3 ? 2 : 1 }));
+        if (stones.length) {
+          const slant = 0.08 + 0.2 * W.wind;
+          const hr = Math.round(200 + 50 * sl), hg = Math.round(206 + 46 * sl), hb = Math.round(218 + 37 * sl);
+          ctx.fillStyle = `rgba(${hr},${hg},${hb},0.35)`;
+          for (const d of stones) { const x = d.u * Wa, y = d.v * Ha; px(x - slant * 2, y - 2); px(x - slant, y - 1); }
+          ctx.fillStyle = `rgba(${hr},${hg},${hb},0.95)`;
+          for (const d of stones) {
+            const x = d.u * Wa, y = d.v * Ha;
+            px(x, y);
+            if (d.sz === 2) { px(x + 1, y); px(x, y + 1); px(x + 1, y + 1); }
+          }
+          for (const d of stones) {
+            d.v += C.HAIL_SPEED * dt * d.sp / Ha; d.u += C.HAIL_SPEED * dt * d.sp * slant / Wa;
+            if (d.v * Ha > Ha + 3) { d.v = -Math.random() * 8 / Ha; d.u = Math.random() * (1 + Ha * slant / Wa) - Ha * slant / Wa; d.sz = Math.random() < 0.3 ? 2 : 1; }
+          }
+          scatter(C.HAIL_BOUNCE_RATE * k, "h");
+        }
+      }
+      /* Les impacts, en px monde (ils ne glissent pas quand la caméra bouge).
+         Au sol : l'éclaboussure (trois images), ou le grêlon qui rebondit ; sur
+         l'eau : un rond qui s'élargit, écrasé comme tout ce qui est couché au
+         sol dans cette vue (deux fois plus large que haut). */
+      if (sp.length) {
         const SPL = [[[0, 0]], [[-1, -1], [1, -1], [0, 0]], [[-2, 0], [2, 0], [-1, -2], [1, -2]]];
         const RING = [[[0, 0]], [[-1, 0], [1, 0]], [[-2, 0], [2, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]],
                       [[-3, 0], [3, 0], [-2, -1], [2, -1], [-2, 1], [2, 1], [0, -1], [0, 1]]];
+        const HOP = [0, 2, 3, 3, 2, 1, 0];
         const RING_MS = C.STORM_SPLASH_MS * 1.9;
         for (let i = sp.length - 1; i >= 0; i--) {
-          const age = now2 - sp[i].t, life = sp[i].w ? RING_MS : C.STORM_SPLASH_MS;
-          if (age >= life || sp.length > 700) { sp.splice(i, 1); continue; }
-          if (sp[i].w) {
+          const q = sp[i], age = now2 - q.t;
+          const life = q.w ? RING_MS : q.k === "h" ? C.HAIL_BOUNCE_MS : C.STORM_SPLASH_MS;
+          if (age >= life || sp.length > 900) { sp.splice(i, 1); continue; }
+          if (q.w) {
             const fr = Math.min(3, Math.floor(age / (RING_MS / 4)));
             ctx.fillStyle = `rgba(${cr + 30},${cg + 30},${cb + 25},${(0.5 - fr * 0.1).toFixed(2)})`;
-            for (const [ox, oy] of RING[fr]) pxW(sp[i].x + ox, sp[i].y + oy);
+            for (const [ox, oy] of RING[fr]) pxW(q.x + ox, q.y + oy);
+          } else if (q.k === "h") {
+            const fr = Math.min(HOP.length - 1, Math.floor(age / (C.HAIL_BOUNCE_MS / HOP.length)));
+            ctx.fillStyle = `rgba(${Math.min(255, cr + 60)},${Math.min(255, cg + 55)},${Math.min(255, cb + 45)},0.9)`;
+            pxW(q.x + (fr >> 2), q.y - HOP[fr]);
           } else {
             const fr = Math.min(2, Math.floor(age / (C.STORM_SPLASH_MS / 3)));
             ctx.fillStyle = `rgba(${cr + 15},${cg + 15},${cb + 10},${(0.6 - fr * 0.15).toFixed(2)})`;
-            for (const [ox, oy] of SPL[fr]) pxW(sp[i].x + ox, sp[i].y + oy);
+            for (const [ox, oy] of SPL[fr]) pxW(q.x + ox, q.y + oy);
           }
         }
-      } else if (rainSplashRef.current.length) rainSplashRef.current.length = 0;
-      // Teinte de saison, et la neige d'hiver (zip 235, Guillaume : « when it's
-      // winter, it snows ») — un flocon est un pixel d'art depuis la phase 3.
+      }
+      // Teinte de saison (zip 235).
       const se = E.seasonOf();
       if (se.tint) {
         ctx.fillStyle = se.tint;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-      if (se.key === "winter") {
-        const want = Math.min(C.SNOW_MAX, Math.round(Wa * Ha / C.SNOW_ART_AREA));
+      /* LA NEIGE — ⚠️ 2026-09-26 : plus un rideau d'hiver continu (zip 235),
+         des ÉPISODES de trois intensités (Guillaume : « plusieurs intensités de
+         précipitation, différentes tailles de flocons »). Trois tailles : la
+         poudre (1 px d'art), le flocon (2×2, coins pâles), le gros flocon
+         mouillé (une croix de 5 px, cœur plus vif), qui tombe plus lentement et
+         se balance plus large. La proportion suit `W.flake` ; chaque flocon tire
+         sa taille en RENTRANT par le haut, donc la neige change de grain peu à
+         peu, jamais d'un coup. */
+      {
+        const k = W.snow;
+        const want = k > 0.005 ? Math.min(C.SNOW_MAX, Math.round(Wa * Ha / C.SNOW_ART_AREA * k)) : 0;
+        const sizeFor = () => { const r = Math.random(), f = W.flake; return r < f * 0.3 ? 3 : r < 0.18 + f * 0.5 ? 2 : 1; };
         const fl = snowFlakesRef.current = adjust(snowFlakesRef.current || [], want,
-          () => ({ u: Math.random(), v: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 6 }));
-        const sl = LUM.lum(skyNow());
-        ctx.fillStyle = `rgba(${Math.round(170 + 70 * sl)},${Math.round(178 + 68 * sl)},${Math.round(200 + 55 * sl)},0.9)`;
-        for (const d of fl) {
-          d.v += C.SNOW_SPEED * dt * d.sp / Ha;
-          d.u += d.sw * dt / Wa;
-          if (d.v * Ha > Ha + 1) { d.v = -1 / Ha; d.u = Math.random(); }
-          px(d.u * Wa, d.v * Ha);
+          () => ({ u: Math.random(), v: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 6, z: sizeFor(), ph: Math.random() * 6.283 }));
+        if (fl.length) {
+          const tS = now2 / 1000, drift = W.wind * 16;
+          const fr0 = Math.round(170 + 70 * sl), fg0 = Math.round(178 + 68 * sl), fb0 = Math.round(200 + 55 * sl);
+          const pos = (d) => [d.u * Wa + Math.sin(tS * (1.6 - d.z * 0.3) + d.ph) * (0.6 + d.z * 0.7), d.v * Ha];
+          ctx.fillStyle = `rgba(${fr0},${fg0},${fb0},0.9)`;
+          for (const d of fl) if (d.z === 1) { const [x, y] = pos(d); px(x, y); }
+          ctx.fillStyle = `rgba(${fr0},${fg0},${fb0},0.55)`;
+          for (const d of fl) if (d.z === 2) { const [x, y] = pos(d); px(x + 1, y); px(x, y + 1); }
+          for (const d of fl) if (d.z === 3) { const [x, y] = pos(d); px(x - 1, y); px(x + 1, y); px(x, y - 1); px(x, y + 1); }
+          ctx.fillStyle = `rgba(${Math.min(255, fr0 + 12)},${Math.min(255, fg0 + 12)},${Math.min(255, fb0 + 8)},0.95)`;
+          for (const d of fl) if (d.z >= 2) { const [x, y] = pos(d); px(x, y); if (d.z === 2) px(x + 1, y + 1); }
+          for (const d of fl) {
+            d.v += C.SNOW_SPEED * dt * d.sp * (d.z === 3 ? 0.72 : d.z === 2 ? 0.88 : 1) / Ha;
+            d.u += (d.sw + drift) * dt / Wa;
+            if (d.v * Ha > Ha + 2) { d.v = -2 / Ha; d.u = Math.random() * (1 + drift * 0.01) - drift * 0.01; d.z = sizeFor(); }
+            else if (d.u * Wa > Wa + 2) d.u -= (Wa + 4) / Wa;
+          }
+          // Fin voile blanc, pour vendre un peu de couverture au sol — en proportion.
+          ctx.fillStyle = `rgba(240, 246, 255, ${(0.1 * k).toFixed(3)})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-        // Fin voile blanc, pour vendre un peu de couverture au sol.
-        ctx.fillStyle = "rgba(240, 246, 255, 0.09)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       ctx.restore();
     }
@@ -32750,7 +32922,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           survol, via .ferme-hud-extra en CSS. */}
       <div className={"ferme-hud panel" + (craftMenuOpen ? " ferme-hud-pinned" : "")}>
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
-        <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(hud.day || 1); const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
+        <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(); /* 2026-09-26 : sans argument — il lui passait le numéro de jour, qu'elle ignorait */ const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
         <div className="ferme-hud-extra">
           <div className="row ferme-hud-barn">🛖 {L.barnHudLine(barn ? barn.level : 0, C.BARN_LEVELS.length, E.barnAnimalCap(barn ? barn.level : 0))}</div>
@@ -37193,12 +37365,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devBuild" })}>{L.devBuildBtn}</button>
                 </div>
                 {/* 2026-09-26 (phase 5) — la faune : saison forcée (locale) et les trois chats. */}
+                {/* 2026-09-26 — LA MÉTÉO ET LA SAISON, POUR TOUT LE MONDE (voir le
+                    résolveur `devSky`). L'état « maintenant » est relu à chaque
+                    rendu du menu : les canaux non nuls de `meteo.js`, en pictos. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSkySection}</div>
+                <div className="ferme-dev-hint">{L.devSkyHint((() => {
+                  const Wn = weatherNow(), pc = (v) => Math.round(v * 100) + " %";
+                  const bits = [L.devSeasonBtn(E.seasonOf().key)];
+                  if (forcedSkyUi.weather && forcedSkyUi.weather.day === (sharedRef.current.day || 1)) bits.push("🛠️ " + L.devWeatherBtn(forcedSkyUi.weather.kind));
+                  if (Wn.rain > 0.01) bits.push("🌧️ " + pc(Wn.rain));
+                  if (Wn.snow > 0.01) bits.push("🌨️ " + pc(Wn.snow));
+                  if (Wn.hail > 0.01) bits.push("🧊 " + pc(Wn.hail));
+                  if (Wn.bolts > 0.01) bits.push("⚡ " + pc(Wn.bolts));
+                  if (Wn.dark > 0.01) bits.push("☁️ " + pc(Wn.dark));
+                  return bits.join(" · ");
+                })())}</div>
+                <div className="ferme-dev-grid">
+                  {[null, ...WX.WX_KINDS].map(k => {
+                    const fw = forcedSkyUi.weather, on = k ? !!(fw && fw.kind === k && fw.day === (sharedRef.current.day || 1)) : !fw;
+                    return <button key={"devwx-" + (k || "auto")} className={"ferme-dev-btn" + (on ? " on" : "")} onClick={() => sendReq({ kind: "devSky", weather: k })}>{L.devWeatherBtn(k)}</button>;
+                  })}
+                </div>
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, "spring", "summer", "autumn", "winter"].map(k => (
+                    <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => sendReq({ kind: "devSky", season: k })}>{L.devSeasonBtn(k)}</button>
+                  ))}
+                </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
                 <div className="ferme-dev-hint">{L.devFaunaHint}</div>
                 <div className="ferme-dev-grid">
-                  {[null, "spring", "summer", "autumn", "winter"].map(k => (
-                    <button key={"devfauna-" + (k || "auto")} className="ferme-dev-btn" onClick={() => devFaunaSeason(k)}>{L.devFaunaSeason(k)}</button>
-                  ))}
                   {[0, 1, 2].map(i => (
                     <button key={"devcat-" + i} className="ferme-dev-btn" onClick={() => devStandByCat(i)}>{L.devFaunaCat(i)}</button>
                   ))}

@@ -23,6 +23,8 @@ L'audit des **échecs (2026-09-24)** ajoute `verify-echecs.mjs` — **68/68**, f
 son entrée) : **24 bancs de contrôle** sur disque ce jour-là (compté en listant `tools/`).
 La **phase 5 (2026-09-26)** ajoute `verify-faune.mjs` — **49/49**, falsifié deux fois : **28 bancs de
 contrôle et 24 de rendu** sur disque (compté en listant `tools/`).
+La **météo (2026-09-26)** ajoute `verify-meteo.mjs` — **40/40**, falsifié deux fois : **29 bancs de
+contrôle et 24 de rendu** sur disque (compté en listant `tools/`).
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -276,6 +278,25 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   ⚠️ Avant de réécrire un script de fabrication, regénérer l'ANCIEN et le comparer au PNG versionné :
   le 2026-09-25, l'église et l'hôtel de ville se reproduisaient au pixel près, le tribunal NON (388 px
   gommés à la main) — la gomme vit maintenant dans son script.
+
+- **`tools/verify-meteo.mjs` — 40 contrôles, 40/40 (2026-09-26 : la météo).** Il JOUE
+  `components/ferme/meteo.js` sur 4 000 journées par saison : le temps est une PURE fonction (deux
+  clients tirent le même) ; les SAISONS (au moins deux fois plus de jours de pluie à l'automne qu'en
+  été, l'été surtout des orages dont des secs, la neige l'hiver seulement en trois intensités, la
+  grêle l'automne et l'hiver seulement ; il IMPRIME les parts de chaque genre) ; AUCUN SAUT (chaque
+  canal par pas de 0,25 minute de jeu, 11,5 millions de lectures, et tout à zéro aux deux bouts de
+  la journée) ; l'orage qui MONTE (ciel avant pluie, premiers éclairs lointains, pluie qui cesse
+  avant que le ciel se dégage) ; la bruine d'abord ; l'orage sec qui ne mouille pas ; les flocons qui
+  grossissent avec la neige ; le FORÇAGE (rien avant son heure, il monte, il vaut pour son jour, il
+  survit à JSON) ; les ÉCLAIRS (chaque tonnerre répond à un éclair vu, un orage qui monte AJOUTE des
+  coups sans déplacer les anciens) ; la saison forcée ; et la FAUNE sous l'averse (pas de saut à
+  son arrivée, rien de réécrit avant son heure, les chats à l'abri, les papillons qui s'effacent peu
+  à peu). ⚠️ **Trois défauts le jour de son écriture** : la taille des flocons qui retombait à zéro
+  d'un coup, un balayage des éclairs borné à 120 s, et la tricolore du port SANS AUCUN ABRI (les
+  bancs du quai tombaient une rangée sous son territoire — invisible tant que l'orage ne tombait
+  qu'un jour sur sept). ⚠️ **Falsifié deux fois** : la pluie d'orage dès le début de la montée
+  (0/150 orages, 38/40) ; les chats qui lisent l'orage « maintenant » au lieu de l'heure de leur
+  créneau (un chat à 558 cases/s, 39/40).
 
 - **`tools/verify-faune.mjs` — 49 contrôles, 49/49 (2026-09-26, phase 5 : la faune).** Il JOUE
   `components/ferme/faune.js` sur la vraie carte : une journée entière plus la nuit d'après, image

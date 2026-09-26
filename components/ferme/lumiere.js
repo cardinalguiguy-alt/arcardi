@@ -83,10 +83,13 @@ export function nightFromSky(sky) {
 }
 
 /* ── 1 bis. L'ORAGE ET SES ÉCLAIRS ─────────────────────────────────────────
-   Le jour d'orage (`E.isStormyDay`, un jour sur sept) n'est plus un voile gris
-   posé par-dessus : il ASSOMBRIT le ciel, donc les lampes, elles, restent
-   vives. L'éclair est une pure fonction du temps réel et du jour — deux
-   joueurs voient le même à l'horloge près, sans un message (§3). */
+   L'orage n'est plus un voile gris posé par-dessus : il ASSOMBRIT le ciel,
+   donc les lampes, elles, restent vives. L'éclair est une pure fonction du
+   temps réel et du jour — deux joueurs voient le même à l'horloge près, sans
+   un message (§3).
+   ⚠️ 2026-09-26 (météo) : l'assombrissement est un DEGRÉ (`dark`, 0..1, lu dans
+   `meteo.js`) et la fréquence des éclairs une COTE par seconde (`odds`) : un
+   orage qui monte assombrit peu à peu et tonne de plus en plus souvent. */
 export const STORM_SKY = [0.70, 0.73, 0.80];
 const FLASH_SLOT_MS = 1000;       // une chance d'éclair par seconde…
 const FLASH_ODDS = 1 / 26;        // … soit un éclair toutes les ~26 s en moyenne
@@ -105,21 +108,43 @@ export function flashShape(dt) {
   if (dt < 200) return 0.72;
   return 0.72 * Math.pow(1 - (dt - 200) / (FLASH_LEN_MS - 200), 2);
 }
-export function flashAt(nowMs, day) {
+/* L'instant du coup dans la seconde `s`, ou -1 s'il n'y en a pas. ⚠️ Le
+   tirage (`h % 1000`) ne dépend pas de la cote : quand la cote monte, les
+   coups déjà tirés restent à leur place et d'autres s'y ajoutent — un éclair
+   ne « saute » pas d'une seconde à l'autre pendant que l'orage monte. */
+function strikeIn(s, day, odds) {
+  const h = hash32(s, day * 7919 + 17);
+  if ((h % 1000) / 1000 >= odds) return -1;
+  return s * FLASH_SLOT_MS + (hash32(h, 3) % 600);
+}
+export function flashAt(nowMs, day, odds = FLASH_ODDS) {
+  if (!(odds > 0)) return 0;
   const slot = Math.floor(nowMs / FLASH_SLOT_MS);
   let best = 0;
   for (let s = slot - 1; s <= slot; s++) {
-    const h = hash32(s, day * 7919 + 17);
-    if ((h % 1000) / 1000 >= FLASH_ODDS) continue;
-    const at = s * FLASH_SLOT_MS + (hash32(h, 3) % 600);
-    best = Math.max(best, flashShape(nowMs - at));
+    const at = strikeIn(s, day, odds);
+    if (at >= 0) best = Math.max(best, flashShape(nowMs - at));
   }
   return best;
 }
-/* Le ciel d'une image : l'heure, l'orage, l'éclair. */
-export function skyLight(tmin, stormy, flash) {
+/* Les coups tombés dans ]fromMs, toMs] — le MÊME tirage que `flashAt`, pour
+   que chaque tonnerre réponde à un éclair qu'on a vu (FermeGame.js). */
+export function strikesIn(fromMs, toMs, day, odds) {
+  const out = [];
+  if (!(odds > 0) || !(toMs > fromMs)) return out;
+  const s0 = Math.floor(fromMs / FLASH_SLOT_MS) - 1, s1 = Math.floor(toMs / FLASH_SLOT_MS);
+  for (let s = s0; s <= s1 && s - s0 < 3600; s++) { // borné à une heure : le jeu ne regarde que deux secondes en arrière
+    const at = strikeIn(s, day, odds);
+    if (at > fromMs && at <= toMs) out.push({ at, u: (hash32(s, day * 131 + 7) % 1000) / 1000 });
+  }
+  return out;
+}
+/* Le ciel d'une image : l'heure, l'orage, l'éclair. `dark` : 0..1 (un
+   booléen vaut 0 ou 1, pour les anciens appelants et les bancs). */
+export function skyLight(tmin, dark, flash) {
   const s = skyAt(tmin);
-  if (stormy) for (let k = 0; k < 3; k++) s[k] *= STORM_SKY[k];
+  const d = dark === true ? 1 : Math.max(0, Math.min(1, +dark || 0));
+  if (d > 0) for (let k = 0; k < 3; k++) s[k] *= 1 - (1 - STORM_SKY[k]) * d;
   if (flash > 0) {
     const F = [0.92, 0.95, 1.0];
     for (let k = 0; k < 3; k++) if (F[k] > s[k]) s[k] += (F[k] - s[k]) * flash * 0.85;

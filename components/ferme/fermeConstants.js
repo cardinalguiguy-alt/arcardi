@@ -1660,20 +1660,11 @@ export const ANIMAL_WALK_FRAME_MS = 260;     // durée d'une frame de patte pend
 export const DAWN_START_MIN = 5 * 60 + 30, DAWN_END_MIN = 6 * 60 + 30;   // 5h30 → 6h30
 export const DUSK_START_MIN = 17 * 60, DUSK_MID_MIN = 20 * 60, DEEP_END_MIN = 23 * 60; // 17h / 20h / 23h
 
-// --- Météo : journées grises d'orage/pluie (chantier 2026-07, demande
-// Guillaume : "ajouter des journées grises d'orages et pluie, une toutes les
-// 7") ---
-// PUREMENT visuel/ambiance pour l'instant : un jour sur STORM_EVERY_N_DAYS
-// (day % STORM_EVERY_N_DAYS === 0, donc jour 7, 14, 21…) est marqué comme
-// orageux dès son tout début (voir E.isStormyDay, dérivé du même compteur
-// `day` que le reste — aucun tirage aléatoire, prévisible et reproductible
-// pour tous les joueurs de la ferme). AUCUN effet de gameplay volontaire
-// (pousse des cultures, énergie, déplacement… tout inchangé) : uniquement un
-// voile gris semi-transparent + des traits de pluie qui défilent à l'écran
-// (voir le rendu dans FermeGame.js, juste après le voile nocturne). Message
-// de chat dédié au lever du jour (L.chatStormyDay), en plus du message
-// "Jour N" habituel.
-export const STORM_EVERY_N_DAYS = 7;      // 1 jour orageux tous les N jours (0 = désactivé)
+// --- Météo (2026-09-26) : le TEMPS lui-même vit dans `meteo.js` (épisodes,
+// saisons, forçage). Ici, seulement le rendu de la pluie, de la neige et de la
+// grêle, à PLEINE intensité : chaque nombre de gouttes, de flocons et de
+// grêlons est multiplié par l'intensité du canal (`rain`, `snow`, `hail`).
+// (Ce bloc portait `STORM_EVERY_N_DAYS`, un jour d'orage sur sept.)
 /* ⚠️ 2026-09-25 (phase 3 de la feuille de route graphique) — LA PLUIE PASSE À
    L'ÉCHELLE DU PIXEL D'ART, ET LE VOILE GRIS DISPARAÎT. `STORM_TINT_ALPHA`
    (un aplat gris par-dessus tout, lampes comprises) est remplacé par un ciel
@@ -1688,6 +1679,19 @@ export const STORM_RAIN_SPEED = 150;      // vitesse de chute, px d'ART par seco
 export const STORM_RAIN_LEN = 5;          // longueur d'une goutte, px d'art
 export const STORM_SPLASH_RATE = 15;      // éclaboussures par seconde et par 10 000 px d'art² (5 → 15 le 2026-09-25, Guillaume : « plus de plocs »)
 export const STORM_SPLASH_MS = 210;       // durée d'une éclaboussure (trois images)
+/* 2026-09-26 — LA GRÊLE (automne, hiver) : des grêlons de 1 ou 2 px d'art,
+   blancs, qui tombent deux fois plus vite que la pluie et REBONDISSENT au sol
+   (un pixel qui remonte et retombe) ; sur l'eau, un rond. */
+export const HAIL_ART_AREA = 1100;        // px d'art² par grêlon, à pleine intensité
+export const HAIL_MAX = 260;
+export const HAIL_SPEED = 330;            // px d'ART par seconde
+export const HAIL_BOUNCE_RATE = 22;       // rebonds par seconde et par 10 000 px d'art², à pleine intensité
+export const HAIL_BOUNCE_MS = 260;
+/* Le tonnerre : celui du monde maléfique (templerun, 410), décision de
+   Guillaume — le reste du son (pluie, vent) attend un chantier son dédié.
+   ⚠️ Lu à sa place d'origine plutôt que recopié : un seul fichier, et le jour
+   où il change, les deux jeux changent ensemble. */
+export const THUNDER_SRC = "/templerun/sounds/thunder.mp3";
 
 // --- Loups (chantier 2026-07, demande Guillaume : "loups assez détaillés,
 // rive droite de la rivière, ponts non fermés, torche pour les éloigner") ---
@@ -6218,8 +6222,8 @@ export const SEASON_EPOCH = Date.UTC(2026, 0, 5); // lundi 5 janvier 2026, 00:00
 // reteinté blanc à rosettes, voir snowLeopardSprite/fermeArt.js).
 // ⚠️ 2026-09-25 (phase 3) : un flocon est UN pixel d'art, et leur nombre suit
 // la surface vue, comme la pluie (voir `STORM_RAIN_ART_AREA`).
-export const SNOW_ART_AREA = 520;    // px d'art² par flocon
-export const SNOW_MAX = 380;         // plafond de flocons simultanés
+export const SNOW_ART_AREA = 300;    // px d'art² par flocon, à PLEINE intensité (2026-09-26 : 520 était la neige continue d'hiver, désormais une neige « modérée » à ~0,6)
+export const SNOW_MAX = 560;         // plafond de flocons simultanés (la tempête)
 export const SNOW_SPEED = 20;        // vitesse de chute, px d'ART par seconde
 // Automne : les visiteurs veulent plus de citrouilles (biais de tirage de la
 // culture demandée, voir classifyBuyOffer) ; feuillages orange (variantes de

@@ -7,24 +7,29 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 (nuit) — Valley Town : phases 0 à 5 livrées, puis RETOUCHES DE LA FAUNE après vingt minutes de jeu
+### 2026-09-26 (suite) — Valley Town : phases 0 à 5, retouches de la faune, puis LA MÉTÉO
 
-Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume
-(2026-09-26, nuit) ; récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde,
-végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel
-par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo).
-- **Dernière livraison (retouches, « reco partout »)** : chat et colverts fluides, colverts moins
-  réguliers, papillons ÷2/÷3, goélands 10 → 6, insectes des lampes en sept robes ; puis les nénuphars que
-  les colverts écartent, et le sommeil des colverts sur la berge (trois poses neuves, un adulte sur trois
-  reste sur l'eau).
-- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 69/69, contrôles neufs falsifiés), **24/24
-  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). **Rien vu sur un vrai iPad.**
-  **Pas de manipulation Supabase.**
-- ⚠️ Constaté en vérifiant : la faune lit la saison RÉELLE (`E.seasonOf()`, fin septembre = automne) quand
-  le bandeau dit « Été » — à régler avec l'item « saison du menu dev » de la liste.
+Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume ;
+récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune,
+bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est
+LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs.**
+- **Dernière livraison : la météo** (`meteo.js`, pure) — épisodes qui MONTENT selon la saison (averse,
+  pluie, orage, orage sec, grêle, neige en trois intensités et trois tailles de flocons), tonnerre du
+  monde maléfique, faune qui lit le temps à l'heure de chaque créneau, prévision dans « Jour N », menu
+  dev « Météo et saison » PARTAGÉ (commande du jour + saison forcée que suit tout `E.seasonOf()`).
+  `E.isStormyDay`/`STORM_EVERY_N_DAYS` n'existent plus. En chemin : la tricolore du port sans abri,
+  le bandeau de l'hôte bloqué sur l'ancien jour — corrigés.
+- Bancs ce jour-là : **29/29 `verify-*`** (`verify-meteo` neuf 40/40, falsifié deux fois), **24/24
+  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). Vu en jeu (orage qui monte,
+  neige, grêle, port sous la pluie, prévision) ; **son pas écouté** (coupé au test), **rien sur un vrai
+  iPad**. **Pas de manipulation Supabase** (deux champs de plus dans le JSON de `ferme_saves` :
+  `forcedWeather`, `forcedSeason` — aucune migration).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **La météo** : les fréquences par saison (`SEASON_ODDS`, parts imprimées par `verify-meteo`), la durée
+  de montée d'un orage (~1 min 30 réelle), la densité de la neige forte et de la grêle, le volume du
+  tonnerre (0,35 loin → 0,9 près), le ciel d'orage ~23 % plus sombre.
 - **Les retouches de la faune** : la taille du colvert (16 px, après « trop grand » à 17 et « pas assez
   détaillé » à 14), la cane qui broute (tête brun sur brun), la fréquence des sorties, les insectes des
   lampes (discrets exprès) ; et la fluidité du chat et des colverts (2026-09-26, nuit : mesurée au banc,
@@ -53,15 +58,14 @@ par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition 
 ### ⏭️ ACTION SUIVANTE
 
 **La suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
-l'ordre accepté (« reco partout ») : (1) **la météo** (note « Météo » sous la checklist : pluie qui MONTE,
-orages SECS, plus de pluie à l'automne, forçage au menu dev — pure fonction du jour, forçage PARTAGÉ
-arbitré par l'hôte : **proposer la forme avant de coder**) ; (2) les nouveautés à état sauvegardé : lait
-et fidélité du chat, épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte
-chacune, aucune migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant
-de coder** ; (3) reflet du pont, saison du menu dev. Puis **phase 6** (maisons « cheap » à refaire,
-éclairage des fenêtres, grands bâtiments compris). Rappeler à Guillaume de jouer les phases 1-5. L'« autre
-jeu » annoncé après les échecs attend qu'il le nomme. ⚠️ Le jour où un nouveau sprite bitmap arrive,
-mesurer son sprite AVANT de poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
+l'ordre accepté (« reco partout ») : (1) les nouveautés à état sauvegardé — lait et fidélité du chat,
+épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte chacune, aucune
+migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant de coder** ;
+(2) le reflet du pont. Puis **phase 6** (maisons « cheap » à refaire, éclairage des fenêtres, grands
+bâtiments compris). Rappeler à Guillaume de jouer les phases 1-5 et la météo. L'« autre jeu » annoncé
+après les échecs attend qu'il le nomme. Le son de la pluie et du vent attend un chantier son dédié.
+⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
+vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 
@@ -409,6 +413,11 @@ dépôt.
   ⚠️ **Corollaire de repli** : quand la carte d'une zone manque chez ce client, un test de
   collision doit ACCEPTER, pas refuser. Refuser épingle l'entité distante à sa dernière
   position connue — c'est-à-dire qu'on reproduit le bogue au lieu de le corriger.
+- ⚠️⚠️ **ET L'INVERSE : UNE FONCTION DU COMPOSANT EST MASQUÉE PAR UNE VARIABLE DU MÊME NOM DANS LA
+  BOUCLE** (météo, 2026-09-26 : `faunaEnvNow()` appelée là où la boucle de la ville déclarait
+  `let faunaEnvNow = null` — « n'est pas une fonction » à la première image en ville, la frame
+  emportée). Ni `no-undef` ni le bundle ne le voient : le nom EXISTE. Avant de nommer une fonction de
+  composant appelée depuis la boucle : `grep -n "\bnom\b"` sur le fichier entier.
 - ⚠️⚠️ **UN MOTIF DE SOL SE JUGE ASSEMBLÉ, ET SA PÉRIODE COMPTE PLUS QUE SES DÉTAILS** (434).
   Une tuile de 16 px se répète tous les 16 px : l'œil voit la grille avant le dessin, **quelle
   que soit sa finesse**. On dessine un pavé de 4×4 tuiles d'un seul tenant et on y découpe la
@@ -563,6 +572,7 @@ dépôt.
 | `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
+| `components/ferme/meteo.js` | **LA MÉTÉO (2026-09-26), pure** : épisodes par jour et par saison (`dayWeather`), huit canaux avec leur fenêtre dans la montée (`weatherAt`, `weatherAtMs`), forçage du menu dev qui commence à SON heure (`normalizeForce`), abri de la faune (`wetness`), éclairs et tonnerre (`boltOdds`, `flashGain`, `thunderFor`), prévision du matin (`forecast`). Le forçage et la saison forcée (`E.setForcedSeason`) passent par `applyForcedSky` (FermeGame.js) et par personne d'autre. Banc : `verify-meteo` |
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
@@ -934,8 +944,10 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   GÉOMÉTRIE (ombres) ; le rendu lui-même — calage sur le pixel d'art, teintes, lisibilité — ne se juge
   qu'en jeu. ⚠️ **Pour le tester en jeu** : l'heure se déplace en décalant `Date.now` dans la page (le
   jeu la lit ; 800 ms réelles = 1 min de jeu) ; le changement de JOUR, lui, dépend du minuteur de
-  l'hôte, qu'un onglet masqué étrangle — pour voir un orage, passer `STORM_EVERY_N_DAYS` à 1 le temps
-  du test, et le REMETTRE à 7.
+  l'hôte, qu'un onglet masqué étrangle. Pour voir un temps donné : menu dev « Météo et saison »
+  (commande partagée, valable le jour en cours, qui MONTE — avancer `Date.now` de 1 à 2 min pour
+  l'avoir au plus fort). ⚠️ Un onglet masqué ne JOUE aucun tonnerre (`document.hidden`) : pour le
+  compter, redéfinir `document.hidden` à `false` et espionner `HTMLMediaElement.prototype.play`.
 - ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** `render-mairie` (439) et
   `render-beffroi` (444) **appellent** les sols au lieu de les repeindre, donc ils jugent ce que
   le jeu dessine vraiment ; **ce qui manque est ce qui reste dans la closure : les BÂTIMENTS de la
@@ -1233,7 +1245,7 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
 faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
 MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs
 fenêtres (phase 6) ; (3) l'éclairage des fenêtres des GRANDS bâtiments, plus travaillé, réaliste, beau ;
-(4) les restes de la phase 4 (liste dans le bloc ⏭️ REPRISE). La météo est l'ACTION SUIVANTE.
+(4) les restes de la phase 4 (liste dans le bloc ⏭️ REPRISE).
 
 ✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :
 bloc ⏭️ REPRISE et `QUETE.md`, autorité 2026-09-13 bis). ⚠️ **Le vandale reste anonyme, jamais

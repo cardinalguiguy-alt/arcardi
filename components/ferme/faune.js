@@ -63,12 +63,26 @@ const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t
 const easeIO = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
 
 /* ── 1. L'ENVIRONNEMENT : l'heure, la saison, la météo ─────────────────────
-   `seasonKey` vient d'`E.seasonOf()` (ou du forçage du menu dev, réservé à la
-   faune). `stormy` : `E.isStormyDay(day)`. */
-export function faunaEnv({ nowMs, dayStartAt, day, seasonKey, stormy }) {
+   `seasonKey` vient d'`E.seasonOf()` (forçage du menu dev compris : il est
+   PARTAGÉ depuis le 2026-09-26, voir `E.setForcedSeason`).
+   ⚠️⚠️ 2026-09-26 (météo) — L'ORAGE N'EST PLUS UN JOUR, C'EST UN MOMENT. Il
+   monte et redescend (`meteo.js`) ; donc :
+   - `stormAt(ms)` dit s'il faut s'abriter À L'INSTANT `ms`. Une décision de
+     créneau le lit à l'heure DU CRÉNEAU, jamais maintenant : sinon, quand
+     l'averse arrive, les cibles des créneaux PASSÉS changent et la bête saute
+     (c'est la règle « jamais de chaîne à rejouer, jamais de saut » de ce
+     fichier, appliquée au temps qu'il fait) ;
+   - `calm` (0..1, maintenant) module les densités — papillons, lucioles,
+     insectes des lampes s'effacent PEU À PEU quand l'averse monte ;
+   - `stormy` reste le booléen de maintenant, pour qui n'a pas d'heure.
+   Sans `stormAt`, on retombe sur `stormy` (les bancs). */
+export function faunaEnv({ nowMs, dayStartAt, day, seasonKey, stormy, calm, stormAt }) {
   const ds = dayStartAt || (nowMs - C.DAY_REAL_MS / 2);
-  return { nowMs, t: nowMs / 1000, dayStartAt: ds, day: day | 0, season: seasonKey || "spring", stormy: !!stormy, market: E.isMarketDay(day | 0) };
+  return { nowMs, t: nowMs / 1000, dayStartAt: ds, day: day | 0, season: seasonKey || "spring", stormy: !!stormy,
+    calm: calm == null ? (stormy ? 0 : 1) : clamp(calm, 0, 1), stormAt: stormAt || null, market: E.isMarketDay(day | 0) };
 }
+/* S'abrite-t-on à l'instant `ms` ? (voir juste au-dessus) */
+export const stormyAt = (env, ms) => (env.stormAt ? !!env.stormAt(ms) : env.stormy);
 /* L'heure de jeu (minutes) à un instant réel quelconque. ⚠️ Non bornée vers
    le bas : un instant d'avant le début de la journée donne une heure < 6h00,
    donc la nuit (voir l'en-tête). */
@@ -82,13 +96,13 @@ const SEASON_FFLY = { spring: 0.45, summer: 1, autumn: 0, winter: 0 };
 /* La densité des papillons (0..1) : ils volent au soleil, de 8h à 19h, et
    jamais un jour d'orage. */
 export function butterflyDensity(env, tm) {
-  if (env.stormy) return 0;
-  return (SEASON_BFLY[env.season] || 0) * inBand(tm, 8 * 60, 19 * 60, 60);
+  if (env.calm <= 0) return 0;
+  return env.calm * (SEASON_BFLY[env.season] || 0) * inBand(tm, 8 * 60, 19 * 60, 60);
 }
 /* Les lucioles : la nuit tombée (21h15) jusqu'à 1h30, printemps et été. */
 export function fireflyDensity(env, tm) {
-  if (env.stormy) return 0;
-  return (SEASON_FFLY[env.season] || 0) * inBand(tm, 21 * 60 + 15, 25 * 60 + 30, 40);
+  if (env.calm <= 0) return 0;
+  return env.calm * (SEASON_FFLY[env.season] || 0) * inBand(tm, 21 * 60 + 15, 25 * 60 + 30, 40);
 }
 export const duckAsleep = (tm) => tm >= 22 * 60 + 30 || tm < 6 * 60 + 30;
 export const gullAsleep = (tm) => tm >= 23 * 60 || tm < 6 * 60;
@@ -578,13 +592,14 @@ function duckLeader(fw, env, site, si, t0) {
     return { ...P, v: DUCK_SPEED * (0.58 + ((fh(seed, k, 71) >>> 5) % 100) / 100 * 0.72) };
   };
   const duckTarget = (k) => {
-    const tm = tminAt(env, (k * SL - duckOffOf(si)) * 1000);
+    const slotMs = (k * SL - duckOffOf(si)) * 1000;
+    const tm = tminAt(env, slotMs), wetK = stormyAt(env, slotMs);
     const asleep = duckAsleep(tm) && site.roost.length;
     /* À TERRE, un créneau sur cinq environ, de jour et hors orage : la place
        est tirée sur la berge du groupe (voir faunaWorld). Tirage INDÉPENDANT
        par créneau, comme tout le reste — un canard peut enchaîner deux
        créneaux à terre, ou replonger aussitôt. */
-    if (!asleep && !env.stormy && site.bank && site.bank.length && tm >= DUCK_LAND_FROM && tm < DUCK_LAND_TO && fh(seed, k, 61) % 100 < DUCK_LAND_PCT) {
+    if (!asleep && !wetK && site.bank && site.bank.length && tm >= DUCK_LAND_FROM && tm < DUCK_LAND_TO && fh(seed, k, 61) % 100 < DUCK_LAND_PCT) {
       const b = site.bank[fh(seed, k, 63) % site.bank.length];
       const j = ((fh(seed, k, 67) >>> 4) % 100) / 100 - 0.5, j2 = ((fh(seed, k, 67) >>> 12) % 100) / 100 - 0.5;
       const P = { x: b.x + j * 0.5, y: b.y + j2 * 0.5, land: true, ex: b.ex, ey: b.ey };
@@ -601,7 +616,7 @@ function duckLeader(fw, env, site, si, t0) {
        groupe choisit une place de berge ; et dans le groupe, certains restent
        sur l'eau juste devant (voir faunaDucks : `wetSleeper`). Hors orage :
        sous l'averse, on dort sur l'eau, à l'abri des roseaux. */
-    if (asleep && !env.stormy && site.bank && site.bank.length && fh(seed, kk, 81) % 100 < DUCK_BANK_NIGHT_PCT) {
+    if (asleep && !wetK && site.bank && site.bank.length && fh(seed, kk, 81) % 100 < DUCK_BANK_NIGHT_PCT) {
       const b = site.bank[fh(seed, kk, 83) % site.bank.length];
       return { x: b.x, y: b.y, land: true, ex: b.ex, ey: b.ey, night: true };
     }
@@ -960,8 +975,8 @@ const MOTH_SEASON = { spring: 0.6, summer: 1, autumn: 0.35, winter: 0 };
 const MOTH_WIN = 40, MOTH_MAX = 8;
 export function lampMotes(env, heads) {
   const out = [];
-  if (!env || env.stormy) return out;
-  const sf = MOTH_SEASON[env.season] || 0;
+  if (!env || env.calm <= 0) return out;
+  const sf = (MOTH_SEASON[env.season] || 0) * env.calm;
   if (sf <= 0) return out;
   const t = env.t;
   for (const hd of heads || []) {
@@ -1076,7 +1091,8 @@ const GULL_SLOT = 38, GULL_FLY = 3.0;
 export const GULL_COUNT = 6;
 function gullSpecies(i) { return i >= 4 ? "laughing" : "herring"; }
 function gullSlotTarget(fw, env, i, k) {
-  const tm = tminAt(env, ((k * GULL_SLOT) - i * 4.3) * 1000);
+  const slotMs = ((k * GULL_SLOT) - i * 4.3) * 1000;
+  const tm = tminAt(env, slotMs);
   const night = gullAsleep(tm);
   // La nuit, on ne change de place qu'une fois toutes les sept minutes.
   const h = fh(i, night ? 100000 + Math.floor(k / 11) : k, 83);
@@ -1086,7 +1102,7 @@ function gullSlotTarget(fw, env, i, k) {
   }
   let r = h % 100;
   if (night) r = r < 60 ? 0 : 50;
-  else if (env.stormy) r = r < 70 ? 0 : 50;
+  else if (stormyAt(env, slotMs)) r = r < 70 ? 0 : 50;
   if (r < 42 && (fw.quay.length || fw.pier.length)) {
     const all = fw.quay.length && fw.pier.length ? ((h >>> 7) % 4 === 0 ? fw.pier : fw.quay) : (fw.quay.length ? fw.quay : fw.pier);
     const q = all[(h >>> 9) % all.length];
@@ -1209,7 +1225,12 @@ function catSpots(tw, nav, home, fishStalls) {
     }
     add(ch.x + (ch.w >> 1), ch.y + ch.h - 1, "porch", { shelter: true, nightOk: true });
   } else if (home === "port") {
-    const R = { x: C.TOWN_LAKE.x, y: C.TOWN_LAKE.y - 6, w: C.TOWN_LAKE.w, h: 8 };
+    /* ⚠️ 2026-09-26 (météo) — `h: 8 → 10` : les bancs du quai sont à la rangée
+       TOWN_LAKE.y + 3, juste sous l'ancien rectangle — la tricolore n'avait donc
+       AUCUN abri (ses quatre places étaient des lampes) et restait sous l'orage.
+       Invisible tant que l'orage tombait un jour sur sept ; `verify-meteo` §10 l'a
+       trouvé le jour où la pluie est devenue fréquente. */
+    const R = { x: C.TOWN_LAKE.x, y: C.TOWN_LAKE.y - 6, w: C.TOWN_LAKE.w, h: 10 };
     for (const p of props) {
       if (!inR(p, R)) continue;
       if (p.kind === "bench" || p.kind === "stoneBench") add(p.x, p.y, "bench", { shelter: true });
@@ -1239,7 +1260,7 @@ function catPath(fw, tw, A, B) {
 function catTarget(fw, env, cat, k) {
   const tm = tminAt(env, (k * CAT_SLOT) * 1000);
   let pool = cat.spots;
-  if (env.stormy) { const sh = pool.filter((s) => s.shelter); if (sh.length) pool = sh; }
+  if (stormyAt(env, k * CAT_SLOT * 1000)) { const sh = pool.filter((s) => s.shelter); if (sh.length) pool = sh; }
   else if (catNight(tm)) { const n = pool.filter((s) => s.nightOk || s.shelter); if (n.length) pool = n; }
   else if (env.market && tm >= 8 * 60 && tm < 13 * 60) {
     const f = pool.filter((s) => s.fish);

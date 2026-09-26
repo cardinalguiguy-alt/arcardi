@@ -1,5 +1,50 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (suite) — LA MÉTÉO : DES ÉPISODES QUI MONTENT, SELON LA SAISON ; LA SAISON FORCÉE PARTAGÉE
+
+Forme proposée puis validée par Guillaume (« reco partout », plus trois réponses : l'hiver en ÉPISODES
+de neige à plusieurs intensités et tailles de flocons, de la grêle l'automne et l'hiver ; le TONNERRE
+du monde maléfique, le reste du son pour un chantier son dédié ; unifier la saison du menu dev).
+- **`meteo.js` (pur)** remplace `E.isStormyDay` (un jour sur sept, orage à pleine force de 6 h à 2 h,
+  supprimé avec `STORM_EVERY_N_DAYS`). Chaque jour reçoit 0 à 2 ÉPISODES tirés du numéro de jour et
+  de la saison (couvert, averse, pluie, orage, orage sec, grêle, neige fine/modérée/forte) ; un
+  épisode donne huit CANAUX (`rain`, `snow`, `hail`, `dark`, `bolts`, `near`, `wind`, `flake`), chacun
+  avec SA fenêtre dans la montée — c'est ce qui fait monter un orage : ciel qui se couvre, éclairs
+  lointains (pâles, tonnerre tardif et sourd), puis la pluie et les éclairs proches ; la pluie cesse
+  avant que le ciel se dégage. La pluie commence en bruine. Zéro message (comme les élections).
+- **Le rendu suit l'intensité** : gouttes plus longues, plus vives et plus penchées quand ça forcit,
+  éclaboussures en proportion ; **grêle** (grains de 1-2 px avec traînée, qui REBONDISSENT, ronds sur
+  l'eau) ; **neige** en trois tailles (poudre, flocon 2×2, grosse croix qui tombe plus lentement et se
+  balance plus large), la proportion suivant `flake` ; voile blanc en proportion. Le ciel s'assombrit
+  par DEGRÉ (`skyLight(t, dark, flash)`), l'éclair est pâle quand l'orage est loin.
+- **Le tonnerre** : `/templerun/sounds/thunder.mp3`, programmé pour chaque éclair tombé depuis
+  l'image précédente (`LUM.strikesIn`, le même tirage que l'éclat du ciel), avec le retard et le
+  volume de la distance ; assourdi dans les intérieurs, muet au passage sombre.
+- **La faune lit la météo à l'heure de CHAQUE CRÉNEAU** (`env.stormAt(ms)`), jamais « maintenant » :
+  sinon l'averse qui arrive réécrirait les créneaux passés et les bêtes sauteraient (falsifié : un
+  chat à 558 cases/s). Papillons, lucioles, insectes des lampes s'effacent en proportion (`calm`).
+- **Menu dev « Météo et saison », pour tout le monde** (`req` `devSky`, arbitrée par l'hôte, dans
+  `p.state`, persistée ; aucune migration SQL) : commander le temps du jour — il MONTE à partir de
+  l'heure de la commande et la rotation revient le lendemain d'elle-même — et forcer la saison, que
+  suivent désormais TOUS les lecteurs d'`E.seasonOf()` (bandeau, arbres, buissons, neige, faune,
+  miel, vergers). Le forçage local de la saison de la faune est supprimé. « Maintenant » y affiche
+  les canaux en cours.
+- **La prévision du jour** est collée au message « Jour N » (pas un chat de plus) : « Ciel gris cet
+  après-midi. », « Un orage monte ce soir… ».
+- ⚠️ **Trouvés en chemin, corrigés** : la tricolore du port n'avait AUCUN abri (les bancs du quai
+  tombaient une rangée sous son territoire, `faunaCats`) ; le bandeau de l'HÔTE restait sur « Jour 1 »
+  toute la journée 2 (il n'apprenait le jour que par un `p.state` qu'il ne se renvoie pas) ; la
+  constatation du bloc REPRISE « la faune lit l'automne » était fausse — la vraie saison était l'été
+  (`E.seasonOf(hud.day)` ignorait son argument ; l'appel est corrigé). Et une fonction
+  `faunaEnvNow` masquée par une VARIABLE du même nom dans la boucle de la ville (« n'est pas une
+  fonction » à la première image en ville ; invisible au lint et au bundle), renommée.
+- `verify-meteo` neuf, 40/40, falsifié deux fois. **Vu en jeu** (échafaudage local) : orage commandé
+  qui monte sur 100 s (ciel 31 → 94 %, éclairs 8 → 90 %, pluie 6 → 92 %), tonnerres de 0,35 (loin) à
+  0,9 (près), ciel ~23 % plus sombre qu'au beau temps à la même heure ; tempête de neige en hiver
+  forcé ; grêle et arbres roux en automne forcé ; pluie et ronds au port ; tricolore sous son banc ;
+  prévision du jour 6. **Pas entendu** (son coupé pendant le test), **pas vu** le rebond de la grêle
+  de près (le volet ne recadre pas). **Pas de manipulation Supabase.**
+
 ## 2026-09-26 (fin de nuit) — LES NÉNUPHARS ET LE SOMMEIL DES COLVERTS SUR LA BERGE
 
 - **Nénuphars écartés** (`faunaReactLilies`, faune.js ; lu au dessin des décors) : les 17 touffes `lily`
@@ -287,7 +332,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
-**Météo, demandée par Guillaume le 2026-09-26 (après la phase 5)** : plus de VARIÉTÉ d'intempéries — une pluie qui ne tombe pas violente d'emblée (ni systématiquement), un orage qui MONTE (il n'arrive pas d'un coup), des orages SECS (éclairs sans pluie, avec un léger assombrissement), plus de pluie en automne qu'en été ; et au menu dev, COMMANDER la météo pour la journée en cours (la rotation normale revient le lendemain).
+✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).
 **Retours de Guillaume après 20 min de jeu (2026-09-26, nuit) — à faire, rien de codé** :
 - ✅ **Chat moins saccadé** (fait, voir le récit en tête). ⬜ Il n'est pas forcément peureux, ça dépend de
   la façon dont on l'approche (le câlin quand on reste calme à côté plaît, à garder). **Lui donner du
@@ -300,10 +345,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 - ⬜ **Épuisette** à acheter (chez Pierre ou au marché) : tenter d'attraper les carpes (à relâcher, la
   mairie en interdit la pêche) ou chasser les papillons, avec un **compteur de papillons** (collection).
 - ⬜ **Reflet du pont** (déjà dans les restes de la phase 4, ci-dessous : re-demandé en jouant).
-- ⬜ **Menu dev** : la saison forcée ne change pas réellement la saison (seulement celle de la faune, et
-  localement) — « pour plus tard ». ⚠️ Constaté en vérifiant : la faune lit `E.seasonOf()` (la date RÉELLE :
-  fin septembre = automne, donc peu d'insectes et peu de papillons) pendant que le bandeau affiche « Été ».
-  Deux saisons coexistent ; à unifier avec ce chantier.
+- ✅ **Menu dev : la saison forcée change réellement la saison**, pour tout le monde (livré avec la météo).
 **Restes de la phase 4, à reprendre (Guillaume, 2026-09-26 : « pour y revenir plus tard »)** : bittes d'amarrage ; reflets des ponts, du navire et des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets) ; reflet de la torche et éclats de lune jamais regardés de près.
 Reporté exprès : détail des personnages (non voulu ; un cerne seulement si, après 7, ils se perdent),
 canevas `devicePixelRatio` (le flou ne touche que le texte, réglé en 2), neige au sol et flaques
