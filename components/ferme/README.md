@@ -1,5 +1,119 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-27
 
+## 2026-09-27 (nuit, fin) — PHASE 10 : LES SOLS, SECONDE PASSE, SELON LES QUARTIERS
+
+Guillaume : « une famille par rang de lieu et surtout de meilleurs dessins », « c'est censé représenter
+du goudron », herbe « selon le quartier », « massifs lisibles, de saison », puis « caveman on ». Tout
+est dessin procédural dans `fermeArt.js`, regardé en jeu et tenu par les bancs de sol.
+- **LE GOUDRON** (`townAsphaltSurface`) : liant gris neutre à la même valeur (L ≈ 82), grain serré,
+  granulat froid, fissures COLMATÉES (serpentins de bitume brillant) et reprises découpées au carré,
+  rares ; quatre variantes tirées par bloc de 4×4 cases (`asphaltVars`), dont les détails restent dans
+  la tuile — rien ne revient à intervalle fixe (c'étaient ses fissures répétées tous les 64 px, sur un
+  brun, qui faisaient la boue). Dans la tuile de rue : traces de roues polies par voie, et un CANIVEAU
+  de pavés au pied de chaque bordure (`gutterCourse`).
+- **TROIS DALLAGES PAR RANG DE LIEU** (`townPavingFamily`) : CIVIQUE (place, parvis des monuments) —
+  un OPUS de six formats sur une grille torique IRRÉGULIÈRE (colonnes et rangées de 6 à 10 px) remplie
+  dans un ordre aléatoire, et une ROSACE de pavés en anneaux autour de la fontaine (`FTN_ROSE_R`) ;
+  MARCHÉ — des pavés en ÉVENTAIL (écailles d'arcs de 32 px, anneaux de pavés) ; TERRASSES (Haute-Ville,
+  belvédère, gare, quais) — des dalles de grès en assises. Tous bouclent sur 64 px dans les deux sens.
+  ⚠️ Deux défauts vus par les bancs avant l'écran : une grille régulière de 8 px gardait une période de
+  16 et 32 px (`render-escaliers`, r = 0,79 / 0,83 → 0,18 / −0,07) ; un remplissage dans l'ordre de
+  lecture faisait commencer presque chaque pierre en colonne 0 (une couture continue).
+- **L'HERBE SELON LE QUARTIER** : le rang social de chaque case (`C.townRankAt`, la règle des maisons)
+  règle les plaques (riche : un gazon qui ne sèche que sous les pas ; pauvre : un pré qui grille par
+  plaques), le semis (riche : une pâquerette sur 90 cases ; moyen : trèfle, pâquerettes, cailloux, une
+  sur 20 ; pauvre : herbe folle, terre nue, pissenlits, taupinières, une sur 6) et la TONTE (bandes sur
+  les pelouses de square et l'herbe riche). Deux octaves de bruit : les plaques ne sont plus des disques.
+- **LES MASSIFS DE SAISON** (`townBedSurface`, `BED`, `BED_SEASON`) : des plants en quinconce, chacun
+  avec sa touffe et une forme de fleur lisible ; tulipes, narcisses, muscaris, pâquerettes au printemps ;
+  géraniums, soucis, lavande, marguerites l'été ; asters, chrysanthèmes, sauge, bruyères l'automne ; un
+  paillis et des bruyères d'hiver. La prairie garde son semis.
+- **LE REBORD EST-OUEST D'UNE TERRASSE** : un chaperon de 5 px jointoyé, et une ombre d'occlusion au pied
+  (`drawTownWallSideFoot`) — le rebord ouest de la Haute-Ville se lit enfin.
+- **LES HERBES HAUTES** : décalées dans leur case, retournées une fois sur deux, teintées par plaques
+  (sèche, drue — `tallGrassTint`, cuites une fois par image), et une sur trois en bouquet.
+- ⚠️ **`roadSplit` a un défaut ancien, GARDÉ** : sa boucle relit `w[0]` qu'elle incrémente, donc un
+  reste de 2 ou plus ne s'ajoute pas en entier. Le corriger changeait les marches de l'escalier (23
+  teintes au lieu de 42) ; les dessins neufs passent par `roadSplitExact`.
+- **Vu en jeu** : l'artère, la place et sa rosace, le marché, la terrasse de la Haute-Ville, la gare,
+  l'herbe riche et le pré, les massifs d'été du parc, le bois de l'est, le rebord. **Pas vu** : les
+  massifs des autres saisons en jeu (planche seule), deux joueurs. **Supabase** : rien.
+
+## 2026-09-27 (nuit, suite) — LES ÉTAPES DE LA MAISON GARFIELD
+
+Guillaume a peint trois états de plus (`refs/MG-neutre.jpeg`, `MG-entravaux.jpeg`, `MG-fermee.jpeg`) :
+« quand Carla n'est pas encore là, le bâtiment sera seulement neutre ; quand elle s'installera ça lancera
+les travaux avant de transitionner vers la version aboutie », « on gardera les rideaux baissés pour
+l'état fermé ». Puis : « pas de chaumière enrichie, seulement la version de base » ; « le grand escalier
+du tribunal va être retravaillé […] il est laid et la physique est cassée, on y reviendra » ; « on
+n'oubliera pas la cohérence sociale par quartiers riches, classe moyenne et plus pauvres ».
+- **Quatre versions au même cadre** (`TOWN_SHOP_MODELS.garfield.variants` : `neutre`, `travaux`, `simple`,
+  `fermee`). Les images de Gemini n'ont pas exactement le même cadrage : `at` dit de combien le dessin est
+  décalé dans son fichier (mesuré par recouvrement des silhouettes : neutre (−1, +1), travaux (−2, +1)).
+  La fabrication découpe là ; le jeu les pose toutes au même point.
+- **L'étape est une pure fonction du jour** (`C.garfieldStage`) : neutre sans Carla, travaux ses
+  `CARLA_SHOP_WORKS_DAYS` = 2 premiers jours (`sinceDay`, jour d'installation, désormais écrit à chaque
+  entrée de résident — un numéro de jour, rien à relocaliser ; une résidente d'avant, sans lui, a sa
+  boutique aboutie), puis ouverte ses jours de service (`E.isShopDay`, passé en prédicat, jamais recopié)
+  et fermée les autres. La touche E, l'invite (« local commercial (vide) », « en travaux », « fermée
+  aujourd'hui »), le toast (« ouverture dans N jours ») et le tableau des nouvelles la lisent tous.
+- **Les passages sous les yeux** : entre ouverte et fermée, le rideau DESSINÉ (recoloré et rythmé sur
+  les rideaux peints : corps ~62,60,72, une lame tous les 16 px de la référence) roule sur toute la
+  hauteur en ~2,8 s, puis l'image aux cadenas prend le relais ; toute autre bascule est un fondu
+  d'1,5 s. La nuit : rien dans le local neutre ; le badigeon des travaux s'éclaire par-derrière jusqu'à
+  23 h (`washPane`, `tools/lib-glow.mjs`) ; les appliques seules quand c'est fermé.
+- **S2** reste en simple : sa quatrième parcelle, (100,122), est en quartier enrichi et y montre la
+  version de base.
+- **Vu en jeu** : le local neutre, l'installation de Carla (fondu vers les travaux), l'invite et le
+  toast des travaux, le fondu vers la boutique ouverte au jour 3, la descente des rideaux au jour 5 puis
+  l'image fermée, l'état fermé en plein jour. **Pas vu** : la remontée (symétrique, même code), deux
+  joueurs. **Supabase** : rien à faire (le champ `sinceDay` voyage dans l'état de la gare, déjà
+  sauvegardé, sans schéma).
+
+## 2026-09-27 (nuit) — LE RIDEAU DE LA MAISON GARFIELD ; S2, LA CHAUMIÈRE ; LE PRESTIGE DES ADRESSES ; PHASE 9
+
+Guillaume : « on continue le travail dans l'ordre », quatre choix tranchés d'emblée (local vide peint par
+Gemini, rideau dessiné et animé, axe recalé sur la porte, phases 9-10-11-7-12-13-14-8), puis « une porte
+centrée sur S2, je préfère ça visuellement », « une cohérence de qualité de maisons par quartier », et
+« caveman on ».
+- **LE RIDEAU DE FER** (`shutters`/`shutHalf`/`shutDim` de `TOWN_SHOP_MODELS.garfield`, `drawRollShutter`) :
+  les jours où Carla ne tient pas boutique (`E.isShopDay`, le prédicat de la touche E), quatre rideaux
+  descendent à mi-hauteur — porte et imposte sous leur caisson, oriel et ses deux pans sous l'enseigne.
+  Métal peint du vert de la façade, lames ancrées sur la barre basse (elles défilent quand il roule),
+  serrure de laiton, ombre portée ; dessiné en px d'ÉCRAN sur la peinture à 1:1. Il roule en ~2,4 s
+  quand l'état change sous les yeux (le jour change à 2 h), et prend sa hauteur d'emblée quand on arrive.
+  La nuit, le calque s'allume vitre par vitre SOUS le bas des rideaux (`glowOpts.rects`, force par morceau
+  `q.k`) et baisse avec eux jusqu'à 40 % ; les appliques restent entières. L'invite dit « fermée
+  aujourd'hui » (elle promettait « entrer ») ; le toast compte les jours de service (il disait « un »).
+- **Le local vide** : le jeu prend `variants.vide` tant que Carla n'est pas résidente — le prompt est écrit
+  (`refs/prompts-maisons.md`), l'image attendue est `refs/MG-fermee.jpg`. En attendant : la boutique
+  garnie, éteinte, comme avant.
+- **L'axe** : l'arrêt de téléport et l'arrêt de taxi visent la porte PEINTE (`C.townShopDoorX`). Pas
+  d'allée à recaler (aucune rue à portée au sud) ; le banc de droite est déjà hors de l'axe (0,6 case à
+  droite du vantail, contre le trumeau) — laissé.
+- **S2, LA CHAUMIÈRE, PORTE CENTRÉE** (`maison-s2.jpeg`, le premier jet gardé) : sa propre largeur,
+  `center` (emprise x+0..x+5 : un mur centré sur l'allée ; dans la largeur standard, la réunion aurait
+  laissé un mur invisible de deux cases — falsifié : S1 29 %, S2 21 % et 0 %). Quatre parcelles loin des
+  lieux prisés (`TOWN_HOUSE_CENTER_AT`) ; seules 24 cases de la carte changent.
+- **LE PRESTIGE DES ADRESSES** (`townHouseStanding`) remplace les rectangles de quartier : distance au lieu
+  prisé le plus proche (place, parc, église, tribunal, terrasse ; marché et lac +10 cases), riche < 17,
+  enrichie < 30, simple au-delà — 9 / 10 / 8. Le front de lac reste enrichi ; les artisans passent en
+  simple ; aucune S3 n'est simple.
+- **Les lanternes** de N1 (les deux versions) et de S1 (les trois) n'allument plus que leur VERRE (le
+  cadre de laiton et la pierre chaude passaient le test de `lanternGlass`).
+- **Phase 9** : les deux lampadaires plantés sur des allées (28,68) et (60,68) passent d'une case côté
+  jardin (passe finale) ; les nénuphars cuits ne poussent plus que sur l'étang et près des roselières ;
+  la porte de la maison hantée est dégagée des feuillus qui la masquaient ; le REFLET prend l'axe de la
+  RIVE devant l'objet (un sapin derrière le quai prenait celui de l'herbe et collait au pied du mur) et
+  perd, derrière un quai, la bande que cache le parement. Les bancs du quai, eux, sont au bord : leur
+  reflet était juste. **Pas fait, exprès** : la haie de la parcelle (160,102) (les haies sont refaites en
+  phase 7) ; l'escalier sous le tribunal — ses « défauts » (pot rouge, pan délavé, bande grise froide,
+  éclairages mêlés) sont DANS la peinture importée « copie exacte » au 467 : aucun résidu de détourage
+  (mesuré), et les retoucher attend Guillaume.
+- **Vu en jeu** : le rideau de jour, de nuit, sa montée et sa descente (rafales d'images), aux crans 1 à 5 ;
+  S2 au bord du parc (avant le prestige) ; le port, le lampadaire déplacé. **Pas vu** : S2 sur ses
+  parcelles définitives, la maison hantée dégagée, deux joueurs. **Supabase** : rien.
+
 ## 2026-09-27 (soir) — S3, S4, LE SALON ; LES MAISONS POSENT ; LE REFLET DU PONT
 
 Guillaume : « on implémente à l'échelle », « tu jugeras […] surprends-moi, ça doit être beau et
@@ -508,16 +622,16 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1, S4 (trois versions), N1 et N2 (simple, riche), S3 — PREMIÈRE LARGE, 9 cases, sur cinq parcelles `TOWN_HOUSE_WIDE_AT` — et la maison hantée sont en jeu, CHACUNE À L'ÉCHELLE DE SA PORTE (récit en tête) ; ✅ ombre de contact et touffes au pied (fin de l'effet « sticker », 2026-09-27) ; restent S2 (relance à porte décentrée), W1 à W3 (4e image : S3, qui fixe l'emprise large) (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs` ; N3 mise de côté par Guillaume le 2026-09-27). ⬜ (audit 2026-09-27) **la lanterne de N1 riche allume tout son cadre en blanc la nuit** (vu chez Rosalie) — la règle « lanterne = son verre seul », tenue sur N2 simple, ne l'est pas ici. 🟨 6b EN COURS : ✅ la Maison Garfield et ✅ le salon (`TOWN_SHOP_MODELS` ; enseigne écrite, barbier qui tourne) ; ⬜ la porte peinte de la Maison Garfield (x+5,8) n'est pas dans l'axe de ses bancs ni de son arrêt (x+4) ; reste la gare (image de Guillaume ; ⬜ la gare attend une décision : `TOWN_STATION` fait 4 cases, 2,3 H, plus étroit qu'une maison étroite — halte minuscule, ou bâtiment élargi à sa dalle de 6 cases, proposition dans `refs/prompts-maisons.md`), le quai en procédural (une bande nord-sud vue d'en haut, pas une façade), la boutique de plage le jour où elle a une place. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
-| ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie. ⬜ (audit 2026-09-27) **Des jardins VÉCUS** : la maison couvre presque sa parcelle et il ne reste devant qu'une bande d'herbe, sans rien d'habité — bois empilé, linge, banc, boîte aux lettres, potager, portillon. ⬜ **Haies autour des nouvelles maisons — REFAITES ENTIÈREMENT (Guillaume, 2026-09-27) : nouveaux sprites, nouvelles textures, nouvelles collisions**, autour de l'emprise de chaque largeur (étroite, standard, et LARGE x+0..x+8 : sur les cinq parcelles larges, la haie de l'est x+7 passe aujourd'hui sous le mur et devant le pan droit de la façade). C'est leur contour qui donne l'impression d'un décalage porte / allée (mesuré : les portes, elles, sont dans l'axe). ⬜ **Lampadaires aux carrefours et aux portes, plus sur une grille fixe** (tous les 16 cases, sans regarder les allées ; deux collés au coin du marché). ⬜ **L'allée envahie de la maison hantée** doit se lire au sol, de la porte à la rue du sud. ⬜ **Des maisons alignées ne sont pas une rue** : l'avenue du nord aligne trois S1 à l'identique (6a y répond en partie) | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
+| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1, S4 (trois versions), N1 et N2 (simple, riche), S3 — PREMIÈRE LARGE, 9 cases, sur cinq parcelles `TOWN_HOUSE_WIDE_AT` — et la maison hantée sont en jeu, CHACUNE À L'ÉCHELLE DE SA PORTE (récit en tête) ; ✅ ombre de contact et touffes au pied (fin de l'effet « sticker », 2026-09-27) ; ✅ S2 simple (la chaumière, PORTE CENTRÉE gardée : sa largeur `center`, 2026-09-27, nuit) ; ✅ PRESTIGE DES ADRESSES (`townHouseStanding` : les versions suivent la distance aux lieux prisés) ; S2 reste en simple (Guillaume : pas de chaumière enrichie) ; restent W1 à W3 (4e image : S3, qui fixe l'emprise large) (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs` ; N3 mise de côté par Guillaume le 2026-09-27). ✅ (audit 2026-09-27) la lanterne de N1 riche (et celles de S1) n'allume plus que son verre. 🟨 6b EN COURS : ✅ la Maison Garfield et ✅ le salon (`TOWN_SHOP_MODELS` ; enseigne écrite, barbier qui tourne) ; ✅ l'axe de la Maison Garfield (arrêts de téléport et de taxi sur sa porte peinte) ; ✅ ses QUATRE ÉTAPES peintes (neutre, travaux, ouverte, fermée aux rideaux cadenassés), le rideau qui roule et les fondus (2026-09-27, nuit) ; reste la gare (image de Guillaume ; ⬜ la gare attend une décision : `TOWN_STATION` fait 4 cases, 2,3 H, plus étroit qu'une maison étroite — halte minuscule, ou bâtiment élargi à sa dalle de 6 cases, proposition dans `refs/prompts-maisons.md`), le quai en procédural (une bande nord-sud vue d'en haut, pas une façade), la boutique de plage le jour où elle a une place. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties par PRESTIGE DE L'ADRESSE.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie. ⬜ (audit 2026-09-27) **Des jardins VÉCUS** : la maison couvre presque sa parcelle et il ne reste devant qu'une bande d'herbe, sans rien d'habité — bois empilé, linge, banc, boîte aux lettres, potager, portillon. ⬜ **Haies autour des nouvelles maisons — REFAITES ENTIÈREMENT (Guillaume, 2026-09-27) : nouveaux sprites, nouvelles textures, nouvelles collisions**, autour de l'emprise de chaque largeur (étroite, standard, et LARGE x+0..x+8 : sur les cinq parcelles larges, la haie de l'est x+7 passe aujourd'hui sous le mur et devant le pan droit de la façade). C'est leur contour qui donne l'impression d'un décalage porte / allée (mesuré : les portes, elles, sont dans l'axe). ⬜ Parcelle (160,102) : deux rangs de la haie nord dépassent derrière le toit (venu de la phase 9). ⬜ Les chaumières S2 (`center`) sont centrées sur leur anneau : leurs haies n'ont pas le décalage des standard. ⬜ **Lampadaires aux carrefours et aux portes, plus sur une grille fixe** (tous les 16 cases, sans regarder les allées ; deux collés au coin du marché). ⬜ **L'allée envahie de la maison hantée** doit se lire au sol, de la porte à la rue du sud. ⬜ **Des maisons alignées ne sont pas une rue** : l'avenue du nord aligne trois S1 à l'identique (6a y répond en partie). ⚠️ **COHÉRENCE SOCIALE PAR QUARTIER (Guillaume, 2026-09-27 : « riches, classe moyenne et plus pauvres »)** : les maisons la suivent déjà (`townHouseStanding`) ; la composition doit la suivre aussi — jardins, décor, clôtures, lampadaires, sols, et qui habite où. ⬜ **UN RÉSEAU QUI N'EST PLUS UNE GRILLE (Guillaume, 2026-09-27 : « envisager des manières de construire un réseau de routes et chemins qui ne soit pas une grille, plus vivant, moins droit ») — trois voies, À TRANCHER AVEC LUI :** (A) COSMÉTIQUE — mêmes rues, mêmes cases, mais leurs bords dessinés en courbes douces (le contour libre des sentiers de la phase 4) et des carrefours arrondis : aucune collision ne bouge, gain modeste ; (B) HYBRIDE, recommandée — garder l'artère, la place et les monuments, et refaire le réseau SECONDAIRE : une ou deux rues en biais (la place vers le port), des ruelles qui suivent le relief et la rive, des placettes aux carrefours, les sentiers en diagonales ; les parcelles se posent le long des rues (façades à l'alignement de la rue, donc des maisons qui tournent) — touche le générateur, la navigation des habitants, le taxi, les haies, les bancs ; se livre par quartier ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES` (même nombre de parcelles, même ordre, aucune migration) ; (C) RÉGÉNÉRER toute la ville en réseau organique — le plus vivant, et le plus risqué (quête, repères, tous les bancs de carte) | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
-| ⬜ | 9 | **Défauts nets (audit du 2026-09-27)**. ⬜ Deux lampadaires plantés sur l'allée d'une maison, devant la porte : (28, 68) et (60, 68). ⬜ Parcelle (160, 102) : deux rangs de la haie nord dépassent derrière le toit. ⬜ Nénuphars semés dans le PORT : `eau.js` §5 en pose sur ~8 % des cases d'eau profonde de TOUS les plans d'eau — les réserver aux eaux calmes (étang, roselières). ⬜ Maison hantée : un feuillu juste devant la porte. ⬜ Grand escalier sous le tribunal (entre les deux terrasses) : collage de morceaux peints d'éclairages différents, un pan délavé, un rectangle plus clair sur le mur de soutènement, des pixels rouges et violets dans la balustrade (résidus de détourage probables, à vérifier sur le PNG), une bande de pavés violacée sous le parvis, un pot rouge posé sur le palier. ⬜ À vérifier : les bancs du quai, en retrait de la rive, se reflètent au ras de l'eau | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
-| ⬜ | 10 | **Sols, seconde passe** (vus au zoom 5). ⬜ Dallage : UN dessin pour la place, le marché, les parvis, les terrasses, la gare et le belvédère — dalles carrées alignées en grille, ton tiré au hasard, un carrelage plutôt qu'une place : rangs décalés, calepinage autour de la fontaine, bordures, usure des passages. ⬜ Rue principale : brun sombre à grandes dalles fissurées sous un bruit fin, se lit boue ; les rues pavées la rejoignent en T sans bordure ni caniveau. ⬜ Herbe : taches claires et sombres en DISQUES à bord tramé (on voit des ronds) ; aucun détail au sol (trèfle, pâquerettes, touffes, cailloux, terre nue). ⬜ Parterres du parc : confettis blancs sur terre, bords bruités, ni rangs ni fleurs lisibles. ⬜ Rebord ouest de la Haute-Ville (x = 120, un niveau entier) : un trait de 1 px entre deux verts, sans lèvre ni ombre — rien ne dit qu'on ne passe pas. ⬜ Herbes hautes (bois du sud-est, passe) : mêmes touffes sombres en semis régulier, effet tampon | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
+| ✅ | 9 | **Défauts nets (audit du 2026-09-27) — livrée le 2026-09-27 (nuit)**. ✅ Les deux lampadaires des allées (28,68) et (60,68) passent côté jardin. ✅ Nénuphars cuits réservés à l'étang et aux roselières. ✅ Porte de la maison hantée dégagée. ✅ Reflets : l'axe est la RIVE devant l'objet, et derrière un quai la bande du parement est cachée (les bancs du quai, au bord, étaient justes ; ce qui collait à l'eau, c'étaient les arbres derrière le quai). ➡️ Parcelle (160,102), la haie nord derrière le toit : renvoyée en phase 7 (haies refaites). ➡️ Le grand escalier sous le tribunal : **À RETRAVAILLER ENTIÈREMENT, PLUS TARD** (Guillaume, 2026-09-27 : « une excellente idée, mais il est laid actuellement et la physique est cassée ») — ses défauts sont DANS la peinture importée « copie exacte » au 467 (aucun résidu de détourage, mesuré) | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
+| ✅ | 10 | **Sols, seconde passe — livrée le 2026-09-27 (nuit)** (récit en tête) : goudron refait (gris, caniveaux, traces de roues, variantes par bloc) ; trois dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des terrasses) ; herbe selon le quartier (tonte, pré, semis) ; massifs de saison en rangs ; rebord est-ouest des terrasses (chaperon et ombre) ; herbes hautes en bouquets teintés. ⬜ Reste : l'usure qui suit les passages sur les dallages (« chemins de désir », avec la phase 4) | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
 | ⬜ | 11 | **Végétation à l'échelle des maisons**. ⬜ Les arbres sont trop petits depuis que les maisons ont grandi (×1,17 à ×1,24 : un feuillu arrive au premier étage), et un seul gabarit par essence — même taille, même silhouette ; en forêt, un papier peint. Deux ou trois tailles par essence, des silhouettes variées, de grands arbres isolés (tilleul de place, marronnier). ⬜ Haies : barres lisses peu texturées, au niveau des anciennes maisons (leur placement est en 7, leur matière ici). ⬜ Balancement : deux poses échangées d'un coup (~1 900 px basculent en une image) — à juger à l'œil, ça peut se lire comme un tic plutôt que comme du vent | avant 7 : la composition place des arbres, il faut d'abord les bons |
 | ⬜ | 12 | **Saisons et intempéries en ville**. ⬜ L'hiver ne change rien : herbe verte, fleurs, pommes aux arbres, feuillage d'été sous la neige ; la neige ne tient nulle part (sol, toits, haies). La ferme a ses arbres de saison (`oakAutumn`, `oakSpring`), la ville non. ⬜ La durée du jour ne suit pas la saison (`skyAt` ne la connaît pas) : l'hiver, les lampes s'allument à 19 h sous un ciel de plein jour. ⬜ Pluie : chaussée sèche, aucun reflet des lampadaires, ni flaque ni éclaboussure. ⬜ Aucune cheminée ne fume (le soir, l'hiver, chez qui habite là) | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
 | ⬜ | 13 | **Lumière et animation, finitions**. ⬜ Ombres portées des bâtiments : quadrilatères à bord franc qui ignorent le toit (à droite de l'hôtel de ville, un rectangle net) ; celles des maisons, une tache ovale. ⬜ Fanions du marché figés (0 pixel changé en une seconde) alors que l'herbe ondule. ⬜ Fontaine : le jet vit à peine, le bassin ne ride pas, aucune goutte ne retombe | morceaux restés de 3 et de 5 ; se glissent entre deux phases |
 | ⬜ | 14 | **Texte du monde**. ⬜ Une seule écriture : les noms sont en `pixelFont`, mais les plaques des maisons, les bulles de dialogue et les enseignes (« MARCHÉ », salon) en `monospace` système (38 appels `ctx.font` dans `FermeGame.js`). ⬜ La plaque « À vendre » ou du propriétaire flotte au faîte du toit : un panneau planté au portail serait un objet du monde, pas une étiquette. ⬜ Panneaux indicateurs vides (deux planches blanches) : y écrire les destinations, en police pixel, dans la langue du joueur | indépendante du reste, se place où l'on veut |
-⚠️ **Phases 9 à 14 : ORDRE À TRANCHER AVEC GUILLAUME.** Proposé : 9 pendant que les images de 6a/6b arrivent, puis 10 et 11 (avant 7, qui s'appuie sur eux), 7, 12, 13, 14, et 8 en dernier.
+✅ **Ordre des phases tranché par Guillaume (2026-09-27, nuit)** : 9 (faite), 10, 11, 7, 12, 13, 14, et 8 en dernier — 6a/6b s'intègrent au fil des images.
 ✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).
 **Retours de Guillaume après 20 min de jeu (2026-09-26, nuit) — à faire, rien de codé** :
 - ✅ **Chat moins saccadé** (fait, voir le récit en tête). ✅ Lait et fidélité livrés le 2026-09-26 (soir). Il n'est pas forcément peureux, ça dépend de

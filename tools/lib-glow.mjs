@@ -161,6 +161,20 @@ export function shopInterior(r, g, b, fy) {
   return [244 * k, 192 * k, 128 * k, 0.95];
 }
 
+/* 2026-09-27 — UNE VITRE PASSÉE AU BLANC D'ESPAGNE, éclairée par-derrière (la
+   Maison Garfield en travaux, le soir) : le badigeon diffuse une lampe de
+   chantier. Seul le blanc s'allume — le cadre, les meneaux et le mastic restent
+   en silhouette — et il garde ses coups de brosse : la lumière suit la
+   luminance du badigeon, plus chaude là où il est mince. Plus bas dans la
+   baie, un peu moins (la lampe est posée haut). */
+export function washPane(r, g, b, fy) {
+  const L = lum(r, g, b);
+  if (L < 150 || Math.abs(r - b) > 45) return null;
+  const t = clamp((L - 150) / 90, 0, 1);
+  const k = (0.62 + 0.38 * t) * (1.04 - 0.3 * fy);
+  return [255 * k, 214 * k, 150 * k, 0.55 + 0.35 * t];
+}
+
 /* Les lettres DORÉES d'une enseigne accrochent la lumière de la rue : seul
    l'or s'allume (le fond peint reste la nuit), sans devenir un néon. */
 export function signGold(r, g, b) {

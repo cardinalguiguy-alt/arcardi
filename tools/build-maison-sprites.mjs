@@ -32,7 +32,7 @@ import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import { loadFerme } from "./lib-canvas.mjs";
 import { resample, writeMips } from "./lib-mip.mjs";
-import { lum, clamp, smooth, darkPane, lanternGlass, hashi, LAMPS, SILS, shadePane, showWindow, shopInterior, signGold } from "./lib-glow.mjs";
+import { lum, clamp, smooth, darkPane, lanternGlass, hashi, LAMPS, SILS, shadePane, showWindow, shopInterior, signGold, washPane } from "./lib-glow.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants"]);
@@ -127,7 +127,11 @@ for (const mk of modelKeys) {
       }
     }
     // 2. Le cadre, et ce qui en déborderait (un cadre trop serré couperait la maison).
-    const [cx0, cy0, CW, CH] = V.crop;
+    /* `at` (2026-09-27, les étapes de la Maison Garfield) : le dessin de cette
+       image est décalé de (dx, dy) dans son fichier par rapport à la référence
+       du modèle — on découpe là où EST le bâtiment ; le jeu, lui, pose toutes
+       les versions au même point (il ne lit que `crop`). */
+    const [cx0, cy0, CW, CH] = [V.crop[0] + ((V.at && V.at[0]) || 0), V.crop[1] + ((V.at && V.at[1]) || 0), V.crop[2], V.crop[3]];
     let outside = 0;
     /* ⚠️ 2026-09-27 — LES POCHES DE FOND ENFERMÉES (`magentaPockets`) : le fond
        vu À TRAVERS un dessin (la fente de la cheminée d'aération de la Maison
@@ -226,9 +230,9 @@ for (const mk of modelKeys) {
         // 2026-09-27 : les commerces ont leurs recettes (vitrine, intérieur, enseigne), voir lib-glow.mjs.
         let px = w.lamp ? lanternGlass(r, g, b) : w.ghost ? ghostPane(r, g, b)
           : w.show ? showWindow(r, g, b, x + cx0, y + cy0, w) : w.interior ? shopInterior(r, g, b, v)
-          : w.sign ? signGold(r, g, b) : housePane(r, g, b, v, med);
+          : w.sign ? signGold(r, g, b) : w.wash ? washPane(r, g, b, v) : housePane(r, g, b, v, med);
         if (!px || px[3] <= 0.01) continue;
-        if (!w.lamp && !w.ghost && !w.show && !w.interior && !w.sign && px[3] > 0.5 && px[2] < 200) px = shadePane(px, st, u, v, true);
+        if (!w.lamp && !w.ghost && !w.show && !w.interior && !w.sign && !w.wash && px[3] > 0.5 && px[2] < 200) px = shadePane(px, st, u, v, true);
         const a = clamp(px[3], 0, 1) * day[3][i];
         for (let c = 0; c < 3; c++) glow[c][i] = clamp(px[c], 0, 255) * a;
         glow[3][i] = a;

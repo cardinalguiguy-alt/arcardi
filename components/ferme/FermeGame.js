@@ -209,7 +209,8 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
     glowImg = loadBitmap(mip.glow);
     if (glowImg && glowOpts && glowOpts.key) glowImg = composeMonumentGlow(glowOpts.key, glowImg, mip, glowOpts.tmin, glowOpts.day);
     if (glowImg) {
-      ctx.globalAlpha = Math.min(1, nightA * (glowOpts && glowOpts.flick != null ? glowOpts.flick : 1));
+      const baseA = Math.min(1, nightA * (glowOpts && glowOpts.flick != null ? glowOpts.flick : 1));
+      ctx.globalAlpha = baseA;
       if (glowOpts && glowOpts.rects) {
         const gw = glowImg.naturalWidth || glowImg.width, gh = glowImg.naturalHeight || glowImg.height;
         glowParts = [];
@@ -217,7 +218,9 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
           const x0 = Math.max(0, Math.floor(q.x * gw)), y0 = Math.max(0, Math.floor(q.y * gh));
           const x1 = Math.min(gw, Math.ceil((q.x + q.w) * gw)), y1 = Math.min(gh, Math.ceil((q.y + q.h) * gh));
           if (x1 <= x0 || y1 <= y0) continue;
-          const part = { src: [x0, y0, x1 - x0, y1 - y0], sx: left + x0 * dw / gw, sy: top + y0 * dh / gh, sw: (x1 - x0) * dw / gw, sh: (y1 - y0) * dh / gh };
+          // `q.k` (2026-09-27, les vitrines d'une boutique fermée) : la force de CE morceau, facteur de `nightA`.
+          const part = { src: [x0, y0, x1 - x0, y1 - y0], sx: left + x0 * dw / gw, sy: top + y0 * dh / gh, sw: (x1 - x0) * dw / gw, sh: (y1 - y0) * dh / gh, k: q.k == null ? 1 : q.k };
+          ctx.globalAlpha = baseA * part.k;
           ctx.drawImage(glowImg, x0, y0, x1 - x0, y1 - y0, part.sx, part.sy, part.sw, part.sh);
           glowParts.push(part);
         }
@@ -325,6 +328,76 @@ function drawBarberPole(ctx, q, now) {
     if (a > 0.01) { ctx.fillStyle = `rgba(20,24,40,${a.toFixed(3)})`; ctx.fillRect(x0 + x, y0, 1, h); }
     else if (a < -0.01) { ctx.fillStyle = `rgba(255,255,255,${(-a).toFixed(3)})`; ctx.fillRect(x0 + x, y0, 1, h); }
   }
+}
+/* 2026-09-27 — LE RIDEAU DE FER D'UN COMMERCE PEINT (la Maison Garfield, quand
+   elle ferme ou ouvre sous les yeux du joueur ; voir `queueTownShop`).
+   Dessiné en px ÉCRAN par-dessus la peinture posée à 1:1 (comme l'enseigne de
+   barbier) : un rideau à la grille de l'art y ferait une grosse tache dans une
+   image trois fois plus fine. `q` : son rectangle ENTIER (du caisson au seuil),
+   en px écran ; `p` : la part baissée (0 à 1) ; `f` : px écran par px de la
+   référence, qui règle les détails à chaque cran de zoom.
+   ⚠️ Les lames sont ANCRÉES SUR LA BARRE BASSE : elles descendent avec elle —
+   c'est ce qui fait lire un rideau qui se déroule, et pas un aplat qui grandit.
+   ⚠️ Teintes et pas des lames RELEVÉS sur les rideaux PEINTS de `MG-fermee`
+   (corps ~62,60,72, creux ~38,36,49, une lame tous les 16 px de la référence) :
+   à la fin de sa course, l'image fermée prend sa place — il doit s'y fondre. */
+const SHUT_COLS = { body: "#3e3c48", dark: "#262431", lite: "#524f5c", bar: "#302e3a", barLite: "#5e5b68", brass: "#b8925a", brassDark: "#6a5230" };
+/* Sa vitesse : une hauteur entière en ≈ 2,8 s (freinée sur la fin). */
+const SHUT_ROLL_PER_S = 0.36;
+function drawRollShutter(ctx, q, p, f) {
+  const x0 = Math.round(q.x), x1 = Math.round(q.x + q.w), yTop = Math.round(q.y);
+  const yBot = Math.round(q.y + Math.max(0, Math.min(1, p)) * q.h), w = x1 - x0, h = yBot - yTop;
+  if (w < 2 || h < 1) return;
+  const barH = Math.min(h, Math.max(2, Math.round(9 * f)));
+  const pitch = Math.max(3, Math.round(16 * f)), edge = Math.max(1, Math.round(4 * f));
+  if (h > barH) {
+    ctx.fillStyle = SHUT_COLS.body; ctx.fillRect(x0, yTop, w, h - barH);
+    for (let y = yBot - barH - pitch; y > yTop; y -= pitch) {
+      ctx.fillStyle = SHUT_COLS.dark; ctx.fillRect(x0, y, w, 1);
+      if (pitch >= 4) { ctx.fillStyle = SHUT_COLS.lite; ctx.fillRect(x0, y + 1, w, 1); }
+    }
+    // Le jour vient d'en haut à gauche (la peinture) : le tiers gauche un rien plus clair.
+    ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(x0 + edge, yTop, Math.round((w - 2 * edge) / 3), h - barH);
+  }
+  // Les bords, dans leurs coulisses, et la fente du caisson d'où il sort.
+  ctx.fillStyle = SHUT_COLS.dark; ctx.fillRect(x0, yTop, edge, h); ctx.fillRect(x1 - edge, yTop, edge, h);
+  ctx.fillStyle = "rgba(8,10,12,0.6)"; ctx.fillRect(x0, yTop, w, 1);
+  // La barre basse, sa lèvre claire, et la serrure de laiton au milieu des larges.
+  ctx.fillStyle = SHUT_COLS.bar; ctx.fillRect(x0, yBot - barH, w, barH);
+  ctx.fillStyle = SHUT_COLS.barLite; ctx.fillRect(x0, yBot - barH, w, 1);
+  if (w >= 24 && barH >= 3) {
+    const lw = Math.max(2, Math.round(16 * f)), lh = Math.max(1, Math.round(4 * f));
+    const lx = Math.round(x0 + (w - lw) / 2), ly = Math.round(yBot - barH / 2 - lh / 2);
+    ctx.fillStyle = SHUT_COLS.brassDark; ctx.fillRect(lx, ly, lw, lh + 1);
+    ctx.fillStyle = SHUT_COLS.brass; ctx.fillRect(lx, ly, lw, lh);
+  }
+  // Son ombre sur ce qu'il laisse voir.
+  ctx.fillStyle = "rgba(0,0,0,0.32)"; ctx.fillRect(x0, yBot, w, Math.max(1, Math.round(3 * f)));
+}
+/* 2026-09-27 (phase 10, audit : les herbes hautes, « mêmes touffes sombres en
+   semis régulier, effet tampon ») — UNE TOUFFE A TROIS TEINTES : la sienne, une
+   plus SÈCHE (blonde, là où l'herbe grille) et une plus DRUE (verte et sombre).
+   Cuites une fois par image chargée, en canevas (jamais `ctx.filter` à chaque
+   touffe à chaque image : des centaines de filtres par frame). */
+const TG_TINTS = new Map();
+function tallGrassTint(img, tone) {
+  if (!tone || !img || !(img.naturalWidth || img.width)) return img;
+  const key = img.src + "|" + tone;
+  let c = TG_TINTS.get(key);
+  if (c) return c;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, w, h), p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    if (!p[i + 3]) continue;
+    const r = p[i], gg = p[i + 1], b = p[i + 2];
+    if (tone === "dry") { p[i] = Math.min(255, r * 1.18 + 22); p[i + 1] = Math.min(255, gg * 1.06 + 12); p[i + 2] = b * 0.8; }
+    else { p[i] = r * 0.82; p[i + 1] = Math.min(255, gg * 0.97 + 4); p[i + 2] = b * 0.9; }
+  }
+  g.putImageData(d, 0, 0);
+  TG_TINTS.set(key, c);
+  return c;
 }
 function mkShopCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
 // Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
@@ -1796,6 +1869,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const mapOpenRef = useRef(false);
   const devMenuOpenRef = useRef(false); // zip 392 : lu par onKeyDown, qui vit dans une closure à deps vides
   const shopOpenRef = useRef(false);
+  /* 2026-09-27 — la hauteur des rideaux de fer des commerces peints, par modèle
+     (`{ p, t }` : la part baissée, et la dernière image qui l'a dessinée). Un
+     état LOCAL et visuel : il suit l'état partagé (Carla de service ou non) et
+     n'existe que pour ANIMER le passage de l'un à l'autre — rien ne circule. */
+  const shopShutRef = useRef({});
   const binOpenRef = useRef(false);
   const bagOpenRef = useRef(false); // zip 236
   const [petNaming, setPetNaming] = useState(null); // zip 398 : { index, petId, value } quand on nomme un familier
@@ -4438,7 +4516,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const ro2 of order) {
         if ((st2.residents || []).length >= want) break;
         if (have.has(ro2.rid)) continue;
-        st2.residents.push({ rid: ro2.rid, job: ro2.job });
+        st2.residents.push({ rid: ro2.rid, job: ro2.job, sinceDay: (s.day | 0) || 1 });
         have.add(ro2.rid);
       }
       dirtyRef.current = true;
@@ -6495,7 +6573,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ro = rosterOf(v.rid);
     const fv = E.finalizeVote(v.votes, Math.random);
     if (fv.stay) {
-      s.station.residents.push({ rid: v.rid, job: v.offer.job });
+      /* `sinceDay` (2026-09-27) : le jour de l'installation — la Maison Garfield
+         en tire ses travaux (`C.garfieldStage`). Un numéro de JOUR, pas un
+         horodatage : rien à relocaliser quand l'hôte change. */
+      s.station.residents.push({ rid: v.rid, job: v.offer.job, sinceDay: (s.day | 0) || 1 });
       stationChat(fv.dice ? L.voteDiceChat(ro.name, fv.roll, true) : L.voteStayChat(ro.name), "\u{1F3E0}");
     } else {
       stationChat(fv.dice ? L.voteDiceChat(ro.name, fv.roll, false) : L.voteLeaveChat(ro.name), "\u{1F3E0}");
@@ -6871,7 +6952,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // décorrélée des maisons (l'attribution de maison sera revue plus tard).
       if ((st.residents || []).length >= C.MAX_RESIDENTS) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); return true; }
       if (!st.residents) st.residents = [];
-      st.residents.push({ rid, job: ro.job, announced: false });
+      st.residents.push({ rid, job: ro.job, announced: false, sinceDay: (s.day | 0) || 1 });
       const v = E.getVisitor(s, rid);
       if (v) { v.phase = "leave"; v.offer = { type: "done" }; } // il a emménagé : il quitte la file des visiteurs
       stationChat(L.residentMovedIn(ro.name, ro.job), "\u{1F3E1}");
@@ -6990,7 +7071,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (req.accept) {
         // Zip 260 : même plafond MAX_RESIDENTS (décorrélé des maisons).
         if ((st.residents || []).length >= C.MAX_RESIDENTS) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); }
-        else { if (!st.residents) st.residents = []; st.residents.push({ rid, job: ro.job, announced: false }); stationChat(L.exileReacceptedChat(ro.name), "\u{1F3E1}"); }
+        else { if (!st.residents) st.residents = []; st.residents.push({ rid, job: ro.job, announced: false, sinceDay: (s.day | 0) || 1 }); stationChat(L.exileReacceptedChat(ro.name), "\u{1F3E1}"); }
       } else {
         stationChat(L.exileRefusedChat(ro.name), "\u{1F494}");
       }
@@ -15660,7 +15741,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              à chaque essai, et c'est exactement ce qui fait qu'on cesse de
              vérifier. On se pose devant la porte de la boutique, le salon est à
              vingt pas à l'est. */
-          else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
+          /* ⚠️ 2026-09-27 : devant sa porte PEINTE (`C.townShopDoorX`, x+5,8),
+             plus au milieu du rectangle (x+4) — depuis que l'image remplit son
+             rectangle, les deux ne coïncident plus. `m.x + 0.5` est le centre. */
+          else if (dk === "townBoutique") { m.x = C.townShopDoorX(C.TOWN_SHOP_MODELS.garfield) - 0.5; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
           /* ⚠️ ZIP 446 — LE CRATÈRE, ET ON SE POSE SUR SON BORD, PAS DEDANS. Sa
              position vient de `starCraterPos` (le vrai balayage), et on recule au
              sud : arriver au centre du trou aurait montré le dessin de trop près,
@@ -20601,6 +20685,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             }
           } else A.drawTownWallSide(ctx, x, y, px, py, sd);   // 2026-09-25 (phase 4) : le chaperon qui tourne
         }
+        /* 2026-09-27 (phase 10) — et l'ombre au PIED d'un mur est-ouest, sur la
+           case basse (un escalier voisin a son limon, pas d'ombre). */
+        if (!bakedCourtStair && !isStair) for (const sd of [-1, 1]) {
+          const up = elAt(x + sd, y) - e;
+          if (up > 0.5 && tw.ground[y * tw.w + x + sd] !== C.G_TOWN_STAIR) A.drawTownWallSideFoot(ctx, px, py, sd);
+        }
 
         /* ⚠️⚠️ ZIP 427 — LA VOIE FERRÉE DE LA VILLE EST CELLE DE LA FERME,
            LITTÉRALEMENT. Ce qu'il y avait ici depuis le 234, ce sont les six
@@ -21995,9 +22085,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const occupiedNow = !!e && age >= 0 && age < C.TOWN_TALLGRASS_OCCUPIED_MS;
         const occupiedKey = (pr.y + 2) * T - C.TOWN_SORT_EPS;
         const variant = A.townTallGrassVariant(pr.x, pr.y);
-        pushE(occupiedNow ? occupiedKey : by, elAt(pr.x, pr.y), () => {
-          const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
-          const cx = pr.x * T + T / 2;
+        /* 2026-09-27 (phase 10) — ni tampon ni semis régulier : la touffe se
+           décale de quelques pixels dans sa case et se retourne une fois sur
+           deux (hachage de la case : la même chez les deux joueurs), prend la
+           teinte de sa PLAQUE (un bruit spatial : sèche par endroits, drue
+           ailleurs — `tallGrassTint`), et une sur trois a une petite sœur à côté
+           (un bouquet, pas une grille). Le décalage vertical entre dans la clé
+           de tri. */
+        const th = EAU.waterHash(pr.x * 53 + 17, pr.y * 29 + 3);
+        const jx = (th % 11) - 5, jy = ((th >>> 4) % 6) - 4, flip = (th >>> 8) & 1;
+        const tn = E.townNoise(pr.x, pr.y, 6, 71), tone = tn > 0.3 ? "dry" : tn < -0.35 ? "lush" : null;
+        const sister = (th >>> 10) % 3 === 0 ? A.TALLGRASS_VARIANTS[(th >>> 12) % A.TALLGRASS_VARIANTS.length] : null;
+        pushE((occupiedNow ? occupiedKey : by) + jy, elAt(pr.x, pr.y), () => {
+          const img0 = loadBitmap(`/town/${variant}.png`); if (!img0) return;
+          const img = tallGrassTint(img0, tone);
+          const cx = pr.x * T + T / 2 + jx;
           /* Vent ambiant (vague spatiale, fonction PURE de fermeArt.js) +
              contact (le ressort PARTAGÉ des buissons, déjà dans cette
              closure — zéro second ressort, §8 de CLAUDE.md). Une seule
@@ -22005,10 +22107,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              base vers les états penchés » demandé, jamais un choix entre
              deux images. */
           const lean = A.townTallGrassWaveLean(pr.x, pr.y, now) + (e ? bushLeanFormula(e.dir, age) : 0);
+          const ih = img0.naturalHeight || img0.height, iw = img0.naturalWidth || img0.width;
+          if (sister) {
+            const s0 = loadBitmap(`/town/${sister}.png`);
+            if (s0) {
+              const si = tallGrassTint(s0, tone), sh2 = s0.naturalHeight || s0.height, sw2 = s0.naturalWidth || s0.width;
+              ctx.save();
+              ctx.translate(cx + (flip ? -7 : 7), by + jy - 2);
+              ctx.transform(flip ? 1 : -1, 0, -lean / sh2, 1, 0, 0);
+              ctx.drawImage(si, -sw2 / 2, -sh2);
+              ctx.restore();
+            }
+          }
           ctx.save();
-          ctx.translate(cx, by);
-          ctx.transform(1, 0, -lean / img.height, 1, 0, 0);
-          ctx.drawImage(img, -img.width / 2, -img.height);
+          ctx.translate(cx, by + jy);
+          ctx.transform(flip ? -1 : 1, 0, -lean / ih, 1, 0, 0);
+          ctx.drawImage(img, -iw / 2, -ih);
           ctx.restore();
         });
       };
@@ -22550,21 +22664,76 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (`C.townShopDoorX`) et sur le bas de son rectangle, à son échelle
          (`C.townShopScale` : la Maison Garfield remplit son rectangle, voir
          sa note) — mais un LIEU au lieu d'une parcelle : pas de plaque, pas de R.
-         ⚠️ La nuit, tout le calque s'allume d'un bloc (vitrines, imposte,
-         appliques) et SEULEMENT quand Carla tient la boutique : sans elle, la
-         Maison Garfield est fermée (`townBoutiqueShut`), et une vitrine
-         éclairée devant une boutique fermée mentirait. L'embase (`drawCivic`)
+         ⚠️ La nuit, le calque suit l'ÉTAPE de la Maison Garfield (voir la note
+         de `queueTownShop`) : rien dans le local neutre, le badigeon en travaux,
+         les vitrines ouverte, les appliques fermée. L'embase (`drawCivic`)
          plutôt que l'ombre des maisons : le devant est dallé de pierre claire
          (note du 425 sur les monuments). */
       const queueTownShop = (mk) => {
-        const M = C.TOWN_SHOP_MODELS[mk], V = M.variants.simple, b = C.townShopSite(M);
-        const SB = C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, "simple")];
+        const M = C.TOWN_SHOP_MODELS[mk], b = C.townShopSite(M);
+        /* 2026-09-27 — LES ÉTAPES DE LA MAISON GARFIELD (`C.garfieldStage`, lue
+           aussi par la touche E, l'invite et le tableau des nouvelles) : un local
+           NEUTRE tant que Carla n'habite pas la vallée, des TRAVAUX ses deux
+           premiers jours, puis la boutique OUVERTE ses jours de service et FERMÉE
+           (rideaux de fer baissés, `MG-fermee`) les autres. Une version peinte
+           par étape, toutes au même cadre ; un commerce sans étapes (le salon)
+           reste ouvert. Une étape absente de ses versions retombe sur `simple`.
+           ⚠️ QUAND L'ÉTAPE CHANGE SOUS LES YEUX DU JOUEUR (le jour change à 2 h,
+           Carla s'installe) : entre ouverte et fermée, le rideau DESSINÉ roule sur
+           l'image ouverte (`drawRollShutter`) jusqu'en bas, puis l'image fermée
+           prend le relais (et l'inverse) ; toute autre bascule est un FONDU
+           d'1,5 s. Une boutique qu'on n'a pas dessinée depuis plus d'une seconde
+           et demie (on arrive en ville) prend son état d'emblée — on n'anime pas
+           un changement qu'on n'a pas vu. Un état local et visuel : rien ne
+           circule (`shopShutRef`). */
+        const stage = M.lit === "carla" ? garfieldStageNow() : "ouverte";
+        const want = { neutre: "neutre", travaux: "travaux", ouverte: "simple", fermee: "fermee" }[stage];
+        const target = M.variants[want] ? want : "simple";
+        const pairV = (v) => v === "simple" || v === "fermee";
+        const st = shopShutRef.current[mk] || (shopShutRef.current[mk] = { shown: target, from: null, fadeT0: 0, p: target === "fermee" ? 1 : 0, t: -1e9 });
+        const sdt = (now - st.t) / 1000;
+        if (!(sdt >= 0 && sdt < 1.5)) { st.shown = target; st.from = null; st.p = target === "fermee" ? 1 : 0; }
+        else if (target !== st.shown) {
+          if (M.shutters && pairV(target) && pairV(st.shown)) st.shown = target;       // le rideau va rouler
+          else { st.from = st.shown; st.fadeT0 = now; st.shown = target; st.p = target === "fermee" ? 1 : 0; }
+        }
+        if (pairV(st.shown) && sdt > 0 && sdt < 1.5) {
+          const tp = st.shown === "fermee" ? 1 : 0, d = tp - st.p;
+          const v = SHUT_ROLL_PER_S * Math.max(0.3, Math.min(1, Math.abs(d) / 0.06));   // freiné sur la fin
+          st.p = Math.abs(d) <= v * sdt ? tp : st.p + Math.sign(d) * v * sdt;
+        }
+        st.t = now;
+        const fadeA = st.from ? Math.min(1, (now - st.fadeT0) / 1500) : 1;
+        if (fadeA >= 1) st.from = null;
+        const shutP = M.shutters && pairV(st.shown) ? st.p : 0;
+        const vk = pairV(st.shown) ? (shutP >= 1 && M.variants.fermee ? "fermee" : "simple") : st.shown;
+        const V = M.variants[vk];
+        const SB = C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, vk)];
         const k = C.townShopScale(M), [c0, c1, cw, ch] = V.crop;
         const doorWX = C.townShopDoorX(M) * T, footWY = (b.y + b.h) * T;
         const cxW = doorWX + (c0 + cw / 2 - M.door) * k, byW = footWY + (c1 + ch - M.foot) * k;
         const wallL = doorWX + (M.wall[0] - M.door) * k, wallR = doorWX + (M.wall[1] - M.door) * k;
         const shopE = elAt(b.x, b.y + b.h - 1);
-        const glowA = M.lit === "carla" ? (carlaIsResident() ? houseLit : 0) : houseLit;
+        /* La nuit, par étape : le local neutre est vide et noir ; en travaux, le
+           badigeon des vitres s'éclaire par-derrière jusqu'à 23 h (on travaille
+           tard) ; ouverte, les vitrines ; fermée, les seules appliques (ses vitres
+           s'en tiennent là, `only`). */
+        const glowA = vk === "neutre" ? 0 : vk === "travaux" ? (winTmin < 23 * 60 ? houseLit : 0) : houseLit;
+        /* Ce qui reste allumé de chaque vitre de l'image ouverte pendant que les
+           rideaux roulent : sous leur bas pour celles qu'ils couvrent (par
+           recouvrement, jamais par rang — voir la note des `shutters`) ; les
+           autres (les pans de l'oriel, l'enseigne) s'éteignent à mesure qu'ils
+           descendent ; les appliques restent entières. */
+        const winPart = (w) => {
+          if (vk !== "simple" || shutP <= 0.001 || w.lamp) return { y0: w.y, frac: 1, k: 1 };
+          let y0 = w.y, covered = false;
+          for (const sh of M.shutters) {
+            const ov = Math.min(w.x + w.w, sh.x1) - Math.max(w.x, sh.x0);
+            if (ov > w.w * 0.5) { covered = true; y0 = Math.max(y0, sh.top + shutP * (sh.bottom - sh.top)); }
+          }
+          return covered ? { y0, frac: Math.max(0, (w.y + w.h - y0) / w.h), k: 1 } : { y0: w.y, frac: 1, k: 1 - shutP };
+        };
+        const shopWins = C.townPaintedWins(mk, vk);
         /* La lumière des vitrines SUR LE PAVÉ (Guillaume : « bien travailler
            l'éclairage des vitrines, c'est important »). Une vitrine de trois
            cases n'est pas une fenêtre : un seul anneau devant son milieu faisait
@@ -22573,28 +22742,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            l'étage d'exposition, en hauteur, porte plus loin et plus faiblement. */
         if (glowA > 0.01 && winNa > 0) {
           const gy = footWY / T + 0.35 - shopE * EP / T;
-          for (const w of C.townPaintedWins(mk, "simple")) {
+          for (const w of shopWins) {
             const x0 = (doorWX + (w.x - M.door) * k) / T, x1 = (doorWX + (w.x + w.w - M.door) * k) / T;
             if (w.lamp) { townWinLights.push({ x: (x0 + x1) / 2, y: gy, r: 1.6, c: "lamp", k: 0.5 * glowA }); continue; }
             if (!w.g && !w.show) continue;                  // l'imposte, l'enseigne : pas de flaque à elles
+            const wp = winPart(w), wk = wp.k * wp.frac * (w.wash ? 0.6 : 1);   // un rideau baissé éteint la flaque qu'il cache ; un badigeon diffuse
+            if (wk <= 0.01) continue;
             const far = !w.g, n = Math.max(1, Math.round((x1 - x0) / (far ? 2.2 : 1.1)));
             for (let i = 0; i < n; i++) townWinLights.push({
               x: x0 + (i + 0.5) * (x1 - x0) / n, y: gy + (far ? 1.6 : 0),
-              r: far ? 3.0 : 2.2, c: "vitrine", k: (far ? 0.24 : 0.46) * glowA,
+              r: far ? 3.0 : 2.2, c: w.wash ? "window" : "vitrine", k: (far ? 0.24 : 0.46) * glowA * wk,
             });
           }
         }
+        /* Le calque de nuit, vitre par vitre (comme les maisons, `glowOpts.rects`)
+           dès qu'il y a des rideaux : la lumière s'arrête au bas du rideau, et la
+           part d'une vitre qu'il cache n'éclaire rien — ni dans l'image, ni dans
+           la passe de lumière (qui ajoute le calque APRÈS le ciel : un rideau
+           peint dans la scène par-dessus un calque entier y aurait brillé). */
+        let glowOpts;
+        if (M.shutters) {
+          const rects = [];
+          for (const w of shopWins) {
+            const wp = winPart(w);
+            if (wp.frac <= 0.001 || wp.k <= 0.001) continue;
+            rects.push({ x: (w.x - c0) / cw, y: (wp.y0 - c1) / ch, w: w.w / cw, h: (w.y + w.h - wp.y0) / ch, k: wp.k });
+          }
+          glowOpts = { rects };
+        }
+        const SBfrom = st.from ? C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, st.from === "fermee" && !M.variants.fermee ? "simple" : st.from)] : null;
         pushE(footWY, shopE, () => {
           drawPaintedGrounding(ctx, cxW - (cw / 2 - 12) * k, cxW + (cw / 2 - 12) * k, byW, byW - footWY + b.h * T * 0.6);
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA);
+          // Le fondu : l'étape d'avant dessous, pleine, la nouvelle par-dessus, qui monte.
+          if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0);
+          const a0 = ctx.globalAlpha;
+          if (SBfrom && fadeA < 1) ctx.globalAlpha = a0 * fadeA;
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, glowOpts);
+          ctx.globalAlpha = a0;
           if (!r) return;
           // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
           lightBuilding(wallL, b.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
-          if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, glowA);
+          if (r.glowImg && r.glowParts) for (const q of r.glowParts) lightScreenGlow(r.glowImg, q.sx, q.sy, q.sw, q.sh, glowA * fadeA * q.k, q.src);
+          else if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, glowA * fadeA);
           // Un rectangle de la référence → l'écran (l'image est posée à 1:1, en px écran).
           const scr = (q) => ({ x: r.left + (q.x - c0) * r.dw / cw, y: r.top + (q.y - c1) * r.dh / ch, w: q.w * r.dw / cw, h: q.h * r.dh / ch });
           ctx.save();
           ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if (vk === "simple" && shutP > 0.001) for (const sh of M.shutters)
+            drawRollShutter(ctx, scr({ x: sh.x0, y: sh.top, w: sh.x1 - sh.x0, h: sh.bottom - sh.top }), shutP, r.dw / cw);
           if (M.pole) drawBarberPole(ctx, scr(M.pole), now);
           if (M.sign) {
             /* Le nom, dans l'enseigne vierge : police pixel à l'échelle ENTIÈRE
@@ -23436,12 +23631,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           for (const d of reflOnly) items.push(d);
           if (items.length) {
             const M0 = ctx.getTransform();
-            const axisOffOf = (d) => d.axisOff != null ? d.axisOff : EAU.waterAxisOffset(tw, d.rx, Math.floor((d.rb - 1) / T));
+            /* ⚠️ 2026-09-27 (phase 9, audit : ce qui est « en retrait de la rive
+               se reflète au ras de l'eau ») — L'AXE DU MIROIR EST LE PLAN DE L'EAU,
+               donc la hauteur de la RIVE DEVANT l'objet, pas celle de sa case. Un
+               sapin planté sur l'herbe derrière le quai prenait l'axe de l'herbe
+               (+1 px) au lieu de celui du parement (+6) : son reflet collait au
+               pied du mur. On cherche la première eau de sa colonne (dix rangées
+               au plus) ; la rive est la case juste au-dessus. Ce qui flotte garde
+               l'axe de sa case (0), ce qui n'a pas d'eau devant lui aussi. Derrière
+               un QUAI, la bande que cache le reflet du parement est retirée de son
+               reflet (`eau.js`, draw). Une seule recherche par objet et par image. */
+            const shoreRowOf = (d) => {
+              if (d._shore !== undefined) return d._shore;
+              const cx = Math.floor(d.rx), cy = Math.floor((d.rb - 1) / T);
+              let r = null;
+              if (cx >= 0 && cx < tw.w && cy >= 0 && cy < tw.h && tw.ground[cy * tw.w + cx] !== C.G_WATER) {
+                for (let y = cy + 1; y <= cy + 10 && y < tw.h; y++) if (tw.ground[y * tw.w + cx] === C.G_WATER) { r = y - 1; break; }
+              }
+              d._shore = r;
+              return r;
+            };
+            const axisOffOf = (d) => {
+              if (d.axisOff != null) return d.axisOff;
+              const sr = shoreRowOf(d);
+              return EAU.waterAxisOffset(tw, Math.floor(d.rx), sr != null ? sr : Math.floor((d.rb - 1) / T));
+            };
+            const occludeOf = (d) => {
+              if (d.axisOff != null) return null;
+              const sr = shoreRowOf(d);
+              if (sr == null || tw.ground[sr * tw.w + Math.floor(d.rx)] !== C.G_PATH_STONE) return null;
+              const c0 = Math.floor(d.rx), out = [];
+              for (let cx = c0 - 2; cx <= c0 + 2; cx++) {
+                if (cx < 0 || cx >= tw.w) continue;
+                for (let y = sr; y <= sr + 3 && y < tw.h; y++) {
+                  if (tw.ground[y * tw.w + cx] !== C.G_WATER) continue;
+                  out.push({ x: cx * T, y: y * T + EAU.QUAY_FACE_H, w: T, h: EAU.QUAY_FACE_H });
+                  break;
+                }
+              }
+              return out;
+            };
             waterReflRef.current.draw(ctx, { zm: M0.a, Rx: -M0.e, Ry: -M0.f, W: canvas.width, H: canvas.height }, bakeR, items, now, axisOffOf, (d, g) => {
               const saved = ctx;
               ctx = g; reflecting = true;
               try { d.fn(); } finally { ctx = saved; reflecting = false; }
-            });
+            }, occludeOf);
           }
         }
       }
@@ -23658,7 +23892,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          proximité (nearCivicDoor / nearTownProp / nearTownRect). Une invite et
          une action qui ne s'accordent pas, c'est un jeu qui propose puis refuse
          — la leçon du 426, réappliquée telle quelle. */
-      else if (nearBuildingDoor(C.TOWN_BOUTIQUE)) tpk = carlaIsResident() ? "townBoutique" : "townBoutiqueShut";
+      /* 2026-09-27 — l'invite dit l'ÉTAPE (le dessin aussi) : elle promettait
+         « entrer » et la touche répondait « fermé ». */
+      else if (nearBuildingDoor(C.TOWN_BOUTIQUE)) tpk = { neutre: "townBoutiqueShut", travaux: "townBoutiqueWorks", ouverte: "townBoutique", fermee: "townBoutiqueOff" }[garfieldStageNow()];
       else if (nearBuildingDoor(C.TOWN_SALON)) tpk = "townSalon";
       else if (nearMarket()) tpk = "townMarket";
       else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
@@ -28336,16 +28572,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* Combien de jours avant sa prochaine ouverture. ⚠️ DÉRIVÉ, comme le jour de
      service lui-même : rien n'est stocké, donc rien ne peut être faux après un
      rechargement ou une reprise de sauvegarde. */
-  function carlaDaysToOpen() {
-    const ro = rosterOf(C.CARLA_RID);
-    if (!ro || ro.weeklyShift == null) return 0;
-    const day = (sharedRef.current.day | 0) || 1;
-    const shifts = Array.isArray(ro.weeklyShift) ? ro.weeklyShift : [ro.weeklyShift];
-    return Math.min(...shifts.map(s => ((s - (day % 7)) + 7) % 7));
-  }
-  function carlaIsResident() {
+  /* 2026-09-27 — L'ÉTAPE DE LA MAISON GARFIELD, AUJOURD'HUI (`C.garfieldStage`) :
+     la SEULE lecture de la touche E, de l'invite, du tableau des nouvelles et du
+     dessin (`queueTownShop`) — une invite qui promet ce que la touche fait. Le
+     jour de service passe par `E.isShopDay`, le prédicat de toujours. */
+  function carlaEntry() {
     const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
-    return list.some(r => r && r.rid === C.CARLA_RID);
+    return list.find(r => r && r.rid === C.CARLA_RID) || null;
+  }
+  function garfieldStageNow() {
+    const c = carlaEntry(), ro = rosterOf(C.CARLA_RID);
+    return C.garfieldStage(!!c, c ? c.sinceDay : undefined, (sharedRef.current.day | 0) || 1, (d) => E.isShopDay(ro, d));
+  }
+  function carlaDaysToOpen() {
+    const c = carlaEntry(), ro = rosterOf(C.CARLA_RID);
+    return C.garfieldDaysToOpen(c ? c.sinceDay : undefined, (sharedRef.current.day | 0) || 1, (d) => E.isShopDay(ro, d));
   }
   /* ⚠️ UNE RÉPLIQUE D'AMBIANCE SE TIRE D'UNE GRAINE PARTAGÉE, JAMAIS DE
      `Math.random()`. Deux joueurs côte à côte devant la même fontaine doivent
@@ -32430,10 +32671,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            est le « bâtiment muet » du 426 ; une boutique fermée qui annonce son
            jour est un RENDEZ-VOUS — c'est-à-dire la seule façon qu'une
            ouverture hebdomadaire devienne du jeu plutôt qu'une gêne. */
-        if (!carlaIsResident()) { pushToast(L.boutiqueLockedToast); return; }
-        if (!E.isShopDay(rosterOf(C.CARLA_RID), (sharedRef.current.day | 0) || 1)) {
-          pushToast(L.boutiqueClosedToast(carlaDaysToOpen())); return;
-        }
+        const gStage = garfieldStageNow();
+        if (gStage === "neutre") { pushToast(L.boutiqueLockedToast); return; }
+        if (gStage === "travaux") { pushToast(L.boutiqueWorksToast(carlaDaysToOpen())); return; }
+        if (gStage === "fermee") { pushToast(L.boutiqueClosedToast(carlaDaysToOpen(), C.CARLA_WORK_DAYS.length)); return; }
         setBoutiqueOpen("hat"); return;
       }
       if (nearCivicDoor(C.TOWN_SALON)) { pushToast(L.salonToast); return; }
@@ -33557,7 +33798,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -37784,7 +38025,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               {!ties.length && <div className="ferme-hint">{L.newsBoardNoTies}</div>}
               {ties.map((t, i) => <div className="ferme-hint" key={"tie-" + i}>• {t}</div>)}
               <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardNotices}</h3>
-              <div className="ferme-hint">• {carlaIsResident() ? L.newsBoardBoutique : L.newsBoardBoutiqueSoon}</div>
+              <div className="ferme-hint">• {{ neutre: L.newsBoardBoutiqueSoon, travaux: L.newsBoardBoutiqueWorks(carlaDaysToOpen()) }[garfieldStageNow()] || L.newsBoardBoutique}</div>
               <div className="ferme-hint">• {L.newsBoardSalon}</div>
               <div className="ferme-hint">• {L.newsBoardCourt}</div>
               <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setNewsBoardOpen(false)}>{L.newsBoardClose}</button></div>

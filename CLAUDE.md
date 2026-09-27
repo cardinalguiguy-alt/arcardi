@@ -7,46 +7,37 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-27 (soir) — Valley Town : S3 (première LARGE), S4, le salon ; les maisons posent ; reflet du pont
+### 2026-09-27 (nuit) — Valley Town : phase 10 (les sols), étapes de la Maison Garfield, S2, prestige, phase 9
 
-Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md` (phases 6 et 7), récit en tête du
-même fichier. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond.
-⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Reste : 6a (S2
-à relancer, W1 à W3 — 4e image : S3 ; N3 mise de côté) · 6b la gare (quai en procédural ; boutique de
-plage sans place) · 7 composition — dont les HAIES, refaites entièrement (Guillaume : nouveaux sprites,
-textures, collisions) et les jardins · 8 intérieurs · 9 à 14, nées de l'AUDIT : ordre à trancher avec lui.**
-- **Livré** : S4 (trois versions, emprise 1..7) ; **S3, première maison LARGE** (9 cases à l'échelle de
-  son vantail, emprise x+0..x+8, sa « bordeaux » = son enrichie) sur cinq parcelles déduites de leur
-  position (`TOWN_HOUSE_WIDE_AT`, choisies sur la carte, aucun rang déplacé) ; **le salon** peint
-  (`TOWN_SHOP_MODELS.salon`, remplit ses 7 cases, nom écrit dans l'enseigne en police pixel, barbier qui
-  TOURNE, vitrines le soir). **Fin de l'effet « sticker »** : ombre de CONTACT sans soleil
-  (`drawPaintedGrounding` : bande sous le trottoir peint + flancs sur la profondeur de l'emprise), à la
-  place de l'ellipse, et touffes d'herbe devant le pied. **Reflet du pont** : pont entier, bout fondu.
-- Bancs à cette livraison : **29/29 `verify-*`** (`verify-vallee` 265, `verify-lumiere` 86), **24/24
-  `render-*`**, `no-undef` propre, bundle, `next build` complet. Vu en jeu (jour, nuit, pont) ; **pas vu** :
-  S3 simple, le salon la nuit en jeu, deux joueurs. **Pas de manipulation Supabase** (rien de persisté).
-- **Retour de partie, même soir** : Guillaume a joué et demandé (1) un signal plus visuel
-  d'ouvert/fermé pour la Maison Garfield, (2) Carla en service deux jours au lieu d'un.
-  **Livré, la partie mécanique seule** (délivrance partielle demandée par lui, pour ne pas traîner) :
-  `CARLA_WORK_DAYS = [3, 4]` (`fermeConstants.js`), `E.isShopDay`/`carlaDaysToOpen` généralisés à un
-  tableau de jours au lieu d'un entier — Carla reste le seul résident à porter ce drapeau, rien de
-  spécial ajouté ailleurs. `verify-vallee` 265/265 (chiffres inchangés), `no-undef` et bundle propres.
-  ⚠️ **Pas livré, exprès** : le signal visuel (rideau de fer discret mi-baissé + lumières réduites les
-  jours chômés ; bâtiment NEUTRE, sans rien qui évoque un commerce de vêtements, tant que Carla n'est
-  pas résidente). Ça touche une image importée (`refs/boutique-garfield.jpg`, §9) qui se pose en
-  regardant le rendu en jeu, pas à l'aveugle sur les coordonnées du modèle — voir ACTION SUIVANTE.
+Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récit en tête du même fichier.
+Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Ordre tranché par Guillaume :
+phases 9 et 10 (faites), 11, 7, 12, 13, 14, 8 ; 6a/6b s'intègrent au fil de ses images.**
+⚠️ **PRINCIPE POSÉ PAR GUILLAUME : LA COHÉRENCE SOCIALE PAR QUARTIER** — riches, classe moyenne, plus
+pauvres. Une seule règle, `C.townStandingAt` / `C.townRankAt` (distance aux lieux prisés), lue par les
+maisons (leurs versions) et par le sol (tonte, semis, plaques) ; tout ce qui se compose ensuite (jardins,
+décor, clôtures, lampadaires, qui habite où) doit la lire aussi.
+- **Livré** : **phase 10** — goudron refait (gris, caniveaux, traces de roues, variantes par bloc), trois
+  dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des
+  terrasses), herbe selon le quartier, massifs de saison en rangs, rebord est-ouest des terrasses,
+  herbes hautes en bouquets teintés. Avant : la Maison Garfield en quatre étapes peintes (neutre,
+  travaux, ouverte, fermée ; `C.garfieldStage`, `sinceDay`), S2 porte centrée en version de base,
+  le prestige des adresses, la phase 9.
+- Bancs à cette livraison : voir la ligne du jour dans le récit ; **53/53** au dernier passage complet
+  (`verify-vallee` 269), `no-undef`, bundle. Vu en jeu : tout ce que liste le récit. **Pas vu** : les
+  massifs hors de l'été en jeu, deux joueurs. **Pas de manipulation Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
 - **Le 2026-09-27 (6a, 6b)** : l'échelle des maisons (porte de 2,04 m), S3 en LARGE et le choix de ses
   cinq parcelles, l'ombre de contact et les touffes (pas d'ombre orientée, exprès), le salon (enseigne,
   barbier, vitrines allumées sans coiffeur), le reflet du pont ; la boutique (×1,42, porte de 2,95 m) et
-  ses vitrines — ⚠️ sa porte peinte (x+5,8) n'est pas dans l'axe de ses bancs ni de son arrêt (x+4) ;
-  le puits et l'arbre de la pie de la parcelle #20 à demi derrière le toit ; **et l'audit (phases 9 à
-  14) : l'ordre se tranche avec lui avant d'en corriger un.**
-- **La nuit du 2026-09-26 (6a)** : N2, et les maisons peintes en ville — la répartition par quartier (riche :
-  centre et terrasse ; enrichie : lac et artisans), les étroites de la vieille ville, la maison hantée et
-  la fréquence de sa lueur (`LUM.ruinGhostOn`).
+  ses vitrines ; le puits et l'arbre de la pie de la parcelle #20 à demi derrière le toit. **La nuit du
+  2026-09-27** : les étapes de la Maison Garfield (deux jours de travaux, le badigeon allumé jusqu'à
+  23 h, le rideau en ~2,8 s, les fondus d'1,5 s), S2 et ses quatre parcelles, les seuils du prestige
+  (17 / 30, +10 pour marché et lac).
+- **La nuit du 2026-09-26 (6a)** : N2, les étroites de la vieille ville, la maison hantée et la fréquence
+  de sa lueur (`LUM.ruinGhostOn`).
 - **Le soir du 2026-09-26** : les vitraux en couleurs (composition dessinée : fond bleu, bordure rubis,
   médaillons ; à juger à l'écran), les horaires des pièces (`monumentWindowLevel`), le reflet du pont
   (`TOWN_BRIDGE_REFL_UP`), la portée de l'épuisette (1,3 papillon / 2,6 carpe), les chances (55 / 40 %),
@@ -67,7 +58,10 @@ textures, collisions) et les jardins · 8 intérieurs · 9 à 14, nées de l'AUD
 - Le perron du tribunal, le zoom manuel, les pets ancrés sur le maître, Eduardo et le port
   (`starYardHookActive`), le belvédère enrichi ; plus anciens : pin, bois du sud-est, cœur de ville,
   « changer de ferme », chantier naval, repousse des buissons.
-- **À décider avec lui, jamais seul (§2)** : quel bâtiment après le tribunal (Gemini) ; traduction des
+- **Chantier futur, décidé par Guillaume (2026-09-27)** : le GRAND ESCALIER sous le tribunal sera
+  retravaillé entièrement (« laid actuellement, et la physique est cassée ») — pas avant qu'il le rouvre.
+- **À décider avec lui, jamais seul (§2)** : la gare (halte minuscule ou `TOWN_STATION` élargie à 6 cases) ;
+  quel bâtiment après le tribunal (Gemini) ; traduction des
   métiers (`job` de `TOWN_RESIDENTS`, une table `jobFr`) ; le jour entre les arcs-boutants de l'église ;
   sécurité et synchro multi de la ferme (`components/ferme/SECURITE.md`, RIEN codé).
 - ⚠️ Dette Google Cloud d'Où's That, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE (il se
@@ -80,29 +74,31 @@ textures, collisions) et les jardins · 8 intérieurs · 9 à 14, nées de l'AUD
 
 ### ⏭️ ACTION SUIVANTE
 
-**Continuer 6a avec les images de Guillaume**, dans l'ordre du tableau en tête de
-`refs/prompts-maisons.md` : la relance de S2 (porte décentrée) AVANT ses enrichie et riche, puis W1 à W3
-avec `maison-s3.jpeg` en 4e image (S3 fixe l'emprise large ; tolérances : porte à 1,4–2,0 H du bord
-gauche, 3,1–3,7 H du bord droit). ⚠️ **Avant d'intégrer une image, mesurer sa porte en H** : la ligne du
-prompt ne garantit rien (S2 sortie centrée, S3 sortie large). Chaque modèle : porte, VANTAIL (`doorH`),
-pied (948 chez les standard et S3), mur, vitres (verre + 4 px ; lanterne = son verre ; vitrine = `show`)
-→ `TOWN_HOUSE_MODELS` / `TOWN_SHOP_MODELS` → `build-maison-sprites` → planche → jeu ; chaque modèle
-couvre ≥ 30 % de chaque case de sa largeur (`verify-vallee`). **Ensuite, la phase 7 : les HAIES refaites**
-(sprites, textures, collisions) autour de chaque largeur — c'est leur contour qui donne le « décalage »
-porte / allée. **À trancher avec lui** : la gare (halte minuscule ou `TOWN_STATION` élargie à 6 cases),
-l'axe de la Maison Garfield, l'ordre des phases 9 à 14. Le cheval de bataille reste : lui faire JOUER
-phases 1-5, météo, 6c, 6a et les commerces en vraie séance.
+**La phase 11 — la végétation à l'échelle des maisons** (checklist au tableau : des arbres trop petits
+depuis que les maisons ont grandi, deux ou trois tailles par essence, de grands arbres isolés, la matière
+des haies, le balancement à deux poses), qui rejoint le **chantier « échelle des arbres » du §13**
+(arbres ×1,6 à ×2, redessinés à la même densité, jamais agrandis ; transparence du feuillage devant le
+joueur ; recul arbre–bâtiment en passe FINALE ; `TOWN_REFL_ROWS` et ombres recalés). ⚠️ C'est de la
+production créative : **LISTER les décisions structurantes et ATTENDRE Guillaume** (§2) — sauf en
+« caveman on ». Ensuite la phase 7, où attend **le réseau de rues qui n'est plus une grille** (trois
+voies écrites au tableau, à trancher avec lui : cosmétique, hybride recommandée, régénération).
+Intégrer au fil de l'eau ses images si elles tombent dans `refs/` : W1 à W3 (`maison-s3.jpeg` en 4e
+image ; porte à 1,4–2,0 H du bord gauche, 3,1–3,7 H du bord droit).
+⚠️ **Avant d'intégrer une image, mesurer sa porte en H ET son cadrage** : la ligne du prompt ne garantit
+rien, et une retouche de Gemini peut décaler le dessin dans son fichier (`at`, mesuré par recouvrement
+des silhouettes avec le fond propre à CHAQUE image — leurs magentas diffèrent). Chaque modèle : porte,
+VANTAIL (`doorH`), pied (dernière rangée de plinthe au-dessus du trait sombre : 948 chez S1, 937 chez
+S2), mur, vitres (verre + 2 px de chaque côté ; lanterne = son verre seul ; vitrine = `show`) →
+`TOWN_HOUSE_MODELS` / `TOWN_SHOP_MODELS` → `build-maison-sprites` → planche → jeu ; chaque modèle couvre
+≥ 30 % de chaque case de sa largeur (`verify-vallee`). Une porte qui ne tombe pas dans une largeur
+existante ne s'y force pas : elle a sa largeur (comme S2). Le cheval de bataille reste : lui faire JOUER
+phases 1-5, météo, 6c, 6a, 10 et les commerces en vraie séance.
 ⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`), `S.townBoutique` et
 `S.townSalon` sont encore fabriquées au chargement sans plus être dessinées — `verify-lumiere` lit les
 fenêtres des premières, `render-echelle`/`render-tribunal` mesurent les deux autres ; les retirer demande
 de réécrire ces sections de banc.
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
-⚠️ Dette laissée par ce soir : le **signal visuel ouvert/fermé de la Maison Garfield**, décidé avec
-Guillaume mais pas dessiné — rideau de fer discret mi-baissé + moins de lumières les jours chômés,
-bâtiment neutre (aucune trace de commerce de vêtements) tant que Carla n'est pas résidente. À poser
-sur `TOWN_SHOP_MODELS.garfield` (`fermeConstants.js`) et son dessin dans `FermeGame.js` (~22559,
-`queueTownShop`), en le regardant en jeu sur l'image réelle, pas en aveugle sur les coordonnées `wins`.
 
 ---
 
@@ -508,6 +504,10 @@ dépôt.
   parfaitement juste : il est tombé à l'instant exact, pour la mauvaise raison. *Un banc qui lit du
   SOURCE doit énumérer toutes les écritures de ce qu'il cherche, ou n'en chercher aucune.*
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
+- ⚠️⚠️ **UNE BORNE DE BOUCLE RECALCULÉE À CHAQUE TOUR SUR CE QUE LA BOUCLE MODIFIE S'ARRÊTE TROP TÔT, SANS
+  ERREUR** (`for (k = 0; k < total - w[0] * n; k++) w[k]++`, `roadSplit`, 2026-09-27 : un reste de 4
+  n'ajoutait qu'un pixel). Et un défaut vieux de vingt zips a des dessins RÉGLÉS DESSUS : le corriger en
+  place les change (les marches du tribunal, 42 → 23 teintes) — on écrit la version juste À CÔTÉ.
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
   `INVALID_OPERATION: program not valid` dans la console.**

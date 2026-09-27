@@ -2058,6 +2058,28 @@ export const CARLA_MIN_ARTISANS = 4;   // résidents à skill requis pour qu'ell
    un des deux tombant sur le marché, on aurait un jour où tout se passe et
    d'autres où rien ne se passe. Décalés, la semaine a trois rendez-vous. */
 export const CARLA_WORK_DAYS = [3, 4];
+/* 2026-09-27 — LES ÉTAPES DE LA MAISON GARFIELD (Guillaume) : un local NEUTRE
+   tant que Carla n'habite pas la vallée ; des TRAVAUX pendant ses
+   `CARLA_SHOP_WORKS_DAYS` premiers jours (compté depuis `sinceDay`, le jour de
+   son installation, écrit sur son entrée de résidente) ; puis la boutique
+   aboutie, OUVERTE ses jours de service et FERMÉE (rideaux baissés) les autres.
+   Une pure fonction du jour : la touche E, l'invite, le tableau des nouvelles
+   et le dessin la lisent tous, rien ne circule en plus.
+   ⚠️ `shopDay` est le prédicat du jeu (`E.isShopDay`), passé tel quel — jamais
+   recopié ici (§4 : une condition recopiée à côté du prédicat qui la nomme a
+   déjà divergé). ⚠️ Une résidente SANS `sinceDay` (installée avant ce jour-là)
+   est établie depuis toujours : sa boutique est aboutie. */
+export const CARLA_SHOP_WORKS_DAYS = 2;
+export function garfieldStage(resident, sinceDay, day, shopDay) {
+  if (!resident) return "neutre";
+  if (typeof sinceDay === "number" && day < sinceDay + CARLA_SHOP_WORKS_DAYS) return "travaux";
+  return shopDay(day) ? "ouverte" : "fermee";
+}
+/* Les jours avant qu'elle ouvre (0 : ouverte aujourd'hui). */
+export function garfieldDaysToOpen(sinceDay, day, shopDay) {
+  for (let k = 0; k < 7 + CARLA_SHOP_WORKS_DAYS; k++) if (garfieldStage(true, sinceDay, day + k, shopDay) === "ouverte") return k;
+  return 0;
+}
 // Léo n'est PAS une entité : sa position est DÉRIVÉE de celle de Carla
 // (il marche dans ses pas avec ce retard, en unités de chemin parcouru, cf.
 // le principe des loups posés sur la piste du défi de fuite). Zéro message
@@ -5095,7 +5117,12 @@ export const TOWN_HOUSE_MODELS = {
           { x: 500, y: 420, w: 94, h: 114, hv: { riche: 80, enrichie: 100 } },           //  enrichie et riche seulement,
           { x: 730, y: 420, w: 86, h: 112, hv: { riche: 80 } },                           //  le verre y suffit)
           { x: 202, y: 696, w: 48, h: 114, g: 1 }, { x: 618, y: 696, w: 268, h: 92, g: 1 },
-          { x: 486, y: 668, w: 72, h: 110, lamp: 1 },
+          /* La lanterne : son VERRE seul (trois vitres, cols 508..539, rangs
+             721..745, relevées sur les trois versions). ⚠️ 2026-09-27 : le
+             rectangle couvrait toute la lanterne ET le mur autour (72×110) — la
+             pierre chaude passe le test de `lanternGlass` et s'allumait à demi,
+             la même faute que N1 riche. */
+          { x: 507, y: 720, w: 34, h: 26, lamp: 1 },
         ],
         variants: {
           simple:   { src: "refs/maison-s1.jpg",          crop: [29, 9, 1032, 972] },
@@ -5109,7 +5136,12 @@ export const TOWN_HOUSE_MODELS = {
           { x: 698, y: 458, w: 82, h: 104, hv: { riche: 84 } },
           { x: 704, y: 240, w: 80, h: 40, only: ["riche"] },                              // la lucarne de la riche
           { x: 674, y: 724, w: 104, h: 114, g: 1 },
-          { x: 492, y: 720, w: 60, h: 88, lamp: 1 },
+          /* La lanterne : son VERRE seul (cols 508..531, rangs 762..780, mesurés
+             sur les deux versions — même place). ⚠️ Audit 2026-09-27, vu chez
+             Rosalie : le rectangle couvrait toute la lanterne (492, 720, 60×88),
+             et le laiton chaud de la riche passe le test de `lanternGlass` —
+             tout son cadre s'allumait en blanc. Même règle que N2. */
+          { x: 507, y: 761, w: 26, h: 21, lamp: 1 },
         ],
         variants: {
           simple: { src: "refs/maison-n1.jpg",       crop: [88, 4, 886, 978] },
@@ -5192,9 +5224,35 @@ export const TOWN_HOUSE_MODELS = {
           enrichie: { src: "refs/maison-s3-bordeaux.jpeg", crop: [14, 7, 1060, 973] },
           riche:    { src: "refs/maison-s3-riche.jpeg",    crop: [14, 7, 1060, 973] },
         } },
+  /* 2026-09-27 — S2, LA CHAUMIÈRE (pierre, chaume arrondi, lucarne en sourcil),
+     PORTE CENTRÉE. Le prompt la voulait au tiers gauche, comme S1 ; Gemini l'a
+     peinte au milieu (1,85 H | 1,86 H), et Guillaume a préféré ce premier jet
+     (« je préfère ça visuellement »). ⚠️ Elle a donc SA largeur (`center`) : la
+     porte d'une parcelle est fixe (son allée, x+3), et un mur centré sur elle
+     couvre x−0,2..x+6,2 — emprise 0..5 —, là où S1 et S4 couvrent 1..7. Dans la
+     même largeur, la réunion (0..7) aurait laissé un mur invisible de près de
+     deux cases à l'est de S2 et une case d'air à l'ouest de S1 (17 % et 29 %
+     de couverture, sous les 30 % de `verify-vallee`). Changer l'emprise
+     standard aurait cassé S1 et S4, déjà en jeu. Écarté aussi : décaler
+     l'image sur l'allée — l'allée EST la porte. Une porte centrée tombe au
+     milieu de l'anneau de haies (x−1..x+6) : S2 y est plus juste que S1.
+     Pied 937 : la dernière rangée de plinthe au-dessus du trait sombre, même
+     lecture que le 948 de S1. Vitres : le verre relevé + 2 px de chaque côté ;
+     la lanterne, son verre seul (règle de N1 et N2). */
+  s2: { size: "center", door: 547, doorH: 241, foot: 937, wall: [100, 996],   // vantail : 668 → 909
+        wins: [
+          { x: 518, y: 385, w: 51, h: 55 },                                               // la lucarne en sourcil
+          { x: 202, y: 681, w: 48, h: 98, g: 1 },                                         // au-dessus des fleurs
+          { x: 796, y: 681, w: 53, h: 98, g: 1 },
+          { x: 668, y: 707, w: 28, h: 18, lamp: 1 },
+        ],
+        variants: {
+          simple: { src: "refs/maison-s2.jpeg", crop: [35, 60, 1027, 915] },
+        } },
 };
-/* Les modèles d'une largeur, dans l'ordre où R les fait défiler. */
-export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide"];
+/* Les modèles d'une largeur, dans l'ordre où R les fait défiler.
+   `center` (2026-09-27) : la standard à porte CENTRÉE (S2), voir sa note. */
+export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide", "center"];
 /* ⚠️ 2026-09-27 — LES PARCELLES LARGES, PAR POSITION (aucun état, §3). Cinq,
    choisies pour la carte et pour que les trois versions de S3 se voient :
    · (122,24), la terrasse de la haute-ville, sous la Maison Garfield — la
@@ -5202,7 +5260,10 @@ export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide"];
    · (128,102), au bord du parc — riche aussi, loin de la première ;
    · (60,144) et (140,144), la promenade du lac, une sur deux — des maisons
      d'armateur face à l'eau, dans un port (enrichie : la bordeaux) ;
-   · (100,28), l'avenue du nord — la seule simple.
+   · (100,28), l'avenue du nord — simple au premier jet ; ENRICHIE depuis le
+     prestige des adresses (`townHouseStanding`, même jour : 17 cases de la
+     terrasse). Aucune S3 n'est donc simple : la maison de maître ne va que
+     dans les beaux quartiers, et sa version simple attend une parcelle.
    Toutes ont 12 cases libres à l'est au niveau du mur (mesuré sur la carte) :
    le mur déborde de la parcelle jusqu'en x+8,6 sans rien toucher. Ce qui ne
    suit PAS encore : la haie de l'est (x+7) passe sous le mur et devant sa
@@ -5210,6 +5271,17 @@ export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide"];
    jour). ⚠️ Une parcelle ne change jamais de RANG (le propriétaire) : on ne
    déplace aucune entrée de `TOWN_HOUSES`. */
 export const TOWN_HOUSE_WIDE_AT = [[122, 24], [128, 102], [60, 144], [140, 144], [100, 28]];
+/* ⚠️ 2026-09-27 — LES PARCELLES À PORTE CENTRÉE (S2, la chaumière), PAR
+   POSITION aussi. La maison la plus rustique, donc LOIN des lieux prisés (voir
+   `townHouseStanding`) : (14,28), au bout de l'avenue du nord ; (46,122), au
+   sud-ouest ; (200,64), chez les artisans — trois simples — et (100,122), entre
+   le parc et le lac, la seule enrichie. Aucune en riche : une chaumière cossue
+   au bord du parc aurait contredit la règle des quartiers (Guillaume, même
+   jour). Choisies parmi les standard dont la case x+0 est libre sur les trois
+   rangées du mur et dont la case x−1 ne porte aucun décor collé au mur (relevé
+   sur la carte) ; leur emprise, x+0..x+5, est exactement le rectangle que le
+   générateur leur réservait. */
+export const TOWN_HOUSE_CENTER_AT = [[14, 28], [46, 122], [200, 64], [100, 122]];
 export const townHouseModelsOf = (size) => Object.keys(TOWN_HOUSE_MODELS).filter(k => TOWN_HOUSE_MODELS[k].size === size);
 /* Le mur du rez-de-chaussée d'un modèle, en cases, relatif à la parcelle (la
    porte tombe en x + TOWN_HOUSE_W / 2). */
@@ -5253,22 +5325,54 @@ export function townHouseSizeFoot(size) {
    qu'UNE emprise, la réunion de celles de ses modèles (`townHouseSizeFoot`,
    tenu par `verify-vallee`).
    · ÉTROITE : la vieille ville autour du marché (les rangées nord et sud) ;
-   · quartier RICHE : le centre (marché, place, parc) et la terrasse de la
-     haute-ville — « les belles adresses » depuis le 425 ;
-   · quartier ENRICHI : la rangée face au lac et le quartier des artisans ;
-   · SIMPLE : le reste. */
-export const TOWN_HOUSE_RICH_AREA = { x: 40, y: 56, w: 96, h: 50 };
+   · LARGE et À PORTE CENTRÉE : des listes de positions (`TOWN_HOUSE_WIDE_AT`,
+     `TOWN_HOUSE_CENTER_AT`) ;
+   · STANDARD : le reste.
+   La VERSION (simple, enrichie, riche) vient du PRESTIGE de l'adresse, plus bas. */
 const inRectXY = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 export function townHouseSize(hsn) {
   if (hsn.model) return TOWN_HOUSE_MODELS[hsn.model].size;
   if (TOWN_HOUSE_WIDE_AT.some(([x, y]) => x === hsn.x && y === hsn.y)) return "wide";
+  if (TOWN_HOUSE_CENTER_AT.some(([x, y]) => x === hsn.x && y === hsn.y)) return "center";
   const mk = TOWN_MARKET;
   return hsn.x < mk.x + mk.w + 6 && hsn.y >= mk.y - 14 && hsn.y <= mk.y + mk.h + 4 ? "narrow" : "std";
 }
+/* ⚠️ 2026-09-27 — LE PRESTIGE D'UNE ADRESSE (Guillaume : « une cohérence de
+   qualité par quartier. Les maisons les plus belles sont dans les zones les plus
+   prisées. Les plus simples sont loin des points d'intérêt »). Il remplace deux
+   rectangles posés à la main (un « centre » riche, le lac et les artisans en
+   enrichie), qui mettaient des maisons enrichies au fond du quartier des
+   artisans, à 40 cases de tout, et des simples à 15 cases de l'église.
+   C'est la distance de la porte au lieu prisé le plus proche, en cases :
+   · les lieux CIVIQUES comptent pleins — la place (et la mairie), le parc,
+     l'église, le tribunal, la terrasse de la haute-ville (ses commerces, le
+     belvédère) ;
+   · les lieux ANIMÉS — le marché, le lac et son port — valent `TOWN_LIVELY_FAR`
+     cases de plus : on y passe, on y travaille, on n'y habite pas en premier.
+   Riche sous `TOWN_STANDING_RICH`, enrichie sous `TOWN_STANDING_PLAIN`, simple
+   au-delà. Mesuré le jour de l'écriture : 9 / 9 / 9 parcelles ; le front de lac
+   reste enrichi (17), les artisans passent en simple (41 à 59). Une pure
+   fonction de la position, comme la largeur : rien ne circule, rien ne migre. */
+export const TOWN_LIVELY_FAR = 10;
+export const TOWN_STANDING_RICH = 17, TOWN_STANDING_PLAIN = 30;
+export function townHouseStanding(hsn) {
+  return townStandingAt(hsn.x + TOWN_HOUSE_W / 2, hsn.y + TOWN_HOUSE_H);
+}
+/* Le même prestige pour un point quelconque (en cases) — 2026-09-27 (phase 10) :
+   le sol aussi suit les quartiers (l'herbe tondue près des lieux prisés, le pré
+   au loin). UNE règle, lue par les maisons et par le sol. */
+export function townStandingAt(px, py) {
+  const d = (r) => Math.hypot(Math.max(r.x - px, 0, px - (r.x + r.w)), Math.max(r.y - py, 0, py - (r.y + r.h)));
+  let s = Infinity;
+  for (const r of [TOWN_PLAZA, TOWN_PARK, TOWN_CHURCH, TOWN_COURT, TOWN_UPPER]) s = Math.min(s, d(r));
+  for (const r of [TOWN_MARKET, TOWN_LAKE]) s = Math.min(s, d(r) + TOWN_LIVELY_FAR);
+  return s;
+}
+/* Le rang social d'un point : 0 riche, 1 classe moyenne, 2 plus pauvre. */
+export const townRankAt = (px, py) => { const s = townStandingAt(px, py); return s < TOWN_STANDING_RICH ? 0 : s < TOWN_STANDING_PLAIN ? 1 : 2; };
 export function townHouseDistrict(hsn) {
-  if (hsn.y >= TOWN_LAKE.y - 14 || hsn.x >= TOWN_ARTISANS.x) return "enrichie";
-  if (inRectXY(TOWN_HOUSE_RICH_AREA, hsn.x, hsn.y) || inRectXY(TOWN_UPPER, hsn.x, hsn.y)) return "riche";
-  return "simple";
+  const s = townHouseStanding(hsn);
+  return s < TOWN_STANDING_RICH ? "riche" : s < TOWN_STANDING_PLAIN ? "enrichie" : "simple";
 }
 /* L'emprise bloquante d'une parcelle (ou de la ruine), en cases absolues. */
 export function townHouseFoot(hsn) {
@@ -5353,20 +5457,62 @@ export const TOWN_SHOP_MODELS = {
        la peinture) ; `interior`, la boutique vue par sa porte vitrée ; `sign`,
        les lettres dorées de l'enseigne ; `lamp`, le verre d'une applique. */
     wins: [
-      { x: 283, y: 212, w: 524, h: 246,                                            // l'étage d'exposition : six spots
+      { x: 283, y: 212, w: 524, h: 246, only: ["simple"],                          // l'étage d'exposition : six spots
         show: { spots: [353, 428, 504, 568, 655, 735], lensY: 280, ambient: 0.4,
                 mullions: [[364, 374], [461, 470], [618, 631], [713, 724]], rails: [[290, 299]] } },
-      { x: 238, y: 582, w: 262, h: 208, g: 1,                                      // l'oriel, au-dessus des fleurs : sa réglette
+      { x: 238, y: 582, w: 262, h: 208, g: 1, only: ["simple"],                    // l'oriel, au-dessus des fleurs : sa réglette
         show: { bar: { x0: 277, x1: 455, y: 607 }, ambient: 0.5 } },
-      { x: 182, y: 590, w: 38, h: 200, g: 1, show: { ambient: 0.62 } },            // ses deux pans
-      { x: 518, y: 590, w: 40, h: 200, g: 1, show: { ambient: 0.62 } },
-      { x: 676, y: 649, w: 140, h: 255, g: 1, interior: 1 },                       // la porte vitrée
-      { x: 676, y: 571, w: 140, h: 60, interior: 1 },                              // son imposte
-      { x: 205, y: 488, w: 330, h: 76, sign: 1 },                                  // l'enseigne
+      { x: 182, y: 590, w: 38, h: 200, g: 1, only: ["simple"], show: { ambient: 0.62 } },   // ses deux pans
+      { x: 518, y: 590, w: 40, h: 200, g: 1, only: ["simple"], show: { ambient: 0.62 } },
+      { x: 676, y: 649, w: 140, h: 255, g: 1, only: ["simple"], interior: 1 },     // la porte vitrée
+      { x: 676, y: 571, w: 140, h: 60, only: ["simple"], interior: 1 },            // son imposte
+      { x: 205, y: 488, w: 330, h: 76, only: ["simple"], sign: 1 },                // l'enseigne
       // Les deux appliques : leur VERRE seul (mesuré à la loupe), comme les lanternes des maisons.
-      { x: 590, y: 667, w: 20, h: 53, lamp: 1 }, { x: 840, y: 304, w: 17, h: 45, lamp: 1 },
+      // Elles brûlent aussi rideaux baissés (`fermee`) : on n'éteint pas une porte.
+      { x: 590, y: 667, w: 20, h: 53, lamp: 1, only: ["simple", "fermee"] },
+      { x: 840, y: 304, w: 17, h: 45, lamp: 1, only: ["simple", "fermee"] },
+      /* EN TRAVAUX : les vitres passées au blanc d'Espagne s'éclairent le soir
+         par-derrière (`wash`) — on travaille tard chez Carla. En px de SA
+         référence (`MG-entravaux.jpeg`), relevés sur le blanc. */
+      { x: 278, y: 213, w: 520, h: 250, wash: 1, only: ["travaux"] },
+      { x: 233, y: 592, w: 258, h: 250, g: 1, wash: 1, only: ["travaux"] },
+      { x: 177, y: 596, w: 30, h: 236, g: 1, wash: 1, only: ["travaux"] },
+      { x: 519, y: 597, w: 27, h: 234, g: 1, wash: 1, only: ["travaux"] },
+      { x: 672, y: 575, w: 141, h: 58, wash: 1, only: ["travaux"] },
     ],
-    variants: { simple: { src: "refs/boutique-garfield.jpg", crop: [30, 11, 1030, 968] } } },
+    /* LES RIDEAUX DE FER (Guillaume, 2026-09-27). L'état FERMÉ de la boutique
+       aboutie est une image peinte, `fermee` (`MG-fermee.jpeg` : rideaux
+       baissés et cadenassés sur la vitrine d'étage, la face de l'oriel et la
+       porte ; les pans de l'oriel restent vitrés). Quand l'état change sous les
+       yeux du joueur, un rideau DESSINÉ roule sur l'image ouverte
+       (`drawRollShutter`, FermeGame.js) jusqu'en bas, puis l'image fermée prend
+       le relais — et l'inverse à l'ouverture. Ses rectangles sont donc ceux des
+       rideaux PEINTS (relevés par différence entre les deux images), en px de
+       la référence ouverte : `top`, sous le caisson ou le bandeau d'où il sort ;
+       `bottom`, où il s'arrête (l'appui, le seuil — celui de l'oriel s'arrête
+       au-dessus des fleurs, qui sont devant lui).
+       ⚠️ Aucune vitre n'est liée à un rideau par son rang : la part d'une vitre
+       que cache un rideau se calcule par recouvrement (`queueTownShop`) ; une
+       vitre qu'aucun rideau ne couvre (les pans, l'enseigne) s'éteint à mesure
+       que les rideaux descendent. */
+    shutters: [
+      { x0: 282, x1: 806, top: 208, bottom: 450 },   // la vitrine d'étage, sous sa corniche
+      { x0: 240, x1: 494, top: 586, bottom: 790 },   // la face de l'oriel, sous l'enseigne, jusqu'aux fleurs
+      { x0: 672, x1: 829, top: 566, bottom: 925 },   // la porte vitrée et son imposte, sous le caisson
+    ],
+    /* LES ÉTAPES (Guillaume, 2026-09-27) : `neutre` tant que Carla n'habite pas
+       la vallée (un local vide, rien d'une boutique), `travaux` ses deux premiers
+       jours (`CARLA_SHOP_WORKS_DAYS`), puis `simple` (ouverte) ou `fermee` selon
+       son jour de service — `garfieldStage`. Toutes au MÊME cadre : `at` dit de
+       combien le dessin d'une image est décalé dans son fichier (mesuré par
+       recouvrement des silhouettes), pour que la fabrication découpe au même
+       endroit du bâtiment et que le jeu les pose toutes au même point. */
+    variants: {
+      simple:  { src: "refs/boutique-garfield.jpg", crop: [30, 11, 1030, 968] },
+      fermee:  { src: "refs/MG-fermee.jpeg",        crop: [30, 11, 1030, 968] },
+      neutre:  { src: "refs/MG-neutre.jpeg",        crop: [30, 11, 1030, 968], at: [-1, 1] },
+      travaux: { src: "refs/MG-entravaux.jpeg",     crop: [30, 11, 1030, 968], at: [-2, 1] },
+    } },
   /* LE SALON DE COIFFURE (`refs/Salon.jpg`, Guillaume, 2026-09-27) — art déco,
      laiton et bleu nuit, deux vitrines à trois spots, une porte vitrée au
      milieu. ⚠️ Comme la Maison Garfield, il REMPLIT son rectangle (`fit: "site"`,

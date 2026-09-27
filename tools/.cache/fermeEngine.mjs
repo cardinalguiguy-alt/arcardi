@@ -7606,6 +7606,35 @@ export function generateTownWorld() {
      une case molle sans dessin, c'est-à-dire l'inverse exact d'un mur
      invisible — un trou invisible. */
   /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-27 (phase 9) — AUCUN LAMPADAIRE SUR L'ALLÉE D'UNE MAISON.
+     ───────────────────────────────────────────────────────────────────────
+     L'audit l'a vu en (28,68) et (60,68) : la grille de la rue principale (un
+     poteau toutes les huit cases, `lampRowN`) est posée AVANT que les parcelles
+     percent leur allée, et son test de sol ne pouvait donc pas la voir — le
+     poteau restait planté dans l'allée, plein, une case sur deux du chemin de la
+     porte bouchée. On le décale d'une case, côté jardin d'abord (il éclaire
+     alors l'entrée, comme un réverbère de portail), sur une case libre qui
+     n'est ni une allée ni un chemin. ⚠️ PASSE FINALE, SANS TIRAGE (§4), et
+     AVANT la passe des feuillus juste en dessous, pour qu'elle voie le poteau
+     à sa nouvelle place. */
+  {
+    const onAlley = new Set();
+    for (let k = 0; k < alleys.length; k += 2) onAlley.add(id(alleys[k], alleys[k + 1]));
+    for (const p of props) {
+      if (p.kind !== "lamp" || !onAlley.has(id(p.x, p.y))) continue;
+      for (const dx of [-1, 1, -2, 2]) {
+        const nx = p.x + dx;
+        if (!inMap(nx, p.y)) continue;
+        const ni = id(nx, p.y);
+        if (onAlley.has(ni) || solid[ni] || objects[ni] !== C.O_NONE) continue;
+        if (ground[ni] === C.G_PATH || ground[ni] === C.G_PATH_STONE) continue;
+        if (props.some(q => q.x === nx && q.y === p.y)) continue;
+        solid[id(p.x, p.y)] = 0; solid[ni] = 1; p.x = nx;
+        break;
+      }
+    }
+  }
+  /* ═══════════════════════════════════════════════════════════════════════
      2026-09-25 (phase 2 de la feuille de route graphique) — AUCUN FEUILLU
      DEVANT UNE LANTERNE.
      ───────────────────────────────────────────────────────────────────────
@@ -7711,6 +7740,14 @@ export function generateTownWorld() {
     const doorX = R.x + 2, doorY = R.y + C.TOWN_HOUSE_H;
     const street = C.TOWN_ST_ROWS.find((r) => r >= doorY && r - doorY <= 8);
     for (let y = doorY; y < (street === undefined ? doorY + 3 : street); y++) for (const dx of [0, 1]) clearTree(doorX + dx, y);
+    /* ⚠️ 2026-09-27 (phase 9, audit) — ET RIEN QUI CACHE LA PORTE. Dégager
+       l'allée ne suffisait pas : un feuillu en (210,144), une colonne à côté
+       d'elle et deux rangées devant, se dessine sur trois cases de large et
+       quatre de haut — il passait DEVANT la porte. On dégage donc, sur les
+       quatre rangées devant la porte, tout arbre dont la silhouette couvrirait
+       la porte (deux colonnes de part et d'autre de l'allée). Le bois reste
+       tout autour : l'allée reste envahie, la porte se voit. */
+    for (let y = doorY; y < doorY + 4; y++) for (let dx = -2; dx <= 3; dx++) clearTree(doorX + dx, y);
   }
 
   const soft = new Uint8Array(W * H);
@@ -8704,7 +8741,8 @@ export function townTaxiStops(tw) {
     ["hall",     C.TOWN_HALL.x + C.TOWN_HALL.w / 2,       C.TOWN_HALL.y + C.TOWN_HALL.h + 2],
     ["church",   C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2,   C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2],
     ["court",    C.TOWN_COURT.x + C.TOWN_COURT.w / 2,     C.TOWN_COURT.y + C.TOWN_COURT.h + 2],
-    ["boutique", C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 2],
+    // La Maison Garfield : sa porte PEINTE (x+5,8), pas le milieu de son rectangle (2026-09-27).
+    ["boutique", C.townShopDoorX(C.TOWN_SHOP_MODELS.garfield), C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 2],
     ["park",     C.TOWN_KIOSK.x + 1,                      C.TOWN_KIOSK.y + 4],
     ["lake",     C.TOWN_PIER.x + C.TOWN_PIER.w / 2,       C.TOWN_LAKE.y - 3],
     ["belvedere",C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h + 2],

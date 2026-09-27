@@ -5094,7 +5094,9 @@ export const FERME_STR = {
     devBuildChat: (who, n) => n > 0 ? `🛠️ ${who} a terminé ${n} construction${n > 1 ? "s" : ""}/culture${n > 1 ? "s" : ""} en cours.` : `🛠️ ${who} a cherché des constructions en cours : il n'y en avait aucune.`,
     salonPlate: "OUVERTURE PROCHAINE",
     promptTownBoutique: "E : entrer à la Maison Garfield",
-    promptTownBoutiqueShut: "E : Maison Garfield (fermée)",
+    promptTownBoutiqueShut: "E : local commercial (vide)",
+    promptTownBoutiqueWorks: "E : Maison Garfield (en travaux)",
+    promptTownBoutiqueOff: "E : Maison Garfield (fermée aujourd'hui)",
     promptTownSalon: "E : salon de coiffure (ouverture prochaine)",
     promptTownNews: "E : lire le tableau des nouvelles",
     promptTownBench: "E : s'asseoir",
@@ -5198,7 +5200,9 @@ export const FERME_STR = {
     // La boutique.
     boutiqueTitle: "Maison Garfield",
     boutiqueSub: "Haute-Ville — sur rendez-vous",
-    boutiqueLockedToast: "🔒 Le local est loué, les malles sont dedans, et Carla Garfield vit encore ailleurs. Faites-en une résidente de la vallée et la porte s'ouvrira.",
+    boutiqueLockedToast: "🔒 Le local est vide. On dit qu'une certaine Carla Garfield l'aurait loué, mais elle vit encore ailleurs : faites-en une résidente de la vallée, et elle s'y installera.",
+    boutiqueWorksToast: (d) => "🔨 Carla prépare sa boutique : les vitres sont passées au blanc. Ouverture " + (d <= 1 ? "demain" : "dans " + d + " jours") + ".",
+    newsBoardBoutiqueWorks: (d) => "Maison Garfield : travaux en cours, ouverture " + (d <= 1 ? "demain" : "dans " + d + " jours") + ", Haute-Ville.",
     boutiqueSlotHat: "Chapeaux",
     boutiqueSlotScarf: "Écharpes",
     boutiqueSlotOutfit: "Tenues",
@@ -5331,9 +5335,9 @@ export const FERME_STR = {
        DISENT la règle : un refus muet et une porte close sans raison passent
        tous les deux pour des bogues. */
     kickRefused: "💅 Carla Garfield n'est employée par personne ici. Elle partira si elle veut.",
-    boutiqueClosedToast: (d) => d === 0
+    boutiqueClosedToast: (d, n) => d === 0
       ? "💅 La Maison Garfield ouvre aujourd'hui — Carla n'est pas encore arrivée."
-      : "💅 Fermé. Carla ne tient boutique qu'un jour par semaine : rendez-vous dans " + d + " jour" + (d > 1 ? "s" : "") + ".",
+      : "💅 Fermé. Carla ne tient boutique " + (n > 1 ? "que " + n + " jours" : "qu'un jour") + " par semaine : rendez-vous dans " + d + " jour" + (d > 1 ? "s" : "") + ".",
     carlaOffDuty: "💅 Carla n'est pas de service aujourd'hui.",
     chatMarketSell: (gain, bonus, money) => "Vendu au marché : " + gain + " or (+" + bonus + " vs le bac). Caisse : " + money + ".",
     /* Zip 431 — ⚠️ CE MESSAGE EST DEVENU LA RÉPONSE À TOUTE VENTE TENTÉE
@@ -6815,7 +6819,9 @@ export const FERME_STR = {
     devBuildChat: (who, n) => n > 0 ? `🛠️ ${who} finished ${n} construction${n > 1 ? "s" : ""}/crop${n > 1 ? "s" : ""} in progress.` : `🛠️ ${who} looked for constructions in progress: there were none.`,
     salonPlate: "OPENING SOON",
     promptTownBoutique: "E: enter Maison Garfield",
-    promptTownBoutiqueShut: "E: Maison Garfield (closed)",
+    promptTownBoutiqueShut: "E: shop premises (empty)",
+    promptTownBoutiqueWorks: "E: Maison Garfield (under works)",
+    promptTownBoutiqueOff: "E: Maison Garfield (closed today)",
     promptTownSalon: "E: hair salon (opening soon)",
     promptTownNews: "E: read the notice board",
     promptTownBench: "E: sit down",
@@ -6903,7 +6909,9 @@ export const FERME_STR = {
     newsBoardClose: "Close",
     boutiqueTitle: "Maison Garfield",
     boutiqueSub: "Upper Town — by appointment",
-    boutiqueLockedToast: "🔒 The premises are leased, the trunks are inside, and Carla Garfield still lives elsewhere. Make her a resident of the valley and the door will open.",
+    boutiqueLockedToast: "🔒 The premises are empty. Word is a certain Carla Garfield has leased them, but she still lives elsewhere: make her a resident of the valley and she will move in.",
+    boutiqueWorksToast: (d) => "🔨 Carla is getting her shop ready: the windows are whitewashed. Opening " + (d <= 1 ? "tomorrow" : "in " + d + " days") + ".",
+    newsBoardBoutiqueWorks: (d) => "Maison Garfield: works under way, opening " + (d <= 1 ? "tomorrow" : "in " + d + " days") + ", Upper Town.",
     boutiqueSlotHat: "Hats",
     boutiqueSlotScarf: "Scarves",
     boutiqueSlotOutfit: "Outfits",
@@ -7018,9 +7026,9 @@ export const FERME_STR = {
     touchZoomIn: "Zoom in", touchZoomOut: "Zoom out", // 2026-09-22 ter
     btnZoomReset: "🔍 Reset zoom", // 2026-09-23 — always-on button, back to the middle notch
     kickRefused: "💅 Carla Garfield works for nobody here. She'll leave when she chooses to.",
-    boutiqueClosedToast: (d) => d === 0
+    boutiqueClosedToast: (d, n) => d === 0
       ? "💅 Maison Garfield opens today — Carla hasn't arrived yet."
-      : "💅 Closed. Carla only keeps shop one day a week: come back in " + d + " day" + (d > 1 ? "s" : "") + ".",
+      : "💅 Closed. Carla only keeps shop " + (n > 1 ? n + " days" : "one day") + " a week: come back in " + d + " day" + (d > 1 ? "s" : "") + ".",
     carlaOffDuty: "💅 Carla is off duty today.",
     chatMarketSell: (gain, bonus, money) => "Sold at the market: " + gain + " gold (+" + bonus + " vs the bin). Till: " + money + ".",
     toastFarMarket: "🎪 Selling only happens at the fairground market in Valley Town. Take the train!",

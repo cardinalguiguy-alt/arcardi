@@ -7,13 +7,14 @@ Une maison par image (une planche de dix ferait ~300 px par maison, flou au zoom
 | # | Modèle | 4e image jointe | À enregistrer dans `refs/` |
 |---|---|---|---|
 | 1 | N3 — **mise de côté** (Guillaume, 2026-09-27 : la série se fait « sans N3 ») | `maison-n1.jpg` | `maison-n3.jpg`, `maison-n3-riche.jpg` — **pas d'enrichie** |
-| 2 | S2 — ⚠️ **relance à faire** (premier essai porte centrée, voir sa ligne) | `maison-s1.jpg` | `maison-s2.jpg`, `maison-s2-enrichie.jpg`, `maison-s2-riche.jpg` |
+| 2 | S2 — ✅ **EN JEU (2026-09-27), porte CENTRÉE gardée** (sa propre largeur, `center`, voir sa ligne) ; **version de base SEULE** (Guillaume : pas de chaumière enrichie) | — | fait : `maison-s2.jpeg` |
 | 3 | S3 — ✅ **EN JEU (2026-09-27), devenue la première LARGE** (9 cases à l'échelle de sa porte) | — | fait : `maison-s3.jpeg`, `-bordeaux` (son enrichie), `-riche` |
 | 4 | S4 — ✅ **EN JEU (2026-09-27)** | — | fait : `Maison-s4.jpeg`, `-enrichie`, `-riche` |
 | 5 | W1 | **`maison-s3.jpeg`** (S3 fixe l'emprise large) | `maison-w1.jpg`, `-enrichie`, `-riche` |
 | 6 | W2 | **`maison-s3.jpeg`** | idem en `w2` |
 | 7 | W3 | **`maison-s3.jpeg`** | idem en `w3` |
 | 8 | SALON — ✅ **EN JEU (2026-09-27)**, comme la Maison Garfield | — | fait : `Salon.jpg` |
+| 8 bis | MAISON GARFIELD, SES ÉTAPES — ✅ **EN JEU (2026-09-27)** : neutre, travaux, fermée (rideaux cadenassés) | — | fait : `MG-neutre.jpeg`, `MG-entravaux.jpeg`, `MG-fermee.jpeg` |
 | 9 | GARE — ⚠️ **en attente**, voir sa ligne plus bas (emplacement de 4 cases) | `maison-s1.jpg` | `gare.jpg` — une image |
 
 ⚠️ **Les étroites n'ont pas d'enrichie** : compté le 2026-09-26, les 8 parcelles étroites tombent en
@@ -61,8 +62,10 @@ seul), puis `node tools/build-maison-sprites.mjs`, puis la planche `tools/out/ma
 (menu dev, « les maisons de la vieille ville »).
 
 ⚠️ **DÉCIDÉ AVEC GUILLAUME LE 2026-09-26 : trois versions par maison** — simple, enrichie (plus de
-caractère, JAMAIS plus pauvre), riche — réparties **PAR QUARTIER** (riches autour de la place et de la
-mairie, enrichies vers le lac et les artisans, simples entre les deux ; pure fonction de la position).
+caractère, JAMAIS plus pauvre), riche — réparties **PAR PRESTIGE DE L'ADRESSE** depuis le 2026-09-27 (Guillaume : « les plus belles dans
+les zones les plus prisées, les plus simples loin des points d'intérêt ») : distance au lieu prisé le
+plus proche (place, parc, église, tribunal, terrasse ; marché et lac +10), riche sous 17 cases, enrichie
+sous 30, simple au-delà (`townHouseStanding` ; pure fonction de la position).
 Les trois versions d'une maison ont la MÊME silhouette : un seul relevé de repères, une seule collision.
 ⚠️ Plus de `duplex.png` : premier essai, Gemini a recopié son angle isométrique. La 4e image sert
 l'échelle, le détail et le rendu — PAS ses couleurs ni sa forme, sinon toutes les maisons se ressemblent.
@@ -116,8 +119,10 @@ a tall narrow stone house squeezed between two neighbours, clearly taller than w
 ```
 a stone cottage, about as wide as it is tall and exactly as wide as the house in the fourth image, under a thick rounded thatched roof with a grassy ridge and neatly trimmed eaves. One eyebrow dormer set into the thatch. The front door is a sturdy wooden door under a heavy stone lintel, left of centre at about one third of the façade from the left, at the same place and the same size as the door of the fourth house. One small deep-set window to the left of the door and two to its right, with wooden frames. A stone chimney rising through the thatch. No gutter and no drainpipe: the thatch overhangs instead.
 ```
-  ⚠️ Premier essai (`refs/maison-s2.jpeg`, 2026-09-27) : porte CENTRÉE malgré la ligne — 1,82 H | 1,84 H
-  pour 0,75–1,45 | 2,5–3,2, un seul carreau de chaque côté. Relance, dans la même conversation :
+  ✅ Premier essai (`refs/maison-s2.jpeg`, 2026-09-27) : porte CENTRÉE malgré la ligne (1,85 H | 1,86 H) —
+  **GARDÉE** (Guillaume : « je préfère ça visuellement ») : S2 a sa propre largeur (`center`, emprise
+  x+0..x+5, centrée sur l'allée) et ses parcelles, loin des lieux prisés (`TOWN_HOUSE_CENTER_AT`). Plus de
+  relance ; l'ENRICHIE et la RICHE se font dans la même conversation. Relance d'autrefois, gardée pour mémoire :
 ```
 Same cottage, same size, same style and same materials, but the front door must NOT be centred: move the door, its heavy stone lintel, the doormat and the wall lamp to the LEFT, so that the door stands at about one third of the façade from the left. Then there is room for only ONE small window to the left of the door, and TWO small windows with flower boxes to the right of the door. Keep the eyebrow dormer and the chimney where they are. Keep the flat pure magenta #FF00FF background.
 ```
@@ -180,6 +185,17 @@ Emprises sur la carte : gare 4×3 (`TOWN_STATION`), Maison Garfield 8×5 (`TOWN_
   in the fourth image ». Le quai (x 4..5, dès y = 66) n'est pas touché.
 ```
 a small country railway station, about 1.6 times as wide as it is tall, its single ordinary front door exactly in the middle of the façade: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns along its front, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard with no letters on the gable. No tracks, no train, no platform.
+```
+- **MAISON GARFIELD, LOCAL VIDE** — ✅ remplacé par les images de Guillaume (`MG-neutre.jpeg`,
+  `MG-entravaux.jpeg`, `MG-fermee.jpeg`) ; le prompt ci-dessous a donné `MG-fermee` (Gemini a baissé des
+  rideaux de fer au lieu de tirer des rideaux, et gardé l'enseigne), gardé pour mémoire. Décision
+  d'origine (2026-09-27) : tant que Carla n'est pas résidente, le bâtiment est NEUTRE. **Conversation neuve, UNE
+  seule image jointe : `refs/boutique-garfield.jpg`** — pas de BASE, pas de monuments : c'est une retouche
+  de la même image, comme la passe RICHE. Même silhouette au pixel près = mêmes repères, même collision ;
+  le jeu choisit l'image selon que Carla est résidente. Rideaux crème tirés (pas de vitrine vide et nue,
+  qui ferait abandonné) ; enseigne vierge (le nom peint disparaît avec les articles).
+```
+Start again from this attached image. Keep exactly this building: same angle, same silhouette, same size, same pixel-art style, same position and size of every opening (upper display window, bay window, glass door and its transom), same roof, same colours, same wall lamps, same drainpipe, same flower box, same doormat. Only one thing changes: this shop is empty and has no tenant yet. Remove every item for sale: no hats, no hat stands, no mannequin heads, no ties, no belts, no scarves, no bags, no jewellery, no clothes of any kind, nothing hanging on the rails. Behind the upper display window, behind the bay window and behind the glass door, plain cream linen curtains are drawn and closed, hiding the inside. The signboard above the bay window is blank: plain dark green painted wood, no letters, no monogram, no gold ornament. The building must look neat and ordinary, not abandoned: no dust, no broken glass, no posters, no "for rent" sign, no text anywhere. Keep the flat pure magenta #FF00FF background.
 ```
 - **MAISON GARFIELD, chapelier et tailleur** — ✅ faite (`refs/boutique-garfield.jpg`), gardée pour mémoire
 ```

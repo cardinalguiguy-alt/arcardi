@@ -198,6 +198,30 @@ for (const cx of C.TOWN_ST_COLS) {
     ok(`commerce « ${mk} » : la carte bloque ses ${f.w} colonnes de mur et libère les ${b.w - f.w} autres`, wrong.length === 0,
        wrong.slice(0, 6).join(" ") || `${b.w * b.h} cases lues`);
   }
+  /* 2026-09-27 — LES ÉTAPES DE LA MAISON GARFIELD (`C.garfieldStage`) : neutre
+     sans Carla ; deux jours de travaux depuis `sinceDay` ; puis ouverte ses jours
+     de service, fermée les autres ; aboutie d'emblée pour une résidente d'avant
+     (sans `sinceDay`). Et chaque étape a son image, au même cadre. Falsifié le
+     jour de son écriture : `<` changé en `<=` dans `garfieldStage` → « travaux travaux travaux… ». */
+  {
+    const ro = C.VISITOR_ROSTER.find(r => r.rid === C.CARLA_RID);
+    const sd = (d) => E.isShopDay(ro, d);
+    const got = [], want = [];
+    for (let d = 10; d < 20; d++) {
+      got.push(C.garfieldStage(true, 10, d, sd));
+      want.push(d < 10 + C.CARLA_SHOP_WORKS_DAYS ? "travaux" : sd(d) ? "ouverte" : "fermee");
+    }
+    const old = C.garfieldStage(true, undefined, 12, sd);
+    ok("Maison Garfield : neutre sans Carla, deux jours de travaux, puis ouverte ou fermée selon son jour de service",
+       C.garfieldStage(false, 10, 11, sd) === "neutre" && got.join() === want.join() && old !== "travaux" && C.CARLA_SHOP_WORKS_DAYS === 2,
+       got.join(" "));
+    const firstOpen = got.indexOf("ouverte");
+    ok("Maison Garfield : « ouverture dans N jours » tombe sur le premier jour ouvert", C.garfieldDaysToOpen(10, 10, sd) === firstOpen,
+       `${C.garfieldDaysToOpen(10, 10, sd)} contre ${firstOpen}`);
+    const G = C.TOWN_SHOP_MODELS.garfield, vks = ["simple", "fermee", "neutre", "travaux"];
+    ok("Maison Garfield : chaque étape a son image, au même cadre", vks.every(v => G.variants[v] && C.TOWN_BITMAPS[C.townPaintedBitmapKey("garfield", v)]
+       && G.variants[v].crop.join() === G.variants.simple.crop.join()), vks.map(v => `${v} ${G.variants[v] ? G.variants[v].src : "—"}`).join(" · "));
+  }
   let bad = [], cells = 0;
   for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) {
     const f = C.townHouseFoot(h);

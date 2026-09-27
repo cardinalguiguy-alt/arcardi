@@ -29,7 +29,7 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
    case ne reste ici qu'en REPLI, et le hachage des coins comme la rampe du port
    n'ont plus qu'une seule écriture, là-bas. */
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau.mjs";
-import { townNoise } from "./fermeEngine.mjs";
+import { townNoise, seasonOf } from "./fermeEngine.mjs";
 import { buildFaunaSprites } from "./fauneArt.mjs";
 
 /* ---------------------------------------------------------------- PALETTE ---
@@ -947,6 +947,14 @@ export const TOWN_HOUSE_WINDOWS = [[16, 58], [70, 58]];
    (l'appelant pose alors sa terre battue). Deux replis, tous deux voulus :
    pas de couche `road` sur le monde, ou pas d'atlas `townRoad` sur les sprites.
    ══════════════════════════════════════════════════════════════════════════ */
+/* 2026-09-27 (phase 10) — un ton plus clair ou plus sombre (`d` ajouté aux trois
+   canaux) : l'arête éclairée et le côté à l'ombre d'un pavé calculé pixel par pixel. */
+function hexShift(hex, d) {
+  const v = parseInt(hex.slice(1), 16), cl = (q) => Math.max(0, Math.min(255, q + d));
+  return "#" + [cl(v >> 16), cl((v >> 8) & 255), cl(v & 255)].map((q) => q.toString(16).padStart(2, "0")).join("");
+}
+/* Le rayon (px) de la rosace de pavés autour de la fontaine de la place. */
+export const FTN_ROSE_R = 54;
 export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   const RS = S && S.townRoad;
   if (!RS || !tw.road) return false;
@@ -997,8 +1005,46 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
      les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
      la différence avec l'ancienne tuile unique est là. */
-  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick : RS.cobble;
+  const paved = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+    const gg = tw.ground[yy * tw.w + xx];
+    return gg === C.G_PATH || gg === C.G_PATH_STONE;
+  };
+  let atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick : RS.cobble;
+  if (rd === C.TR_ASPHALT && RS.asphaltVars) {
+    const v = waterHash(Math.floor(x / sup) * 7 + 3, Math.floor(y / sup) * 13 + 5) % (RS.asphaltVars.length + 1);
+    if (v) atlas = RS.asphaltVars[v - 1];
+  }
   ctx.drawImage(atlas, ax, ay, T, T, px, py, T, T);
+  /* 2026-09-27 (phase 10) — CE QUI FAIT UNE CHAUSSÉE, et qui dépend de la place
+     dans la chaussée (d'où ici, pas dans la tuile) : les TRACES DE ROUES, deux
+     bandes polies un rien plus claires par voie, aux bords rongés ; et le
+     CANIVEAU, une rangée de pavés au pied de chaque bordure (une rue bâtie
+     n'est pas une nappe posée). Le sens se lit sur les voisins goudronnés. */
+  if (rd === C.TR_ASPHALT) {
+    const isA = (xx, yy) => xx >= 0 && yy >= 0 && xx < tw.w && yy < tw.h && tw.road[yy * tw.w + xx] === C.TR_ASPHALT;
+    const horizRoad = isA(x - 1, y) || isA(x + 1, y);
+    if (horizRoad) {
+      let y0 = y; while (isA(x, y0 - 1)) y0--;
+      let y1 = y; while (isA(x, y1 + 1)) y1++;
+      const wPx = (y1 - y0 + 1) * T, off = (y - y0) * T, lanes = wPx >= 3 * T ? 2 : 1, laneW = wPx / lanes;
+      for (let l = 0; l < lanes; l++) for (const f of [0.28, 0.72]) {
+        const cy = Math.round(l * laneW + f * laneW) - off;
+        for (let k = 0; k < T; k++) {
+          const h = waterHash(x * T + k, (l * 2 + (f > 0.5 ? 1 : 0)) * 97 + 11);
+          const top = cy - 2 - (h & 1), bot = cy + 2 + ((h >> 1) & 1);
+          if (bot <= 0 || top >= T) continue;
+          ctx.fillStyle = "rgba(255,255,255,0.045)";
+          ctx.fillRect(px + k, py + Math.max(0, top), 1, Math.min(T, bot) - Math.max(0, top));
+        }
+      }
+    }
+    const side = (xx, yy) => !paved(xx, yy);
+    if (horizRoad) {
+      if (side(x, y - 1)) gutterCourse(ctx, x, y, px, py + KW, "n");
+      if (side(x, y + 1)) gutterCourse(ctx, x, y, px, py + T - KW - 3, "s");
+    }
+  }
 
   /* ⚠️ HORS-ZIP 2026-09-02 — LE MARQUAGE BLANC POINTILLÉ A ÉTÉ RETIRÉ, PAS
      REMPLACÉ. L'audit du même jour le pointait comme le détail le plus
@@ -1012,11 +1058,6 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
      donc le SOL : dallé (rue, allée, esplanade) → rien ; herbe, eau, marche →
      bordure. La place n'est pas coupée, les allées débouchent, les carrefours
      restent ouverts. */
-  const paved = (xx, yy) => {
-    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
-    const gg = tw.ground[yy * tw.w + xx];
-    return gg === C.G_PATH || gg === C.G_PATH_STONE;
-  };
   const kb = rd === C.TR_BRICK ? RS.kerbBrick : RS.kerb;
   if (!paved(x, y - 1)) ctx.drawImage(kb.n, ax, 0, T, KW, px, py, T, KW);
   if (!paved(x, y + 1)) ctx.drawImage(kb.s, ax, 0, T, KW, px, py + T - KW, T, KW);
@@ -1040,6 +1081,21 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   }
   if (F) softSpill(ctx, tw, F, x, y, px, py, 3);
   return true;
+}
+/* 2026-09-27 (phase 10) — LE CANIVEAU d'une chaussée goudronnée : une rangée de
+   pavés de granit sombres de trois pixels, posée au pied de la bordure, plus
+   basse qu'elle (un filet d'ombre côté trottoir). Le pas suit le MONDE. */
+function gutterCourse(ctx, x, y, px, py, side) {
+  const T = SPR_T;
+  for (let k = 0; k < T; k++) {
+    const w = x * T + k, joint = w % 5 === 4;
+    const tone = waterHash((w / 5) | 0, y * 3 + (side === "n" ? 1 : 2)) % 3;
+    ctx.fillStyle = joint ? "#3b3c40" : ["#66676b", "#6d6e71", "#5f6064"][tone];
+    ctx.fillRect(px + k, py, 1, 3);
+    if (!joint) { ctx.fillStyle = "#7b7c7f"; ctx.fillRect(px + k, py + (side === "n" ? 1 : 0), 1, 1); }
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(px, side === "n" ? py : py + 2, T, 1);
 }
 /* La bordure construite entre deux revêtements durs : des pavés de granit de
    trois pixels, joints d'un pixel, sur le côté `side` de la case. Le pas suit
@@ -1167,6 +1223,18 @@ export function townStairVertical(tw, x, y) {
   return Math.abs(at(x, y + 1) - at(x, y - 1)) >= Math.abs(at(x + 1, y) - at(x - 1, y));
 }
 
+/* 2026-09-27 (phase 10) — LA FAMILLE DE DALLAGE D'UNE CASE, par rang de lieu
+   (la cohérence sociale par quartier) : le MARCHÉ ; le CIVIQUE — la place et les
+   parvis des trois monuments (leur rectangle, deux cases de part et d'autre,
+   sept au sud : de quoi couvrir tout parvis que dalle `forecourt`) ; et les
+   TERRASSES pour tout le reste (Haute-Ville, belvédère, gare, quais). */
+const PAVE_CIVIC = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT].map((b) => ({ x: b.x - 2, y: b.y, w: b.w + 4, h: b.h + 7 }));
+const inR = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+export function townPavingFamily(x, y) {
+  if (inR(C.TOWN_MARKET, x, y)) return "market";
+  if (inR(C.TOWN_PLAZA, x, y) || PAVE_CIVIC.some((r) => inR(r, x, y))) return "civic";
+  return "terrace";
+}
 /* LE DALLAGE D'ESPLANADE, plus sa PIERRE DE BORD. ⚠️ LE BORD SE DÉDUIT DU
    VOISINAGE, jamais de la géométrie de `TOWN_PLAZA` : c'est ce qui le fait
    servir AUSSI les cinq parvis, le champ de foire, le quai et la terrasse de la
@@ -1177,7 +1245,20 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
   const RS = S && S.townRoad;
   if (!RS || !RS.flag) return false;
   const T = SPR_T, sup = RS.sup;
-  ctx.drawImage(RS.flag, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  /* 2026-09-27 (phase 10) — LA FAMILLE DU LIEU (`townPavingFamily`) : l'opus
+     civique, les pavés en éventail du marché, les dalles de grès des terrasses ;
+     et sur la place, la rosace de pavés autour de la fontaine. */
+  const fam = townPavingFamily(x, y);
+  const atlas = fam === "market" && RS.setts ? RS.setts : fam === "terrace" && RS.flagTerrace ? RS.flagTerrace : RS.flag;
+  ctx.drawImage(atlas, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  if (fam === "civic" && RS.fountainRose) {
+    const R = FTN_ROSE_R, fcx = (C.TOWN_FOUNTAIN.x + 1) * T, fcy = (C.TOWN_FOUNTAIN.y + 1) * T;
+    const sx = x * T - (fcx - R), sy = y * T - (fcy - R);
+    if (sx > -T && sy > -T && sx < 2 * R && sy < 2 * R) {
+      const x0 = Math.max(0, sx), y0 = Math.max(0, sy), x1 = Math.min(2 * R, sx + T), y1 = Math.min(2 * R, sy + T);
+      if (x1 > x0 && y1 > y0) ctx.drawImage(RS.fountainRose, x0, y0, x1 - x0, y1 - y0, px + (x0 - sx), py + (y0 - sy), x1 - x0, y1 - y0);
+    }
+  }
   /* ⚠️⚠️ 2026-09-25 (phase 2) — LES DEUX CASES DE LA FONTAINE SONT DU DALLAGE
      POUR LE DESSIN. Elles sont de l'EAU pour la collision (voir le rendu du
      sol, FermeGame.js), et ce test les prenait donc pour un bord de place :
@@ -1332,12 +1413,31 @@ export function drawTownWallDress(ctx, tw, x, y, px, py, fh) {
 /* Le côté d'une terrasse (est ou ouest), vu de dessus : le chaperon qui tourne,
    au lieu du trait sombre du 425 — c'est lui qui montre que le mur a une
    ÉPAISSEUR. Joints au pas du monde, comme le chaperon de face. */
+/* ⚠️ 2026-09-27 (phase 10, audit : le rebord ouest de la Haute-Ville, « un trait
+   de 1 px entre deux verts, sans lèvre ni ombre — rien ne dit qu'on ne passe
+   pas ») — LE CHAPERON FAIT CINQ PIXELS, ET LE PIED A SON OMBRE. Un mur qui court
+   du nord au sud, vu de haut, ne montre que son sommet : c'est donc le sommet
+   qui doit tout dire — des pierres jointoyées, l'arête du côté du vide sombre
+   (elle tombe), une arête claire côté terrasse — et l'ombre d'occlusion à son
+   pied, sur la case d'en bas (`drawTownWallSideFoot`). */
 export function drawTownWallSide(ctx, x, y, px, py, side) {
-  const T = SPR_T, bx = side < 0 ? px : px + T - 3;
-  const cols = side < 0 ? ["#a39e93", "#d2cdc1", "#bdb8ac"] : ["#bdb8ac", "#d2cdc1", "#a39e93"];
-  for (let k = 0; k < 3; k++) { ctx.fillStyle = cols[k]; ctx.fillRect(bx + k, py, 1, T); }
-  ctx.fillStyle = "#8e8a80";
-  for (let q = 0; q < T; q++) if ((y * T + q) % 7 === 0) ctx.fillRect(bx, py + q, 3, 1);
+  const T = SPR_T, W = 5, bx = side < 0 ? px : px + T - W;
+  // De l'extérieur (côté vide) vers l'intérieur (côté terrasse).
+  const cols = ["#7a766d", "#b7b2a6", "#c4bfb3", "#d4cfc3", "#aaa598"];
+  for (let k = 0; k < W; k++) { ctx.fillStyle = cols[k]; ctx.fillRect(side < 0 ? bx + k : bx + W - 1 - k, py, 1, T); }
+  // Les joints des pierres, au pas de 7 px du monde, et une pierre sur trois un ton plus chaude.
+  for (let q = 0; q < T; q++) {
+    const w = y * T + q;
+    if (w % 7 === 0) { ctx.fillStyle = "#8e8a80"; ctx.fillRect(bx, py + q, W, 1); }
+    else if (((w / 7) | 0) % 3 === 1) { ctx.fillStyle = "rgba(170,140,100,0.12)"; ctx.fillRect(bx + (side < 0 ? 1 : 0), py + q, W - 1, 1); }
+  }
+}
+/* L'ombre au pied d'un mur est-ouest, sur la case BASSE voisine (`side` : le
+   côté où se dresse le mur, −1 à l'ouest, +1 à l'est). */
+export function drawTownWallSideFoot(ctx, px, py, side) {
+  const T = SPR_T, x0 = side < 0 ? px : px + T - 4;
+  ctx.fillStyle = "rgba(20,26,16,0.30)"; ctx.fillRect(side < 0 ? x0 : x0 + 2, py, 2, T);
+  ctx.fillStyle = "rgba(20,26,16,0.13)"; ctx.fillRect(side < 0 ? x0 + 2 : x0, py, 2, T);
 }
 /* L'ombre que le mur porte au pied, sur la case d'EN DESSOUS (la lumière vient
    du nord-ouest, par-dessus la terrasse). Posée par cette case-là, après son
@@ -1746,13 +1846,27 @@ export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
       const cell = layer[pos][c][vr];
       ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
     }
-    // Les petites choses semées : une case sur quarante-cinq, jamais au bord d'une allée (l'herbe y est usée).
+    /* Les petites choses semées, SELON LE QUARTIER (2026-09-27, phase 10) :
+       riche, une pâquerette de loin en loin (une case sur 90) ; classe moyenne,
+       trèfle, pâquerettes et cailloux (une sur 20) ; plus pauvre, un pré — herbe
+       folle, terre nue, pissenlits, cailloux, trèfle, et la taupinière (une sur
+       6). Jamais au bord d'une allée (l'herbe y est usée). */
+    const rk = F.rank[y * tw.w + x];
     const h = waterHash(x * 89 + 7, y * 57 + 3);
-    if (h % 45 === 0 && !F.worn[y * tw.w + x]) {
-      const kind = (h >>> 8) % 50 === 0 ? 3 : (h >>> 8) % 3;       // une taupinière pour cinquante semis : un événement, pas un motif
+    const every = rk === 0 ? 90 : rk === 1 ? 20 : 6;   // ⚠️ premier jet à 26 et 11 : au cran 5, le pré ne montrait que deux cailloux
+    if (h % every === 0 && !F.worn[y * tw.w + x] && GL.details.length > 6) {
+      const pool = rk === 0 ? [1] : rk === 1 ? [0, 1, 1, 2] : [4, 4, 5, 6, 2, 0, 4, 5];
+      const kind = rk === 2 && (h >>> 8) % 70 === 0 ? 3 : pool[(h >>> 8) % pool.length];   // la taupinière : un événement, pas un motif
       const cell = GL.details[kind][(h >>> 13) % 3];
       ctx.drawImage(cell.img, cell.sx, cell.sy, 8, 8, px + 1 + ((h >>> 16) % 7), py + 1 + ((h >>> 19) % 7), 8, 8);
     }
+  }
+  /* LA TONTE : une pelouse de square, et l'herbe des quartiers riches, portent
+     des bandes de tonte — deux cases claires, deux sombres, à peine. C'est le
+     détail qui dit « quelqu'un tond ici » sans poser un seul objet. */
+  if (GL && (g0 === C.G_TOWN_LAWN || (g0 === C.G_GRASS && townGrassField(tw).rank[y * tw.w + x] === 0))) {
+    ctx.fillStyle = (y >> 1) & 1 ? "rgba(0,0,0,0.035)" : "rgba(255,255,230,0.045)";
+    ctx.fillRect(px, py, T, T);
   }
   /* Le DÉBORD d'un sentier meuble voisin (voir `drawTownRoadTile`) : sur la
      prairie comme sur la pelouse d'un square, jamais ailleurs. */
@@ -1791,21 +1905,35 @@ export function townGrassField(tw) {
   };
   const shoreAt = (xx, yy) => xx >= 0 && yy >= 0 && xx < W && yy < H && tw.shore && tw.shore[yy * W + xx] > 0;
   const dry = new Uint8Array(W1 * (H + 1)), lush = new Uint8Array(W1 * (H + 1)), worn = new Uint8Array(W * H);
+  /* ⚠️ 2026-09-27 (phase 10) — LE RANG SOCIAL DE CHAQUE CASE (`C.townRankAt`,
+     la règle des maisons) : 0 riche, 1 classe moyenne, 2 plus pauvre. Il règle
+     les plaques ici et le semis et la tonte au dessin (Guillaume : « selon le
+     quartier » — une pelouse tondue près des lieux prisés, un pré au loin). */
+  const rank = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) rank[y * W + x] = C.townRankAt(x + 0.5, y + 0.5);
+  const rankC = (cx, cy) => rank[Math.min(H - 1, cy) * W + Math.min(W - 1, cx)];
   for (let cy = 0; cy <= H; cy++) for (let cx = 0; cx <= W; cx++) {
     let nearPath = false, nearShore = false;
     for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
       if (paved(cx + dx, cy + dy)) nearPath = true;
       if (shoreAt(cx + dx, cy + dy)) nearShore = true;
     }
-    const dN = townNoise(cx, cy, 7.5, 41), lN = townNoise(cx, cy, 9, 43);
+    /* ⚠️ DEUX OCTAVES : sur une seule, les plaques sortaient en DISQUES à bord
+       tramé (l'audit : « on voit des ronds »). La seconde, trois fois plus fine,
+       déchire leur bord. */
+    const dN = 0.72 * townNoise(cx, cy, 7.5, 41) + 0.28 * townNoise(cx, cy, 2.6, 53) + 0.14;
+    const lN = 0.72 * townNoise(cx, cy, 9, 43) + 0.28 * townNoise(cx, cy, 3.1, 59) + 0.14;
+    const rk = rankC(cx, cy);
     const wear = nearPath ? 0.62 * (0.5 + 0.5 * townNoise(cx, cy, 3.2, 47)) : 0;
-    dry[cy * W1 + cx] = dN + wear > 0.40 ? 1 : 0;
-    lush[cy * W1 + cx] = !dry[cy * W1 + cx] && lN + (nearShore ? 0.5 : 0) > 0.42 ? 1 : 0;
+    // Riche : un gazon entretenu, qui ne sèche que sous les pas ; pauvre : un pré qui grille par plaques.
+    const dryBias = rk === 0 ? -0.34 : rk === 2 ? 0.1 : 0;
+    dry[cy * W1 + cx] = dN + wear * (rk === 0 ? 0.6 : 1) + dryBias > 0.40 ? 1 : 0;
+    lush[cy * W1 + cx] = !dry[cy * W1 + cx] && lN + (nearShore ? 0.5 : 0) + (rk === 0 ? -0.3 : 0) > 0.42 ? 1 : 0;
   }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     worn[y * W + x] = paved(x - 1, y) || paved(x + 1, y) || paved(x, y - 1) || paved(x, y + 1) ? 1 : 0;
   }
-  F = { dry, lush, worn };
+  F = { dry, lush, worn, rank };
   GRASS_FIELDS.set(tw, F);
   return F;
 }
@@ -1815,7 +1943,7 @@ export function townGrassField(tw) {
    ⚠️ LA VARIANTE VIENT DU HACHAGE DE LA CASE, jamais d'un tirage : deux cases
    voisines doivent différer, et la même case doit être identique chez les deux
    joueurs et d'une image à l'autre. */
-export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
+export function drawTownBloomTile(ctx, S, tw, x, y, px, py, season) {
   const BS = S && S.townBloom;
   const b = (BS && tw.bloom) ? tw.bloom[y * tw.w + x] : 0;
   if (!b || !BS.surf || !BS.surf[b - 1]) return false;
@@ -1855,7 +1983,10 @@ export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
   /* ⚠️ LA CASE SE DÉCOUPE DANS LE PAVÉ, elle ne se choisit plus dans une liste :
      c'est ce qui fait qu'une tige traverse le bord d'une case au lieu de
      s'arrêter dessus (voir `townBloomSurface`). */
-  ctx.drawImage(BS.surf[b - 1], (x % BS.sup) * SPR_T, (y % BS.sup) * SPR_T, SPR_T, SPR_T, px, py, SPR_T, SPR_T);
+  // 2026-09-27 (phase 10) — le massif de la SAISON (`seasonal`), la prairie en toute saison.
+  const sk = season || seasonOf().key;
+  const surf = (BS.seasonal && BS.seasonal[sk] && BS.seasonal[sk][b - 1]) || BS.surf[b - 1];
+  ctx.drawImage(surf, (x % BS.sup) * SPR_T, (y % BS.sup) * SPR_T, SPR_T, SPR_T, px, py, SPR_T, SPR_T);
   return true;
 }
 
@@ -11305,9 +11436,29 @@ export function buildSprites() {
      rang suivant, et la couture reviendrait. */
   function roadSplit(total, n, r, jitter) {
     const w = new Array(n).fill(Math.floor(total / n));
+    /* ⚠️⚠️ 2026-09-27 — CETTE BOUCLE A UN DÉFAUT, ET ON LE GARDE EXPRÈS. Elle
+       relit `w[0]`, qu'elle vient d'incrémenter : un reste de 2 ou plus
+       n'ajoute qu'UN pixel, et la somme ne fait plus `total`. La corriger
+       change les tirages de tout ce qui l'appelle avec un tel reste — les
+       marches de l'escalier du tribunal sont sorties avec 23 teintes au lieu
+       de 42 (`render-escaliers`). Les dessins qui ont été réglés dessus le
+       gardent ; tout usage NEUF passe par `roadSplitExact`, juste en dessous. */
     for (let k = 0; k < total - w[0] * n; k++) w[k]++;
     // Le jitter est un TRANSFERT (on prend à l'un, on donne à l'autre) : la
     // somme est invariante par construction, jamais recalculée.
+    for (let k = 0; k < n * 3; k++) {
+      const a = (r() * n) | 0, b = (r() * n) | 0;
+      if (a === b || w[a] <= jitter[0] + 1 || w[b] >= jitter[1]) continue;
+      w[a]--; w[b]++;
+    }
+    return w;
+  }
+  /* La même répartition, JUSTE : le reste se calcule une fois (2026-09-27, les
+     dallages de la phase 10 ; voir la note de `roadSplit`). */
+  function roadSplitExact(total, n, r, jitter) {
+    const w = new Array(n).fill(Math.floor(total / n));
+    const rem = total - w[0] * n;
+    for (let k = 0; k < rem; k++) w[k]++;
     for (let k = 0; k < n * 3; k++) {
       const a = (r() * n) | 0, b = (r() * n) | 0;
       if (a === b || w[a] <= jitter[0] + 1 || w[b] >= jitter[1]) continue;
@@ -11449,6 +11600,89 @@ export function buildSprites() {
         roadWrap(g, x, top - 2, 1, 3, pet);
         if (K.core) roadWrap(g, x, top - 1, 1, 1, K.core);
       }
+    }
+    return c;
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-09-27 (phase 10) — LES MASSIFS DE SAISON, EN RANGS.
+     ╚══════════════════════════════════════════════════════════════════════
+     Guillaume : « massifs lisibles, de saison ». L'audit : des confettis sur
+     de la terre, ni rangs ni fleurs lisibles — le semis au hasard de tiges à
+     fleur du 437-439 (`townBloomSurface`, gardé pour la PRAIRIE, qui est un
+     semis). Un massif CULTIVÉ se lit à trois choses, et les trois sont ici :
+     · des PLANTS EN RANGS décalés (un tous les 8 px, rangs décalés d'un
+       demi-pas — le quinconce du jardinier), chacun avec sa TOUFFE de feuilles ;
+     · une FORME DE FLEUR par espèce, lisible à 16 px : la coupe de la tulipe,
+       la trompette du narcisse, l'épi de la lavande, la boule du géranium,
+       l'étoile de l'aster, le pompon du chrysanthème ;
+     · les espèces de la SAISON (printemps : tulipes, narcisses, muscaris,
+       pâquerettes ; été : géraniums, soucis, lavande, marguerites ; automne :
+       asters, chrysanthèmes, sauge, bruyères ; hiver : un paillis et quelques
+       bruyères d'hiver — le parc de la ville riche est entretenu toute
+       l'année).
+     Boucle sur 64 px dans les deux sens (`wrap2`), chaque plant décalé d'un
+     pixel au hasard : un quinconce parfait se lirait comme un papier peint. */
+  const BED = {
+    tulip:    { shape: "cup",     tall: 3, cols: [["#d8352f", "#a8231f"], ["#e8698f", "#b84a6c"], ["#f2c23a", "#c99422"]], leaf: ["#3f7d3a", "#2f6130", "#5b9a4c"] },
+    daffodil: { shape: "trumpet", tall: 3, cols: [["#f6e27a", "#e8a72a"], ["#f4efd0", "#e8a72a"]], leaf: ["#4f8a3f", "#3a6a31", "#6aa655"] },
+    muscari:  { shape: "spike",   tall: 1, cols: [["#5d6fc8", "#3f4f9c"], ["#7a86d6", "#4f5fae"]], leaf: ["#467d3c", "#33612e", "#5f9a4d"] },
+    pansy:    { shape: "daisy",   tall: 0, cols: [["#f4f1e6", "#e6c43a"], ["#ffffff", "#e6c43a"]], leaf: ["#3f7d3a", "#2f6130", "#5b9a4c"] },
+    geranium: { shape: "round",   tall: 1, cols: [["#d8382f", "#9e211c"], ["#e0556d", "#a83349"], ["#f07a6a", "#b9483b"]], leaf: ["#3c7a36", "#2c5e2a", "#5a9a4a"] },
+    marigold: { shape: "round",   tall: 0, cols: [["#f2a72e", "#c46a12"], ["#f6cf3c", "#d08e18"]], leaf: ["#467f38", "#33612b", "#62a04e"] },
+    lavender: { shape: "spike",   tall: 2, cols: [["#8a6fc4", "#5f4a98"], ["#a189d8", "#6f57a8"]], leaf: ["#6d8f68", "#55724f", "#8aa884"] },
+    marguerite: { shape: "daisy", tall: 1, cols: [["#f4f1e6", "#e8c93c"]], leaf: ["#3f7d3a", "#2f6130", "#5b9a4c"] },
+    aster:    { shape: "star",    tall: 1, cols: [["#9a6fd0", "#e3c33a"], ["#d46fa6", "#e3c33a"], ["#7f7fd8", "#e3c33a"]], leaf: ["#3f7038", "#2e562b", "#58884c"] },
+    mum:      { shape: "pompom",  tall: 1, cols: [["#c9702c", "#8e4515"], ["#d99a36", "#9c611a"], ["#b04a3a", "#7a2a20"]], leaf: ["#3f6f36", "#2e552a", "#577f4a"] },
+    sage:     { shape: "spike",   tall: 2, cols: [["#5f78c8", "#3f529a"], ["#7a6fc0", "#54489a"]], leaf: ["#5f7f5a", "#475f43", "#7b9a74"] },
+    heather:  { shape: "heath",   tall: 0, cols: [["#d67ab2", "#a24e84"], ["#e9a8cf", "#b86b99"], ["#f2eef0", "#c9b8c4"]], leaf: ["#3f5f3a", "#2e4a2b", "#577a4f"] },
+  };
+  const BED_SEASON = {
+    spring: { [C.BL_TULIP]: "tulip", [C.BL_GOLD]: "daffodil", [C.BL_LAVENDER]: "muscari", [C.BL_DAISY]: "pansy" },
+    summer: { [C.BL_TULIP]: "geranium", [C.BL_GOLD]: "marigold", [C.BL_LAVENDER]: "lavender", [C.BL_DAISY]: "marguerite" },
+    autumn: { [C.BL_TULIP]: "aster", [C.BL_GOLD]: "mum", [C.BL_LAVENDER]: "sage", [C.BL_DAISY]: "heather" },
+  };
+  function bedHead(g, sh, hx, hy, col) {
+    const [a, b] = col;
+    if (sh === "cup") { wrap2(g, hx - 1, hy, 3, 2, a); wrap2(g, hx - 1, hy - 1, 1, 1, a); wrap2(g, hx + 1, hy - 1, 1, 1, a); wrap2(g, hx, hy + 1, 1, 1, b); wrap2(g, hx - 1, hy + 1, 1, 1, b); }
+    else if (sh === "trumpet") { wrap2(g, hx - 1, hy - 1, 3, 2, a); wrap2(g, hx, hy, 1, 1, b); wrap2(g, hx, hy - 2, 1, 1, a); }
+    else if (sh === "spike") { wrap2(g, hx, hy - 2, 1, 4, a); wrap2(g, hx, hy - 2, 1, 1, b); wrap2(g, hx + 1, hy - 1, 1, 3, b); }
+    else if (sh === "daisy") { wrap2(g, hx - 1, hy, 3, 1, a); wrap2(g, hx, hy - 1, 1, 3, a); wrap2(g, hx, hy, 1, 1, b); }
+    else if (sh === "round") { wrap2(g, hx - 1, hy - 1, 3, 3, a); wrap2(g, hx - 1, hy - 1, 1, 1, b); wrap2(g, hx + 1, hy + 1, 1, 1, b); wrap2(g, hx, hy - 2, 1, 1, a); }
+    else if (sh === "star") { wrap2(g, hx - 1, hy, 3, 1, a); wrap2(g, hx, hy - 1, 1, 3, a); wrap2(g, hx - 1, hy - 1, 1, 1, a); wrap2(g, hx + 1, hy + 1, 1, 1, a); wrap2(g, hx, hy, 1, 1, b); }
+    else if (sh === "pompom") { wrap2(g, hx - 1, hy - 1, 4, 2, a); wrap2(g, hx, hy - 2, 2, 1, a); wrap2(g, hx, hy, 2, 1, b); wrap2(g, hx + 1, hy - 2, 1, 1, b); }
+    else { wrap2(g, hx - 1, hy, 2, 1, a); wrap2(g, hx, hy - 1, 1, 1, a); wrap2(g, hx + 1, hy - 1, 1, 1, b); }       // bruyère : grappe
+  }
+  function townBedSurface(sp, seed) {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(seed);
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      const bx = col * 8 + (row % 2 ? 4 : 0) + ((r() * 3) | 0) - 1, by = row * 8 + 6 + ((r() * 3) | 0) - 1;
+      // La touffe : un monticule de feuilles, sombre dessous, plus clair au-dessus.
+      wrap2(g, bx - 2, by - 1, 5, 2, sp.leaf[1]);
+      wrap2(g, bx - 1, by - 2, 3, 1, sp.leaf[0]);
+      wrap2(g, bx - 2, by - 1, 1, 1, sp.leaf[0]); wrap2(g, bx + 1, by - 2, 1, 1, sp.leaf[2]);
+      wrap2(g, bx - 2, by + 1, 5, 1, "rgba(30,20,10,0.35)");                       // l'ombre du plant sur la terre
+      const nh = sp.shape === "spike" ? 2 : sp.shape === "daisy" || sp.shape === "heath" ? 2 : 1 + (r() < 0.4 ? 1 : 0);
+      const hc = sp.cols[(r() * sp.cols.length) | 0];
+      for (let k = 0; k < nh; k++) {
+        const hx = bx + (nh === 1 ? 0 : k === 0 ? -1 : 2) + ((r() * 2) | 0) - (nh === 1 ? 0 : 1);
+        const hy = by - 3 - sp.tall - (k ? (r() < 0.5 ? 1 : 0) : 0);
+        if (sp.tall >= 2) wrap2(g, hx, hy + 1, 1, sp.tall + 1, sp.leaf[1]);          // la tige
+        bedHead(g, sp.shape, hx, hy, hc);
+      }
+    }
+    return c;
+  }
+  /* L'hiver : un paillis de brins de paille et d'écorce sur la terre, et de loin
+     en loin une bruyère d'hiver — le massif dort, il n'est pas abandonné. */
+  function townBedWinterSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x4a71);
+    for (let i = 0; i < 520; i++) wrap2(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1 + ((r() * 2) | 0), 1, ["#8a6b3a", "#7a5a30", "#9c7d48", "#6b4f2c"][(r() * 4) | 0]);
+    const sp = BED.heather;
+    for (let i = 0; i < 14; i++) {
+      const bx = (r() * ROAD_N) | 0, by = (r() * ROAD_N) | 0;
+      wrap2(g, bx - 2, by - 1, 5, 2, sp.leaf[1]); wrap2(g, bx - 1, by - 2, 3, 1, sp.leaf[0]);
+      bedHead(g, "heath", bx, by - 3, sp.cols[(r() * sp.cols.length) | 0]);
     }
     return c;
   }
@@ -11676,10 +11910,26 @@ export function buildSprites() {
         const x = 1 + ((r() * 5) | 0), y = 2 + ((r() * 4) | 0), w = 1 + ((r() * 2) | 0);
         P(g, x, y, w, 1, "#9c978c"); P(g, x, y + 1, w, 1, "#7a766e");
       }
-    } else {                                             // la taupinière
+    } else if (kind === 3) {                             // la taupinière
       P(g, 1, 4, 6, 2, "#6b5237"); P(g, 2, 3, 4, 1, "#7d6243"); P(g, 3, 2, 2, 1, "#8b6f4d");
       P(g, 1, 6, 6, 1, "rgba(40,30,20,0.35)");
       P(g, 2, 4, 1, 1, "#5a4430"); P(g, 5, 3, 1, 1, "#9a7e5a");
+    } else if (kind === 4) {                             // 2026-09-27 — une touffe d'herbe folle, plus haute et plus pâle
+      for (let k = 0; k < 6; k++) {
+        const x = 1 + ((r() * 6) | 0), h = 3 + ((r() * 3) | 0);
+        P(g, x, 7 - h, 1, h, k % 2 ? "#8fae5a" : "#7c9d4c");
+        if (r() < 0.5) P(g, x, 7 - h, 1, 1, "#b7c37a");
+      }
+      P(g, 1, 7, 6, 1, "rgba(30,40,20,0.3)");
+    } else if (kind === 5) {                             // une plaque de terre nue, piétinée
+      P(g, 1, 3, 6, 3, "#8c7657"); P(g, 2, 2, 4, 1, "#8c7657"); P(g, 2, 6, 4, 1, "#8c7657");
+      P(g, 2, 3, 2, 1, "#9d8666"); P(g, 5, 4, 1, 1, "#77634a"); P(g, 3, 5, 1, 1, "#a38c6a");
+      if (vr) P(g, 6, 3, 1, 1, "#6fa05a");
+    } else {                                             // le pissenlit
+      for (let k = 0; k < 2; k++) {
+        const x = 2 + ((r() * 4) | 0), y = 2 + ((r() * 4) | 0);
+        P(g, x - 1, y + 1, 3, 1, "#5f8f48"); P(g, x, y, 1, 1, "#f2c230"); P(g, x - 1, y, 1, 1, "#e0a91e"); P(g, x + 1, y, 1, 1, "#e0a91e"); P(g, x, y - 1, 1, 1, "#f7d95a");
+      }
     }
     return c;
   }
@@ -11819,107 +12069,79 @@ export function buildSprites() {
   }
 
   /* ------------------------------------------------------------ LE GOUDRON
-     Référence « nuit et pavé sombre », mais élargie et de jour : un gris
-     ANTHRACITE, jamais uniforme. Ce qui fait un bitume crédible tient en
-     quatre couches, dans cet ordre : le grain (des milliers de pixels de trois
-     gris voisins), les REPRISES (des rustines d'une autre teinte, aux bords
-     mous — c'est le détail qui dit « on a ouvert la chaussée ici »), les
-     FISSURES (des lignes brisées d'un pixel), et le gravillon clair qui
-     accroche la lumière. */
-  function townAsphaltSurface() {
-    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x2b93);
-    /* ⚠️ HORS-ZIP 2026-09-02 — LIANT ÉCLAIRCI ET RÉCHAUFFÉ, SUR MESURE DE
-       L'AUDIT : la route ressortait à L≈40 en jeu (l'herbe est à L≈150), seul
-       saut de valeur brutal de la carte, et son grain scintillait au zoom 3.
-       Chaque teinte de cette fonction a été recalée sur la MÊME luminance
-       cible (~78) avec le MÊME écart relatif au liant qu'avant — ce n'est pas
-       une nouvelle palette, c'est l'ancienne rehaussée d'un cran : les
-       cailloux restent plus clairs que le liant, les fissures et les traces
-       d'huile restent plus sombres, dans les mêmes proportions qu'avant.
-       Réalisme préservé par construction, pas par réglage à l'œil. */
-    P(g, 0, 0, ROAD_N, ROAD_N, "#564e4a");
-    /* ⚠️ LE PREMIER JET AVAIT UN ÉCART-TYPE DE 8,7 SUR TREIZE COULEURS, et
-       `render-rues.mjs` l'a refusé avant que Guillaume ne le voie : c'était un
-       aplat anthracite avec du bruit dessus, pas du bitume. Ce qui manquait est
-       ce qu'on voit vraiment en baissant les yeux sur une chaussée — LE
-       GRANULAT. Un enrobé n'est pas gris : c'est du gravier clair noyé dans du
-       noir, et à 16 px par case c'est le seul détail qui porte la matière.
-       Douze tons de liant, puis les cailloux par-dessus.
-       ⚠️ Le bruit fin (3200 points) est en plus RESSERRÉ autour du liant (au
-       lieu d'être recalé à l'identique comme le reste) : c'est lui, pas le
-       granulat, que l'audit du 2026-09-02 pointe comme le poivre-et-sel qui
-       grésille au défilement. Les cailloux, eux, gardent tout leur contraste. */
-    const GRAIN = ["#534b47", "#59514f", "#554d49", "#5b5250", "#524945", "#4f4744",
-                   "#5c5353", "#574f4c", "#514845", "#5e5554", "#544b4b", "#59504d"];
-    for (let i = 0; i < 3200; i++) {
-      P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, GRAIN[(r() * GRAIN.length) | 0]);
+     ⚠️⚠️ 2026-09-27 (phase 10) — REFAIT : IL SE LISAIT COMME DE LA BOUE.
+     Guillaume : « c'est censé représenter du goudron ». Trois raisons, mesurées
+     sur la planche assemblée : (1) un liant BRUN chaud (86,78,74) — le brun
+     est la couleur de la terre, pas du bitume ; (2) sept fissures en marche
+     aléatoire qui revenaient TOUS LES 64 PX et dessinaient de grandes dalles
+     craquelées — une terre sèche ; (3) quatre reprises aux bords mous, qui
+     ajoutaient des flaques. Le nouveau bitume :
+     · un liant GRIS NEUTRE à peine froid, à la MÊME valeur (L ≈ 81, le
+       réglage de l'audit du 2026-09-02 contre le saut de valeur avec l'herbe) ;
+     · un grain très serré autour du liant (il grésillait au défilement), un
+       granulat clair et froid qui accroche la lumière, quelques silex chauds ;
+     · des fissures COLMATÉES : des serpentins de bitume noir, un peu brillants,
+       plus rares et plus longs — c'est l'image d'une chaussée entretenue ;
+     · des reprises DÉCOUPÉES au carré (une chaussée se rapièce à la scie),
+       plus sombres et plus lisses, joint scellé au pourtour.
+     ⚠️ LA PÉRIODE : ces détails-là ne bouclent PAS — ils restent à l'intérieur
+     de la tuile (marge de 4 px), et la ville tire l'une de QUATRE variantes par
+     bloc de 4×4 cases (`asphaltVars`, `drawTownRoadTile`) : rien ne revient à
+     intervalle fixe. Seul le grain boucle (il est tiré pixel par pixel, aucune
+     couture ne se voit). Les traces de roues et le caniveau, qui dépendent de
+     la place dans la chaussée, se posent dans `drawTownRoadTile`. */
+  function townAsphaltSurface(seed) {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(seed || 0x2b93);
+    P(g, 0, 0, ROAD_N, ROAD_N, "#4f5156");
+    const GRAIN = ["#4b4d52", "#53555a", "#4d4f54", "#55575c", "#494b50", "#515358", "#57595e", "#4a4c51", "#505155", "#4e5055",
+                   "#47494e", "#595b60", "#4c4e53", "#525459", "#56575b"];
+    for (let i = 0; i < 3600; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, GRAIN[(r() * GRAIN.length) | 0]);
+    // La poussière claire des bas-côtés et des joints, en petits amas : ce qui
+    // fait qu'un bitume a DU RELIEF de valeur sans grésiller (§8).
+    for (let i = 0; i < 40; i++) {
+      const dx = (r() * ROAD_N) | 0, dy = (r() * (ROAD_N - 2)) | 0;
+      roadWrap(g, dx, dy, 1 + ((r() * 2) | 0), 1, r() < 0.5 ? "#5e6065" : "#626468");
     }
-    // Le granulat : des cailloux d'un ou deux pixels, plus clairs que le liant,
-    // avec pour une part sur trois un pixel d'ombre au sud — c'est ce relief
-    // minuscule qui empêche la chaussée de se lire comme du feutre.
-    /* ⚠️ ET IL EN FAUT MOINS QU'ON NE CROIT. Premier réglage : 260 cailloux
-       jusqu'à #6f7079, et la planche assemblée montrait du POIVRE ET SEL — à
-       l'échelle du jeu (une case = 16 px), un granulat trop clair et trop dense
-       scintille au défilement au lieu de faire de la matière. On en pose 170,
-       plafonnés deux tons plus bas. La règle est celle du §8 : ce qui porte la
-       matière est l'écart de valeur, pas la quantité de points. */
-    const STONE = ["#6f6766", "#756d6c", "#696160", "#7b7373", "#6c6461", "#726b6a", "#787070", "#7e7678"];
-    for (let i = 0; i < 170; i++) {
-      const sx = (r() * ROAD_N) | 0, sy = (r() * ROAD_N) | 0, sw = r() < 0.35 ? 2 : 1;
-      const k = (r() * STONE.length) | 0;
-      roadWrap(g, sx, sy, sw, 1, STONE[k]);
-      if (r() < 0.34) roadWrap(g, sx, sy + 1, sw, 1, "#473f3b");
+    // Le granulat : des gravillons clairs et froids, un sur trois avec son ombre au sud.
+    const STONE = ["#6a6c71", "#707277", "#65676c", "#76787c", "#6d6e72", "#7b7c80", "#686a6f", "#737579"];
+    for (let i = 0; i < 160; i++) {
+      const sx = (r() * ROAD_N) | 0, sy = (r() * (ROAD_N - 1)) | 0, sw = r() < 0.3 ? 2 : 1;
+      roadWrap(g, sx, sy, sw, 1, STONE[(r() * STONE.length) | 0]);
+      if (r() < 0.34) roadWrap(g, sx, sy + 1, sw, 1, "#404246");
     }
-    // Quelques granulats CHAUDS : un enrobé contient du silex et du grès, et
-    // deux ou trois taches ocres suffisent à sortir le gris du camaïeu bleuté.
-    for (let i = 0; i < 34; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#746148" : "#7f694e");
-    // Les traces d'huile : les plus sombres du dessin, mais discrètes — deux
-    // taches franches se répéteraient tous les quatre carreaux et dessineraient
-    // à elles seules la période du motif (vu sur la planche assemblée).
-    for (let i = 0; i < 2; i++) {
-      const ox = (r() * ROAD_N) | 0, oy = (r() * ROAD_N) | 0;
-      for (let k = 0; k < 3 + ((r() * 3) | 0); k++) roadWrap(g, ox + ((r() * 5) | 0), oy + k, 2 + ((r() * 3) | 0), 1, "#4a4240");
+    for (let i = 0; i < 22; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#6b655b" : "#716a5e");   // les silex
+    const M = 4, IN = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // Les reprises : une ou deux rustines découpées, plus sombres et plus lisses, joint scellé.
+    /* ⚠️ Rares, et à peine plus sombres : premier jet (une ou deux par tuile,
+       joint noir), la planche montrait un semis de BOÎTES sur toute l'artère. */
+    const nP = r() < 0.4 ? 1 : 0;
+    for (let p = 0; p < nP; p++) {
+      const pw = 12 + ((r() * 14) | 0), ph = 8 + ((r() * 10) | 0);
+      const px0 = M + ((r() * (ROAD_N - 2 * M - pw)) | 0), py0 = M + ((r() * (ROAD_N - 2 * M - ph)) | 0);
+      P(g, px0, py0, pw, ph, "#4b4d52");
+      for (let i = 0; i < pw * ph / 9; i++) P(g, px0 + ((r() * pw) | 0), py0 + ((r() * ph) | 0), 1, 1, r() < 0.3 ? "#5a5c61" : "#484a4e");
+      P(g, px0, py0, pw, 1, "#414246"); P(g, px0, py0 + ph - 1, pw, 1, "#414246");
+      P(g, px0, py0, 1, ph, "#414246"); P(g, px0 + pw - 1, py0, 1, ph, "#414246");
     }
-    /* Les reprises d'enrobé. ⚠️ PREMIER JET REFUSÉ EN REGARDANT LA PLANCHE : des
-       RECTANGLES GRIS bien nets, qui se lisaient comme un bogue d'affichage et
-       pas comme une chaussée rapiécée. Deux corrections, et la seconde est la
-       vraie : un écart de teinte deux fois plus faible (une reprise est de
-       l'enrobé, pas du béton), et un bord qui DÉRIVE — l'inset de chaque ligne
-       suit une marche aléatoire au lieu d'être retiré au hasard, ce qui donne
-       un contour continu et mou plutôt qu'une frange en dents de scie.
-       ⚠️ Et on repose du granulat PAR-DESSUS (plus bas) : sans ça, la rustine
-       reste une zone lisse au milieu d'un sol grenu, ce qui la redessine. */
-    for (let p = 0; p < 4; p++) {
-      const px0 = (r() * ROAD_N) | 0, py0 = (r() * ROAD_N) | 0;
-      const pw = 11 + ((r() * 16) | 0), ph = 9 + ((r() * 13) | 0);
-      const col = r() < 0.5 ? "#514945" : "#5b5350";
-      let a = 0, b = 0;
-      for (let k = 0; k < ph; k++) {
-        a += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0); b += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0);
-        a = Math.max(-2, Math.min(2, a)); b = Math.max(-2, Math.min(2, b));
-        roadWrap(g, px0 + a, py0 + k, pw + b - a, 1, col);
-        roadWrap(g, px0 + a, py0 + k, 1, 1, "#49413d");        // joint d'émulsion, côté gauche
-        roadWrap(g, px0 + pw + b - 1, py0 + k, 1, 1, "#49413d");
-      }
-      // Le granulat de la reprise, sinon elle reste une tache lisse.
-      for (let i = 0; i < pw * ph / 7; i++) {
-        roadWrap(g, px0 + ((r() * pw) | 0), py0 + ((r() * ph) | 0), 1, 1, r() < 0.3 ? "#716968" : "#4d4543");
-      }
-    }
-    // Les fissures : une marche aléatoire, jamais une droite.
-    for (let f = 0; f < 7; f++) {
-      let fx = (r() * ROAD_N) | 0, fy = (r() * ROAD_N) | 0;
-      const horiz = r() < 0.55, len = 10 + ((r() * 26) | 0);
+    // Les fissures colmatées : des serpentins de bitume noir, parfois doublés, avec un reflet.
+    const nF = 2 + ((r() * 2) | 0);
+    for (let f = 0; f < nF; f++) {
+      let fx = M + ((r() * (ROAD_N - 2 * M)) | 0), fy = M + ((r() * (ROAD_N - 2 * M)) | 0);
+      const horiz = r() < 0.6, len = 16 + ((r() * 26) | 0);
       for (let k = 0; k < len; k++) {
-        roadWrap(g, fx, fy, 1, 1, "#443c37");
-        if (r() < 0.25) roadWrap(g, fx, fy + 1, 1, 1, "#645c5a");   // la lèvre éclairée de la fissure
-        if (horiz) { fx++; fy += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
-        else { fy++; fx += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
-        fx = ((fx % ROAD_N) + ROAD_N) % ROAD_N; fy = ((fy % ROAD_N) + ROAD_N) % ROAD_N;
+        P(g, fx, fy, 1, 1, "#2f3034");
+        if (r() < 0.45) P(g, horiz ? fx : fx + 1, horiz ? fy + 1 : fy, 1, 1, "#36373b");   // plus large par endroits
+        if (r() < 0.2) P(g, fx, horiz ? fy - 1 : fy, 1, 1, "#5f6166");                      // le bitume luit
+        if (horiz) { fx++; fy += r() < 0.3 ? (r() < 0.5 ? 1 : -1) : 0; }
+        else { fy++; fx += r() < 0.3 ? (r() < 0.5 ? 1 : -1) : 0; }
+        fx = IN(fx, M, ROAD_N - M - 2); fy = IN(fy, M, ROAD_N - M - 2);
       }
     }
-    // Gravillon : le seul endroit où le bitume est clair.
-    for (let i = 0; i < 90; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.3 ? "#847c7b" : "#6f6765");
+    // Une tache d'huile, discrète.
+    if (r() < 0.6) {
+      const ox = M + ((r() * (ROAD_N - 2 * M - 8)) | 0), oy = M + ((r() * (ROAD_N - 2 * M - 6)) | 0);
+      for (let k = 0; k < 4; k++) P(g, ox + ((r() * 3) | 0), oy + k, 3 + ((r() * 4) | 0), 1, "#46474c");
+    }
     return c;
   }
 
@@ -12247,125 +12469,212 @@ export function buildSprites() {
     return c;
   }
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     ZIP 436 — LE DALLAGE DES ESPLANADES : LE DERNIER DAMIER DE LA VILLE.
-     ─────────────────────────────────────────────────────────────────────────
-     ⚠️⚠️ IL EST DANS LE MÊME SAC QUE LES MARCHES, ET POUR LA MÊME RAISON. Le
-     parvis du tribunal, la terrasse de la Haute-Ville, la place, les cinq
-     parvis, le champ de foire et le quai de gare sont tous du `G_PATH_STONE`,
-     et il était peint dans la closure du rendu depuis le 425 : `(x + y) % 2`
-     entre deux gris, plus un joint clair au nord-ouest. C'est-à-dire **un
-     damier de période 16 px**, exactement le défaut que le 434 a corrigé sur
-     les rues — et il occupe la surface qui ENTOURE les escaliers du tribunal.
-     Quand Guillaume écrit « il y a un écart flagrant de qualité de textures »
-     entre le sol pavé et les escaliers du courthouse, les deux tiers de ce
-     qu'il regarde sont ce damier-ci : la volée neuve arrivait sur lui.
-
-     ⚠️ MÊME MÉTHODE, TROISIÈME FOIS : un pavé de 4×4 tuiles qui boucle
-     (`roadWrap`), découpé par `x % 4`. Mais la MATIÈRE est délibérément autre
-     que celle des rues — de grandes dalles rectangulaires appareillées, pas des
-     pavés ronds. Une place n'est pas une chaussée (c'est déjà l'argument du 434
-     pour que le goudron s'arrête à ses quatre bords), et deux sols qui se
-     touchent doivent se DISTINGUER, sinon on a fait du travail pour rien. */
-  function townFlagSurface() {
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-09-27 (phase 10) — LES DALLAGES PAR RANG DE LIEU.
+     ╚══════════════════════════════════════════════════════════════════════
+     Guillaume : « une famille par rang de lieu, et surtout de meilleurs
+     dessins ». L'audit : la place, le marché, les parvis, les terrasses, la
+     gare et le belvédère avaient TOUS le même dallage, des rangées de dalles
+     presque carrées qui se lisaient comme un carrelage. Trois familles, dans
+     l'ordre social des lieux (la cohérence par quartier de Guillaume) :
+     · CIVIQUE (la place, les parvis de la mairie, de l'église, du tribunal) :
+       un OPUS — des pierres claires de six formats calepinées sur une grille
+       torique de 8 px, grandes pour la plupart, jamais alignées en rangs ; et
+       une ROSACE de pavés en anneaux autour de la fontaine ;
+     · MARCHÉ : des pavés de granit posés EN ÉVENTAIL (des arcs en écailles),
+       rustiques, plus sombres, plus chauds ;
+     · TERRASSES (la Haute-Ville, le belvédère, la gare, les quais) : un
+       appareil de dalles de grès en assises, plus petites, plus chaudes.
+     ⚠️ Toutes bouclent sur 64 px dans les DEUX sens (`wrap2`) : un motif qui ne
+     boucle qu'en x ferait une couture tous les quatre carreaux en y.
+     ⚠️ L'opus civique garde la palette du dallage d'avant : `render-escaliers`
+     tient sa luminance contre le bloc de l'escalier et son relief contre le
+     damier du 425.
+     ⚠️ LEÇONS REPRISES DU DALLAGE DU 436 (remplacé ici) : le JOINT est sombre
+     et porte tout l'écart de valeur (clair, le dallage mesurait deux fois moins
+     de relief que les pavés) ; une place est faite de peu de grandes pierres,
+     sa matière tient donc dans l'écart d'une pierre À L'AUTRE (une minorité
+     franchement plus sombre ou plus claire), pas dans le grain de chacune ; une
+     fêlure ne traverse jamais la pierre, dévie deux fois au plus du même côté
+     et reste pâle — un zigzag franc se lisait comme un chevron dessiné (439). */
+  const wrap2 = (g, x, y, w, h, col) => { for (const oy of [-ROAD_N, 0, ROAD_N]) roadWrap(g, x, y + oy, w, h, col); };
+  /* Le calepinage : des pierres de formats `sizes` (en unités de la grille,
+     avec leur poids) posées sur un tore de n×n unités — chaque case prise une
+     fois, le motif boucle par construction. */
+  function opusLayout(r, n, sizes) {
+    const used = new Uint8Array(n * n), out = [];
+    const free = (cx, cy, w, h) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (used[((cy + j) % n) * n + (cx + i) % n]) return false; return true; };
+    /* ⚠️ Dans un ordre ALÉATOIRE : dans l'ordre de lecture, la case (0, y) est
+       libre au début de chaque rang, presque chaque pierre commençait donc en
+       colonne 0 et le bord du motif devenait un joint continu — une couture
+       tous les 64 px (vu par `render-escaliers`, 102 contre 57). */
+    const order = Array.from({ length: n * n }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) { const j = (r() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
+    for (const oi of order) {
+      const cx = oi % n, cy = (oi / n) | 0;
+      if (used[cy * n + cx]) continue;
+      const fits = sizes.filter(([w, h]) => free(cx, cy, w, h));
+      let tot = 0; for (const f of fits) tot += f[2];
+      let pick = fits[fits.length - 1], t = r() * tot;
+      for (const f of fits) { t -= f[2]; if (t <= 0) { pick = f; break; } }
+      for (let j = 0; j < pick[1]; j++) for (let i = 0; i < pick[0]; i++) used[((cy + j) % n) * n + (cx + i) % n] = 1;
+      out.push({ cx, cy, w: pick[0], h: pick[1] });
+    }
+    return out;
+  }
+  /* Une pierre taillée : son corps, un biseau éclairé au nord-ouest et une arête
+     d'ombre au sud-est (partiels : un biseau complet fait une pastille), deux
+     marbrures douces d'un ton voisin (la pierre n'est pas une teinte, c'est un
+     nuage de teintes), un grain de quelques pixels, parfois une fêlure courte. */
+  function cutStone(g, r, x, y, w, h, pal, crackCol) {
+    const k = (r() * pal.body.length) | 0;
+    let body = pal.body[k];
+    const roll = r();
+    if (roll < pal.darkP) body = pal.dark[(r() * pal.dark.length) | 0];
+    else if (roll < pal.darkP + pal.lightP) body = pal.light[(r() * pal.light.length) | 0];
+    wrap2(g, x, y, w, h, body);
+    for (let m = 0; m < 2; m++) {
+      const mw = 2 + ((r() * Math.max(1, w - 3)) | 0), mh = 1 + ((r() * Math.max(1, h - 3)) | 0);
+      const mx = x + 1 + ((r() * Math.max(1, w - mw - 1)) | 0), my = y + 1 + ((r() * Math.max(1, h - mh - 1)) | 0);
+      wrap2(g, mx, my, mw, mh, pal.mottle[(r() * pal.mottle.length) | 0]);
+    }
+    const lo = (r() * 2) | 0, hi = w - ((r() * 3) | 0);
+    if (hi - lo > 1) wrap2(g, x + lo, y, hi - lo, 1, pal.lit[(r() * pal.lit.length) | 0]);
+    wrap2(g, x, y + 1, 1, Math.max(1, h - 2 - ((r() * 2) | 0)), pal.lit[(r() * pal.lit.length) | 0]);
+    wrap2(g, x + 1 + ((r() * 2) | 0), y + h - 1, Math.max(1, w - 2), 1, pal.drk[(r() * pal.drk.length) | 0]);
+    wrap2(g, x + w - 1, y + 1, 1, Math.max(1, h - 2), pal.drk[(r() * pal.drk.length) | 0]);
+    for (let q = 0; q < Math.max(2, (w * h / 22) | 0); q++)
+      wrap2(g, x + 1 + ((r() * Math.max(1, w - 2)) | 0), y + 1 + ((r() * Math.max(1, h - 2)) | 0), 1, 1, r() < 0.5 ? pal.lit[(r() * pal.lit.length) | 0] : pal.drk[(r() * pal.drk.length) | 0]);
+    if (crackCol && w >= 10 && h >= 8 && r() < 0.14) {
+      let fx = x + 3 + ((r() * (w - 6)) | 0); const len = 3 + ((r() * (h - 6)) | 0), fy = y + 2 + ((r() * Math.max(1, h - 4 - len)) | 0), turn = r() < 0.5 ? -1 : 1;
+      let jogs = 0;
+      for (let q = 0; q < len; q++) { wrap2(g, fx, fy + q, 1, 1, crackCol); if (jogs < 2 && r() < 0.35) { fx += turn; jogs++; } }
+    }
+  }
+  const PAL_CIVIC = {
+    body: ["#b0aea6", "#b7b5ad", "#a9a79f", "#c2c0b7", "#adaba3", "#b4b2aa", "#9e9c95", "#bcbab2", "#a3a199", "#c8c6bd", "#a7a59d", "#b8b6ac"],
+    mottle: ["#aeaca4", "#b9b7af", "#a5a39b", "#bebcb3", "#b2b0a8"],
+    lit: ["#cfcdc4", "#d5d3ca", "#c9c7be", "#d2d0c7", "#dad8cf", "#cccac1"],
+    drk: ["#8d8b85", "#93918b", "#878580", "#908e88", "#82807b", "#98968f"],
+    dark: ["#96948d", "#8f8d86", "#9a9891"], light: ["#cdcbc2", "#c9c7bf", "#d0cec5"], darkP: 0.14, lightP: 0.12,
+  };
+  function townFlagCivicSurface() {
     const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x2c8f);
-    /* ⚠️ LE JOINT EST SOMBRE, ET C'EST LUI QUI PORTE TOUT L'ÉCART DE VALEUR.
-       Premier jet à `#7d7b76` : `render-escaliers.mjs` mesurait un écart-type de
-       23,0 contre 45,8 aux pavés de rue — le dallage neuf était deux fois plus
-       plat que ce qu'il devait égaler, c'est-à-dire qu'on venait de refaire le
-       défaut qu'on corrigeait. Un joint de dalle est une RAINURE : à 16 px, une
-       rainure est sombre. */
-    const JOINT = "#5c5a56";
-    P(g, 0, 0, ROAD_N, ROAD_N, JOINT);
-    for (let i = 0; i < 700; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#6a6863" : "#4e4c49");
-    /* ⚠️ LA PLAGE DE TEINTES DES DALLES EST LARGE, ET C'EST LA CORRECTION QUE
-       LE BANC A IMPOSÉE. Avec douze gris tous à ±5 de luminance, la place
-       mesurait un écart-type de 28,7 contre 45,8 aux pavés : chaque dalle était
-       jolie et l'ENSEMBLE était un aplat, parce qu'une place est faite de peu
-       de grandes pierres et que sa matière tient donc dans l'écart d'une pierre
-       À L'AUTRE, pas dans le grain de chacune. C'est l'inverse exact du
-       goudron du 434 (un seul matériau, la richesse dans le grain) — et c'est
-       pour ça qu'on ne peut pas recopier le réglage d'une surface sur une
-       autre. Seize teintes, de `#9a988f` à `#c8c6bd`. */
-    const BODY = ["#b0aea6", "#b7b5ad", "#a9a79f", "#c2c0b7", "#adaba3", "#b4b2aa", "#9e9c95", "#bcbab2",
-                  "#a3a199", "#c8c6bd", "#a7a59d", "#b8b6ac", "#9a988f", "#c5c3ba", "#aba9a1", "#bfbdb4"];
-    const LIT = ["#cfcdc4", "#d5d3ca", "#c9c7be", "#d2d0c7", "#dad8cf", "#cccac1"];
-    const DRK = ["#8d8b85", "#93918b", "#878580", "#908e88", "#82807b", "#98968f"];
-    /* ⚠️ TROIS RANGS DE 21 ou 22 px, pas quatre de 16 : une DALLE est plus
-       grande qu'une case, sinon on redessine la grille avec des joints. 64 =
-       21 + 21 + 22, pas un pixel de reste (c'est ce qui garantit le bouclage). */
-    const ROWH = [21, 21, 22];
-    let y = 0;
-    for (const rh of ROWH) {
-      const n = 3 + ((r() * 2) | 0);                 // 3 ou 4 dalles par rang
-      const ws = roadSplit(ROAD_N, n, r, [13, 28]);
-      let x = (r() * ROAD_N) | 0;                    // le rang est décalé : aucun joint continu
-      for (let s = 0; s < n; s++) {
-        const w = ws[s], k = (r() * BODY.length) | 0;
-        roadWrap(g, x, y, w - 1, rh - 1, BODY[k]);
-        roadWrap(g, x, y, w - 1, 1, LIT[(r() * LIT.length) | 0]);        // arête nord, éclairée
-        roadWrap(g, x, y, 1, rh - 1, LIT[(r() * LIT.length) | 0]);       // arête ouest
-        roadWrap(g, x, y + rh - 2, w - 1, 1, DRK[(r() * DRK.length) | 0]);
-        roadWrap(g, x + w - 2, y, 1, rh - 1, DRK[(r() * DRK.length) | 0]);
-        /* ⚠️ UNE DALLE SUR SIX EST FÊLÉE, ET C'EST CE QUI EMPÊCHE LA PLACE
-           D'AVOIR L'AIR IMPRIMÉE (le mot du 425). Une fêlure est une ligne
-           BRISÉE : droite, elle se lit comme un joint qu'on aurait oublié. */
-        /* ⚠️⚠️ ZIP 439 — ELLE A ÉTÉ REFAITE, ET C'EST UN DÉFAUT VU EN JEU, PAS
-           AU BANC. Le tracé du 436 partait du HAUT de la dalle et descendait sur
-           toute sa hauteur en zigzaguant d'un pixel une fois sur deux, en
-           `#8c8a84` — soit un écart de vingt-cinq valeurs avec le corps de la
-           dalle. Résultat à l'échelle de jeu : un trait sombre, long, anguleux,
-           parfaitement lisible… comme un CHEVRON DESSINÉ sur la pierre. Sur la
-           promenade du lac, où les dalles sont grandes et pâles, on voyait des
-           « < » régulièrement semés le long du quai. Aucune planche de banc ne
-           pouvait le dire : elles montrent la texture agrandie, où le zigzag
-           ressemble bien à une fêlure — c'est à 100 % de zoom, et seulement là,
-           qu'il devient un signe.
-           Trois corrections, et les trois comptent :
-             — elle ne traverse plus la dalle : deux tiers de hauteur au plus,
-               et jamais depuis le bord (une fêlure qui va d'un joint à l'autre
-               EST un joint) ;
-             — elle est deux fois moins contrastée (`#a3a19a`), donc elle se
-               devine au lieu de se lire ;
-             — elle dévie d'un pixel au plus DEUX fois, et toujours du même
-               côté : un zigzag alterné dessine une dent de scie, c'est-à-dire
-               une forme, et une fêlure n'en a pas. */
-        if (r() < 0.17) {
-          const len = 3 + ((r() * (rh - 8)) | 0);
-          let fx = x + 3 + ((r() * (w - 6)) | 0);
-          const fy = y + 2 + ((r() * (rh - 4 - len)) | 0), turn = r() < 0.5 ? -1 : 1;
-          let jogs = 0;
-          for (let q = 0; q < len; q++) {
-            roadWrap(g, fx, fy + q, 1, 1, "#a3a19a");
-            if (jogs < 2 && r() < 0.35) { fx += turn; jogs++; }
-          }
+    P(g, 0, 0, ROAD_N, ROAD_N, "#5c5a56");
+    for (let i = 0; i < 500; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#6a6863" : "#4e4c49");
+    /* Six formats, les grands surtout : une place est faite de PEU de grandes
+       pierres. ⚠️ SUR UNE GRILLE IRRÉGULIÈRE : des colonnes et des rangées de 6
+       à 10 px (toujours 64 en tout). Premier jet sur un pas fixe de 8 px :
+       `render-escaliers` y mesurait une période de 16 et de 32 px (r = 0,79 et
+       0,83) — tous les joints tombaient sur les mêmes lignes, c'était encore
+       une grille, en plus fine. */
+    const CW = roadSplitExact(ROAD_N, 8, r, [6, 10]), RW = roadSplitExact(ROAD_N, 8, r, [6, 10]);
+    const cxs = [0], rys = [0];
+    for (let i = 0; i < 8; i++) { cxs.push(cxs[i] + CW[i]); rys.push(rys[i] + RW[i]); }
+    const span = (arr, sz, a, n) => { let t = 0; for (let k = 0; k < n; k++) t += sz[(a + k) % 8]; return t; };
+    const L = opusLayout(r, 8, [[3, 2, 5], [2, 3, 4], [2, 2, 6], [4, 2, 2], [3, 3, 2], [2, 1, 2], [1, 2, 2], [1, 1, 1]]);
+    for (const st of L) cutStone(g, r, cxs[st.cx], rys[st.cy], span(cxs, CW, st.cx, st.w) - 1, span(rys, RW, st.cy, st.h) - 1, PAL_CIVIC, "#a3a19a");
+    // Un peu de mousse dans les joints au sud des pierres.
+    for (let i = 0; i < 18; i++) { const k = (r() * 8) | 0; wrap2(g, (r() * ROAD_N) | 0, rys[k] + RW[k] - 1, 2 + ((r() * 3) | 0), 1, "#6b7355"); }
+    return c;
+  }
+  const PAL_TERRACE = {
+    body: ["#b9ad98", "#c1b59f", "#b2a690", "#c7bca6", "#b5a993", "#bdb19b", "#aea28c", "#c4b8a2", "#b7ab95"],
+    mottle: ["#b5a994", "#c0b49e", "#ab9f89", "#c5b9a3"],
+    lit: ["#d6ccb8", "#dcd2be", "#d0c6b2", "#d9cfbb"],
+    drk: ["#8f8572", "#958b78", "#897f6d", "#92887a"],
+    dark: ["#a2967f", "#9c917b"], light: ["#cfc4ae", "#d3c8b2"], darkP: 0.12, lightP: 0.1,
+  };
+  function townFlagTerraceSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x7e21);
+    P(g, 0, 0, ROAD_N, ROAD_N, "#6a6152");
+    for (let i = 0; i < 500; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#766d5d" : "#5c5446");
+    /* Des ASSISES de 8 px (huit par 64), chaque pierre longue de 2 à 4 unités de
+       6 px… non : de 12 à 26 px, et chaque assise décalée — l'appareil d'un
+       mur couché, c'est ce qui sépare une terrasse d'une place. */
+    /* ⚠️ Premier jet en assises de 8 px et pierres de 12 à 26 : la planche
+       montrait un MUR DE BRIQUES couché. Des dalles de 10 à 15 px de haut et de
+       16 à 30 de long lisent une terrasse. */
+    const RH = roadSplitExact(ROAD_N, 5, r, [10, 15]);
+    let yy = 0;
+    for (let row = 0; row < RH.length; row++) {
+      const n = 2 + ((r() * 3) | 0), ws = roadSplitExact(ROAD_N, n, r, [16, 30]);
+      let x = (r() * ROAD_N) | 0;
+      for (let s = 0; s < n; s++) { cutStone(g, r, x, yy, ws[s] - 1, RH[row] - 1, PAL_TERRACE, "#a4987f"); x = (x + ws[s]) % ROAD_N; }
+      for (let i = 0; i < 5; i++) wrap2(g, (r() * ROAD_N) | 0, yy + RH[row] - 1, 1 + ((r() * 3) | 0), 1, r() < 0.5 ? "#6b7355" : "#7d7560");
+      yy += RH[row];
+    }
+    return c;
+  }
+  /* LES PAVÉS EN ÉVENTAIL (le marché). Des écailles : des disques de rayon 23
+     centrés sur un réseau de pas 32 px, rangées décalées d'un demi-pas tous les
+     16 px, la rangée du dessous posée PAR-DESSUS celle du dessus — on voit de
+     chaque écaille le HAUT de son disque, borné par des arcs (le point
+     appartient au disque de la rangée la plus basse qui le contient).
+     ⚠️ Premier jet : chaque point allait à la demi-écaille du DESSUS, les
+     frontières devenaient des droites horizontales et les arcs disparaissaient —
+     un pavage au hasard sur la planche. Dans chaque écaille, les pavés suivent des ANNEAUX
+     autour de son centre (4,5 px de haut, ~5 px de long), joints sombres. Le
+     réseau a une période de 32 px dans les deux sens : 64 boucle. Couleur par
+     pavé, tirée d'un hachage de (écaille, anneau, rang) : même pavé, même ton. */
+  function townSettFanSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N);
+    const S = 32, RD = 23, RH = 4.6, SW = 5.2;
+    const BODY = ["#8d8a83", "#96928a", "#85827b", "#9c988f", "#8a8781", "#928e86", "#7f7c76", "#a09c93", "#88857f", "#99958c", "#8f8b82", "#837f78"];
+    const WARM = ["#978c7c", "#8f8474", "#a09482"];
+    const hash = (a, b, cc, d) => { let h = (a * 73856093) ^ (b * 19349663) ^ (cc * 83492791) ^ (d * 2654435761); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return (h ^ (h >>> 15)) >>> 0; };
+    for (let y = 0; y < ROAD_N; y++) for (let x = 0; x < ROAD_N; x++) {
+      let own = null;
+      for (let j = Math.floor(y / 16) + 2; j >= Math.floor(y / 16) - 2 && !own; j--) {
+        const cy = j * 16, ox = ((j % 2) + 2) % 2 ? S / 2 : 0;
+        const i0 = Math.round((x - ox) / S);
+        for (const i of [i0, i0 - 1, i0 + 1]) {
+          const cx = i * S + ox, d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+          if (d <= RD) { own = { i, j, d, a: Math.atan2(y + 0.5 - cy, x + 0.5 - cx) }; break; }
         }
-        for (let q = 0; q < 9; q++) roadWrap(g, x + 1 + ((r() * (w - 2)) | 0), y + 1 + ((r() * (rh - 2)) | 0), 1, 1 + ((r() * 2) | 0), r() < 0.5 ? LIT[(r() * LIT.length) | 0] : DRK[(r() * DRK.length) | 0]);
-        /* Une dalle sur huit est FRANCHEMENT plus sombre — celle qu'on a
-           remplacée, ou celle qui garde l'eau. Sans cette minorité, une place
-           est un aplat très détaillé, ce qui n'est pas la même chose qu'une
-           place. C'est le même argument que la minorité de pierres chaudes des
-           pavés de rue (434). */
-        /* ⚠️⚠️ ZIP 439 — CES DEUX FRÉQUENCES ONT MONTÉ (0,13→0,20 et
-           0,08→0,14), ET C'EST UNE COMPENSATION ASSUMÉE. La fêlure du 436
-           portait à elle seule une part de la « matière » mesurée par
-           `render-escaliers.mjs` ; en la rendant discrète (elle se lisait comme
-           un chevron dessiné, voir sa note), l'écart-type du dallage est tombé
-           de ×3,3 à ×2,9 du damier de 425 et le contrôle a échoué.
-           ⚠️ ON N'A PAS DESSERRÉ LE SEUIL, ET ON N'A PAS REMIS LA FÊLURE : on a
-           rendu la matière PAR OÙ ELLE DOIT VENIR. La note de `BODY` le dit
-           trois lignes plus haut — une place est faite de PEU DE GRANDES
-           PIERRES, donc sa matière tient dans l'écart d'une pierre À L'AUTRE et
-           non dans le grain de chacune. Une dalle sur cinq franchement plus
-           sombre et une sur sept franchement plus claire, c'est exactement ça ;
-           du grain en plus aurait rattrapé le chiffre en trahissant la règle. */
-        if (r() < 0.20) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, "#98968f");
-        else if (r() < 0.14) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, "#c4c2b9");
-        // Mousse dans les joints, côté sud de la dalle — là où l'eau stagne.
-        if (r() < 0.4) roadWrap(g, x + 2 + ((r() * (w - 5)) | 0), y + rh - 2, 2 + ((r() * 3) | 0), 1, "#6b7355");
-        x = (x + w) % ROAD_N;
       }
-      y += rh;
+      if (!own) { P(g, x, y, 1, 1, "#4a4843"); continue; }
+      const ring = Math.floor(own.d / RH), fr = own.d / RH - ring;
+      const circ = Math.max(1, Math.round(Math.PI * (ring + 0.5) * RH / SW));   // pavés sur le demi-tour
+      const t = (own.a / Math.PI) * circ + (ring % 2) * 0.5, sIdx = Math.floor(t), ft = t - sIdx;
+      // Les indices d'écaille ramenés à la période (64 px = 2 pas) : même pavé des deux côtés d'une couture.
+      const ii = ((own.i % 2) + 2) % 2, jj = ((own.j % 4) + 4) % 4;
+      const h = hash(ii, jj, ring, sIdx);
+      let col = (h % 9 === 0) ? WARM[(h >>> 4) % WARM.length] : BODY[(h >>> 3) % BODY.length];
+      if (own.d > RD - 1.2) col = "#4f4d48";                                         // l'arc de l'écaille
+      else if (fr < 0.2 || ft < 0.16) col = "#55534d";                               // les joints
+      else if (fr > 0.82 || ft > 0.9) col = hexShift(col, -14);                      // le côté à l'ombre
+      else if (fr < 0.36 && ft < 0.5) col = hexShift(col, 12);                       // l'arête éclairée
+      P(g, x, y, 1, 1, col);
+    }
+    return c;
+  }
+  /* LA ROSACE DE LA FONTAINE : des anneaux de pavés clairs autour de la vasque,
+     jusqu'à `FTN_ROSE_R` px, cerclés d'un anneau de pierres de bordure plus
+     sombres. Transparente hors du cercle : elle se pose PAR-DESSUS l'opus.
+     Son centre est le centre de la fontaine (2×2 cases). */
+  function townFountainRose() {
+    const R = FTN_ROSE_R, N = 2 * R;
+    const [c, g] = cv(N, N);
+    const RH = 5, SW = 6;
+    const BODY = ["#c2c0b7", "#b9b7af", "#c8c6bd", "#b3b1a9", "#bebcb3", "#c5c3ba", "#afada5"];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = x + 0.5 - R, dy = y + 0.5 - R, d = Math.hypot(dx, dy);
+      if (d > R) continue;
+      const a = Math.atan2(dy, dx);
+      if (d > R - 5) {                                                               // l'anneau de bordure
+        const n = Math.round(2 * Math.PI * (R - 2.5) / 9), t = ((a + Math.PI) / (2 * Math.PI)) * n, ft = t - Math.floor(t);
+        P(g, x, y, 1, 1, ft < 0.12 || d > R - 1 ? "#6d6b66" : d > R - 2 ? "#8b8983" : ft < 0.3 ? "#b0aea6" : "#9d9b94");
+        continue;
+      }
+      const ring = Math.floor(d / RH), fr = d / RH - ring;
+      const n = Math.max(4, Math.round(2 * Math.PI * (ring + 0.5) * RH / SW));
+      const t = ((a + Math.PI) / (2 * Math.PI)) * n + (ring % 2) * 0.5, sIdx = Math.floor(t), ft = t - sIdx;
+      let col = BODY[(((ring * 131 + sIdx * 17) >>> 0) % BODY.length)];
+      if (fr < 0.2 || ft < 0.14) col = "#6a6863";
+      else if (fr > 0.8 || ft > 0.9) col = hexShift(col, -16);
+      else if (fr < 0.36) col = hexShift(col, 10);
+      P(g, x, y, 1, 1, col);
     }
     return c;
   }
@@ -16894,13 +17203,18 @@ export function buildSprites() {
       return {
         dry: contourOverlay(townGrassSurface(GRASS_PAL.dry), 0x51),
         lush: contourOverlay(townGrassSurface(GRASS_PAL.lush), 0x73),
-        details: [0, 1, 2, 3].map((k) => [0, 1, 2].map((vr) => detPut(townGrassDetail(k, vr)))),
+        details: [0, 1, 2, 3, 4, 5, 6].map((k) => [0, 1, 2].map((vr) => detPut(townGrassDetail(k, vr)))),
       };
     })(),
     townRoad: {
       sup: ROAD_SUP,
       kerbW: 4,
-      asphalt: townAsphaltSurface(),
+      asphalt: townAsphaltSurface(0x2b93),
+      /* 2026-09-27 (phase 10) — quatre goudrons au même grain, l'un par bloc de
+         4×4 cases (voir `townAsphaltSurface`) : ni fissure ni reprise ne
+         revient à intervalle fixe. La première EST `asphalt` (les bancs) ;
+         `asphaltVars` porte les trois autres (trois canevas de plus, pas quatre). */
+      asphaltVars: [0x51c7, 0x9e2d, 0x3a61].map((sd) => townAsphaltSurface(sd)),
       cobble: townCobbleSurface(),
       brick: townBrickSurface(),
       // Bordure de pierre pour le goudron et les pavés, bordure de brique
@@ -16908,7 +17222,11 @@ export function buildSprites() {
       kerb: { n: townKerbStrip("n", KERB_STONE), s: townKerbStrip("s", KERB_STONE), e: townKerbStrip("e", KERB_STONE), w: townKerbStrip("w", KERB_STONE) },
       kerbBrick: { n: townKerbStrip("n", KERB_BRICK), s: townKerbStrip("s", KERB_BRICK), e: townKerbStrip("e", KERB_BRICK), w: townKerbStrip("w", KERB_BRICK) },
       // ZIP 436 — le dallage des esplanades, dernier damier de 16 px de la ville.
-      flag: townFlagSurface(),
+      flag: townFlagCivicSurface(),
+      // 2026-09-27 (phase 10) — les deux autres familles et la rosace de la fontaine.
+      flagTerrace: townFlagTerraceSurface(),
+      setts: townSettFanSurface(),
+      fountainRose: townFountainRose(),
       // ZIP 437 — le gravier des promenades de parc et de rive.
       gravel: townGravelSurface(),
       // 2026-09-25 (phase 4) — la terre battue, et les deux sentiers découpés
@@ -16929,7 +17247,23 @@ export function buildSprites() {
     /* ZIP 439 — un PAVÉ de 64 px par espèce, plus huit tuiles de 16 (voir la
        note de `townBloomSurface`). `sup` voyage avec les images, comme pour
        `townRoad` : le jour où la période change, le rendu n'a rien à savoir. */
-    townBloom: { sup: ROAD_SUP, surf: Array.from({ length: C.BL_KINDS }, (_, k) => townBloomSurface(k + 1)) },
+    /* 2026-09-27 (phase 10) — `seasonal[saison][espèce - 1]` : les massifs
+       cultivés de chaque saison (voir `townBedSurface`) ; la prairie reste le
+       semis du 437 (`surf`), en toute saison — un seul canevas partagé. */
+    townBloom: (() => {
+      const surf = Array.from({ length: C.BL_KINDS }, (_, k) => townBloomSurface(k + 1));
+      const winter = townBedWinterSurface();
+      const seasonal = {};
+      for (const sk of ["spring", "summer", "autumn", "winter"]) {
+        seasonal[sk] = Array.from({ length: C.BL_KINDS }, (_, k) => {
+          const kind = k + 1;
+          if (kind === C.BL_WILD) return surf[k];
+          if (sk === "winter") return winter;
+          return townBedSurface(BED[BED_SEASON[sk][kind]], 0x3b17 + kind * 131 + sk.length * 17);
+        });
+      }
+      return { sup: ROAD_SUP, surf, seasonal };
+    })(),
     townShrub: [0, 1, 2, 3, 4, 5].map(v => townShrubSprite(v)),
     townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
     /* ══ ZIP 439 — LES SPRITES DE LA PLANCHE, TELS QUELS ══

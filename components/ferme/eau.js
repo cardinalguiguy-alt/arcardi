@@ -993,6 +993,25 @@ export function drawWaterSwellBand(ctx, wx, wy, px, py, w, top, now, d, depthsMa
       la profondeur CUITE (un rocher ne sort pas d'une eau de trois mètres). */
 const GLINT_MS = 460;
 const WAT_SHOAL = Math.round((N_LEV - 1) * 0.30);
+/* ⚠️ 2026-09-27 (phase 9, audit) — LES NÉNUPHARS CUITS NE POUSSENT QU'EN EAU
+   CALME. Semés sur 8 % de toute case profonde, ils flottaient au milieu du PORT,
+   entre le navire et le quai. Ils restent sur l'étang du parc et aux abords des
+   ROSELIÈRES du lac (à `LILY_NEAR` cases d'un roseau ou d'un nénuphar posé par
+   le générateur) : là où l'eau dort. L'ensemble se calcule une fois par carte
+   (une carte de ville ne change jamais, §6). */
+const LILY_NEAR = 3;
+const lilyCalm = new WeakMap();
+function lilyCalmCells(tw) {
+  let set = lilyCalm.get(tw);
+  if (set) return set;
+  set = new Set();
+  for (const p of tw.props || []) {
+    if (p.kind !== "reedsWater" && p.kind !== "reedTuft" && p.kind !== "lily") continue;
+    for (let dy = -LILY_NEAR; dy <= LILY_NEAR; dy++) for (let dx = -LILY_NEAR; dx <= LILY_NEAR; dx++) set.add((p.y + dy) * tw.w + p.x + dx);
+  }
+  lilyCalm.set(tw, set);
+  return set;
+}
 export function drawWaterSurface(ctx, S, tw, bake, x, y, px, py, now) {
   const info = bakedCellInfo(bake, x, y);
   if (!info || tw.ground[y * tw.w + x] !== C.G_WATER) return false;
@@ -1057,7 +1076,7 @@ export function drawWaterSurface(ctx, S, tw, bake, x, y, px, py, now) {
     const hh = waterHash(x * 11 + 3, y * 13 + 7);
     const blit = (cell) => ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, px, py, cell.w, cell.h);
     if (SW.wrock && d <= WAT_SHOAL && (hh % 100) < 7) blit(SW.wrock[(hh >>> 7) % SW.wrock.length]);
-    else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 8) blit(SW.lily[(hh >>> 11) % SW.lily.length]);
+    else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 8 && (R.isPond || lilyCalmCells(tw).has(y * tw.w + x))) blit(SW.lily[(hh >>> 11) % SW.lily.length]);
   }
   return true;
 }
@@ -1130,7 +1149,16 @@ export function makeWaterReflector(makeCanvas) {
   /* LE JOUR. `items` : { rb (ligne de sol, px monde), rx (colonne, case) } ;
      `axisOffOf(item)` : de combien l'axe descend sous la ligne de sol ;
      `drawItem(item, g)` : redessine l'objet sur `g`, dans le repère monde. */
-  function draw(ctx, view, bake, items, now, axisOffOf, drawItem) {
+  /* ⚠️ 2026-09-27 (phase 9, audit : « les bancs du quai, en retrait de la rive,
+     se reflètent au ras de l'eau ») — `occludeOf(item)` : les bandes (px monde)
+     que cache, dans le reflet de cet objet, le reflet du PAREMENT qui le porte.
+     Le miroir est juste (l'axe est le plan de l'eau) ; ce qui manquait est que
+     le quai est un bloc : le rayon qui frappe l'eau à moins d'un parement du
+     pied du mur remonte dans le quai reflété, pas vers ce qui est posé derrière.
+     Ces premières rangées d'eau montrent le parement, jamais un banc en
+     retrait. Un objet planté au bord n'y perd rien (son reflet commence juste
+     en dessous) ; ce qui flotte (sans bande) passe après, rien ne le rogne. */
+  function draw(ctx, view, bake, items, now, axisOffOf, drawItem, occludeOf) {
     if (!bake || !items.length) return;
     const zm = view.zm;
     const ox = Math.floor(view.Rx / zm), oy = Math.floor(view.Ry / zm);
@@ -1143,12 +1171,20 @@ export function makeWaterReflector(makeCanvas) {
     Rg.globalAlpha = 1;
     Rg.clearRect(0, 0, Lw, Lh);
     let n = 0;
-    for (const it of items) {
+    const put = (it) => {
       const axis = it.rb + axisOffOf(it);
-      if (axis - oy > rows.y1 || axis + 96 - oy < rows.y0) continue;
+      if (axis - oy > rows.y1 || axis + 96 - oy < rows.y0) return;
       Rg.setTransform(1, 0, 0, -1, -ox, 2 * axis - oy);
       try { drawItem(it, Rg); n++; } catch (e) { /* un reflet raté ne coûte pas l'image */ }
+    };
+    const rest = [], occ = [];
+    for (const it of items) {
+      const o = occludeOf ? occludeOf(it) : null;
+      if (o && o.length) { put(it); for (const q of o) occ.push(q); } else rest.push(it);
     }
+    Rg.setTransform(1, 0, 0, 1, 0, 0);
+    for (const q of occ) Rg.clearRect(q.x - ox, q.y - oy, q.w, q.h);
+    for (const it of rest) put(it);
     Rg.setTransform(1, 0, 0, 1, 0, 0);
     if (!n) return;
     Rg.globalCompositeOperation = "source-atop";
