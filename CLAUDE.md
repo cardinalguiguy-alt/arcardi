@@ -1271,6 +1271,16 @@ MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, a
 fenêtres (phase 6) ; (3) les restes de la phase 4 (bittes d'amarrage,
 reflets du navire et des fenêtres, chemins de désir).
 
+⚠️ **CHANTIER FUTUR, MIS EN RÉSERVE LE 2026-09-27 : L'ÉCHELLE DES ARBRES DE VALLEY TOWN.** Mesuré à
+13,5 px/m (personnage 23 px = 1,70 m) : maisons 8,9–10,7 m, tribunal 19 m, église 15 m — cohérents ;
+**l'arbre 48×64 fait 4,7 m** (un arbuste), la carte 265 × 200 m, la vitesse ~22 km/h. ⚠️ **Écarté** :
+réduire personnages et mobilier en gardant les maisons (portes à 4 m, et un sprite réduit perd les ¾ de
+ses pixels — sauf à redessiner tout le décor à double densité). **Retenu pour plus tard** : arbres
+×1,6 à ×2 (7,5–9,5 m), REDESSINÉS à la même densité (jamais agrandis), avec dans le même geste la
+transparence du feuillage devant le joueur (inexistante aujourd'hui), un recul arbre–bâtiment posé en
+passe FINALE (§4), `TOWN_REFL_ROWS` et les ombres recalés, bois éclaircis ; à coupler avec la phase 7
+(haies) qui partage les contours de parcelle. Optionnel : vitesse vers 4 cases/s, flèches d'église.
+
 ✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :
 bloc ⏭️ REPRISE et `QUETE.md`, autorité 2026-09-13 bis). ⚠️ **Le vandale reste anonyme, jamais
 élucidé dans cette quête** — réservé à une quête future ; ne jamais lui donner d'identité.
