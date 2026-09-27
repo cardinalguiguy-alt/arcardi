@@ -21771,7 +21771,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `nearCivicDoor` fonctionne sur eux sans une ligne de plus, et l'invite
          ne peut pas se désaccorder de la touche E. La marge basse de 4 px est
          celle de leurs canevas (voir fermeArt.js). */
-      drawCivic(C.TOWN_BOUTIQUE, sprites.townBoutique, 4);
+      // ⚠️ 2026-09-27 (phase 6b) : la Maison Garfield est PEINTE — elle se
+      // dessine avec les maisons peintes (`queueTownShop`, plus bas), là où
+      // leurs flaques de lumière se déclarent. `sprites.townBoutique` n'est
+      // plus dessiné (dette : il est encore fabriqué au chargement).
       drawCivic(C.TOWN_SALON, sprites.townSalon, 4);
       /* ⚠️⚠️ LEURS NOMS SONT ÉCRITS ICI, PAS DANS LEURS SPRITES. Deux raisons,
          la seconde étant celle qui tranche :
@@ -21805,7 +21808,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.textAlign = "left";
           });
         };
-        plate(C.TOWN_BOUTIQUE, sprites.townBoutique, L.boutiqueTitle, null);
+        // La boutique n'a plus de plaque : son nom est peint sur l'oriel (voir `TOWN_SHOP_MODELS`).
         plate(C.TOWN_SALON, sprites.townSalon, "Salon", L.salonPlate);
       }
       /* LA GARE DE VALLEY TOWN (427) : le bâtiment de la ferme, tel quel. Une
@@ -22326,13 +22329,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const queueTownHouse = (hsn, look, o) => {
         const M = C.TOWN_HOUSE_MODELS[look.model], V = M.variants[look.variant];
         const SB = C.TOWN_BITMAPS[C.townHouseBitmapKey(look.model, look.variant)];
-        const k = C.TOWN_HOUSE_SCALE, [c0, c1, cw, ch] = V.crop;
+        const k = C.townDoorScale(M), [c0, c1, cw, ch] = V.crop;
         const doorWX = (hsn.x + C.TOWN_HOUSE_W / 2) * T, footWY = (hsn.y + C.TOWN_HOUSE_H) * T;
         const cxW = doorWX + (c0 + cw / 2 - M.door) * k, byW = footWY + (c1 + ch - M.foot) * k;
         const topW = footWY + (c1 - M.foot) * k;
         const wallL = doorWX + (M.wall[0] - M.door) * k, wallR = doorWX + (M.wall[1] - M.door) * k;
         const houseE = elAt(hsn.x + 2, hsn.y + C.TOWN_HOUSE_H - 1);
-        const wins = C.townHouseWins(look.model, look.variant);
+        const wins = C.townPaintedWins(look.model, look.variant);
         const rects = [];
         if (o.owned && winNa > 0) {
           let wi = 0;
@@ -22396,6 +22399,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         });
       }
       queueTownHouse(C.TOWN_RUIN, C.townHouseLook(C.TOWN_RUIN), { ruin: true });
+      /* 2026-09-27 (phase 6b) — LES COMMERCES PEINTS (`C.TOWN_SHOP_MODELS`).
+         Même pose que les maisons — l'image calée sur sa PORTE PEINTE
+         (`C.townShopDoorX`) et sur le bas de son rectangle, à son échelle
+         (`C.townShopScale` : la Maison Garfield remplit son rectangle, voir
+         sa note) — mais un LIEU au lieu d'une parcelle : pas de plaque, pas de R.
+         ⚠️ La nuit, tout le calque s'allume d'un bloc (vitrines, imposte,
+         appliques) et SEULEMENT quand Carla tient la boutique : sans elle, la
+         Maison Garfield est fermée (`townBoutiqueShut`), et une vitrine
+         éclairée devant une boutique fermée mentirait. L'embase (`drawCivic`)
+         plutôt que l'ombre des maisons : le devant est dallé de pierre claire
+         (note du 425 sur les monuments). */
+      const queueTownShop = (mk) => {
+        const M = C.TOWN_SHOP_MODELS[mk], V = M.variants.simple, b = C.townShopSite(M);
+        const SB = C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, "simple")];
+        const k = C.townShopScale(M), [c0, c1, cw, ch] = V.crop;
+        const doorWX = C.townShopDoorX(M) * T, footWY = (b.y + b.h) * T;
+        const cxW = doorWX + (c0 + cw / 2 - M.door) * k, byW = footWY + (c1 + ch - M.foot) * k;
+        const wallL = doorWX + (M.wall[0] - M.door) * k, wallR = doorWX + (M.wall[1] - M.door) * k;
+        const shopE = elAt(b.x, b.y + b.h - 1);
+        const glowA = carlaIsResident() ? houseLit : 0;
+        /* La lumière des vitrines SUR LE PAVÉ (Guillaume : « bien travailler
+           l'éclairage des vitrines, c'est important »). Une vitrine de trois
+           cases n'est pas une fenêtre : un seul anneau devant son milieu faisait
+           une tache ronde. Elle pose une NAPPE — un anneau par case de largeur,
+           qui se recouvrent — d'un blanc chaud d'halogène (`vitrine`, lumiere.js) ;
+           l'étage d'exposition, en hauteur, porte plus loin et plus faiblement. */
+        if (glowA > 0.01 && winNa > 0) {
+          const gy = footWY / T + 0.35 - shopE * EP / T;
+          for (const w of C.townPaintedWins(mk, "simple")) {
+            const x0 = (doorWX + (w.x - M.door) * k) / T, x1 = (doorWX + (w.x + w.w - M.door) * k) / T;
+            if (w.lamp) { townWinLights.push({ x: (x0 + x1) / 2, y: gy, r: 1.6, c: "lamp", k: 0.5 * glowA }); continue; }
+            if (!w.g && !w.show) continue;                  // l'imposte, l'enseigne : pas de flaque à elles
+            const far = !w.g, n = Math.max(1, Math.round((x1 - x0) / (far ? 2.2 : 1.1)));
+            for (let i = 0; i < n; i++) townWinLights.push({
+              x: x0 + (i + 0.5) * (x1 - x0) / n, y: gy + (far ? 1.6 : 0),
+              r: far ? 3.0 : 2.2, c: "vitrine", k: (far ? 0.24 : 0.46) * glowA,
+            });
+          }
+        }
+        pushE(footWY, shopE, () => {
+          drawBuildingFooting(ctx, (wallL + wallR) / 2, footWY, (wallR - wallL) / 2);
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA);
+          if (!r) return;
+          // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
+          lightBuilding(wallL, b.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
+          if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, glowA);
+        });
+      };
+      for (const mk of Object.keys(C.TOWN_SHOP_MODELS)) queueTownShop(mk);
       // Station sign (ride back to the farm), reusing the farm's ad board sprite.
       draws.push({ y: (C.TOWN_STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.TOWN_STATION_SIGN.x * T - 1, C.TOWN_STATION_SIGN.y * T - 6) });
       /* ╔════════════════════════════════════════════════════════════════════

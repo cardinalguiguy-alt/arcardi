@@ -153,14 +153,50 @@ for (const cx of C.TOWN_ST_COLS) {
   ok("la porte de la maison hantée est accessible", reach(rx, ry) || reach(rx + 1, ry), `(${rx},${ry})`);
 }
 /* 2026-09-26 (phase 6a) — LES MAISONS PEINTES. La collision d'une parcelle vient
-   de sa LARGEUR, jamais du modèle choisi avec R : tous les modèles d'une même
-   largeur doivent donc avoir la même emprise, sinon changer de façade ferait
+   de sa LARGEUR, jamais du modèle choisi avec R, sinon changer de façade ferait
    passer à travers un mur (ou buter sur du vide). Et l'emprise doit être
-   exactement ce que le générateur a posé. */
+   exactement ce que le générateur a posé.
+   ⚠️ 2026-09-27 — chaque maison à l'échelle de SA porte : N1 et N2 n'ont plus la
+   même emprise (2..6 et 1..6). La largeur prend la RÉUNION (`townHouseSizeFoot`) :
+   aucun mur ne peut donc déborder de l'emprise de sa largeur (par construction,
+   rien à contrôler). Ce qui peut casser, c'est l'inverse — un modèle plus étroit
+   que la réunion, à côté duquel on buterait sur de l'air : chacun doit couvrir
+   au moins 30 % de chaque case de l'emprise de sa largeur. (Falsifié le jour de
+   son écriture : le mur de N1 rétréci de 60 px à gauche → « n1 case 1 (1 %) ».) */
 {
+  const cover = (sp, c) => Math.max(0, Math.min(sp.R, c + 1) - Math.max(sp.L, c));
   for (const size of C.TOWN_HOUSE_SIZES) {
-    const feet = C.townHouseModelsOf(size).map(k => JSON.stringify(C.townHouseModelFoot(C.TOWN_HOUSE_MODELS[k])));
-    ok(`largeur « ${size} » : ${feet.length} modèle(s), une seule emprise`, feet.length > 0 && new Set(feet).size === 1, feet.join(" "));
+    const sf = C.townHouseSizeFoot(size), models = C.townHouseModelsOf(size);
+    const own = models.map(k => { const f = C.townHouseModelFoot(C.TOWN_HOUSE_MODELS[k]); return `${k} ${f.dx}..${f.dx + f.w - 1}`; });
+    const thin = [];
+    for (const k of models) {
+      const sp = C.townHouseWallSpan(C.TOWN_HOUSE_MODELS[k]);
+      for (let c = sf.dx; c < sf.dx + sf.w; c++) if (cover(sp, c) < 0.3) thin.push(`${k} case ${c} (${Math.round(cover(sp, c) * 100)} %)`);
+    }
+    ok(`largeur « ${size} » : emprise ${sf.dx}..${sf.dx + sf.w - 1}, chaque modèle en couvre ≥ 30 % de chaque case`, models.length > 0 && thin.length === 0,
+       `${own.join(" · ")} ; ${thin.join(" · ") || `${models.length * sf.w} cases lues`}`);
+  }
+  /* 2026-09-27 (phase 6b) — LES COMMERCES PEINTS. Le rectangle reste le LIEU ;
+     ce qui bloque est le MUR à l'échelle de la porte (`townShopFoot`). Deux
+     choses à tenir : le mur ne sort pas du rectangle de plus d'une demi-case
+     (au-delà, rien ne le rendrait plein — on traverserait un mur peint), et la
+     carte bloque exactement ses colonnes, pas une de plus (pas de mur invisible
+     sur le pavé libéré). Falsifiés le jour de leur écriture, chacun sur SON
+     défaut : la porte de la Maison Garfield déplacée de 100 px dans l'image →
+     « mur 120.39..125.92 » ; la passe finale du générateur coupée → « (127,12)
+     plein (128,12) plein… ». ⚠️ Le second ne voit pas le premier défaut : le
+     banc et le générateur lisent la même emprise — il tient le GÉNÉRATEUR. */
+  for (const [mk, m] of Object.entries(C.TOWN_SHOP_MODELS)) {
+    const b = C.townShopSite(m), sp = C.townShopWallSpan(m), f = C.townShopFoot(m);
+    ok(`commerce « ${mk} » : son mur peint tient dans son rectangle`, sp.L >= b.x - 0.5 && sp.R <= b.x + b.w + 0.5,
+       `mur ${sp.L.toFixed(2)}..${sp.R.toFixed(2)}, rectangle ${b.x}..${b.x + b.w}`);
+    const wrong = [];
+    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
+      const want = x >= f.x && x < f.x + f.w;
+      if (!!tw.solid[idx(x, y)] !== want) wrong.push(`(${x},${y}) ${want ? "libre" : "plein"}`);
+    }
+    ok(`commerce « ${mk} » : la carte bloque ses ${f.w} colonnes de mur et libère les ${b.w - f.w} autres`, wrong.length === 0,
+       wrong.slice(0, 6).join(" ") || `${b.w * b.h} cases lues`);
   }
   let bad = [], cells = 0;
   for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) {
@@ -921,9 +957,14 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
      garde-fou du tribunal (426), où les colonnes du couloir muraient six pièces
      sur dix-sept. Les portes sont au MILIEU de la façade sud (c'est ce que
      suppose nearCivicDoor) : on vérifie les trois cases devant chacune. */
+  /* ⚠️ 2026-09-27 : la porte PEINTE d'un commerce n'est plus forcément au milieu
+     (la Maison Garfield remplit son rectangle, sa porte vitrée tombe en x+5,8) :
+     on vérifie devant ELLE — les cases sous son cadre, ± une. */
   const bad = [];
+  const shopOf = (b) => Object.values(C.TOWN_SHOP_MODELS).find(m => C.townShopSite(m) === b);
   for (const [name, b] of [["boutique", C.TOWN_BOUTIQUE], ["salon", C.TOWN_SALON], ["tribunal", C.TOWN_COURT], ["gare", C.TOWN_STATION]]) {
-    const dx = b.x + Math.floor(b.w / 2);
+    const sm = shopOf(b);
+    const dx = sm ? Math.floor(C.townShopDoorX(sm)) : b.x + Math.floor(b.w / 2);
     for (let k = -1; k <= 1; k++) for (let dy = 1; dy <= 2; dy++) {
       if (!walkable(dx + k, b.y + b.h + dy - 1)) bad.push(`${name}(${dx + k},${b.y + b.h + dy - 1})`);
     }

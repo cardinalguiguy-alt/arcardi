@@ -7638,14 +7638,17 @@ export function generateTownWorld() {
      2026-09-26 (phase 6a) — LES MAISONS PEINTES : L'EMPRISE DU MUR.
      ───────────────────────────────────────────────────────────────────────
      La parcelle réservée plus haut (6 × 3) devient l'emprise du mur peint :
-     6 cases décalées d'une vers l'est pour les standard (la porte de S1 n'est
-     pas au milieu de sa façade), 4 pour les étroites. Elle vient de la LARGEUR
-     de la parcelle (`C.townHouseFoot`), jamais du modèle qu'un joueur choisit
-     avec R. ⚠️ EN DERNIER ET SANS TIRAGE (§4) : poser la vraie emprise pendant
-     la génération déplaçait 717 cases ailleurs sur la carte. Les cases libérées
-     n'ont rien reçu (elles étaient réservées) : elles redeviennent du jardin.
-     La case gagnée à l'est (S1) était du gazon de jardin : on y retire ce qui
-     aurait pu y pousser. */
+     depuis que chaque maison est à l'échelle de sa porte (2026-09-27), 7 cases
+     décalées d'une vers l'est pour les standard (x+1..x+7 : la porte de S1 est
+     au tiers de sa façade), 6 pour les étroites (x+1..x+6). Elle vient de la
+     LARGEUR de la parcelle (`C.townHouseFoot`), jamais du modèle qu'un joueur
+     choisit avec R. ⚠️ EN DERNIER ET SANS TIRAGE (§4) : poser la vraie emprise
+     pendant la génération déplaçait 717 cases ailleurs sur la carte. Les cases
+     libérées n'ont rien reçu (elles étaient réservées) : elles redeviennent du
+     jardin. Les cases gagnées étaient du gazon de jardin — et, pour les
+     standard, la haie de l'est (x+7), qui reste une haie sous le mur : les
+     haies entouraient les anciennes façades et seront refaites autour des
+     nouvelles (Guillaume, 2026-09-27). On y retire ce qui aurait pu pousser. */
   for (const hsn of C.TOWN_HOUSES) {
     rect({ x: hsn.x, y: hsn.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }, (x, y, i) => { if (!hedge[i]) solid[i] = 0; });
     const f = C.townHouseFoot(hsn);
@@ -7657,6 +7660,20 @@ export function generateTownWorld() {
       const p = props[k];
       if (p.x >= f.x && p.x < f.x + f.w && p.y >= f.y && p.y < f.y + f.h) props.splice(k, 1);
     }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-27 (phase 6b) — LES COMMERCES PEINTS : LE MUR BLOQUE, PAS LE LIEU.
+     ───────────────────────────────────────────────────────────────────────
+     Le rectangle d'un commerce a été rendu plein plus haut, avec les
+     monuments — et il y reste : une case libérée PLUS TÔT changerait les
+     tirages des décors (§4). À l'échelle de sa porte, la Maison Garfield ne
+     couvre plus que 6 de ses 8 colonnes (`C.townShopFoot`) : les deux de l'est
+     redeviennent le pavé qu'elles étaient dessous — rien n'y a été posé, elles
+     étaient pleines. */
+  for (const m of Object.values(C.TOWN_SHOP_MODELS)) {
+    const b = C.townShopSite(m), f = C.townShopFoot(m);
+    rect(b, (x, y, i) => { if (x < f.x || x >= f.x + f.w) solid[i] = 0; });
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -7675,7 +7692,12 @@ export function generateTownWorld() {
   {
     const R = C.TOWN_RUIN, f = C.townHouseFoot(R);
     const clearTree = (x, y) => { if (!inMap(x, y)) return; const i = id(x, y); if (objects[i] === C.O_TREE || objects[i] === C.O_TREE2 || objects[i] === C.O_STUMP) { objects[i] = C.O_NONE; objHp.delete(i); } };
-    for (let y = R.y; y < R.y + C.TOWN_HOUSE_H + 2; y++) for (let x = R.x + 1; x < R.x + C.TOWN_HOUSE_W + 1; x++) clearTree(x, y);
+    /* Sur toute la largeur de son IMAGE, pas de son mur (2026-09-27) : à
+       l'échelle de sa porte, la ruine déborde jusqu'en x+0,4 et x+8,1 (décombres
+       des flancs) — un arbre gardé en x+0, pris à x+1..x+6, poussait devant
+       l'angle de sa façade (vu au banc de ce jour-là, jamais en jeu). */
+    const img = C.townHouseImageSpan(R.model, R.variant);
+    for (let y = R.y; y < R.y + C.TOWN_HOUSE_H + 2; y++) for (let x = R.x + Math.floor(img.L); x < R.x + Math.ceil(img.R); x++) clearTree(x, y);
     // Les décors qu'elle recouvre, décombres des flancs compris (une case de
     // part et d'autre du mur) — et leur case redevient libre, sans quoi un
     // buisson retiré laisserait un mur invisible (verify-vallee l'a vu).
@@ -7845,8 +7867,11 @@ export function townSpots(tw) {
   // Le parvis de l'église.
   add(C.TOWN_CHURCH.x + 3, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2, "pray");
   // La vitrine de la Maison Garfield : on s'y colle le nez, on n'entre pas.
+  // ⚠️ 2026-09-27 : les deux devant l'ORIEL peint (x+1..x+3 du rectangle, la
+  // porte à sa droite). La seconde était en x+w-2, devant l'ancienne façade de
+  // 8 cases — devant du pavé nu depuis que la boutique est à l'échelle de sa porte.
   add(C.TOWN_BOUTIQUE.x + 1, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
-  add(C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w - 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
+  add(C.TOWN_BOUTIQUE.x + 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
   add(C.TOWN_SALON.x + 1, C.TOWN_SALON.y + C.TOWN_SALON.h + 1, "window");
 
   /* ═════════════════════════════════════════════════════════════════════════

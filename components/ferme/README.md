@@ -1,4 +1,46 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-27
+
+## 2026-09-27 — LES MAISONS À L'ÉCHELLE DE LEUR PORTE ; 6b : LA MAISON GARFIELD PEINTE
+
+Guillaume : « redimensionner toutes les nouvelles maisons à une échelle réaliste : tu prends la porte et
+tu mets le player devant », puis « caveman on », puis, sur la boutique, « bien plus grande stp ».
+- **Mesuré** : à l'échelle commune du 2026-09-26 (26/248), le VANTAIL des maisons faisait 22 à 23 px —
+  la taille du personnage (23 px peints = 1,70 m) : une porte de 1,70 m, et un pixel de chaque côté des
+  épaules chez S1. **Chaque modèle est désormais à l'échelle de SON vantail** (`doorH`, du seuil au
+  sommet, relevé au pixel ; `townDoorScale`) : 27,6 px = 2,04 m, soit ×1,17 (S1) à ×1,24 (N2). Planche
+  de comparaison refaite personnage devant chaque porte ; vu en jeu, zoom 5, devant N2.
+- **Emprises** : S1 → cases 1..7, N1 → 2..6, N2 → 1..6. Une largeur prend la RÉUNION de ses modèles
+  (`townHouseSizeFoot`) ; `verify-vallee` exige que chaque modèle en couvre ≥ 30 % de chaque case
+  (falsifié). Seuil de collision rendu symétrique (50 %) : il valait 60 % à gauche, 40 % à droite.
+- **Les haies n'ont pas bougé** : la case gagnée à l'est des standard (x+7) est la haie de l'anneau, qui
+  reste sous le mur. Guillaume : haies et jardins seront refaits autour des nouvelles maisons. Relevé au
+  passage (script, pas en jeu) : le puits et l'arbre de la pie de la parcelle #20 passent en partie
+  derrière le toit agrandi ; devant la maison hantée, un arbre poussait à l'angle — dégagé (sur toute
+  la largeur de son IMAGE, `townHouseImageSpan`).
+- **La Maison Garfield** (`refs/boutique-garfield.jpg`, 1er bâtiment de la 6b) : `TOWN_SHOP_MODELS`,
+  mêmes repères que les maisons, fabriquée par `build-maison-sprites`. Le rectangle `TOWN_BOUTIQUE` reste
+  le LIEU (porte au sens de `nearCivicDoor`, parvis, bancs, résidents) ; l'image se cale sur sa porte
+  PEINTE (`townShopDoorX`). À l'échelle de sa porte elle faisait 5,7 cases — « bien plus grande » : son mur
+  remplit désormais tout son rectangle (`fit: "site"`, ×1,42 : porte vitrée de 2,95 m sous son imposte),
+  pas plus (la terrasse s'arrête en x=120). Son nom est PEINT (nom de maison, identique dans les deux
+  langues) : la plaque dessinée au-dessus n'est plus posée. Liseré violet chassé : bord du cadre compté
+  comme du fond, nettoyage sur 12 px, poches de magenta franc enfermées = fond (les maisons ressortent
+  identiques à l'octet).
+- **LES VITRINES LA NUIT** (Guillaume : « bien travailler l'éclairage des vitrines, c'est important ») :
+  une recette à elles (`showWindow`, `tools/lib-glow.mjs`) — la recette des maisons rendait l'étage
+  d'exposition en aplat beige délavé. Les articles gardent leurs couleurs (la lumière d'halogène les
+  multiplie), chaque SPOT peint au plafond (relevés au pixel) pose un cône et une coquille sur le fond et
+  sa lentille brille, la réglette de l'oriel éclaire jusqu'aux chapeaux du bas, les montants restent en
+  silhouette ; la porte vitrée montre une salle éclairée qui s'assombrit vers le sol (`shopInterior`) ;
+  les lettres dorées de l'enseigne accrochent la lumière (`signGold`). Au sol, une NAPPE blanc chaud
+  (`vitrine`, lumiere.js) : un anneau par case de vitrine au lieu d'un rond unique, et une lueur plus
+  lointaine sous l'étage d'exposition. Tout s'allume quand Carla tient la boutique ; fermée, rien.
+  Réglé sur une simulation de la composition du jeu (ciel qui multiplie, calque rajouté), puis vu en jeu.
+- **Vu en jeu** : la boutique de jour et de nuit (Carla résidente, vitrines et nappe au sol), l'invite
+  « E » devant sa porte peinte ; S1 riche, N2, la vieille ville. **Pas vu** : les autres parcelles une à une, la maison hantée
+  agrandie, deux joueurs. Bancs : 29/29 `verify-*` (`verify-vallee` 262, `verify-lumiere` 86), 24/24 `render-*`,
+  `no-undef`, bundle, `next build` complet. **Dette** : `S.townBoutique` (procédurale) encore fabriquée
+  au chargement, mesurée par `render-echelle`, plus dessinée.
 
 ## 2026-09-26 (nuit, suite) — 6a : N2, LA MAISON DE PIERRE PÂLE AUX VOLETS VERTS
 
@@ -411,7 +453,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1 (trois versions), N1 et N2 (simple, riche) et la maison hantée sont en jeu (récit en tête) ; restent N3, S2 à S4, W1 à W3 (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs`). ⬜ 6b attend ses images. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1 (trois versions), N1 et N2 (simple, riche) et la maison hantée sont en jeu, CHACUNE À L'ÉCHELLE DE SA PORTE depuis le 2026-09-27 (récit en tête) ; restent N3, S2 à S4, W1 à W3 (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs`). 🟨 6b EN COURS : ✅ la Maison Garfield (`TOWN_SHOP_MODELS`) ; restent la gare et le salon (images de Guillaume), le quai en procédural (une bande nord-sud vue d'en haut, pas une façade), la boutique de plage le jour où elle a une place. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties PAR QUARTIER.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 ✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).

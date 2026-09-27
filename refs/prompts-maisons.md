@@ -13,7 +13,7 @@ Une maison par image (une planche de dix ferait ~300 px par maison, flou au zoom
 | 5 | W1 | `maison-s1.jpg` | idem en `w1` |
 | 6 | W2 | **`maison-w1.jpg`** (W1 validée en jeu d'abord) | idem en `w2` |
 | 7 | W3 | **`maison-w1.jpg`** | idem en `w3` |
-| 8 | GARE, MAISON GARFIELD, SALON | `maison-s1.jpg` | `gare.jpg`, `boutique-garfield.jpg`, `salon.jpg` — une image chacun |
+| 8 | GARE, SALON (✅ MAISON GARFIELD, en jeu le 2026-09-27) | `maison-s1.jpg` | `gare.jpg`, `salon.jpg` — une image chacun |
 
 ⚠️ **Les étroites n'ont pas d'enrichie** : compté le 2026-09-26, les 8 parcelles étroites tombent en
 4 simples + 4 riches, aucune dans le quartier enrichi (le lac, les artisans). Les standard : 8 simples,
@@ -42,20 +42,18 @@ fond blanc mange les pâquerettes qui le touchent.)
 
 ## POURQUOI CHAQUE LIGNE IMPOSE LA PLACE DE LA PORTE (pour l'intégration)
 
-La collision d'une parcelle vient de sa LARGEUR, jamais du modèle : tous les modèles d'une largeur ont la
-même emprise (`townHouseModelFoot`, tenu par `verify-vallee`). Elle dépend de la largeur du mur du
-rez-de-chaussée ET de la place de la porte dans ce mur (l'image se cale sur la porte).
-- **Standard** (S1 : mur 102..998, porte 399) : la porte est au **tiers gauche** du mur. Tolérance à
-  l'échelle commune : de la porte au bord gauche du mur 245..397 px de référence, au bord droit
-  520..671 px — soit une porte entre 27 % et 43 % du mur. **Une porte centrée tombe hors tolérance**
-  (d'où S3, qui était « symétrique », réécrite).
-- **Étroite** (N1 : mur 206..882, porte 393) : la porte au **quart gauche** — « door on the LEFT ».
-- **Large** : la PREMIÈRE, W1, fixe la règle (porte au tiers gauche, imposée dans sa ligne) ; W2 et W3
+⚠️ **Depuis le 2026-09-27, chaque maison est à l'échelle de SA porte** (`townDoorScale`) : son VANTAIL
+(du seuil au sommet, `doorH`) fait 27,6 px d'art, une porte de 2,04 m à côté d'un personnage de 1,70 m.
+La taille de l'image de Gemini ne compte donc plus ; seules comptent les PROPORTIONS — largeur du mur du
+rez-de-chaussée et place de la porte, en hauteurs de vantail (H). La collision d'une parcelle vient de sa
+LARGEUR : l'emprise d'une largeur est la réunion de celles de ses modèles, et chaque modèle doit en
+couvrir ≥ 30 % de chaque case (`verify-vallee`). Pour ne pas changer l'emprise en place :
+- **Standard** (cases 1..7 ; S1 : 1,33 H | 2,67 H) : de la porte au bord gauche du mur 0,75 à 1,45 H, au
+  bord droit 2,5 à 3,2 H — la porte au **tiers gauche**. Une porte centrée sort de l'emprise.
+- **Étroite** (cases 1..6 ; N1 : 0,86 | 2,25 H ; N2 : 1,0 | 2,43 H) : à gauche 0,75 à 1,45 H, à droite
+  1,9 à 2,6 H — « door on the LEFT ».
+- **Large** : la PREMIÈRE, W1, fixe l'emprise (porte au tiers gauche, imposée dans sa ligne) ; W2 et W3
   la copient en prenant W1 en 4e image.
-⚠️⚠️ **LES LARGES NE TIENNENT PAS À L'ÉCHELLE COMMUNE** (`TOWN_HOUSE_SCALE` = 26/248) : 8 cases y font
-1 221 px de référence, et Gemini rend en 1 085 px de large. À l'arrivée de W1, une échelle PAR MODÈLE,
-**dérivée de sa porte** (26 px d'art / hauteur du cadre de porte), à défaut de la commune — le principe
-de l'échelle unique est que la PORTE garde la même hauteur partout, et c'est exactement ce que ça tient.
 **Intégrer une nouvelle maison** : une entrée dans `TOWN_HOUSE_MODELS` (fermeConstants.js — porte, pied du
 mur, mur, cadre et vitres relevés sur l'image simple ; vitre = verre mesuré + 4 px, lanterne = son verre
 seul), puis `node tools/build-maison-sprites.mjs`, puis la planche `tools/out/maisons.png`, puis le jeu
@@ -144,6 +142,15 @@ a large half-timbered house, exactly as wide as the house in the fourth image, w
 
 # Phase 6b — la gare et les commerces (même BASE, même méthode, une seule image chacun)
 
+⚠️⚠️ **LA LEÇON DE LA MAISON GARFIELD (2026-09-27)** : Gemini l'a peinte haute et étroite, porte à droite
+— un mur de 3,2 hauteurs de porte. À l'échelle de sa porte elle ne remplissait que 5,7 de ses 8 cases ;
+Guillaume la voulait « bien plus grande », elle remplit donc son rectangle avec une porte de 2,95 m
+(`fit: "site"`). ⚠️ **La nuit, une vitrine s'allume par SES SPOTS PEINTS** (`showWindow`, relevés au pixel) :
+demander des spots ou une réglette VISIBLES dans chaque vitrine. **Pour les suivants, demander une façade
+LARGE, porte simple AU MILIEU** : le rectangle
+place la porte au milieu (`nearCivicDoor`), et une façade d'environ 4 hauteurs de porte (salon, 7 cases)
+ou 2,5 (gare, 4 cases) remplit son rectangle avec une porte à hauteur d'homme.
+
 ⚠️ **Enseignes VIERGES** : le jeu écrit les noms lui-même, dans les deux langues — un texte cuit dans
 l'image ne se traduit pas (§4 de `CLAUDE.md`). 4e image : `maison-s1.jpg` (échelle et porte communes).
 Emprises sur la carte : gare 4×3 (`TOWN_STATION`), Maison Garfield 8×5 (`TOWN_BOUTIQUE`), salon 7×4
@@ -151,15 +158,15 @@ Emprises sur la carte : gare 4×3 (`TOWN_STATION`), Maison Garfield 8×5 (`TOWN_
 
 - **GARE**
 ```
-a small country railway station, about 1.6 times as wide as it is tall: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns along its front, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard with no letters on the gable. No tracks, no train, no platform.
+a small country railway station, about 1.6 times as wide as it is tall, its single ordinary front door exactly in the middle of the façade: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns along its front, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard with no letters on the gable. No tracks, no train, no platform.
 ```
-- **MAISON GARFIELD, chapelier et tailleur**
+- **MAISON GARFIELD, chapelier et tailleur** — ✅ faite (`refs/boutique-garfield.jpg`), gardée pour mémoire
 ```
 an elegant little clothing and hat shop, about 1.6 times as wide as it is tall, in stone and dark green painted wood: a large shop window with small panes showing hats on stands and a tailor's dummy, a glazed shop door with a bell, a striped fabric awning in green and cream, a blank hanging signboard with no letters, flower boxes, an upper floor with one half-timbered gable.
 ```
 - **SALON DE COIFFURE**
 ```
-a small barber and hairdresser shop, about 1.75 times as wide as it is tall: stone ground floor, a red-white-blue striped barber's pole beside the door, a shop window with a mirror and a leather chair visible inside, a short blue awning, a blank signboard with no letters, a half-timbered upper floor with one window.
+a small barber and hairdresser shop, about 1.75 times as wide as it is tall, wide and low, its single ordinary glazed door exactly in the middle of the ground floor with a shop window on each side: stone ground floor, a red-white-blue striped barber's pole beside the door, shop windows with a mirror and a leather chair visible inside, lit by a few small spotlights on a ceiling track clearly visible inside the windows, a short blue awning, a blank signboard with no letters, a half-timbered upper floor with one window.
 ```
 - **BOUTIQUE D'OBJETS DE PLAGE** — ⚠️ à ne lancer qu'une fois son emplacement choisi (moyen terme, Guillaume)
 ```

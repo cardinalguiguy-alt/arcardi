@@ -80,3 +80,92 @@ export function shadePane(g, st, u, v, isRoom) {
   return [c[0], c[1], c[2], a];
 }
 
+
+/* ── 2026-09-27 — UNE VITRINE D'EXPOSITION ALLUMÉE (la Maison Garfield) ──────
+   Guillaume : « bien travailler l'éclairage des vitrines, c'est important ».
+   Une vitrine n'est pas une fenêtre de maison : une fenêtre s'allume d'un bloc
+   (on ne voit pas dedans), une vitrine est ÉCLAIRÉE POUR QU'ON VOIE CE QU'ELLE
+   MONTRE. ⚠️ Premier jet, la recette des maisons (`housePane`) : tout pixel
+   chaud éclairci jusqu'à 215 — l'étage d'exposition sortait en aplat beige
+   délavé, les chapeaux et les cravates effacés.
+   · les articles GARDENT leurs couleurs : la lumière les MULTIPLIE (halogène,
+     3 000 K), elle ne les remplace pas — le calque de nuit est, à l'écran, la
+     couleur même qu'on voit (le ciel le multiplie, puis il est rajouté : voir
+     `makeLightRenderer`) ; ses ombres sont donc de vraies ombres ;
+   · chaque SPOT du plafond (`spots` : l'abscisse de sa lentille, px de la
+     référence) pose un cône qui s'élargit en descendant, et dessine sur le
+     fond l'arc en COQUILLE d'un plafonnier — le motif qui fait lire une vitrine
+     de boutique la nuit ; sa lentille brille ;
+   · une RÉGLETTE (`bar` : ses deux bouts) éclaire tout du long, plus fort près
+     d'elle, et brille elle-même ;
+   · les MONTANTS (`mullions` en x, `rails` en y) restent en silhouette sur le
+     fond allumé — ce qui fait une vitrine et pas un panneau lumineux ;
+   · les bords et les coins reçoivent moins (vignettage), les points les plus
+     chauffés tirent vers le blanc chaud, sans aplat.
+   `x, y` : le pixel (px de la référence) ; `w` : la vitre ({ x, y, w, h }). */
+export const SHOW_TINT = [1.0, 0.88, 0.70];
+const SHOW_HOT = [255, 246, 226];
+export function showWindow(r, g, b, x, y, w) {
+  const S = w.show, L = lum(r, g, b);
+  const inRun = (v, runs) => (runs || []).some(([a, c]) => v >= a && v <= c);
+  if (inRun(x, S.mullions) || inRun(y, S.rails)) return null;         // en silhouette
+  const u = (x - w.x) / w.w, v = (y - w.y) / w.h;
+  // Les sources elles-mêmes : la lentille d'un spot, la réglette.
+  for (const sx of S.spots || []) {
+    const d = Math.hypot((x - sx) / 7, (y - S.lensY) / 4);
+    if (d < 1) return [...SHOW_HOT, 1 - 0.5 * smooth(0.5, 1, d)];
+  }
+  if (S.bar && y >= S.bar.y - 2 && y <= S.bar.y + 2 && x >= S.bar.x0 && x <= S.bar.x1) return [...SHOW_HOT, 1];
+  // La lumière reçue.
+  let I = S.ambient == null ? 0.36 : S.ambient;
+  for (const sx of S.spots || []) {
+    const dy = (y - S.lensY) / w.h;
+    if (dy <= 0) continue;
+    const du = (x - sx) / w.w;
+    /* ⚠️ Des cônes ÉTROITS : six spots sur 524 px, et des cônes qui
+       s'élargissaient vite (0,30 par hauteur) se recouvraient tous — un fond
+       blanc partout, pas une coquille lisible (premier réglage, vu sur la
+       simulation de nuit du jeu). */
+    const sig = 0.03 + 0.17 * dy;                                      // le cône s'élargit en descendant
+    const top = 0.04 + 2.8 * du * du;                                  // le bord haut de la coquille : un arc
+    I += 0.8 * Math.exp(-(du / sig) * (du / sig)) * smooth(top - 0.02, top + 0.04, dy);
+  }
+  if (S.bar) {
+    const dy = (y - S.bar.y) / w.h;
+    if (dy > 0) {
+      const along = Math.min(smooth(S.bar.x0 - 40, S.bar.x0 + 10, x), 1 - smooth(S.bar.x1 - 10, S.bar.x1 + 40, x));
+      I += 0.85 * along * Math.exp(-dy * 1.5);                         // une réglette porte loin : les chapeaux du bas aussi
+    }
+  }
+  I *= 0.8 + 0.2 * smooth(0, 0.16, Math.min(u, 1 - u, v, 1 - v));    // vignettage
+  I = Math.min(1.8, I);
+  const k = 1.2 * I;
+  let c = [r * SHOW_TINT[0] * k, g * SHOW_TINT[1] * k, b * SHOW_TINT[2] * k];
+  const hot = smooth(1.15, 1.8, I) * smooth(120, 235, L);
+  c = c.map((q, i) => q + (SHOW_HOT[i] - q) * 0.3 * hot);
+  return [clamp(c[0], 0, 255), clamp(c[1], 0, 255), clamp(c[2], 0, 255), 0.97];
+}
+
+/* L'intérieur d'une boutique vu à travers sa porte vitrée : une lumière chaude
+   qui garde la texture peinte du verre (reflets, profondeur) ; la poignée et
+   le bois clair, en contre-jour, restent en silhouette. */
+export function shopInterior(r, g, b, fy) {
+  const L = lum(r, g, b);
+  if (r > b + 35 && L > 90) return null;                              // laiton, bois : en silhouette
+  if (L < 28) return null;
+  /* ⚠️ Pas un panneau : premier jet, une lumière presque uniforme — la porte
+     sortait en aplat crème. La salle s'assombrit vers le sol, loin du
+     plafonnier, et garde la texture peinte du verre. */
+  const t = clamp(L / 160, 0, 1);
+  const k = (0.48 + 0.42 * t) * (1.08 - 0.42 * fy);
+  return [244 * k, 192 * k, 128 * k, 0.95];
+}
+
+/* Les lettres DORÉES d'une enseigne accrochent la lumière de la rue : seul
+   l'or s'allume (le fond peint reste la nuit), sans devenir un néon. */
+export function signGold(r, g, b) {
+  const L = lum(r, g, b);
+  if (r - b < 30 || L < 90) return null;
+  const k = clamp(L / 190, 0.55, 1.1);
+  return [255 * k, 214 * k, 138 * k, 0.6 * smooth(90, 150, L)];
+}

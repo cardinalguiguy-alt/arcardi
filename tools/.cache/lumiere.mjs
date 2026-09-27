@@ -358,6 +358,10 @@ export const LIGHT_COLORS = {
   torch: [0.78, 0.44, 0.04],
   window: [0.62, 0.42, 0.10],
   door: [0.60, 0.42, 0.12],
+  /* 2026-09-27 — une VITRINE éclairée (la Maison Garfield) : l'halogène d'une
+     boutique, plus blanc que la lampe à huile d'une fenêtre — sous le ciel de
+     lune, ≈ (1,00 / 0,91 / 0,82), un blanc chaud et pas un orangé. */
+  vitrine: [0.70, 0.56, 0.26],
   head: [1.0, 0.95, 0.78],
   // 2026-09-26 (phase 5) — la luciole : un jaune-VERT froid (≈ 560 nm), pas une flamme.
   firefly: [0.50, 0.78, 0.12],

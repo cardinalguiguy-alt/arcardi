@@ -5036,14 +5036,16 @@ export const TOWN_COURT_SPRITE = {
    Références et méthode de prompt : `refs/prompts-maisons.md`. Fabrication :
    `tools/build-maison-sprites.mjs` (détourage du magenta, calque de nuit).
 
-   ⚠️⚠️ UNE SEULE ÉCHELLE POUR TOUTES LES MAISONS (`TOWN_HOUSE_SCALE`), jamais une
-   échelle par maison ajustée à sa parcelle : c'est la PORTE qui doit garder la
-   même hauteur partout — à 6 cases, celle de S1 tient à peine un personnage.
-   Gemini peint toutes les maisons à ~970 px de haut ; une N1 « ajustée » à ses
-   4 cases aurait eu une porte de 16 px d'art, plus petite qu'un enfant.
+   ⚠️⚠️ L'ÉCHELLE D'UNE MAISON EST CELLE DE SA PORTE (`townDoorScale`, plus
+   bas), jamais une échelle ajustée à sa parcelle : c'est la PORTE qui garde la
+   même hauteur partout. Gemini peint toutes les maisons à ~970 px de haut ; une
+   N1 « ajustée » à ses 4 cases aurait eu une porte de 16 px d'art, plus petite
+   qu'un enfant.
    ⚠️ LES REPÈRES SONT EN PX DE LA RÉFÉRENCE (le .jpg), relevés sur la version
    SIMPLE — Gemini retouche l'image sans la recadrer, donc les trois versions
    ont la porte au même pixel (mesuré : ±2 px). `door` : l'axe de la porte ;
+   `doorH` : la hauteur du VANTAIL, du seuil au sommet (l'arc compris), d'où se
+   DÉRIVE l'échelle du modèle ;
    `foot` : le pied du mur (il tombe sur la ligne entre l'emprise et la rangée
    de la porte) ; `wall` : le mur du rez-de-chaussée, d'où se DÉRIVE l'emprise
    bloquante (`townHouseModelFoot`) — jamais les étages en encorbellement, qui
@@ -5055,19 +5057,34 @@ export const TOWN_COURT_SPRITE = {
    `only`, le script aurait allumé les ardoises de la simple au même endroit) ;
    `hv` : la hauteur de verre d'une version — les jardinières des riches mordent
    le bas des vitres, et allumées elles sortaient en fleurs jaunes (planche du
-   2026-09-26). Lues par `townHouseWins`, pour le script ET pour le jeu.
+   2026-09-26). Lues par `townPaintedWins`, pour le script ET pour le jeu.
    ⚠️ LA PORTE NE BOUGE JAMAIS : l'image se cale sur `x + TOWN_HOUSE_W / 2`, là où
    le générateur perce l'allée. Une porte qui suivrait le modèle choisi (R)
    déplacerait l'allée — donc la carte — au gré d'une préférence de joueur. */
-/* ⚠️ L'ÉCHELLE SE DÉDUIT DE LA PORTE, PAS DE LA LARGEUR. Premier jet : S1 posée
-   sur ses 6 cases (96/1028) — vue en jeu le soir même, sa porte faisait 23 px
-   d'art et celle de N1 20, plus petites qu'un personnage : des maisons de
-   poupée. La porte des maisons procédurales qu'elles remplacent faisait 26 px
-   (`bDoor`, fermeArt.js) : c'est la proportion que le jeu a toujours eue, on la
-   garde. Le cadre de porte de S1 fait 248 px dans sa référence (662 → 910). */
-export const TOWN_HOUSE_SCALE = 26 / 248;   // px d'ART par px de référence
+/* ⚠️ L'ÉCHELLE SE DÉDUIT DE LA PORTE, PAS DE LA LARGEUR. Premier jet (2026-09-26) :
+   S1 posée sur ses 6 cases — sa porte faisait 23 px d'art et celle de N1 20,
+   des maisons de poupée. Second jet, le même soir : une échelle COMMUNE, le
+   CADRE de porte de S1 (248 px de référence) à 26 px, la porte des anciennes
+   façades procédurales (`bDoor`, fermeArt.js).
+   ⚠️⚠️ 2026-09-27 — LE CADRE N'EST PAS LE PASSAGE, ET L'ANCIENNE PORTE N'ÉTAIT
+   PAS UNE VRAIE PORTE. Guillaume : « tu prends la porte et tu mets le player
+   devant ». Mesuré : à 26/248, le VANTAIL faisait 22 à 23 px — pile la taille
+   du personnage (23 px peints, `tools/render-echelle.mjs`), une porte de
+   1,70 m ; la tête touchait le linteau, et S1 ne laissait qu'un pixel de
+   chaque côté des épaules. Une porte d'entrée fait 2,04 m (hauteur
+   normalisée) : 23 × 2,04 / 1,70 = 27,6 px de vantail. Chaque modèle est mis
+   à l'échelle de SON vantail (`doorH`) : ×1,17 (S1) à ×1,24 (N2) par rapport
+   au second jet. La largeur suit sans qu'on la règle : 14 à 18 px de vantail
+   pour 10 px d'épaules. Une échelle COMMUNE aurait laissé les portes de Gemini
+   varier de 5 % d'un modèle à l'autre — et c'est la seule forme qui laisse
+   passer les LARGES : à l'échelle commune, 8 cases demandaient 1 221 px de
+   référence, et Gemini rend en 1 085. La parcelle suit la maison, pas
+   l'inverse : les haies et les jardins seront refaits autour d'elles
+   (Guillaume, même jour). */
+export const TOWN_HOUSE_DOOR_PX = 23 * 2.04 / 1.70;   // 27,6 px d'art : le vantail d'une porte de 2,04 m
+export const townDoorScale = (m) => TOWN_HOUSE_DOOR_PX / m.doorH;   // px d'ART par px de référence
 export const TOWN_HOUSE_MODELS = {
-  s1: { size: "std", door: 399, foot: 948, wall: [102, 998],
+  s1: { size: "std", door: 399, doorH: 224, foot: 948, wall: [102, 998],   // vantail : 686 → 910
         wins: [
           { x: 288, y: 234, w: 62, h: 62 }, { x: 742, y: 234, w: 62, h: 62 },          // lucarnes
           { x: 280, y: 420, w: 84, h: 112, hv: { riche: 80 } },                          // étage (celle du milieu :
@@ -5081,7 +5098,7 @@ export const TOWN_HOUSE_MODELS = {
           enrichie: { src: "refs/maison-s1-enrichie.jpg", crop: [28, 9, 1034, 974] },
           riche:    { src: "refs/maison-s1-riche.jpg",    crop: [28, 6, 1035, 978] },
         } },
-  n1: { size: "narrow", door: 393, foot: 945, wall: [206, 882],
+  n1: { size: "narrow", door: 393, doorH: 217, foot: 945, wall: [206, 882],   // vantail : 717 (sommet de l'arc) → 934
         wins: [
           { x: 290, y: 238, w: 84, h: 92, hv: { riche: 70 } },                             // pignon
           { x: 296, y: 470, w: 88, h: 92, hv: { riche: 72 } },                             // étage
@@ -5100,13 +5117,15 @@ export const TOWN_HOUSE_MODELS = {
         } },
   /* 2026-09-26 — N2, la maison de pierre pâle aux volets verts. Peinte avec N1
      en 4e référence (`refs/prompts-maisons.md`) : même plinthe au pixel près
-     (pied 945), même emprise (cases 2..5 — le mur déborde de 0,4 case à gauche,
-     sous le seuil de `townHouseModelFoot`). Les vitres sont le verre mesuré
+     (pied 945). Son mur est 8 % plus large que celui de N1 : à l'échelle de sa
+     porte (2026-09-27), elle couvre les cases 1..6 et N1 les cases 2..6 — la
+     largeur étroite prend la réunion (`townHouseSizeFoot`), et N1 couvre encore
+     49 % de la case 1. Les vitres sont le verre mesuré
      + 4 px, comme N1. La riche a des jardinières sous chaque fenêtre (d'où les
      `hv`) et PAS de lanterne (une plaque de laiton à sa place) — sa vitre de
      lampe allumerait le laiton. Elle est sortie sur fond BLANC : détourée par
      remplissage depuis le bord (`build-maison-sprites`). Pas d'enrichie. */
-  n2: { size: "narrow", door: 391, foot: 945, wall: [177, 909],
+  n2: { size: "narrow", door: 391, doorH: 213, foot: 945, wall: [177, 909],   // vantail : 721 → 934
         wins: [
           { x: 504, y: 218, w: 78, h: 72, hv: { riche: 52 } },                            // lucarne (garde-corps chez la riche)
           { x: 336, y: 443, w: 108, h: 120, hv: { riche: 78 } },                          // étage
@@ -5123,19 +5142,47 @@ export const TOWN_HOUSE_MODELS = {
 /* Les modèles d'une largeur, dans l'ordre où R les fait défiler. */
 export const TOWN_HOUSE_SIZES = ["narrow", "std"];
 export const townHouseModelsOf = (size) => Object.keys(TOWN_HOUSE_MODELS).filter(k => TOWN_HOUSE_MODELS[k].size === size);
+/* Le mur du rez-de-chaussée d'un modèle, en cases, relatif à la parcelle (la
+   porte tombe en x + TOWN_HOUSE_W / 2). */
+export function townHouseWallSpan(m) {
+  const k = townDoorScale(m) / 16;
+  return { L: TOWN_HOUSE_W / 2 + (m.wall[0] - m.door) * k, R: TOWN_HOUSE_W / 2 + (m.wall[1] - m.door) * k };
+}
+/* L'IMAGE d'une version, en cases, relative à la parcelle : toute sa largeur,
+   débords du toit et décombres compris (le cadre gardé dans la référence). */
+export function townHouseImageSpan(model, variant) {
+  const m = TOWN_HOUSE_MODELS[model], [c0, , cw] = m.variants[variant].crop, k = townDoorScale(m) / 16;
+  return { L: TOWN_HOUSE_W / 2 + (c0 - m.door) * k, R: TOWN_HOUSE_W / 2 + (c0 + cw - m.door) * k };
+}
 /* L'emprise bloquante d'un modèle, en cases, relative à la parcelle : les cases
-   dont le mur du rez-de-chaussée couvre plus de 40 %. S1 → 1..6, N1 → 2..5. */
+   que son mur couvre à plus de la moitié. S1 → 1..7, N1 → 2..6, N2 → 1..6
+   (2026-09-27). ⚠️ Le seuil était de 60 % à gauche et de 40 % à droite (un
+   `floor(L + 0.6)` face à un `ceil(R - 0.4)`), écrit « 40 % » en commentaire :
+   rendu symétrique le jour où l'échelle a changé — aucune emprise d'avant ne
+   bougeait avec lui. */
 export function townHouseModelFoot(m) {
-  const L = TOWN_HOUSE_W / 2 + (m.wall[0] - m.door) * TOWN_HOUSE_SCALE / 16;
-  const R = TOWN_HOUSE_W / 2 + (m.wall[1] - m.door) * TOWN_HOUSE_SCALE / 16;
-  const x0 = Math.floor(L + 0.6), x1 = Math.ceil(R - 0.4);
+  const { L, R } = townHouseWallSpan(m);
+  const x0 = Math.floor(L + 0.5), x1 = Math.ceil(R - 0.5);
+  return { dx: x0, w: x1 - x0 };
+}
+/* L'emprise d'une LARGEUR : la réunion de celles de ses modèles. Un mur ne se
+   dessine jamais sur une case praticable ; un modèle plus étroit que la
+   réunion bute sur un peu d'air à côté de son mur — `verify-vallee` exige qu'il
+   couvre au moins 30 % de chaque case de l'emprise de sa largeur. */
+export function townHouseSizeFoot(size) {
+  let x0 = Infinity, x1 = -Infinity;
+  for (const k of townHouseModelsOf(size)) {
+    const f = townHouseModelFoot(TOWN_HOUSE_MODELS[k]);
+    x0 = Math.min(x0, f.dx); x1 = Math.max(x1, f.dx + f.w);
+  }
   return { dx: x0, w: x1 - x0 };
 }
 /* ⚠️ LA LARGEUR ET LE QUARTIER SE DÉDUISENT DE LA POSITION DE LA PARCELLE —
    aucun état, aucun message, aucune migration (§3 : ce qui se déduit ne se
    diffuse pas). La collision d'une parcelle ne dépend donc JAMAIS du modèle
-   que son propriétaire choisit avec R : elle vient de sa largeur, et tous les
-   modèles d'une largeur ont la même emprise (tenu par `verify-vallee`).
+   que son propriétaire choisit avec R : elle vient de sa largeur, qui n'a
+   qu'UNE emprise, la réunion de celles de ses modèles (`townHouseSizeFoot`,
+   tenu par `verify-vallee`).
    · ÉTROITE : la vieille ville autour du marché (les rangées nord et sud) ;
    · quartier RICHE : le centre (marché, place, parc) et la terrasse de la
      haute-ville — « les belles adresses » depuis le 425 ;
@@ -5155,8 +5202,7 @@ export function townHouseDistrict(hsn) {
 }
 /* L'emprise bloquante d'une parcelle (ou de la ruine), en cases absolues. */
 export function townHouseFoot(hsn) {
-  const m = TOWN_HOUSE_MODELS[hsn.model || townHouseModelsOf(townHouseSize(hsn))[0]];
-  const f = townHouseModelFoot(m);
+  const f = hsn.model ? townHouseModelFoot(TOWN_HOUSE_MODELS[hsn.model]) : townHouseSizeFoot(townHouseSize(hsn));
   return { x: hsn.x + f.dx, y: hsn.y, w: f.w, h: TOWN_HOUSE_H };
 }
 /* Le modèle et la version dessinés sur une parcelle : `style` est la façade
@@ -5174,8 +5220,8 @@ export const townHouseBitmapKey = (model, variant) => `house_${model}_${variant}
 /* Les vitres d'une version, hauteur résolue — la SEULE lecture de `wins`/`hv`/
    `only` : le script de fabrication cuit ces rectangles, le jeu allume les
    mêmes, un par un, à l'heure de `LUM.windowLit`. */
-export function townHouseWins(model, variant) {
-  const m = TOWN_HOUSE_MODELS[model], v = m.variants[variant];
+export function townPaintedWins(model, variant) {
+  const m = townPaintedModel(model), v = m.variants[variant];
   return (v.wins || m.wins).filter(w => !w.only || w.only.includes(variant))
     .map(w => ({ ...w, h: (w.hv && w.hv[variant]) || w.h }));
 }
@@ -5193,8 +5239,105 @@ function townHouseBitmaps() {
   for (const [mk, m] of Object.entries(TOWN_HOUSE_MODELS)) for (const [vk, v] of Object.entries(m.variants)) {
     const key = townHouseBitmapKey(mk, vk), base = `/town/maison-${mk}-${vk}`;
     out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, zooms: [1, 2, 3, 4, 5],
-                 disp: v.crop[2] * TOWN_HOUSE_SCALE, dispH: v.crop[3] * TOWN_HOUSE_SCALE, grow: 1, smooth: false,
+                 disp: v.crop[2] * townDoorScale(m), dispH: v.crop[3] * townDoorScale(m), grow: 1, smooth: false,
                  house: { model: mk, variant: vk } };
+  }
+  return out;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ PHASE 6b (2026-09-27) — LES COMMERCES PEINTS, À L'ÉCHELLE DE LEUR PORTE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Mêmes repères que les maisons (porte, vantail, pied, mur, vitres, cadre, en
+   px de la référence ; `tools/build-maison-sprites.mjs` les fabrique aussi),
+   une seule version chacun, et un LIEU au lieu d'une parcelle : `site` nomme le
+   rectangle du bâtiment (`TOWN_BOUTIQUE`…), qui reste ce qu'il était — le
+   repère de sa porte (x + w/2, `nearCivicDoor`), de son parvis, de ses bancs,
+   du zoom et des résidents. L'image se cale sur cette porte et sur le bas du
+   rectangle. Son MUR, à l'échelle de sa porte, décide de ce qui bloque
+   (`townShopFoot`) : les cases du rectangle qu'il ne couvre pas redeviennent
+   du pavé, en passe FINALE du générateur (§4 : aucun tirage) — le cas inverse
+   du tribunal, dont le dessin déborde de son rectangle (même raison : le lieu
+   et la place au sol sont deux grandeurs, elles portent deux noms). */
+export const TOWN_SHOP_MODELS = {
+  /* LA MAISON GARFIELD (`refs/boutique-garfield.jpg`, Guillaume, 2026-09-27).
+     ⚠️ Son nom est PEINT sur l'oriel, alors que le prompt voulait une enseigne
+     vierge (§4 : un texte cuit ne se traduit pas) — accepté parce que c'est un
+     nom de maison, le même dans les deux langues (`boutiqueTitle`), jamais un
+     mot à traduire ; la plaque dessinée au-dessus, qui le répétait, n'est plus
+     posée. Le pied est le bas du trottoir peint (978), comme la plinthe de S1 ;
+     le cadre s'arrête là — la bande de magenta délavé que Gemini a laissée
+     dessous passait au jeu en liseré violet.
+     ⚠️⚠️ SON ÉCHELLE N'EST PAS CELLE DE SA PORTE (`fit: "site"`). Premier jet
+     (2026-09-27) : le vantail de sa porte vitrée (645 → 925) à 2,04 m, comme
+     les maisons — un mur de 5,7 cases, une boutique plus petite que la façade
+     procédurale qu'elle remplaçait. Guillaume, vu en jeu : « bien plus grande
+     la boutique stp ». Le mur (97..996) remplit donc TOUT son rectangle (×1,42 :
+     la porte vitrée fait 2,95 m sous son imposte, une maison de couture) —
+     et pas plus : à gauche, la terrasse de la haute-ville s'arrête en x=120.
+     La porte peinte tombe alors en x+5,8, pas au milieu du rectangle :
+     `nearCivicDoor` accepte toute la façade (± w/2), rien à y changer. */
+  garfield: { site: "boutique", fit: "site", door: 746, doorH: 280, foot: 978, wall: [97, 996], demagenta: 12, magentaPockets: true,
+    /* Les vitres, et comment chacune s'allume (`tools/lib-glow.mjs`) : `show`,
+       une VITRINE (ses spots, sa réglette, ses montants, relevés au pixel sur
+       la peinture) ; `interior`, la boutique vue par sa porte vitrée ; `sign`,
+       les lettres dorées de l'enseigne ; `lamp`, le verre d'une applique. */
+    wins: [
+      { x: 283, y: 212, w: 524, h: 246,                                            // l'étage d'exposition : six spots
+        show: { spots: [353, 428, 504, 568, 655, 735], lensY: 280, ambient: 0.4,
+                mullions: [[364, 374], [461, 470], [618, 631], [713, 724]], rails: [[290, 299]] } },
+      { x: 238, y: 582, w: 262, h: 208, g: 1,                                      // l'oriel, au-dessus des fleurs : sa réglette
+        show: { bar: { x0: 277, x1: 455, y: 607 }, ambient: 0.5 } },
+      { x: 182, y: 590, w: 38, h: 200, g: 1, show: { ambient: 0.62 } },            // ses deux pans
+      { x: 518, y: 590, w: 40, h: 200, g: 1, show: { ambient: 0.62 } },
+      { x: 676, y: 649, w: 140, h: 255, g: 1, interior: 1 },                       // la porte vitrée
+      { x: 676, y: 571, w: 140, h: 60, interior: 1 },                              // son imposte
+      { x: 205, y: 488, w: 330, h: 76, sign: 1 },                                  // l'enseigne
+      // Les deux appliques : leur VERRE seul (mesuré à la loupe), comme les lanternes des maisons.
+      { x: 590, y: 667, w: 20, h: 53, lamp: 1 }, { x: 840, y: 304, w: 17, h: 45, lamp: 1 },
+    ],
+    variants: { simple: { src: "refs/boutique-garfield.jpg", crop: [30, 11, 1030, 968] } } },
+};
+/* Un modèle peint, maison ou commerce (les clés ne se recouvrent pas). */
+export const townPaintedModel = (mk) => TOWN_HOUSE_MODELS[mk] || TOWN_SHOP_MODELS[mk];
+export const townPaintedBitmapKey = (mk, vk) => TOWN_SHOP_MODELS[mk] ? `shop_${mk}_${vk}` : townHouseBitmapKey(mk, vk);
+/* Le rectangle d'un commerce. ⚠️ Pas de repli : un `site` inconnu doit casser. */
+export function townShopSite(m) {
+  const b = { boutique: TOWN_BOUTIQUE }[m.site];
+  if (!b) throw new Error(`commerce peint : site inconnu « ${m.site} »`);
+  return b;
+}
+/* Son échelle : celle de sa porte, ou — `fit: "site"` — celle qui fait remplir
+   à son mur toute la largeur de son rectangle. */
+export function townShopScale(m) {
+  return m.fit === "site" ? townShopSite(m).w * 16 / (m.wall[1] - m.wall[0]) : townDoorScale(m);
+}
+/* Son mur, en cases ABSOLUES : le rectangle entier (`fit: "site"`), sinon
+   calé sur la porte, qui tombe alors en x + w/2 comme celle des monuments. */
+export function townShopWallSpan(m) {
+  const b = townShopSite(m);
+  if (m.fit === "site") return { L: b.x, R: b.x + b.w };
+  const k = townShopScale(m) / 16, d = b.x + b.w / 2;
+  return { L: d + (m.wall[0] - m.door) * k, R: d + (m.wall[1] - m.door) * k };
+}
+/* L'axe de sa porte PEINTE, en cases absolues — là où l'image se cale. */
+export function townShopDoorX(m) {
+  return townShopWallSpan(m).L + (m.door - m.wall[0]) * townShopScale(m) / 16;
+}
+/* Ce qui bloque : les colonnes du rectangle que le mur couvre à plus de la
+   moitié (même règle que `townHouseModelFoot`), sur toute sa profondeur. */
+export function townShopFoot(m) {
+  const b = townShopSite(m), { L, R } = townShopWallSpan(m);
+  const x0 = Math.max(b.x, Math.floor(L + 0.5)), x1 = Math.min(b.x + b.w, Math.ceil(R - 0.5));
+  return { x: x0, y: b.y, w: x1 - x0, h: b.h };
+}
+function townShopBitmaps() {
+  const out = {};
+  for (const [mk, m] of Object.entries(TOWN_SHOP_MODELS)) for (const [vk, v] of Object.entries(m.variants)) {
+    const key = townPaintedBitmapKey(mk, vk), base = `/town/boutique-${mk}-${vk}`;
+    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, zooms: [1, 2, 3, 4, 5],
+                 disp: v.crop[2] * townShopScale(m), dispH: v.crop[3] * townShopScale(m), grow: 1, smooth: false,
+                 shop: { model: mk, variant: vk } };
   }
   return out;
 }
@@ -7488,6 +7631,11 @@ export const ALWAYS_GUEST_RIDS = [CARLA_RID];
    pas. */
 export const TOWN_BOUTIQUE = { x: 121, y: 12, w: 8, h: 5 };   // Maison Garfield
 export const TOWN_SALON = { x: 152, y: 12, w: 7, h: 4 };      // salon de coiffure, « ouverture prochaine »
+/* Les images des commerces peints rejoignent `TOWN_BITMAPS` ICI, pas dans sa
+   déclaration : leur taille dépend de leur rectangle (`fit: "site"`), déclaré
+   juste au-dessus — plus haut, `TOWN_BOUTIQUE` n'existe pas encore et le
+   chargement du module lèverait une ReferenceError (2026-09-27). */
+Object.assign(TOWN_BITMAPS, townShopBitmaps());
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 427 — LA GARDE-ROBE DE LA MAISON GARFIELD.

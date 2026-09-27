@@ -4,6 +4,11 @@
 // par cran de zoom à sa taille d'écran exacte (`tools/lib-mip.mjs`), jour ET
 // calque de nuit, tirés du même rééchantillonnage (alignés au pixel).
 //
+// ⚠️ 2026-09-27 (phase 6b) : il fabrique aussi les COMMERCES peints
+// (`TOWN_SHOP_MODELS` : mêmes repères, une seule version), APRÈS les maisons —
+// l'ordre des modèles nourrit le tirage des lampes et des silhouettes, et les
+// images des maisons doivent sortir identiques quand un commerce s'ajoute.
+//
 // Tout ce que le script sait vient de `TOWN_HOUSE_MODELS` (fermeConstants.js) :
 // la référence, le cadre, les vitres. Le JEU lit la même table pour poser
 // l'image (porte, pied du mur) et allumer les fenêtres une à une — une vitre
@@ -27,7 +32,7 @@ import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import { loadFerme } from "./lib-canvas.mjs";
 import { resample, writeMips } from "./lib-mip.mjs";
-import { lum, clamp, smooth, darkPane, lanternGlass, hashi, LAMPS, SILS, shadePane } from "./lib-glow.mjs";
+import { lum, clamp, smooth, darkPane, lanternGlass, hashi, LAMPS, SILS, shadePane, showWindow, shopInterior, signGold } from "./lib-glow.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants"]);
@@ -61,10 +66,11 @@ function ghostPane(r, g, b) {
 }
 
 const report = [], previews = [];
-const modelKeys = Object.keys(C.TOWN_HOUSE_MODELS);
-for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
+const modelKeys = [...Object.keys(C.TOWN_HOUSE_MODELS), ...Object.keys(C.TOWN_SHOP_MODELS)];
+for (const mk of modelKeys) {
+  const M = C.townPaintedModel(mk);
   for (const [vk, V] of Object.entries(M.variants)) {
-    const SB = C.TOWN_BITMAPS[C.townHouseBitmapKey(mk, vk)];
+    const SB = C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, vk)];
     const img = jpeg.decode(readFileSync(path.join(ROOT, V.src)), { useTArray: true, formatAsRGBA: true });
     const { width: SW, height: SH, data: src } = img;
     // 1. Le fond, mesuré dans le coin haut-gauche (jamais de maison là).
@@ -123,7 +129,18 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
     // 2. Le cadre, et ce qui en déborderait (un cadre trop serré couperait la maison).
     const [cx0, cy0, CW, CH] = V.crop;
     let outside = 0;
-    const alphaAt = (x, y) => (keyed && !keyed[y * SW + x]) ? 1 : smooth(KEY_LO, KEY_HI, distAt(x, y));
+    /* ⚠️ 2026-09-27 — LES POCHES DE FOND ENFERMÉES (`magentaPockets`) : le fond
+       vu À TRAVERS un dessin (la fente de la cheminée d'aération de la Maison
+       Garfield) n'est relié à rien, et sa rampe le laissait à moitié opaque —
+       une tache magenta au cran 5. Sur ces images-là, un magenta FRANC (vert
+       sous 40, rouge et bleu au-dessus de 100) est du fond où qu'il soit : le
+       chapeau violet de la vitrine a toujours un vert d'au moins 107 (mesuré). */
+    const pocketBg = (x, y) => {
+      if (!M.magentaPockets || !magentaBg) return false;
+      const o = (y * SW + x) * 4;
+      return src[o + 1] < 40 && Math.min(src[o], src[o + 2]) > 100;
+    };
+    const alphaAt = (x, y) => pocketBg(x, y) ? 0 : (keyed && !keyed[y * SW + x]) ? 1 : smooth(KEY_LO, KEY_HI, distAt(x, y));
     for (let y = 2; y < SH - 2; y++) for (let x = 2; x < SW - 2; x++) {
       if (x >= cx0 && x < cx0 + CW && y >= cy0 && y < cy0 + CH) continue;
       if (alphaAt(x, y) > 0.5) outside++;
@@ -154,7 +171,18 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
     if (magentaBg) {
       let near = new Uint8Array(CW * CH);
       for (let i = 0; i < CW * CH; i++) near[i] = day[3][i] < 0.5 ? 1 : 0;
-      for (let pass = 0; pass < 5; pass++) {
+      /* ⚠️ 2026-09-27 — LE BORD DU CADRE COMPTE COMME DU FOND : le cadre n'écarte
+         que du fond. Sans ça, un dessin qui TOUCHE son cadre (le trottoir de la
+         Maison Garfield, coupé au ras de la bande de magenta délavé qui le
+         bordait) n'a aucun pixel de fond à côté de lui, et son cerne teinté de
+         magenta passait au jeu en liseré violet. Sans effet sur les maisons :
+         leurs cadres ont une marge de fond (images identiques à l'octet). */
+      for (let x = 0; x < CW; x++) { near[x] = 1; near[(CH - 1) * CW + x] = 1; }
+      for (let y = 0; y < CH; y++) { near[y * CW] = 1; near[y * CW + CW - 1] = 1; }
+      /* Le rayon : 5 px pour les maisons ; `demagenta` quand Gemini a teinté
+         plus loin (la boutique : 6 à 12 px de lavande sur les pentes du toit et
+         la cheminée d'aération, mesurés sur l'image du jeu). */
+      for (let pass = 0; pass < (M.demagenta || 5); pass++) {
         const nx = near.slice();
         for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
           const i = y * CW + x;
@@ -173,7 +201,7 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
       }
     }
     // 4. Le calque de nuit : les vitres de CETTE version, une recette par sorte.
-    const wins = C.townHouseWins(mk, vk);
+    const wins = C.townPaintedWins(mk, vk);
     const glow = [0, 1, 2, 3].map(() => new Float32Array(CW * CH));
     let lit = 0;
     wins.forEach((w, wi) => {
@@ -195,9 +223,12 @@ for (const [mk, M] of Object.entries(C.TOWN_HOUSE_MODELS)) {
         if (day[3][i] < 0.5) continue;
         const r = rgbAt[i * 3], g = rgbAt[i * 3 + 1], b = rgbAt[i * 3 + 2];
         const u = (x - x0) / w.w, v = (y - y0) / wh;
-        let px = w.lamp ? lanternGlass(r, g, b) : w.ghost ? ghostPane(r, g, b) : housePane(r, g, b, v, med);
+        // 2026-09-27 : les commerces ont leurs recettes (vitrine, intérieur, enseigne), voir lib-glow.mjs.
+        let px = w.lamp ? lanternGlass(r, g, b) : w.ghost ? ghostPane(r, g, b)
+          : w.show ? showWindow(r, g, b, x + cx0, y + cy0, w) : w.interior ? shopInterior(r, g, b, v)
+          : w.sign ? signGold(r, g, b) : housePane(r, g, b, v, med);
         if (!px || px[3] <= 0.01) continue;
-        if (!w.lamp && !w.ghost && px[3] > 0.5 && px[2] < 200) px = shadePane(px, st, u, v, true);
+        if (!w.lamp && !w.ghost && !w.show && !w.interior && !w.sign && px[3] > 0.5 && px[2] < 200) px = shadePane(px, st, u, v, true);
         const a = clamp(px[3], 0, 1) * day[3][i];
         for (let c = 0; c < 3; c++) glow[c][i] = clamp(px[c], 0, 255) * a;
         glow[3][i] = a;
