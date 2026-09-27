@@ -28,6 +28,15 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   **l'îlot qui flotte dans un APLAT**, en connexité à **huit** voisins (à quatre, un cerne d'un
   pixel en diagonale n'est plus connexe et le banc accuse le contour lui-même). « Le pixel isolé »
   interdit le pixel art ; « les îlots de moins de quatre pixels » accuse les dégradés.
+- ⚠️⚠️ **UNE CHARPENTE SE DESSINE DEPUIS LA SILHOUETTE VOULUE, PAS DEPUIS LE PIED** (magnolia,
+  2026-09-27). Une ramification récursive à longueurs et redressements égaux fait finir toutes les
+  pointes à la même hauteur : un plateau, et les fleurs collées en une bande. On pose d'abord les
+  POINTES dans l'enveloppe choisie (un semis à distance minimale, graine fixe), puis on remonte vers
+  les tiges. Corollaire, même jour : *une taille d'objet se REDESSINE (même taille de bouquet, plus de
+  bouquets), elle ne s'agrandit pas* — et un grand houppier en anneau a un cœur à remplir, sinon il sort
+  en beignet (feuilles ou fleurs). ⚠️ *Et un JEUNE n'est pas un adulte en petit* (Guillaume, même soir :
+  « les jeunes arbres ne peuvent pas être aussi fournis ») : moins de masses, plus petites, écartées, le
+  bois visible entre elles — l'âge se lit à la densité, pas à la taille.
 - ⚠️⚠️ **UNE COURBE ÉCRITE `f(x)` NE PEUT PAS SE REPLIER** (437) — pas de crique, pas de
   presqu'île, pas d'îlot, pas d'ovale. Une rive, un contour, une côte, une table de conseil se
   décrivent par un **CHAMP `s(x,y)` dont on prend l'isoligne**, jamais par une hauteur par colonne

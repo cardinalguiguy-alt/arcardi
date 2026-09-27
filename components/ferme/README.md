@@ -1,5 +1,56 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-27
 
+## 2026-09-27 (nuit, suite) — PHASE 11 : LES TAILLES D'ARBRE, LES FLEURS À LEUR ÉCHELLE, LE FEUILLAGE QUI S'EFFACE
+
+Guillaume : « dessine de jeunes arbres, et d'autres plus grands, plus courts, identifie ensuite l'arbre
+à grandes fleurs roses (magnolia ?) et corrige la taille des fleurs pour que ce soit beau mais plus
+réaliste. Les saules pleureurs sont absolument magnifiques. » Puis, en cours : « les jeunes arbres ne
+peuvent pas être aussi fournis que des adultes ».
+- **QUATRE TAILLES DE PLUS PAR ESSENCE DESSINÉE EN CODE** (`TREE_SIZES`, `sizedSpec`, `fermeArt.js`) :
+  JEUNE (baliveau : peu de bouquets, petits, écartés, ses rameaux visibles entre eux ; conifère à
+  verticilles séparés), TUTEURÉ (le même, piquet et paillage, au bord d'une rue), TRAPU (plus court, plus
+  large), GRAND (×1,45 à ×1,55, 64×96 : un feuillu atteint le toit des maisons). Redessinés, jamais
+  agrandis : les bouquets gardent leur taille, leur NOMBRE suit la couronne ; un grand houppier reçoit un
+  second anneau (sinon beignet — vert ou fleuri). Quatre atlas, un par taille (432 images, pas 432
+  canevas). L'adulte est inchangé au pixel près.
+- **QUI A QUELLE TAILLE** (`townTreeSize`, pure, mise en cache par carte) : verger → trapus ; parc →
+  grands ; cyprès du cimetière → grands ; ailleurs un mélange ; un jeune qui borde une rue est tuteuré.
+  Un grand ou un trapu qui couvrirait une lanterne, un mur, une maison ou un décor dur redevient adulte —
+  on ne retire aucun arbre (§4). Carte : 519 adultes, 142 jeunes (4 tuteurés), 75 trapus, 108 grands.
+- **LE MAGNOLIA REDESSINÉ** (`magnoliaTree`) : c'était `REF_MAGNOLIA`, celui de la planche — six fleurs de
+  16 px, près d'un mètre à 13,5 px/m. Désormais une charpente à trois tiges posée DEPUIS le dôme (le premier
+  jet, ramifié depuis le pied, finissait en plateau), 28 tulipes de 3 à 5 px en deux roses, floraison sur
+  bois nu au printemps et pétales tombés, feuillage et fleurs de fin de saison l'été, bronze l'automne ;
+  le feuillage passe par le peintre commun (`clumpList`, `drawWood`). Le magnolia procédural du 439
+  (corolles de 11 px) n'est plus planté : ses cases prennent celui-ci. `planche.js` n'est pas touché.
+- **LE SAULE DE LA PLANCHE N'A PAS BOUGÉ** (sapin et pommier de la planche non plus : un bitmap ne se
+  redessine pas à une autre taille).
+- Les marges de la vue suivent le plus haut arbre (`A.TOWN_TREE_MAX_H` : `yBot`, `TOWN_REFL_ROWS` = 8,
+  deux colonnes de plus de chaque côté).
+- **Au passage** : `verify-densite` était ROUGE depuis la phase 10 (la « petite sœur » des touffes
+  rechargeait le PNG sous un autre nom de variable) ; les trois appels passent par `tallGrassBitmap`.
+- **Puis « caveman on »** — le reste de la phase, d'un bloc :
+  - **L COMME « LÀ » : OÙ SUIS-JE ?** (`drawFindMe`, `FIND_ME_MS` 2,6 s) — un premier jet faisait
+    s'effacer le feuillage devant le joueur ; Guillaume : « ce n'est pas un problème que le perso soit
+    masqué par les arbres : une touche peut servir pour mettre un pointeur ». Le fondu est retiré ; L pose
+    une flèche qui rebondit au-dessus du nom et un anneau qui s'élargit aux pieds, peints après la lumière
+    et les noms (`flushNameTags`), donc par-dessus les couronnes et la nuit, dans les quatre zones. Local.
+    Ajouté à la ligne d'aide (`help2`, deux langues). ⚠️ Pas de bouton tactile.
+  - **LE CERISIER ET LE MIMOSA** : leurs corolles de 11 px (cerisier) et pompons de 9 px (mimosa) deviennent
+    un NUAGE ombré dans la couleur des fleurs, semé de petites fleurs plus claires sur un réseau décalé par
+    hachage (`paintBloom`, `cluster`). Premier jet refusé à la planche : le réseau posé sur le feuillage
+    se lisait comme une grille.
+  - **LE VENT EN CINQ POSES** (`TREE_FRAMES`, `TREE_SWAY` sur huit pas, même période) : deux demi-poses ;
+    le plus gros saut d'une image à l'autre baisse de 36 % (3 525 → 2 246 px sur les quinze essences ; le
+    saule de la planche 716 → 498). Tous les arbres de ville passent en ATLAS (cinq feuilles), adultes
+    compris : aucun canevas de plus.
+  - **LES HAIES** : renvoyées entières à la phase 7, qui refait déjà leurs sprites, textures et collisions.
+- **Vu en jeu** (été et printemps forcés) : le grand arbre au niveau des toits près des maisons de la
+  vieille ville, le jeune tuteuré au bord de la rue, les magnolias du parc en fleurs, le bois de l'est
+  mêlé, le repère de L sur un joueur caché par un grand feuillu du bois. **Pas vu en jeu** : les jeunes éclaircis, le
+  cerisier et le mimosa neufs, le vent à cinq poses (planches et banc seulement), l'automne, deux joueurs.
+  **Supabase** : rien.
+
 ## 2026-09-27 (nuit, fin) — PHASE 10 : LES SOLS, SECONDE PASSE, SELON LES QUARTIERS
 
 Guillaume : « une famille par rang de lieu et surtout de meilleurs dessins », « c'est censé représenter
@@ -627,7 +678,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 | ✅ | 9 | **Défauts nets (audit du 2026-09-27) — livrée le 2026-09-27 (nuit)**. ✅ Les deux lampadaires des allées (28,68) et (60,68) passent côté jardin. ✅ Nénuphars cuits réservés à l'étang et aux roselières. ✅ Porte de la maison hantée dégagée. ✅ Reflets : l'axe est la RIVE devant l'objet, et derrière un quai la bande du parement est cachée (les bancs du quai, au bord, étaient justes ; ce qui collait à l'eau, c'étaient les arbres derrière le quai). ➡️ Parcelle (160,102), la haie nord derrière le toit : renvoyée en phase 7 (haies refaites). ➡️ Le grand escalier sous le tribunal : **À RETRAVAILLER ENTIÈREMENT, PLUS TARD** (Guillaume, 2026-09-27 : « une excellente idée, mais il est laid actuellement et la physique est cassée ») — ses défauts sont DANS la peinture importée « copie exacte » au 467 (aucun résidu de détourage, mesuré) | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
 | ✅ | 10 | **Sols, seconde passe — livrée le 2026-09-27 (nuit)** (récit en tête) : goudron refait (gris, caniveaux, traces de roues, variantes par bloc) ; trois dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des terrasses) ; herbe selon le quartier (tonte, pré, semis) ; massifs de saison en rangs ; rebord est-ouest des terrasses (chaperon et ombre) ; herbes hautes en bouquets teintés. ⬜ Reste : l'usure qui suit les passages sur les dallages (« chemins de désir », avec la phase 4) | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
-| ⬜ | 11 | **Végétation à l'échelle des maisons**. ⬜ Les arbres sont trop petits depuis que les maisons ont grandi (×1,17 à ×1,24 : un feuillu arrive au premier étage), et un seul gabarit par essence — même taille, même silhouette ; en forêt, un papier peint. Deux ou trois tailles par essence, des silhouettes variées, de grands arbres isolés (tilleul de place, marronnier). ⬜ Haies : barres lisses peu texturées, au niveau des anciennes maisons (leur placement est en 7, leur matière ici). ⬜ Balancement : deux poses échangées d'un coup (~1 900 px basculent en une image) — à juger à l'œil, ça peut se lire comme un tic plutôt que comme du vent | avant 7 : la composition place des arbres, il faut d'abord les bons |
+| ✅ | 11 | **Végétation à l'échelle des maisons — livrée le 2026-09-27 (nuit)** (récit en tête) : quatre tailles par essence dessinée en code (jeune clairsemé, tuteuré, trapu, grand ×1,5), le magnolia redessiné (fleurs de 3 à 5 px), cerisier et mimosa en nuages de petites fleurs, repère « où suis-je ? » (L), vent en cinq poses ; ➡️ la matière des haies part en phase 7. Constat d'origine : ~~Les arbres sont trop petits depuis que les maisons ont grandi (×1,17 à ×1,24 : un feuillu arrive au premier étage), et un seul gabarit par essence — même taille, même silhouette ; en forêt, un papier peint. Deux ou trois tailles par essence, des silhouettes variées, de grands arbres isolés (tilleul de place, marronnier). ⬜ Haies : barres lisses peu texturées, au niveau des anciennes maisons (leur placement est en 7, leur matière ici). Balancement : deux poses échangées d'un coup~~ | avant 7 : la composition place des arbres, il faut d'abord les bons |
 | ⬜ | 12 | **Saisons et intempéries en ville**. ⬜ L'hiver ne change rien : herbe verte, fleurs, pommes aux arbres, feuillage d'été sous la neige ; la neige ne tient nulle part (sol, toits, haies). La ferme a ses arbres de saison (`oakAutumn`, `oakSpring`), la ville non. ⬜ La durée du jour ne suit pas la saison (`skyAt` ne la connaît pas) : l'hiver, les lampes s'allument à 19 h sous un ciel de plein jour. ⬜ Pluie : chaussée sèche, aucun reflet des lampadaires, ni flaque ni éclaboussure. ⬜ Aucune cheminée ne fume (le soir, l'hiver, chez qui habite là) | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
 | ⬜ | 13 | **Lumière et animation, finitions**. ⬜ Ombres portées des bâtiments : quadrilatères à bord franc qui ignorent le toit (à droite de l'hôtel de ville, un rectangle net) ; celles des maisons, une tache ovale. ⬜ Fanions du marché figés (0 pixel changé en une seconde) alors que l'herbe ondule. ⬜ Fontaine : le jet vit à peine, le bassin ne ride pas, aucune goutte ne retombe | morceaux restés de 3 et de 5 ; se glissent entre deux phases |
 | ⬜ | 14 | **Texte du monde**. ⬜ Une seule écriture : les noms sont en `pixelFont`, mais les plaques des maisons, les bulles de dialogue et les enseignes (« MARCHÉ », salon) en `monospace` système (38 appels `ctx.font` dans `FermeGame.js`). ⬜ La plaque « À vendre » ou du propriétaire flotte au faîte du toit : un panneau planté au portail serait un objet du monde, pas une étiquette. ⬜ Panneaux indicateurs vides (deux planches blanches) : y écrire les destinations, en police pixel, dans la langue du joueur | indépendante du reste, se place où l'on veut |

@@ -61,7 +61,14 @@ import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandy
    `Map` recréée à chaque image oublierait la position précédente et la vitesse
    resterait nulle — une traîne qui ne se déclenche jamais, sans aucune erreur. */
 const STAR_LEAN_MEM = new Map();
+const FIND_ME_MS = 2600;   // 2026-09-27 (phase 11) : durée du repère de la touche L
 import { loadBitmap, peekBitmap } from "./bitmapAssets";
+/* ⚠️ 2026-09-27 (phase 11) — L'UNIQUE CHARGEMENT DES TOUFFES D'HERBE HAUTE
+   (famille `tallGrass` de `TOWN_BITMAPS`, noms dans `A.TALLGRASS_VARIANTS`).
+   La « petite sœur » de la phase 10 avait recopié le chemin sous un autre nom
+   de variable, et `verify-densite` (« aucune URL écrite en dur ») rougissait :
+   trois appels, une seule écriture — le banc lit celle-ci. */
+const tallGrassBitmap = (variant) => loadBitmap(`/town/${variant}.png`);
 import * as PF from "./pixelFont";
 import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
 import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
@@ -1484,6 +1491,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const organRef = useRef({ until: 0, src: null });  // la registration en cours
   const organMuteRef = useRef(false);                // le morceau n'est pas déposé
   const candleNextRef = useRef(0);                   // anti-rafale du râtelier
+  const findMeUntilRef = useRef(0);                   // 2026-09-27 (phase 11) : L, le repère « où suis-je ? »
   const starKeyNextRef = useRef(0);                  // zip 444 : anti-rafale des gestes de quête (E maintenu)
   const starBellDayRef = useRef(0);                  // zip 444 : le jour où la cloche a déjà sonné toute seule (lever du jour)
   /* ⚠️ LA SCÈNE EN COURS. Elle vit dans un REF et pas dans un état React, pour
@@ -16210,6 +16218,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          sauf une fois, si la quête est en cours, pour qu'on n'apprenne pas le
          raccourci dans le vide. */
       if (e.code === "KeyP" && !e.repeat && !uiOpen) togglePlan();
+      // 2026-09-27 (phase 11) — L comme « là » : le repère du joueur (voir `drawFindMe`).
+      if (e.code === "KeyL" && !e.repeat) findMeUntilRef.current = performance.now() + FIND_ME_MS;
       /* ⚠️⚠️ 2026-09-22 ter — LE ZOOM MANUEL AU CLAVIER, EN PLUS DE LA MOLETTE
          (voir `onWheel` juste plus bas). Deux touches par sens (la principale
          ET le pavé numérique), parce que + et - se tapent différemment selon
@@ -20336,7 +20346,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ══════════════════════════════════════════════════════════════════════ */
       const EP = C.TOWN_ELEV_PX;
       const MAXE = 2;                                    // altitude maximale de la ville
-      const yBot = Math.min(tw.h - 1, y1 + Math.ceil((MAXE * EP) / T) + 1);
+      /* ⚠️ 2026-09-27 (phase 11) — ET UN GRAND ARBRE PLANTÉ SOUS LE BORD monte
+         dans l'image de toute sa hauteur (96 px, six rangées) : la marge est la
+         plus grande des deux, sinon sa couronne apparaît d'un coup quand son
+         pied entre dans le cadre (le défaut des reflets, note de `TOWN_REFL_ROWS`). */
+      const yBot = Math.min(tw.h - 1, y1 + Math.max(Math.ceil((MAXE * EP) / T) + 1, Math.ceil(A.TOWN_TREE_MAX_H / T) - 1));
       const elAt = (x, y) => (x < 0 || y < 0 || x >= tw.w || y >= tw.h ? 0 : tw.elev[y * tw.w + x]);
       const draws = [];
       /* 2026-09-26 — des entrées qui ne se dessinent QUE dans la passe des
@@ -20410,9 +20424,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          plus haut (64 px) plus l'axe du quai. Ce qui s'y dessine hors cadre est
          découpé par le canevas ; ce qui compte, c'est que la file de dessin
          CONNAISSE l'objet, pour que la passe des reflets le rejoue. */
-      const TOWN_REFL_ROWS = 6;
+      /* ⚠️ 2026-09-27 (phase 11) : le plus haut arbre fait maintenant 96 px
+         (`A.TOWN_TREE_MAX_H`), plus l'axe du quai — la marge en DÉRIVE. Et la
+         boucle déborde de deux colonnes de chaque côté : un grand arbre ou un
+         trapu fait quatre cases de large, sa couronne entre dans le cadre avant
+         son pied. */
+      const TOWN_REFL_ROWS = Math.ceil(A.TOWN_TREE_MAX_H / T) + 2;
       const yR0 = Math.max(0, y0 - TOWN_REFL_ROWS);
-      for (let y = yR0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
+      const xL = Math.max(0, x0 - 2), xR = Math.min(tw.w - 1, x1 + 2);
+      for (let y = yR0; y <= yBot; y++) for (let x = xL; x <= xR; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const bakedCourtStair = C.townCourtMainStairCell(x, y);
         const e = tw.elev[i], oy = -e * EP;
@@ -22097,7 +22117,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const tn = E.townNoise(pr.x, pr.y, 6, 71), tone = tn > 0.3 ? "dry" : tn < -0.35 ? "lush" : null;
         const sister = (th >>> 10) % 3 === 0 ? A.TALLGRASS_VARIANTS[(th >>> 12) % A.TALLGRASS_VARIANTS.length] : null;
         pushE((occupiedNow ? occupiedKey : by) + jy, elAt(pr.x, pr.y), () => {
-          const img0 = loadBitmap(`/town/${variant}.png`); if (!img0) return;
+          const img0 = tallGrassBitmap(variant); if (!img0) return;
           const img = tallGrassTint(img0, tone);
           const cx = pr.x * T + T / 2 + jx;
           /* Vent ambiant (vague spatiale, fonction PURE de fermeArt.js) +
@@ -22109,7 +22129,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const lean = A.townTallGrassWaveLean(pr.x, pr.y, now) + (e ? bushLeanFormula(e.dir, age) : 0);
           const ih = img0.naturalHeight || img0.height, iw = img0.naturalWidth || img0.width;
           if (sister) {
-            const s0 = loadBitmap(`/town/${sister}.png`);
+            const s0 = tallGrassBitmap(sister);
             if (s0) {
               const si = tallGrassTint(s0, tone), sh2 = s0.naturalHeight || s0.height, sw2 = s0.naturalWidth || s0.width;
               ctx.save();
@@ -22570,7 +22590,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         spots.forEach((sx, i) => {
           const hv = EAU.waterHash(h0 + i * 17, i * 29 + 5);
           const variant = TUFT_KINDS[hv % TUFT_KINDS.length];
-          const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
+          const img = tallGrassBitmap(variant); if (!img) return;
           const flip = (hv >> 3) & 1, by = byW + 1 + ((hv >> 5) & 1);
           pushE(by, e, () => {
             const lean = A.townTallGrassWaveLean(sx / T, by / T, now);
@@ -26258,6 +26278,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         d: m && Number.isFinite(p.x) ? Math.hypot(p.x - m.x, p.y - m.y) : 0,
       };
       const st = nameTagRef.current;
+      if (isSelf) st.self = { sx: tag.sx, sy: tag.sy, s: tag.s };   // le repère « où suis-je ? » (L) s'y accroche
       if (st.queue) st.queue.push(tag); else paintLabels(ctx, [tag], null, 0);
     }
     /* La boîte à l'écran d'une étiquette — celle du masquage. */
@@ -26289,11 +26310,52 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       g.restore();
     }
-    function openNameTags() { nameTagRef.current.queue = []; }
+    function openNameTags() { nameTagRef.current.queue = []; nameTagRef.current.self = null; }
     function flushNameTags() {
       const st = nameTagRef.current, q = st.queue;
       st.queue = null;
       if (q) paintLabels(ctx, q, st.fade, st.dt);
+      drawFindMe(st.self);
+    }
+    /* ⚠️ 2026-09-27 (phase 11) — L COMME « LÀ » : OÙ SUIS-JE ? Guillaume, sur le
+       feuillage qui s'effaçait devant le joueur : « ce n'est pas un problème que
+       le perso soit masqué par les arbres : une touche peut servir pour mettre un
+       pointeur si on a vraiment perdu son player ». Les grands arbres cachent donc
+       le joueur, comme n'importe quel décor, et L pose pendant `FIND_ME_MS` une
+       flèche qui rebondit au-dessus de sa tête et un anneau qui s'élargit à ses
+       pieds — peints ici, APRÈS la lumière et les noms, donc par-dessus les
+       couronnes et la nuit. En coordonnées ÉCRAN, au pas du pixel d'art (`s`).
+       Local : rien ne part sur le réseau (§3). */
+    function drawFindMe(at) {
+      const until = findMeUntilRef.current;
+      if (!at || !until) return;
+      const now = performance.now(), left = until - now;
+      if (left <= 0) { findMeUntilRef.current = 0; return; }
+      const s = at.s, t = (FIND_ME_MS - left) / 1000;
+      const fade = Math.min(1, left / 400, t / 0.12);
+      const bounce = Math.round(Math.abs(Math.sin(t * Math.PI * 2.2)) * 4) * s;
+      const cx = Math.round(at.sx), top = Math.round(at.sy - 14 * s - bounce);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = fade;
+      // La flèche : un fût de 3, une pointe de 7 → 1, cernée de sombre.
+      const rows = [[-1, 3], [-1, 3], [-1, 3], [-3, 7], [-2, 5], [-1, 3], [0, 1]];
+      for (let pass = 0; pass < 2; pass++) rows.forEach(([x0, w], r) => {
+        ctx.fillStyle = pass ? (r < 3 ? "#ffe066" : r === 3 ? "#ffd23f" : "#f2b705") : "#2a1a08";
+        const o = pass ? 0 : s;
+        ctx.fillRect(cx + x0 * s - o, top + r * s - o, w * s + 2 * o, s + 2 * o);
+      });
+      // L'anneau aux pieds (le nom est à 10 px au-dessus du sprite, qui en fait 24) : il s'élargit et pâlit, deux fois par seconde.
+      const fy = at.sy + 33 * s, ph = (t * 2) % 1;
+      const rx = (5 + ph * 9) * s, ry = rx * 0.42;
+      ctx.globalAlpha = fade * (1 - ph) * 0.9;
+      ctx.fillStyle = "#ffe066";
+      const n = Math.max(24, Math.round(rx / s * 5));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        ctx.fillRect(Math.round((cx + Math.cos(a) * rx) / s) * s, Math.round((fy + Math.sin(a) * ry) / s) * s, s, s);
+      }
+      ctx.restore();
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;

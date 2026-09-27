@@ -65,7 +65,7 @@ const ok = (cond, label, detail) => {
    de la planche s'affichaient « undefined » dans tous les messages du banc :
    le contrôle mesurait la bonne chose et le rapport était illisible. */
 const NAMES = ["chêne", "érable", "bouleau", "saule", "magnolia", "cerisier", "mimosa", "pommier", "sapin", "pin", "cyprès",
-               "sapin (planche)", "arbre rond (planche)", "saule (planche)", "magnolia (planche)"];
+               "sapin (planche)", "arbre rond (planche)", "saule (planche)", "magnolia (redessiné)"];
 /* ⚠️⚠️ LES ESSENCES IMPORTÉES SONT HORS DU CONTRÔLE DE PROPRETÉ, et pour la
    même raison qu'au banc de rive : ce contrôle-là mesure la netteté de NOTRE
    trait — il a été réécrit quatre fois au 438 pour ça. Appliqué au dessin de
@@ -74,7 +74,10 @@ const NAMES = ["chêne", "érable", "bouleau", "saule", "magnolia", "cerisier", 
    recopier. Tout le reste — le bord du canevas, les saisons, la silhouette —
    continue de s'appliquer à elles : ce sont des propriétés de l'INTÉGRATION,
    pas du dessin. */
-const IMPORTED = (k) => k >= 11;
+/* ⚠️ 2026-09-27 (phase 11) : le magnolia (indice 14) n'est plus importé — il
+   est redessiné en code (`magnoliaTree`), donc il repasse sous le contrôle de
+   propreté comme les onze autres. */
+const IMPORTED = (k) => k >= 11 && k !== A.TT.REF_MAGNOLIA;
 const SEASONS = ["summer", "spring", "autumn"];
 const TW = S.townTrees[0].w, TH = S.townTrees[0].h;   // 48×64 depuis le 438
 
@@ -82,8 +85,14 @@ const TW = S.townTrees[0].w, TH = S.townTrees[0].h;   // 48×64 depuis le 438
    sprite dans une planche dont on garde le tampon, et on mesure dessus. */
 function pixelsOf(img) {
   const sh = makeCanvas(TW, TH);
-  sh.ctx.drawImage(img, 0, 0);
+  drawTree(sh.ctx, img, 0, 0);
   return sh.px;
+}
+/* 2026-09-27 (phase 11) : un arbre de ville est une CELLULE d'atlas
+   (`{img,sx,sy,w,h}`), plus un canevas — la lecture passe par ici. */
+function drawTree(ctx, img, x, y) {
+  if (img.sx !== undefined) ctx.drawImage(img.img, img.sx, img.sy, img.w, img.h, x, y, img.w, img.h);
+  else ctx.drawImage(img, x, y);
 }
 const at = (px, x, y) => {
   const o = (y * TW + x) * 4;
@@ -119,7 +128,7 @@ console.log("\n=== 1. rien ne touche le bord du canevas (§4) ===\n");
       const d = PL.PLANCHE[src];
       let want = 0;
       for (const r of d.rows) for (const ch of r) if (ch !== ".") want++;
-      for (const se of SEASONS) for (let f = 0; f < 3; f++) {
+      for (const se of SEASONS) for (let f = 0; f < S.townTrees[k][se].length; f++) {
         const px = pixelsOf(S.townTrees[k][se][f]);
         let got = 0;
         for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) if (at(px, x, y)) got++;
@@ -127,7 +136,7 @@ console.log("\n=== 1. rien ne touche le bord du canevas (§4) ===\n");
       }
     }
     ok(lost.length === 0, "aucun pixel perdu au montage des essences importées",
-       lost.length ? lost.slice(0, 4).join(" · ") : "36 images, aucune amputée");
+       lost.length ? lost.slice(0, 4).join(" · ") : "45 images (5 poses), aucune amputée");
   }
 }
 
@@ -300,7 +309,13 @@ console.log("\n=== 5. la saison change la couleur, pas la forme ===\n");
       for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) if (!!at(base, x, y) !== !!at(px, x, y)) diff++;
       // Un pommier en fleurs perd ses pommes et un magnolia d'automne ses
       // fleurs : quelques pixels de coque bougent, la couronne non.
-      if (diff > 40) bad.push(NAMES[k] + "/" + se + " (" + diff + " px)");
+      /* ⚠️ 2026-09-27 (phase 11) — UNE EXCEPTION, NOMMÉE ET BORNÉE : le
+         magnolia redessiné fleurit sur BOIS NU au printemps (c'est ce qui le
+         rend vrai), donc sa silhouette change exprès avec la saison. On borne
+         quand même l'écart : un magnolia qui changerait d'arbre entier
+         (canevas vide, autre essence) le dépasserait. */
+      const lim = k === A.TT.REF_MAGNOLIA ? 420 : 40;
+      if (diff > lim) bad.push(NAMES[k] + "/" + se + " (" + diff + " px)");
     }
   }
   ok(bad.length === 0, "les trois saisons partagent la même silhouette", bad.length ? bad.join(", ") : "0 essence déformée");
@@ -338,6 +353,125 @@ console.log("\n=== 6. l'essence se déduit du lieu ===\n");
   ok(top / trees < 0.55, "aucune essence n'écrase les autres", "la plus courante : " + Math.round(top / trees * 100) + " %");
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   2026-09-27 (phase 11) — LES TAILLES ET LES FLEURS DU MAGNOLIA.
+   ═════════════════════════════════════════════════════════════════════════ */
+const SIZE_KEYS = ["young", "planted", "short", "tall"];
+function cellPx(cell, w, h) {
+  const sh = makeCanvas(w, h);
+  if (cell.sx !== undefined) sh.ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, 0, 0, cell.w, cell.h);
+  else sh.ctx.drawImage(cell, 0, 0);
+  return sh.px;
+}
+// La boîte de ce qui est peint au-dessus de l'ombre (alpha franc : l'ombre est à 18-38 %).
+function bodyBox(px, w, h) {
+  let x0 = w, x1 = -1, y0 = h, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 200) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return { w: x1 - x0 + 1, h: y1 - y0 + 1, x0, y0 };
+}
+console.log("\n=== 7. les tailles : redessinées, pas agrandies ===\n");
+{
+  const sized = S.townTrees.map((t, k) => [k, t]).filter(([, t]) => t.sizes);
+  ok(sized.length === 12, "douze essences dessinées en code ont leurs tailles", sized.map(([k]) => NAMES[k]).join(", "));
+  ok(!S.townTrees[A.TT.REF_WILLOW].sizes, "le saule de la planche garde son unique dessin (« absolument magnifiques »)");
+  let edge = [], read = 0;
+  const ratio = [];
+  for (const [k, t] of sized) {
+    const adult = bodyBox(cellPx(t.summer[1], t.w, t.h), t.w, t.h);
+    const r = {};
+    for (const key of SIZE_KEYS) {
+      const m = t.sizes[key];
+      for (const se of SEASONS) for (let f = 0; f < m[se].length; f++) {
+        const px = cellPx(m[se][f], m.w, m.h); read++;
+        let hit = 0;
+        for (let x = 0; x < m.w; x++) { if (px[x * 4 + 3] > 8) hit++; if (px[((m.h - 1) * m.w + x) * 4 + 3] > 8) hit++; }
+        for (let y = 0; y < m.h; y++) { if (px[(y * m.w) * 4 + 3] > 8) hit++; if (px[(y * m.w + m.w - 1) * 4 + 3] > 8) hit++; }
+        if (hit) edge.push(NAMES[k] + "/" + key + "/" + se + "/f" + f + " (" + hit + ")");
+      }
+      const b = bodyBox(cellPx(m.summer[1], m.w, m.h), m.w, m.h);
+      r[key] = { h: b.h / adult.h, w: b.w / adult.w, aspect: b.w / b.h };
+    }
+    ratio.push([NAMES[k], r]);
+  }
+  ok(edge.length === 0, "aucun pixel sur le bord d'un gabarit de taille (§4)", `${read} images lues · ` + (edge.length ? edge.slice(0, 4).join(" · ") : "0 débord"));
+  for (const [nm, r] of ratio) console.log(`        ${nm.padEnd(22)} jeune ×${r.young.h.toFixed(2)} · trapu ×${r.short.h.toFixed(2)} (large ×${r.short.w.toFixed(2)}) · grand ×${r.tall.h.toFixed(2)}`);
+  ok(ratio.every(([, r]) => r.tall.h >= 1.35), "chaque grand arbre dépasse l'adulte d'au moins un tiers", "le moins haut : ×" + Math.min(...ratio.map(([, r]) => r.tall.h)).toFixed(2));
+  ok(ratio.every(([, r]) => r.young.h <= 0.85 && r.young.w <= 0.8), "chaque jeune est plus petit et plus mince que l'adulte");
+  ok(ratio.every(([nm, r]) => r.short.h <= 1.02 && (r.short.aspect > r.tall.aspect)), "chaque trapu est plus court que l'adulte et plus large pour sa hauteur que le grand");
+}
+console.log("\n=== 8. le magnolia : des fleurs à leur taille ===\n");
+{
+  /* Grandeur choisie pour ce qu'elle SÉPARE (§8 de CLAUDE.md) : une fleur est
+     une tache ROSE — rouge et bleu au-dessus du vert. Ni l'écorce (gris brun),
+     ni les feuilles (vert), ni le feuillage d'automne (bleu sous le vert) n'en
+     portent. On compte les taches connexes et leur largeur. */
+  const pink = (r, g, b) => r > 150 && r > g + 8 && b > g;
+  function blobs(get, w, h) {
+    const seen = new Uint8Array(w * h), out = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (seen[y * w + x] || !get(x, y)) continue;
+      let x0 = x, x1 = x, y0 = y, y1 = y, n = 0; const st = [[x, y]]; seen[y * w + x] = 1;
+      while (st.length) { const [a, b] = st.pop(); n++; x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const c = a + dx, d = b + dy; if (c < 0 || d < 0 || c >= w || d >= h || seen[d * w + c] || !get(c, d)) continue; seen[d * w + c] = 1; st.push([c, d]); } }
+      out.push({ w: x1 - x0 + 1, h: y1 - y0 + 1, n });
+    }
+    return out;
+  }
+  const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const old = PL.PLANCHE.treeMagnolia, oldPal = old.pal.map(hex);
+  const before = blobs((x, y) => { const ch = old.rows[y][x]; if (ch === ".") return false; const [r, g, b] = oldPal[ch.charCodeAt(0) - 48]; return pink(r, g, b); }, old.w, old.h).filter(b => b.n >= 4);
+  const t = S.townTrees[A.TT.REF_MAGNOLIA], px = cellPx(t.spring[1], t.w, t.h);
+  const after = blobs((x, y) => { const o = (y * t.w + x) * 4; return px[o + 3] > 200 && pink(px[o], px[o + 1], px[o + 2]); }, t.w, t.h).filter(b => b.n >= 4);
+  const med = (a) => { const s = a.map(b => Math.max(b.w, b.h)).sort((p, q) => p - q); return s[s.length >> 1]; };
+  console.log(`        planche : ${before.length} fleurs, taille médiane ${med(before)} px · redessiné : ${after.length} fleurs, taille médiane ${med(after)} px`);
+  ok(med(before) >= 9, "le banc reconnaît les grandes fleurs de la planche (il sait voir le défaut)", "médiane " + med(before) + " px");
+  ok(med(after) <= 5, "une fleur fait 3 à 5 px (15 à 35 cm à 13,5 px/m)", "médiane " + med(after) + " px");
+  ok(after.length >= 20, "et il y en a des dizaines, pas six", after.length + " taches roses");
+}
+console.log("\n=== 9. les tailles sur la carte ===\n");
+{
+  const n = { adult: 0, young: 0, planted: 0, short: 0, tall: 0 };
+  const lamps = tw.props.filter(p => p.kind === "lamp" || p.kind === "hangLamp" || p.kind === "oilLamp");
+  let covered = [], big = 0;
+  for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
+    const o = tw.objects[y * tw.w + x];
+    if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+    const z = A.townTreeSize(tw, x, y, o); n[z]++;
+    if (z !== "tall" && z !== "short") continue;
+    big++;
+    /* Lu sur le GABARIT dessiné (largeur, hauteur du canevas), pas recopié de
+       la règle du jeu : une lanterne dans le rectangle du sprite est cachée. */
+    const m = S.townTrees[A.townTreeKind(tw, x, y, o)].sizes[z];
+    const hw = Math.floor(m.w / 2 / 16), up = Math.ceil(m.base / 16) - 1;
+    for (const l of lamps) if (Math.abs(l.x - x) <= hw && l.y < y && l.y >= y - up) covered.push(`${x},${y}`);
+  }
+  console.log("        " + Object.entries(n).map(([k, v]) => k + " " + v).join(" · "));
+  ok(n.tall > 40 && n.young + n.planted > 40 && n.short > 30, "les trois nouvelles tailles sont plantées en nombre", `grand ${n.tall} · jeune ${n.young + n.planted} · trapu ${n.short}`);
+  ok(n.planted > 0 && n.young > 0, "des jeunes tuteurés en ville ET des jeunes libres dans les bois");
+  ok(covered.length === 0, "aucun grand arbre ni trapu devant une lanterne", `${big} lus · ` + (covered.length ? covered.slice(0, 5).join(" · ") : "0"));
+}
+
+console.log("\n=== 10. le vent : cinq poses, pas de bascule d'un bloc ===\n");
+{
+  /* Ce qui se voit comme un « tic », c'est le NOMBRE de pixels qui changent d'une
+     image à la suivante. Avec trois poses, le cycle passait du repos (1) à
+     l'extrême (2) en un pas ; avec les demi-poses, le même trajet prend deux
+     pas. On compare le plus gros saut du cycle neuf au saut direct d'avant. */
+  const CYCLE = [1, 4, 2, 4, 1, 3, 0, 3];
+  const diff = (a, b) => { let n = 0; for (let i = 3; i < a.length; i += 4) if ((a[i] > 8) !== (b[i] > 8) || (a[i] > 8 && (a[i - 3] !== b[i - 3] || a[i - 2] !== b[i - 2]))) n++; return n; };
+  let before = 0, after = 0, lines = [];
+  for (let k = 0; k < S.townTrees.length; k++) {
+    const fr = S.townTrees[k].summer.map(pixelsOf);
+    if (fr.length !== 5) continue;
+    const old = diff(fr[1], fr[2]);
+    let worst = 0;
+    for (let i = 0; i < CYCLE.length; i++) worst = Math.max(worst, diff(fr[CYCLE[i]], fr[CYCLE[(i + 1) % CYCLE.length]]));
+    before += old; after += worst; lines.push(`${NAMES[k]} ${old}→${worst}`);
+  }
+  console.log("        " + lines.join(" · "));
+  ok(after <= before * 0.75, "le plus gros saut d'une image à l'autre baisse d'un quart au moins", `${before} → ${after} px (somme des essences)`);
+}
+
 /* ─────────────────────────── LES PLANCHES ─────────────────────────── */
 {
   const PAD = 6, COLS = S.townTrees.length;
@@ -345,7 +479,7 @@ console.log("\n=== 6. l'essence se déduit du lieu ===\n");
   const sh = makeCanvas(W, H);
   sh.ctx.fillStyle = "#4e8b46"; sh.ctx.fillRect(0, 0, W, H);
   for (let k = 0; k < COLS; k++) for (let s = 0; s < 3; s++) {
-    sh.ctx.drawImage(S.townTrees[k][SEASONS[s]][1], PAD + k * (TW + PAD), PAD + s * (TH + PAD));
+    drawTree(sh.ctx, S.townTrees[k][SEASONS[s]][1], PAD + k * (TW + PAD), PAD + s * (TH + PAD));
   }
   const up = scale(sh.px, W, H, 3);
   writePNG(path.join(OUT, "arbres-essences.png"), up.px, up.W, up.H);
@@ -357,12 +491,36 @@ console.log("\n=== 6. l'essence se déduit du lieu ===\n");
   sh.ctx.fillStyle = "#4e8b46"; sh.ctx.fillRect(0, 0, W, H);
   sh.ctx.drawImage(S.oak, PAD, PAD);
   sh.ctx.drawImage(S.pine, PAD + (TW + PAD), PAD);
-  sh.ctx.drawImage(S.townTrees[0].summer[1], PAD + 2 * (TW + PAD), PAD);
-  sh.ctx.drawImage(S.townTrees[8].summer[1], PAD + 3 * (TW + PAD), PAD);
+  drawTree(sh.ctx, S.townTrees[0].summer[1], PAD + 2 * (TW + PAD), PAD);
+  drawTree(sh.ctx, S.townTrees[8].summer[1], PAD + 3 * (TW + PAD), PAD);
   const up = scale(sh.px, W, H, 5);
   writePNG(path.join(OUT, "arbres-avant-apres.png"), up.px, up.W, up.H);
 }
 
-console.log("\nImages : tools/out/arbres-essences.png, arbres-avant-apres.png\n");
+/* 2026-09-27 (phase 11) — la planche des tailles : une rangée par essence
+   dessinée en code (jeune, tuteuré, adulte, trapu, grand), en été, avec un
+   repère d'homme de 1,70 m (23 px) — et le magnolia dans ses trois saisons. */
+{
+  const rows = S.townTrees.map((t, k) => [k, t]).filter(([, t]) => t.sizes);
+  const cols = ["young", "planted", "adult", "short", "tall"];
+  const CW = 64, CH = 96, PAD = 6, W = PAD + (cols.length + 3) * (CW + PAD) + 20, H = PAD + rows.length * (CH + PAD);
+  const sh = makeCanvas(W, H);
+  sh.ctx.fillStyle = "#4e8b46"; sh.ctx.fillRect(0, 0, W, H);
+  rows.forEach(([k, t], r) => {
+    const put = (cell, m, cx) => {
+      const dx = cx + (CW - m.w) / 2, dy = PAD + r * (CH + PAD) + CH - 6 - m.base;
+      if (cell.sx !== undefined) sh.ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, dx, dy, cell.w, cell.h);
+      else sh.ctx.drawImage(cell, dx, dy);
+    };
+    cols.forEach((c, i) => { const m = c === "adult" ? t : t.sizes[c]; put(m.summer[1], m, PAD + i * (CW + PAD)); });
+    if (k === A.TT.REF_MAGNOLIA) ["spring", "summer", "autumn"].forEach((se, i) => put(t.sizes.tall[se][1], t.sizes.tall, PAD + (cols.length + i) * (CW + PAD)));
+    // L'homme de 1,70 m, planté sur la même ligne de sol.
+    sh.ctx.fillStyle = "#2b2b3a"; sh.ctx.fillRect(W - 14, PAD + r * (CH + PAD) + CH - 6 - 23, 6, 23);
+  });
+  const up = scale(sh.px, W, H, 3);
+  writePNG(path.join(OUT, "arbres-tailles.png"), up.px, up.W, up.H);
+}
+
+console.log("\nImages : tools/out/arbres-essences.png, arbres-avant-apres.png, arbres-tailles.png\n");
 console.log(fail ? fail + " CONTRÔLE(S) EN ÉCHEC\n" : "Tout est bon.\n");
 process.exit(fail ? 1 : 0);

@@ -535,6 +535,20 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   par le haut (rabotée en silence), le liseré clair faisait le TOUR du houppier au lieu de son
   seul bord nord-ouest (l'arbre était détouré en vert vif), et le bouleau sortait **en beignet**
   — huit bouquets sur un anneau étroit ne couvrent pas le centre.
+  ⚠️ **2026-09-27 (phase 11) — trois chapitres de plus, 24 contrôles.** §7 les TAILLES (jeune,
+  tuteuré, trapu, grand) des douze essences dessinées en code : 432 images lues dans leurs atlas, aucun
+  pixel au bord, grand ≥ ×1,35 l'adulte, jeune plus petit ET plus mince, trapu plus large pour sa
+  hauteur que le grand. §8 le MAGNOLIA : taches ROSES connexes (rouge et bleu au-dessus du vert — ni
+  l'écorce, ni les feuilles, ni l'automne n'en portent) ; la planche de Guillaume sort à 6 fleurs de
+  médiane 16 px (le banc sait voir le défaut), le redessiné à 28 fleurs de 4 px. §9 les tailles SUR LA
+  CARTE, et aucune lanterne dans le rectangle d'un grand arbre ou d'un trapu, lu sur le GABARIT dessiné
+  (falsifié : sans la règle de place, 3 lanternes cachées). Le magnolia redessiné fleurit sur bois nu au
+  printemps : exception nommée et bornée (420 px) au contrôle des silhouettes saisonnières. Planche
+  `tools/out/arbres-tailles.png`, avec un repère d'homme de 1,70 m.
+  §10 le VENT : le plus gros saut de pixels d'une image à la suivante sur le cycle à cinq poses, contre le
+  saut direct repos→extrême d'avant — doit baisser d'un quart (mesuré 3 525 → 2 246 ; falsifié : demi-poses
+  égales au repos → 3 602, rouge). Les arbres de ville sont des CELLULES d'atlas : `drawTree`/`cellPx` ici,
+  un recopiage dans `render-parc` (contrôle des lanternes).
 
 - **`tools/render-parc.mjs` — le parc, les deux rives du lac du sud, LE PONT et LE SENTIER DE
   L'EST, 31 contrôles, 31/31 (437, + le pont au 439, + le bois au 440).**

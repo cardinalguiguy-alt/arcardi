@@ -2050,7 +2050,13 @@ export function townTreeKind(tw, x, y, obj) {
   if (TT_IN(C.TOWN_ORCHARD, x, y)) return (h % 3) === 0 ? TT.REF_APPLE : TT.APPLE;
   if (TT_IN(C.TOWN_PARK, x, y)) {
     const k = h % 12;
-    return k < 3 ? TT.REF_MAGNOLIA : k < 5 ? TT.CHERRY : k < 7 ? TT.MAGNOLIA : k < 9 ? TT.MIMOSA
+    /* ⚠️ 2026-09-27 (phase 11) — `TT.MAGNOLIA` (le magnolia procédural du 439,
+       corolles de onze pixels) N'EST PLUS CHOISI : même défaut que celui de la
+       planche (« corrige la taille des fleurs »), et deux magnolias différents
+       dans le même parc se lisent comme deux essences. Ses cases prennent le
+       magnolia redessiné. Son entrée reste dans `TREE_SPECS` (les indices de
+       `TT` ne se réordonnent jamais), comme le saule procédural. */
+    return k < 3 ? TT.REF_MAGNOLIA : k < 5 ? TT.CHERRY : k < 7 ? TT.REF_MAGNOLIA : k < 9 ? TT.MIMOSA
          : k < 10 ? TT.REF_APPLE : k < 11 ? TT.APPLE : TT.MAPLE;
   }
   const k = h % 8;
@@ -2066,39 +2072,114 @@ export function townTreeKind(tw, x, y, obj) {
    pas comme du vent mais comme un défaut d'affichage — exactement le voile
    `sin(x + y)` du 425 sur l'eau, en pire. Avec elle, chaque arbre a son souffle,
    et rien ne circule sur le réseau (§3 : ce qui se déduit ne se diffuse pas). */
-const TREE_SWAY = [1, 2, 1, 0];      // aller-retour : 0 et 2 sont les extrêmes, 1 le repos
+/* Aller-retour sur les cinq poses (`TREE_FRAMES`) : 1 le repos, 4 et 3 les
+   demi-poses, 2 et 0 les extrêmes. Huit pas d'une demi-période chacun : même
+   période qu'avec les trois poses d'avant (2026-09-27, phase 11). */
+const TREE_SWAY = [1, 4, 2, 4, 1, 3, 0, 3];
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-27 (phase 11) — QUELLE TAILLE POUR CET ARBRE. Pure, comme l'essence :
+   le LIEU d'abord, le hachage ensuite, et rien sur le réseau.
+   · au verger, beaucoup de TRAPUS (un fruitier se taille bas) et pas de grand ;
+   · au parc, des GRANDS (les arbres qu'on a laissés vieillir) ;
+   · au cimetière et en terrasse, le cyprès monte ;
+   · ailleurs, un mélange, avec des jeunes — TUTEURÉS s'ils bordent une rue ou
+     une allée (quelqu'un les a plantés), libres dans les bois.
+   ⚠️⚠️ UN GRAND ARBRE OU UN TRAPU DÉBORDE DE DEUX CASES DE CHAQUE CÔTÉ, ET SA
+   COURONNE COUVRE CE QUI EST DERRIÈRE LUI (au nord). La règle du 2026-09-27
+   (aucun feuillu devant une lanterne, `generateTownWorld`) vaut aussi pour lui :
+   s'il y a une lanterne, un mur, une maison ou un décor dur sous sa couronne,
+   il redevient ADULTE. On NE RETIRE PAS d'arbre ici (ce serait toucher la carte,
+   §4) : on choisit seulement un dessin qui tient à sa place.
+   ⚠️ LE RÉSULTAT EST MIS EN CACHE PAR CARTE (`WeakMap`) : la fonction est lue
+   à chaque image pour chaque arbre visible, et le test de place balaie jusqu'à
+   trente cases. */
+export const TOWN_TREE_MAX_H = 96;   // le plus haut gabarit (`tall`) : les marges de la vue en dépendent
+const TREE_SIZE_MEMO = new WeakMap();
+const TREE_ROOM = { tall: [2, 5], short: [2, 3] };   // [demi-largeur, rangées au nord] que la couronne couvre
+function treeSizeRaw(tw, x, y, k, lampAt) {
+  const h = waterHash(x * 61 + 29, y * 17 + 43) % 100;
+  const inCem = TT_IN(C.TOWN_CEMETERY, x, y) || TT_IN(C.TOWN_UPPER, x, y);
+  let pick;
+  if (TT_IN(C.TOWN_ORCHARD, x, y)) pick = h < 40 ? "short" : h < 60 ? "young" : "adult";
+  else if (TT_IN(C.TOWN_PARK, x, y)) pick = h < 28 ? "tall" : h < 42 ? "short" : h < 56 ? "young" : "adult";
+  else if (k === TT.CYPRESS && inCem) pick = h < 38 ? "tall" : h < 52 ? "young" : "adult";
+  else pick = h < 20 ? "young" : h < 42 ? "tall" : h < 56 ? "short" : "adult";
+  if (pick === "young") {
+    const i = y * tw.w + x;
+    const street = (tw.road[i - 1] || tw.road[i + 1] || tw.road[i - tw.w] || tw.road[i + tw.w]) && k !== TT.FIR && k !== TT.PINE && k !== TT.CYPRESS;
+    return street ? "planted" : "young";
+  }
+  const room = TREE_ROOM[pick];
+  if (room) {
+    const [hw, up] = room;
+    for (let yy = y - up; yy <= y; yy++) for (let xx = x - hw; xx <= x + hw; xx++) {
+      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return "adult";
+      const j = yy * tw.w + xx;
+      if (lampAt[j]) return "adult";
+      if (xx === x && yy === y) continue;
+      const o = tw.objects[j];
+      if (tw.solid[j] && !tw.hedge[j] && o !== C.O_TREE && o !== C.O_TREE2 && tw.ground[j] !== C.G_WATER && !(tw.soft && tw.soft[j])) return "adult";
+    }
+  }
+  return pick;
+}
+export function townTreeSize(tw, x, y, obj) {
+  if (!tw || !tw.shore || !tw.road) return "adult";
+  let memo = TREE_SIZE_MEMO.get(tw);
+  if (!memo) {
+    const lampAt = new Uint8Array(tw.w * tw.h);
+    for (const p of tw.props || []) if (p.kind === "lamp" || p.kind === "hangLamp" || p.kind === "oilLamp") lampAt[p.y * tw.w + p.x] = 1;
+    memo = { lampAt, cache: new Map() };
+    TREE_SIZE_MEMO.set(tw, memo);
+  }
+  const i = y * tw.w + x;
+  let v = memo.cache.get(i);
+  if (v === undefined) {
+    const k = townTreeKind(tw, x, y, obj);
+    // Les essences de la planche (sapin, pommier, saule) n'ont que leur adulte : voir `townTrees`.
+    v = k === null || (k > TT.CYPRESS && k !== TT.REF_MAGNOLIA) ? "adult" : treeSizeRaw(tw, x, y, k, memo.lampAt);
+    memo.cache.set(i, v);
+  }
+  return v;
+}
+/* L'image et son gabarit. ⚠️ Depuis la phase 11 elle rend `{ img, m }` : une
+   taille vit dans un ATLAS (une cellule `{img,sx,sy,w,h}`, lue par `blitCell`)
+   et a son propre ancrage — l'adulte, lui, reste un canevas. */
 export function townTreeImg(S, tw, x, y, seasonKey, obj, now) {
   const set = S && S.townTrees;
   if (!set) return null;
   const k = townTreeKind(tw, x, y, obj);
   if (k === null || !set[k]) return null;
+  const size = set[k].sizes ? townTreeSize(tw, x, y, obj) : "adult";
+  const m = size === "adult" ? set[k] : set[k].sizes[size];
   const seasonName = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
-  let frames = set[k][seasonName];
+  let frames = m[seasonName];
   /* ⚠️ hors-zip 2026-08-31 (session saule) — LE JITTER DE TEINTE DU SAULE
      IMPORTÉ, CHOISI PAR CASE ET NON PAR IMAGE : le même hachage que la phase de
      vent juste en dessous, sur un couple de coordonnées différent pour ne pas
      corréler les deux. `set[k].autumnAlt` n'existe que pour `treeWillow`
-     (construit plus haut) : pour les 14 autres essences, `alts` est
+     (construit plus haut) : pour les autres essences, `alts` est
      `undefined` et cette branche ne fait rien. */
   if (seasonName === "autumn" && set[k].autumnAlt) {
     const alts = set[k].autumnAlt;
     const vi = waterHash(x * 19 + 31, y * 37 + 17) % (alts.length + 1);
     if (vi > 0) frames = alts[vi - 1];
   }
-  if (!now) return frames[1];
+  if (!now) return { img: frames[1], m };
   const ph = waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000;
-  return frames[TREE_SWAY[Math.floor(now / C.TOWN_TREE_SWAY_MS + ph * 4) & 3]];
+  return { img: frames[TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + ph * 8) & 7]], m };
 }
 /* Le dessin complet, ancrage compris. ⚠️ L'ANCRAGE VIT ICI ET PAS CHEZ
-   L'APPELANT : le gabarit est passé de 32×48 à 48×64 au 438, et un décalage
-   écrit en dur dans la boucle de rendu aurait planté les arbres vingt pixels
-   trop haut sans qu'aucune erreur ne le dise. `S.townTrees[k].base` porte la
-   ligne de sol du canevas ; le rendu n'a rien à savoir. */
+   L'APPELANT : le gabarit est passé de 32×48 à 48×64 au 438, et depuis la
+   phase 11 chaque taille a le sien (`m.w`, `m.base`) — un décalage écrit en dur
+   dans la boucle de rendu planterait les grands arbres trente pixels trop bas,
+   sans erreur. */
 export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
-  const img = townTreeImg(S, tw, x, y, seasonKey, obj, now);
-  if (!img) return false;
-  const m = S.townTrees[0];
-  ctx.drawImage(img, px + SPR_T / 2 - m.w / 2, py + SPR_T - m.base);
+  const r = townTreeImg(S, tw, x, y, seasonKey, obj, now);
+  if (!r || !r.img) return false;
+  const dx = px + SPR_T / 2 - r.m.w / 2, dy = py + SPR_T - r.m.base;
+  if (r.img.sx !== undefined) blitCell(ctx, r.img, dx, dy);
+  else ctx.drawImage(r.img, dx, dy);
   return true;
 }
 
@@ -13156,15 +13237,23 @@ export function buildSprites() {
      vient du hachage de la case : deux arbres voisins ne respirent jamais
      ensemble, sinon toute la forêt bat comme un cœur.
      ════════════════════════════════════════════════════════════════════════ */
-  const TW_ = 48, TH_ = 64;        // 3 cases de large, 4 de haut
-  const TBASE_ = 58;               // la ligne de sol dans le canevas
+  /* ⚠️⚠️ 2026-09-27 (phase 11) — LE GABARIT DEVIENT UNE VARIABLE, ET SEULEMENT
+     LE TEMPS D'UN DESSIN. Les tailles d'arbre (jeune, grand, trapu, voir
+     `TREE_SIZES`) se REDESSINENT dans un canevas à leur taille — jamais un
+     adulte agrandi (§13 de CLAUDE.md : un sprite agrandi double ses pixels).
+     Toutes les fonctions ci-dessous lisent ces quatre valeurs ; `withTreeGeom`
+     les pose puis les REMET en sortie (`finally`), parce que `plancheTree` et
+     les bancs supposent le gabarit adulte. `TCX_` est le centre du fût : il
+     valait 24 en dur à onze endroits. */
+  let TW_ = 48, TH_ = 64;          // 3 cases de large, 4 de haut (adulte)
+  let TBASE_ = 58, TCX_ = 24;      // la ligne de sol, le centre du fût
   const TFRAMES_ = 3;
   /* Le tronc. ⚠️ DESSINÉ AVANT LA COURONNE, donc il déborde dessous : peint
      après, il couperait le feuillage en deux ; arrêté au ras des feuilles, il
      laisserait voir le fond entre les deux. */
   function treeTrunk(g, sp) {
     const [bark, barkL, barkD] = sp.trunk;
-    const w = sp.tw, x0 = 24 - (w >> 1), top = sp.trunkTop, bot = TBASE_;
+    const w = sp.tw, x0 = TCX_ - (w >> 1), top = sp.trunkTop, bot = TBASE_;
     for (let y = top; y < bot; y++) {
       const t = (y - top) / (bot - top);
       // L'évasement du pied : sans lui, un tronc est un poteau planté.
@@ -13240,15 +13329,17 @@ export function buildSprites() {
      silhouette change de nature, et c'est aussi ce qui rend le dessin
      reproductible chez les deux joueurs sans un octet de réseau. */
   function crownClumps(sp, frame) {
-    const out = [];
-    const { cx, cy, rx, ry, n, rad, radVar } = sp.crown;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + sp.crown.phase;
-      const r = rad + radVar * Math.sin(i * 2.399 + sp.crown.phase * 3);
-      const bx = cx + Math.cos(a) * rx, by = cy + Math.sin(a) * ry * 0.95;
-      out.push({ x: bx, y: by, r });
+    const out = sp.clumpList ? sp.clumpList.map(o => ({ x: o.x, y: o.y, r: o.r })) : [];
+    if (!sp.clumpList) {
+      const { cx, cy, rx, ry, n, rad, radVar } = sp.crown;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + sp.crown.phase;
+        const r = rad + radVar * Math.sin(i * 2.399 + sp.crown.phase * 3);
+        const bx = cx + Math.cos(a) * rx, by = cy + Math.sin(a) * ry * 0.95;
+        out.push({ x: bx, y: by, r });
+      }
+      for (const [ix, iy, ir] of (sp.crown.inner || [])) out.push({ x: cx + ix, y: cy + iy, r: ir });
     }
-    for (const [ix, iy, ir] of (sp.crown.inner || [])) out.push({ x: cx + ix, y: cy + iy, r: ir });
     if (frame) {
       /* LE VENT. Le décalage est proportionnel à la HAUTEUR du bouquet dans la
          couronne : la cime prend un pixel, le bas ne bouge pas. Un arbre entier
@@ -13314,10 +13405,59 @@ export function buildSprites() {
      ⚠️ ENTRE DEUX PÉTALES, ON NE PEINT RIEN : le feuillage déjà posé reste
      visible dans les creux, ce qui est exactement ce que montre la planche et
      ce qui empêche la corolle de se lire comme une pastille. */
-  function paintBloom(g, o, pal, mask, puff) {
+  function paintBloom(g, o, pal, mask, puff, cluster) {
     const PN = 5, pr = o.r * 0.54;
     const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
     const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
+    /* ⚠️ 2026-09-27 (phase 11) — LE CERISIER ET LE MIMOSA EN FLEURS À LEUR TAILLE.
+       Même demande que le magnolia (« beau mais plus réaliste ») : une fleur de
+       cerisier fait 3 cm, un pompon de mimosa 5 mm — ni l'une ni l'autre n'est
+       une corolle de onze pixels. La masse reste (elle est dans le masque, la
+       silhouette ne bouge pas d'une saison à l'autre) ; on y sème un RÉSEAU de
+       petites fleurs, calé sur le centre de la masse pour qu'il suive le vent
+       avec elle : croix de cinq pixels pour le cerisier (cœur rose sombre),
+       boules de 2×2 pour le mimosa. Entre deux fleurs, le feuillage reste :
+       c'est ce vert qui en fait un nuage et pas un aplat. */
+    if (cluster) {
+      /* ⚠️ PREMIER JET REFUSÉ À LA PLANCHE : un réseau de petites fleurs posé sur
+         le FEUILLAGE donnait un arbre vert quadrillé de rose — la période du
+         réseau se lisait avant les fleurs (`DESSIN.md` : la période compte plus
+         que les détails), et l'arbre avait perdu son nuage. Donc : (1) la masse
+         est ombrée dans la couleur des fleurs, en trois tons sur une seule
+         grandeur (comme un bouquet) — c'est le nuage ; (2) on y pose de petites
+         fleurs PLUS CLAIRES, sur un réseau en quinconce dont chaque point est
+         décalé ou sauté par hachage — c'est la texture, sans période. */
+      const ox = Math.round(o.x), oy = Math.round(o.y);
+      const at = (xx, yy) => xx >= 1 && yy >= 1 && xx < TW_ - 1 && yy < TH_ - 1 && mask[yy * TW_ + xx];
+      const hh = (a, b) => (((a * 73856093) ^ (b * 19349663)) >>> 0) % 97;
+      for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) {
+        if (!at(x, y)) continue;
+        const cdx = x + 0.5 - o.x, cdy = y + 0.5 - o.y, d = Math.sqrt(cdx * cdx + cdy * cdy) / o.r;
+        if (d > 1) continue;
+        if (d > 0.82 && hh(x, y) % 3 === 0) continue;                 // un bord qui s'effiloche : le vert passe
+        const lit = (-cdx * 0.62 - cdy * 0.78) / o.r;
+        P(g, x, y, 1, 1, lit > 0.3 ? pal.petal : lit < -0.28 ? pal.petalD : (puff ? pal.petal : pal.petalD2 || pal.petal));
+      }
+      for (let ly = -Math.ceil(o.r); ly <= Math.ceil(o.r); ly += 2) for (let lx = -Math.ceil(o.r); lx <= Math.ceil(o.r); lx += 3) {
+        const h = hh(lx + 31, ly + 17);
+        if (h % 5 === 0) continue;
+        const x = ox + lx + ((ly >> 1) & 1) + (h % 3) - 1, y = oy + ly + ((h >> 2) & 1);
+        if (!at(x, y) || (x - o.x) ** 2 + (y - o.y) ** 2 > o.r * o.r * 0.8) continue;
+        const lit = (-(x - o.x) * 0.62 - (y - o.y) * 0.78) / o.r;
+        if (lit < -0.45) continue;                                     // l'ombre du nuage reste sombre
+        if (puff) {
+          P(g, x, y, 1, 1, pal.petalL);
+          if (at(x + 1, y) && h % 2) P(g, x + 1, y, 1, 1, pal.petalL);
+        } else {
+          P(g, x, y, 1, 1, pal.petalL);
+          if (at(x - 1, y)) P(g, x - 1, y, 1, 1, pal.petalL);
+          if (at(x + 1, y)) P(g, x + 1, y, 1, 1, pal.petalL);
+          if (at(x, y - 1) && lit > 0) P(g, x, y - 1, 1, 1, pal.petalL);
+          if (at(x, y + 1)) P(g, x, y + 1, 1, 1, pal.petalD);                // le cœur ombré sous la fleur
+        }
+      }
+      return;
+    }
     for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) {
       if (!mask[y * TW_ + x]) continue;
       const cdx = x + 0.5 - o.x, cdy = y + 0.5 - o.y;
@@ -13368,14 +13508,32 @@ export function buildSprites() {
        berge). Une ombre centrée sous l'objet est une ombre de midi pile, et
        elle contredit tout le reste du décor. */
     for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
-      const u = (x - 25.5) / 17, v = (y - (TBASE_ + 1.0)) / 4.0;
+      const u = (x - (TCX_ + 1.5)) / (sp.shadowRx || 17), v = (y - (TBASE_ + 1.0)) / 4.0;
       const d = u * u + v * v;
       if (d > 1) continue;
       P(g, x, y, 1, 1, d > 0.44 ? "rgba(18,34,14,0.18)" : "rgba(12,26,10,0.38)");
     }
+    if (sp.stake) treeStake(g, sp);   // 2026-09-27 (phase 11) : le jeune arbre planté, avant son fût
     if (sp.conifer) { townConifer(g, sp, pal, frame); return c; }
-    treeTrunk(g, sp);
+    /* 2026-09-27 (phase 11) — deux crochets pour le magnolia redessiné : sa
+       charpente à troncs multiples (`drawWood`) et ses bouquets posés aux pointes
+       de ses branches (`clumpList`) au lieu d'un anneau sur une ellipse. Tout le
+       reste — ombrage, cerne, nervures, vent — est celui des autres essences. */
+    if (sp.drawWood) sp.drawWood(g, frame); else treeTrunk(g, sp);
     const clumps = crownClumps(sp, frame);
+    /* LES RAMEAUX DU JEUNE ARBRE : un trait d'un pixel du haut du fût vers
+       chaque bouquet, peint AVANT la couronne — elle en recouvre le bout, et ce
+       qu'on voit entre deux bouquets, c'est le bois. */
+    if (sp.twigs) {
+      const x0 = TCX_, y0 = sp.trunkTop + 2;
+      for (const o of clumps) {
+        const n = Math.max(2, Math.ceil(Math.hypot(o.x - x0, o.y - y0) * 1.5));
+        for (let i = 0; i <= n; i++) {
+          const t = i / n, x = Math.round(x0 + (o.x - x0) * t), y = Math.round(y0 + (o.y - y0) * t);
+          if (x >= 1 && y >= 1 && x < TW_ - 1 && y < TH_ - 1) P(g, x, y, 1, 1, i < n * 0.4 ? sp.trunk[0] : sp.trunk[2]);
+        }
+      }
+    }
     /* ZIP 439 — les corolles. Elles entrent dans le MASQUE avec les bouquets
        (voir la note de `bloomAnchors`), donc la silhouette est celle de leur
        union, et elle ne dépend pas de la saison. */
@@ -13458,7 +13616,7 @@ export function buildSprites() {
        ON NE PEINT RIEN : la masse reste, déjà couverte de feuillage par la
        passe précédente, et la silhouette ne bouge pas d'un pixel. */
     if (blooms.length && pal.petal) {
-      for (const o of blooms.slice().sort((a, b) => a.y - b.y)) paintBloom(g, o, pal, mask, !!sp.blossom.puff);
+      for (const o of blooms.slice().sort((a, b) => a.y - b.y)) paintBloom(g, o, pal, mask, !!sp.blossom.puff, !!sp.blossom.cluster);
     }
     /* LE CERNE EXTÉRIEUR. Un pixel tout autour de l'union — c'est la netteté
        que Guillaume demande (« net et bien détaillé ») : sans cerne, deux
@@ -13532,11 +13690,11 @@ export function buildSprites() {
         let low = -1;
         for (let y = 1; y < TH_ - 1; y++) if (mask[y * TW_ + x]) low = y;
         if (low < 0) continue;
-        const edgeF = 0.45 + 0.55 * Math.sin((x - 24) / 13 * 1.6 + 1.57);   // long au centre, court aux bouts
+        const edgeF = 0.45 + 0.55 * Math.sin((x - TCX_) / 13 * 1.6 + 1.57);   // long au centre, court aux bouts
         const len = Math.round(sp.weep * Math.max(0.22, edgeF) * (0.78 + 0.22 * Math.sin(x * 1.7 + frame)));
         const col = (x % 3 === 0) ? leafD : (x % 3 === 1) ? leaf : leafL;
         for (let q = 1; q <= len && low + q < TBASE_ - 2; q++) {
-          const xx = x + ((q > len * 0.62) ? (x < 24 ? -1 : 1) : 0);
+          const xx = x + ((q > len * 0.62) ? (x < TCX_ ? -1 : 1) : 0);
           if (xx < 1 || xx >= TW_ - 1) break;
           P(g, xx, low + q, 1, 1, q === len ? pal.out : col);
         }
@@ -13564,9 +13722,9 @@ export function buildSprites() {
     if (sp.richTrunk) {
       treeTrunk(g, Object.assign({}, sp, { trunkTop: bot - sp.bare }));
     } else {
-      P(g, 24 - (sp.tw >> 1), bot - sp.bare, sp.tw, sp.bare, sp.trunk[0]);
-      P(g, 24 - (sp.tw >> 1), bot - sp.bare, 1, sp.bare, sp.trunk[2]);
-      P(g, 24 - (sp.tw >> 1) + sp.tw - 1, bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+      P(g, TCX_ - (sp.tw >> 1), bot - sp.bare, sp.tw, sp.bare, sp.trunk[0]);
+      P(g, TCX_ - (sp.tw >> 1), bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+      P(g, TCX_ - (sp.tw >> 1) + sp.tw - 1, bot - sp.bare, 1, sp.bare, sp.trunk[2]);
       P(g, 19, bot - 2, 10, 2, sp.trunk[2]);
     }
     const span = bot - sp.bare - top;
@@ -13579,7 +13737,7 @@ export function buildSprites() {
       for (let y = yT; y <= yB && y < TH_ - 1; y++) {
         const t = (y - yT) / Math.max(1, yB - yT);
         const hw = half * (0.22 + 0.78 * t);
-        const cxs = 24 + sway * (1 - t);
+        const cxs = TCX_ + sway * (1 - t);
         for (let x = Math.max(1, Math.round(cxs - hw) - 2); x <= Math.min(TW_ - 2, Math.round(cxs + hw) + 2); x++) {
           // Le feston : la branche dépasse de zéro à deux pixels, colonne par
           // colonne, selon une dent de scie CALCULÉE — même colonne, même dent,
@@ -13592,7 +13750,7 @@ export function buildSprites() {
         }
       }
       // L'ombre portée de l'étage sur celui du dessous : c'est elle qui creuse.
-      for (let x = Math.max(1, Math.round(24 - half)); x <= Math.min(TW_ - 2, Math.round(24 + half)); x++) {
+      for (let x = Math.max(1, Math.round(TCX_ - half)); x <= Math.min(TW_ - 2, Math.round(TCX_ + half)); x++) {
         const yy = Math.min(TH_ - 2, yB);
         if (mask[yy * TW_ + x]) P(g, x, yy, 1, 1, pal.edge);
       }
@@ -13605,10 +13763,10 @@ export function buildSprites() {
     }
     // La flèche, bornée à y = 1 : le §4 en flagrant délit au 437 (elle sortait).
     const spY = Math.max(1, top - 3);
-    P(g, 24 + Math.round(frame * 1.4), spY, 1, 4, ndL);
+    P(g, TCX_ + Math.round(frame * 1.4), spY, 1, 4, ndL);
     if (pal.cone) for (let i = 0; i < tiers - 1; i++) {
       const y = top + Math.round((i + 0.8) * span / tiers);
-      const x = 24 + (i % 2 ? 4 + i : -5 - i);
+      const x = TCX_ + (i % 2 ? 4 + i : -5 - i);
       if (on(x, y)) { P(g, x, y, 2, 3, pal.cone); P(g, x, y, 1, 1, "#8a6d47"); }
     }
   }
@@ -13684,7 +13842,7 @@ export function buildSprites() {
       leaf: ["#469049", "#68b96c", "#2b6631"], edge: "#194723", out: "#0f2f17", vein: "#82cd88",
       // Le cerisier est le rose PÂLE : c'est ce qui le distingue du magnolia,
       // qui partage sa forme. Deux arbres roses identiques ne font qu'un arbre.
-      blossom: { cx: 24, cy: 22, rx: 11.4, ry: 9.4, n: 6, rad: 5.4, phase: 2.0,
+      blossom: { cx: 24, cy: 22, rx: 11.4, ry: 9.4, n: 6, rad: 5.4, phase: 2.0, cluster: true,
                  inner: [[0, -4, 5.0], [-2, 4, 5.0]] },
       petal: "#f7bcd4", petalL: "#ffe8f2", petalD: "#c06a90", petalC: "#f8e59a",
       autumn: { leaf: ["#c06a3a", "#e29a5f", "#833d17"], edge: "#4d2409", out: "#331706", vein: "#f0b183", petal: null },
@@ -13699,7 +13857,7 @@ export function buildSprites() {
          une fleur de neuf pixels ne se lisent pas : ce qui fait reconnaître un
          mimosa est une BOULE duveteuse, et il en faut beaucoup. Sept boules
          plus deux au cœur, plus petites que les corolles du magnolia. */
-      blossom: { cx: 24, cy: 23, rx: 11.2, ry: 8.6, n: 7, rad: 4.6, phase: 5.0, puff: true,
+      blossom: { cx: 24, cy: 23, rx: 11.2, ry: 8.6, n: 7, rad: 4.6, phase: 5.0, puff: true, cluster: true,
                  inner: [[-2, -3, 4.4], [3, 3, 4.2]] },
       petal: "#f0cb34", petalL: "#fff08a", petalD: "#a87c12", petalC: "#fff6b0",
       autumn: { petal: "#dcb930", petalL: "#f4dd6c", petalD: "#96690c", petalC: "#f8e58a" },
@@ -13731,6 +13889,316 @@ export function buildSprites() {
       trunk: ["#52432e", "#6b5940", "#352a1c"],
       leaf: ["#2a5c3f", "#3d8557", "#163828"], edge: "#0e2a1a", out: "#071810" },
   ];
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-27 (phase 11) — LES TAILLES D'ARBRE : JEUNE, PLANTÉ, GRAND, TRAPU.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume : « dessine de jeunes arbres, et d'autres plus grands, plus
+     courts ». Depuis que les maisons ont grandi (phase 6a), l'adulte de 48×64
+     (4,7 m à 13,5 px/m) arrive au premier étage, et chaque essence n'avait
+     qu'une silhouette : en forêt, un papier peint.
+     ⚠️⚠️ UNE TAILLE EST UNE TRANSFORMATION DE LA TABLE, PAS UNE MISE À
+     L'ÉCHELLE DE L'IMAGE. `sizedSpec` recalcule la couronne (ellipse porteuse,
+     nombre de bouquets), le fût et l'ombre à partir de la ligne de l'adulte, et
+     le dessin repart de zéro dans un canevas à sa taille : les bouquets gardent
+     À PEU PRÈS LEUR TAILLE DE PIXEL (`rs` proche de 1), c'est leur NOMBRE qui
+     suit la couronne. Un arbre grand est donc plus riche, pas plus flou — la
+     règle du §13 de CLAUDE.md (« redessinés à la même densité, jamais
+     agrandis »).
+     · `young` : un baliveau — fût haut et mince, petite couronne. Des bois.
+     · `planted` : le même, TUTEURÉ, sur son cercle de paillage — l'arbre qu'une
+       ville plante le long d'une rue. Deux dessins parce que deux histoires.
+     · `tall` : ×1,55 en hauteur (7,5 m environ) — le grand arbre isolé.
+     · `short` : trapu, plus large que haut — l'arbre taillé bas, le fruitier.
+     ⚠️ L'ADULTE N'EST PAS DANS CETTE TABLE : il reste le dessin d'avant, au
+     pixel près (`render-arbres` le tient), et c'est lui que la ferme, les
+     bancs et `plancheTree` supposent.
+     `geom` = [largeur, hauteur, ligne de sol, centre du fût] du canevas. */
+  const TREE_SIZES = {
+    young:   { geom: [48, 64, 58, 24], sx: 0.6,  sy: 0.66, trunkH: 0.94, twS: 0.5,  rs: 0.6, sparse: true },
+    planted: { geom: [48, 64, 58, 24], sx: 0.6,  sy: 0.66, trunkH: 0.94, twS: 0.5,  rs: 0.6, sparse: true, stake: true },
+    tall:    { geom: [64, 96, 90, 32], sx: 1.34, sy: 1.55, trunkH: 1.45, twS: 1.35, rs: 1.12 },
+    short:   { geom: [64, 64, 58, 32], sx: 1.28, sy: 0.9,  trunkH: 0.6,  twS: 1.3,  rs: 1.06 },
+  };
+  const TREE_SIZE_KEYS = Object.keys(TREE_SIZES);
+  function withTreeGeom(z, fn) {
+    const keep = [TW_, TH_, TBASE_, TCX_];
+    [TW_, TH_, TBASE_, TCX_] = z.geom;
+    try { return fn(); } finally { [TW_, TH_, TBASE_, TCX_] = keep; }
+  }
+  /* La ligne d'une essence, redessinée à une taille. ⚠️ LES COORDONNÉES DE
+     `TREE_SPECS` SONT CELLES DE L'ADULTE (centre 24, sol 58) : tout passe par
+     `X`/`Y` et rien d'autre, sinon un bouquet oublié resterait planté à sa place
+     d'adulte au milieu d'un grand arbre. */
+  function sizedSpec(sp, z) {
+    const [, , B, CX] = z.geom;
+    const X = (x) => CX + (x - 24) * z.sx;
+    const out = Object.assign({}, sp, { tw: Math.max(2, Math.round(sp.tw * z.twS)), shadowRx: 17 * z.sx, stake: !!z.stake });
+    if (sp.conifer) {
+      out.crownTop = Math.max(2, B - Math.round((58 - sp.crownTop) * z.sy));
+      out.bare = Math.max(2, Math.round(sp.bare * z.trunkH));
+      out.halfTop = sp.halfTop * z.sx; out.halfBot = sp.halfBot * z.sx;
+      // Même hauteur d'étage : un grand sapin a PLUS d'étages, pas des étages plus hauts.
+      out.tiers = Math.max(2, Math.round(sp.tiers * z.sy));
+      // Le jeune conifère : des étages qui ne se recouvrent pas — on voit le fût entre deux verticilles.
+      if (z.sparse) { out.overlap = -1; out.halfTop *= 0.85; }
+      return out;
+    }
+    const trunkTop = B - Math.round((58 - sp.trunkTop) * z.trunkH);
+    const Y = (y) => trunkTop - (sp.trunkTop - y) * z.sy;   // la couronne se pose sur SON fût
+    out.trunkTop = trunkTop;
+    // Le jeune : bouquets plus petits, posés plus au large — le vide entre eux laisse voir les rameaux.
+    const spread = z.sparse ? 1.18 : 1, cr = sp.crown, rx = cr.rx * z.sx * spread, ry = cr.ry * z.sy * spread, rad = cr.rad * z.rs * (z.sparse ? 0.85 : 1);
+    /* Le nombre de bouquets suit le PÉRIMÈTRE de l'ellipse rapporté à la taille
+       d'un bouquet : même recouvrement entre voisins qu'à l'adulte. */
+    let n = Math.max(5, Math.round(cr.n * ((rx + ry) / (cr.rx + cr.ry)) / z.rs));
+    let inner = (cr.inner || []).map(([ix, iy, ir]) => [ix * z.sx, iy * z.sy, ir * z.rs]);
+    /* ⚠️ UN JEUNE ARBRE N'EST PAS UN ADULTE EN PETIT (Guillaume : « les jeunes
+       arbres ne peuvent pas être aussi fournis que des adultes »). Premier jet :
+       même recouvrement de bouquets qu'à l'adulte, donc une boule pleine sur un
+       bâton. Un baliveau a PEU de bouquets, petits, séparés — et entre eux on voit
+       ses rameaux (`twigs`, peints par `townTreeSprite` sous la couronne). */
+    if (z.sparse) {
+      n = Math.max(4, Math.round(n * 0.6));
+      inner = inner.slice(0, 1).map(([ix, iy, ir]) => [ix, iy, ir * 0.8]);
+      out.twigs = true;
+    }
+    /* ⚠️ UN GRAND HOUPPIER A UN CŒUR À REMPLIR : à ×1,3, l'anneau s'écarte et
+       les trois bouquets du centre ne se touchent plus — le BEIGNET du bouleau
+       (note de `TREE_SPECS`), en grand. Un second anneau, à mi-rayon. */
+    if (z.sx > 1.15) {
+      const k = Math.round(n * 0.55);
+      for (let i = 0; i < k; i++) {
+        const a = (i / k) * Math.PI * 2 + cr.phase + 0.4;
+        inner.push([Math.cos(a) * rx * 0.5, Math.sin(a) * ry * 0.5, rad * 0.95]);
+      }
+    }
+    out.crown = Object.assign({}, cr, { cx: X(cr.cx), cy: Y(cr.cy), rx, ry, rad, radVar: cr.radVar * z.rs, n, inner });
+    if (sp.blossom) {
+      const b = sp.blossom, brx = b.rx * z.sx, bry = b.ry * z.sy, bn = z.sparse ? 0.55 : 1;
+      out.blossom = Object.assign({}, b, {
+        cx: X(b.cx), cy: Y(b.cy), rx: brx, ry: bry, rad: b.rad * Math.min(1, z.rs),
+        n: Math.max(3, Math.round(b.n * bn * (brx + bry) / (b.rx + b.ry))),
+        inner: z.sparse ? [] : (b.inner || []).map(([ix, iy, ir]) => [ix * z.sx, iy * z.sy, ir * Math.min(1, z.rs)]),
+      });
+      /* ⚠️ Même défaut que les bouquets, en rose : sur un grand arbre l'anneau
+         de fleurs s'écarte et laisse un cœur VERT — un beignet fleuri, vu sur
+         `arbres-tailles.png` (magnolia, cerisier, mimosa). Un anneau intérieur. */
+      if (z.sx > 1.15) {
+        const k = Math.max(3, Math.round(out.blossom.n * 0.5)), bb = out.blossom;
+        for (let i = 0; i < k; i++) {
+          const a = (i / k) * Math.PI * 2 + b.phase + 0.6;
+          bb.inner.push([Math.cos(a) * brx * 0.48, Math.sin(a) * bry * 0.48, bb.rad * 0.95]);
+        }
+      }
+    }
+    if (sp.weep) out.weep = Math.round(sp.weep * z.sy);
+    return out;
+  }
+  /* LE TUTEUR ET SON PAILLAGE, pour le jeune arbre planté. Un piquet de
+     châtaignier clair au sud-est du fût (la lumière vient du nord-ouest : son
+     flanc gauche est clair), une attache sombre aux deux tiers, et un cercle de
+     terre sous l'ombre — c'est lui qui dit « quelqu'un l'a planté là ». */
+  function treeStake(g, sp) {
+    for (let y = TBASE_ - 2; y <= TBASE_ + 2; y++) for (let x = TCX_ - 7; x <= TCX_ + 8; x++) {
+      const u = (x - TCX_ - 0.5) / 7.5, v = (y - TBASE_ - 0.2) / 2.4;
+      const d = u * u + v * v;
+      if (d > 1) continue;
+      P(g, x, y, 1, 1, d > 0.62 ? "#4e3a26" : ((x + y * 3) % 5 ? "#654a30" : "#7a5c3b"));
+    }
+    const sx = TCX_ + (sp.tw >> 1) + 2, top = sp.trunkTop + 5;
+    P(g, sx, top, 2, TBASE_ - top, "#a88a62");
+    P(g, sx, top, 1, TBASE_ - top, "#c9ad84");
+    P(g, sx + 1, top, 1, TBASE_ - top, "#7c6245");
+    P(g, sx, top - 1, 2, 1, "#6f573c");
+    const ty = top + Math.round((TBASE_ - top) * 0.33);
+    P(g, TCX_ - (sp.tw >> 1), ty, sx - (TCX_ - (sp.tw >> 1)), 1, "#3b2a1c");
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-27 (phase 11) — LE MAGNOLIA, REDESSINÉ : DES FLEURS À LEUR TAILLE.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume : « identifie l'arbre à grandes fleurs roses (magnolia ?) et
+     corrige la taille des fleurs pour que ce soit beau mais plus réaliste ».
+     C'était `REF_MAGNOLIA`, le magnolia de SA planche (`planche.js`,
+     `treeMagnolia`) : six fleurs de onze à treize pixels sur des branches nues,
+     une fleur par sixième de couronne — à 13,5 px/m, des fleurs de près d'un
+     mètre. Un magnolia de Soulange porte des fleurs de 15 à 25 cm : TROIS à
+     CINQ pixels ici.
+     ⚠️ `planche.js` EST GÉNÉRÉ, ON N'Y TOUCHE PAS : l'essence est redessinée en
+     code, et le sprite de la planche reste disponible (plus aucune case ne le
+     désigne). Ce qui fait la beauté de celui de Guillaume est GARDÉ — les
+     branches sombres qui se voient, le rose dégradé vers le cœur, le port en
+     vase — et ce qui le rendait irréaliste change : l'échelle et le NOMBRE.
+     Quelques dizaines de tulipes dressées au bout des rameaux au lieu de six
+     roses géantes.
+     ⚠️ LA STRUCTURE EST UN ARBRE DE BRANCHES, PAS UNE SILHOUETTE : trois
+     tiges depuis le pied (le magnolia est un arbre à troncs multiples), qui se
+     ramifient et se REDRESSENT (`ang * 0.55`), d'où le vase. Le générateur est
+     `makeRnd` à graine FIXE : même arbre chez les deux joueurs, sans un octet.
+     SAISONS : au printemps, la floraison sur bois nu (le tableau qu'on
+     attend) ; en été, les feuilles sont sorties et une partie des fleurs tient
+     encore — gardé exprès pour que le parc ne perde pas son arbre rose ; en
+     automne, le feuillage bronze, sans fleur.
+     Les fleurs ont DEUX formes : la tulipe fermée (3×4, dressée) et la fleur
+     ouverte (5×3), une sur quatre. Un seul dessin de fleur répété quarante fois
+     redevient du papier peint. */
+  const MAG_BARK = ["#4c403d", "#6e605b", "#2f2624"];
+  const MAG_PETAL = { base: "#a34a75", mid: "#e48fb3", light: "#f7c9dc", tip: "#fff1f6", out: "#6f2c50" };
+  const MAG_LEAF = { summer: ["#3f8546", "#63ad63", "#265c2d", "#132f17"], spring: ["#5aa04e", "#80c86a", "#397a33", "#1b3d17"],
+                     autumn: ["#a8772e", "#d1a24c", "#6d4717", "#3a2508"] };
+  function magnoliaTree(season, frame, z) {
+    z = z || { geom: [48, 64, 58, 24], sx: 1, sy: 1, twS: 1, rs: 1 };
+    return withTreeGeom(z, () => {
+      /* ⚠️⚠️ LA CHARPENTE SE DESSINE DEPUIS LA COURONNE, PAS DEPUIS LE PIED.
+         Premier jet : une ramification récursive (trois tiges, trois branches,
+         deux rameaux), toutes de même longueur et redressées d'autant — toutes
+         les pointes finissaient à la MÊME hauteur. Vu sur `arbres-tailles.png`,
+         un plateau, une table de fleurs, et les fleurs collées en UNE bande rose
+         que le banc comptait comme une seule tache de 44 px.
+         Ici on pose d'abord les POINTES dans l'enveloppe en dôme du magnolia
+         (un semis de Poisson à graine fixe), puis on remonte : chaque pointe se
+         rattache à une branche secondaire, chaque secondaire à l'une des trois
+         tiges. La forme du houppier est donc celle qu'on a choisie, et la
+         hiérarchie reste lisible (3 → 9 → une quarantaine). */
+      const rnd = makeRnd(1907 + Math.round(z.sx * 100) + Math.round(z.sy * 7));
+      const young = z.sx < 0.8;
+      const rx = 17.5 * z.sx, ry = 16 * z.sy;
+      const cbot = TBASE_ - (young ? 16 : 9 * z.sy + 2);            // le bas de la couronne
+      const cy = cbot - ry, cx = TCX_;
+      const pts = [];
+      for (let tries = 0; tries < 2400 && pts.length < 140; tries++) {
+        const u = rnd() * 2 - 1, v = rnd() * 2 - 1;
+        if (u * u + v * v > 1 || v > 0.6) continue;                  // le dessous du dôme reste ouvert : on y voit la charpente
+        const x = cx + u * rx, y = cy + v * ry;
+        // Le jeune magnolia est plus clairsemé : ses pointes s'écartent (voir `TREE_SIZES.young`).
+        const dmin = young ? 5.8 : 4.4;
+        if (pts.some(p => (p.x - x) ** 2 + (p.y - y) ** 2 < dmin * dmin)) continue;
+        pts.push({ x, y, u, v });
+      }
+      const nStem = young ? 1 : 3, W0 = Math.max(2, Math.round(3 * z.twS));
+      const forks = [];
+      for (let i = 0; i < nStem; i++) {
+        const f = nStem === 1 ? 0 : i - 1;
+        forks.push({ x0: cx + f * 1.5, y0: TBASE_ - 1, x: cx + f * rx * 0.34, y: cbot - ry * 0.12 });
+      }
+      const segs = [], nodes = [];
+      for (const fk of forks) segs.push({ x: fk.x0, y: fk.y0, x2: fk.x, y2: fk.y, w: W0, bend: 0 });
+      const byFork = forks.map(() => []);
+      for (const p of pts) {
+        let best = 0; for (let i = 1; i < forks.length; i++) if (Math.abs(forks[i].x - p.x) < Math.abs(forks[best].x - p.x)) best = i;
+        byFork[best].push(p);
+      }
+      byFork.forEach((set, fi) => {
+        const fk = forks[fi];
+        if (!set.length) return;
+        const ang = (p) => Math.atan2(p.x - fk.x, fk.y - p.y);
+        set.sort((a, b) => ang(a) - ang(b));
+        const groups = young ? 2 : 3;
+        for (let gi = 0; gi < groups; gi++) {
+          const grp = set.slice(Math.floor(gi * set.length / groups), Math.floor((gi + 1) * set.length / groups));
+          if (!grp.length) continue;
+          const mx = grp.reduce((a, p) => a + p.x, 0) / grp.length, my = grp.reduce((a, p) => a + p.y, 0) / grp.length;
+          const nd = { x: fk.x + (mx - fk.x) * 0.55, y: fk.y + (my - fk.y) * 0.55 };
+          nodes.push(nd);
+          segs.push({ x: fk.x, y: fk.y, x2: nd.x, y2: nd.y, w: Math.max(1, W0 - 1), bend: (mx - fk.x) * 0.12 });
+          for (const p of grp) segs.push({ x: nd.x, y: nd.y, x2: p.x, y2: p.y + 1, w: 1, bend: (p.x - nd.x) * 0.15 });
+        }
+      });
+      const topY = Math.min(...pts.map(t => t.y));
+      // Le vent : la cime plie, le pied ne bouge pas (même loi que `crownClumps`).
+      const sw = (y) => { const h = Math.max(0, Math.min(1, (TBASE_ - 8 - y) / Math.max(1, TBASE_ - 8 - topY))); return Math.round(frame * h * h * 1.8); };
+      const drawWood = (g) => {
+        // Les branches, les plus épaisses d'abord : un rameau fin passe DEVANT la branche qui le porte.
+        for (const s of segs.slice().sort((a, b) => b.w - a.w)) {
+          const len = Math.hypot(s.x2 - s.x, s.y2 - s.y), n = Math.max(2, Math.ceil(len * 2));
+          for (let i = 0; i <= n; i++) {
+            // Une branche s'arque vers l'extérieur (`bend`) : droite, elle ferait un rayon de roue.
+            const t = i / n, x = s.x + (s.x2 - s.x) * t + s.bend * 4 * t * (1 - t), y = s.y + (s.y2 - s.y) * t;
+            const w = Math.max(1, Math.round(s.w - t * 0.6));
+            for (let k = 0; k < w; k++) {
+              const xx = Math.round(x - (w >> 1) + k) + sw(y), yy = Math.round(y);
+              if (xx >= 1 && yy >= 1 && xx < TW_ - 1 && yy < TH_ - 1) P(g, xx, yy, 1, 1, w === 1 ? MAG_BARK[2] : k === 0 ? MAG_BARK[1] : k === w - 1 && w > 2 ? MAG_BARK[2] : MAG_BARK[0]);
+            }
+          }
+        }
+      };
+      /* LE FEUILLAGE (été, automne) PASSE PAR LE PEINTRE DES AUTRES ESSENCES
+         (`townTreeSprite`) : mêmes bouquets pleins, même ombre en croissant, même
+         cerne, même vent. Premier jet, un disque par pointe peint ici : des
+         sucettes vertes sur des bâtons (vu sur la planche). Les bouquets sont
+         posés aux pointes et aux nœuds, assez gros pour se fondre en couronne. */
+      const leafy = season !== "spring";
+      let c;
+      if (leafy) {
+        const rr = 4.3 * (z.rs || 1);
+        const sp = {
+          id: "magnolia", tw: W0, trunkTop: TBASE_, shadowRx: 16 * z.sx, stake: !!z.stake,
+          trunk: MAG_BARK, drawWood,
+          clumpList: young ? pts.filter((_, i) => i % 2 === 0).map(p => ({ x: p.x, y: p.y, r: rr * 0.75 }))
+                           : nodes.map(n => ({ x: n.x, y: n.y - 1, r: rr * 1.1 })).concat(pts.map(p => ({ x: p.x, y: p.y, r: rr }))),
+          leaf: ["#3d8545", "#5fab62", "#255c2c"], edge: "#18421f", out: "#0e2912", vein: "#7cc47c",
+          autumn: { leaf: ["#b07a2c", "#d8a64c", "#74481a"], edge: "#4c2e0a", out: "#321d06", vein: "#f0c979" },
+        };
+        c = townTreeSprite(sp, season, frame);
+      } else {
+        c = cv(TW_, TH_)[0];
+        const g0 = c.getContext("2d");
+        const srx = 16 * z.sx;
+        for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 3; x < TW_ - 3; x++) {
+          const u = (x - (TCX_ + 1.5)) / srx, v = (y - (TBASE_ + 1.0)) / 4.0, d = u * u + v * v;
+          if (d <= 1) P(g0, x, y, 1, 1, d > 0.44 ? "rgba(18,34,14,0.18)" : "rgba(12,26,10,0.38)");
+        }
+        if (z.stake) treeStake(g0, { tw: W0, trunkTop: TBASE_ - 18 });
+        drawWood(g0);
+      }
+      const g = c.getContext("2d");
+      const mask = new Uint8Array(TW_ * TH_);
+      const paint = (x, y, col) => { const xx = Math.round(x) + sw(y), yy = Math.round(y); if (xx < 2 || yy < 2 || xx >= TW_ - 2 || yy >= TH_ - 2) return; P(g, xx, yy, 1, 1, col); mask[yy * TW_ + xx] = 1; };
+      /* LES FLEURS. Au printemps toutes les pointes (floraison sur bois nu) ; en
+         été, une sur trois, sur le haut du dôme (la remontée de fin de saison
+         du magnolia de Soulange) ; en automne aucune. Deux formes — la tulipe
+         dressée (3×4) et, une sur quatre, la fleur ouverte (5×3) — et deux
+         roses, l'un plus pâle : quarante fois le même dessin redeviendrait un
+         papier peint. */
+      const bloom = season === "spring" ? pts : season === "summer" ? pts.filter((p, i) => i % 3 === 0 && p.v < 0.2) : [];
+      const PALE = { base: "#b86a92", mid: "#eeb2cb", light: "#fbe0eb", tip: "#fffafc" };
+      bloom.map((o, i) => [i, o]).sort((a, b) => a[1].y - b[1].y).forEach(([i, o]) => {
+        const x = o.x, y = o.y, P5 = (i % 3 === 1) ? PALE : MAG_PETAL;
+        if (i % 4 === 3) {
+          // Ouverte : cinq pixels de large, les pétales retombent de part et d'autre du cœur.
+          paint(x - 1, y - 1, P5.tip); paint(x + 1, y - 1, P5.light);
+          paint(x - 2, y, P5.light); paint(x - 1, y, P5.mid); paint(x, y, P5.base); paint(x + 1, y, P5.mid); paint(x + 2, y, P5.mid);
+          paint(x - 1, y + 1, P5.mid); paint(x, y + 1, P5.base); paint(x + 1, y + 1, P5.base);
+        } else {
+          // Tulipe dressée : pointes pâles, ventre rose, base pourpre — le dégradé du magnolia de Soulange.
+          paint(x - 1, y - 2, P5.tip); paint(x + 1, y - 2, P5.light);
+          paint(x - 1, y - 1, P5.light); paint(x, y - 1, P5.tip); paint(x + 1, y - 1, P5.mid);
+          paint(x - 1, y, P5.mid); paint(x, y, P5.mid); paint(x + 1, y, P5.base);
+          paint(x, y + 1, P5.base);
+        }
+      });
+      /* Le cerne des fleurs, À L'EXTÉRIEUR et du côté de l'ombre seulement (sud
+         et est). ⚠️ Posé SUR le bord comme chez les autres essences, il
+         mangerait une fleur de trois pixels sur deux ; tout autour, il en ferait
+         des pastilles. Un trait sous la fleur suffit à la détacher. */
+      const on = (x, y) => x >= 0 && y >= 0 && x < TW_ && y < TH_ && mask[y * TW_ + x];
+      for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+        if (mask[y * TW_ + x]) continue;
+        if (on(x, y - 1) || on(x - 1, y)) P(g, x, y, 1, 1, MAG_PETAL.out);
+      }
+      // Les pétales tombés, au printemps : quelques points pâles dans l'ombre, à des places fixes.
+      if (season === "spring" && !young) {
+        const srx = 16 * z.sx;
+        for (let k = 0; k < 9; k++) {
+          const x = Math.round(TCX_ - srx * 0.8 + ((k * 37) % 17) / 17 * srx * 1.7), y = TBASE_ - 2 + ((k * 5) % 5);
+          P(g, x, y, 1, 1, k % 2 ? MAG_PETAL.light : PALE.mid);
+        }
+      }
+      return c;
+    });
+  }
+
 
   // Arbre mort, sans feuilles (chantier 2026-07, demande Guillaume : arbres
   // morts pour l'ambiance de la carte maléfique) : même gabarit 32x48 que
@@ -17175,6 +17643,18 @@ export function buildSprites() {
      48 (berge) + 64 (tramage) + 12 (décors) = 636 cases ; `petFrames` (plus
      bas) en fait 39 × 4 × 3 = 468. Un seul atlas par famille, en grille. */
   const waterAtlasPut = makeAtlas(T, T, 636, 32);
+  /* 2026-09-27 (phase 11) — LES ARBRES DE VILLE EN ATLAS, ET CINQ POSES DE VENT.
+     `TREE_FRAMES` : les trois poses d'avant (−1, 0, +1 — l'indice 1 reste le
+     REPOS, les bancs le lisent) et deux DEMI-poses intercalées. Avec trois poses,
+     ~1 900 px basculaient d'un coup à chaque souffle (le « tic » noté à la phase
+     11) ; les demi-poses ne décalent que la cime, le reste suit à l'image
+     suivante. Le cycle (`TREE_SWAY`) garde la même période.
+     Cinq poses × trois saisons × quinze essences auraient ajouté une centaine de
+     canevas au compte que WebKit plafonne (§10 de CLAUDE.md) : les adultes
+     passent en atlas comme les tailles. Une feuille par gabarit, cinq en tout. */
+  const TREE_FRAMES = [-1, 0, 1, -0.5, 0.5];
+  const TREE_ADULT_PUT = makeAtlas(48, 64, 15 * 3 * TREE_FRAMES.length + 2 * TREE_FRAMES.length, 16);
+  const TREE_SIZE_ATLAS = Object.fromEntries(TREE_SIZE_KEYS.map(k => [k, makeAtlas(TREE_SIZES[k].geom[0], TREE_SIZES[k].geom[1], 12 * 3 * TREE_FRAMES.length, 12)]));
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
     // Zip 431 : l'herbe de Valley Town, même grain, palette assombrie (voir GRASS_TOWN).
@@ -17485,15 +17965,15 @@ export function buildSprites() {
     townTrees: [
       ...TREE_SPECS.map(sp => ({
         w: TW_, h: TH_, base: TBASE_,
-        summer: [-1, 0, 1].map(f => townTreeSprite(sp, "summer", f)),
-        spring: [-1, 0, 1].map(f => townTreeSprite(sp, "spring", f)),
-        autumn: [-1, 0, 1].map(f => townTreeSprite(sp, "autumn", f)),
+        summer: TREE_FRAMES.map(f => TREE_ADULT_PUT(townTreeSprite(sp, "summer", f))),
+        spring: TREE_FRAMES.map(f => TREE_ADULT_PUT(townTreeSprite(sp, "spring", f))),
+        autumn: TREE_FRAMES.map(f => TREE_ADULT_PUT(townTreeSprite(sp, "autumn", f))),
       })),
-      ...[["treeFir", 1], ["treeApple", 0], ["treeWillow", 0], ["treeMagnolia", 0]].map(([nm, ev]) => ({
+      ...[["treeFir", 1], ["treeApple", 0], ["treeWillow", 0]].map(([nm, ev]) => ({
         w: TW_, h: TH_, base: TBASE_,
-        summer: [-1, 0, 1].map(f => plancheTree(nm, "summer", f, ev)),
-        spring: [-1, 0, 1].map(f => plancheTree(nm, "spring", f, ev)),
-        autumn: [-1, 0, 1].map(f => plancheTree(nm, "autumn", f, ev)),
+        summer: TREE_FRAMES.map(f => TREE_ADULT_PUT(plancheTree(nm, "summer", f, ev))),
+        spring: TREE_FRAMES.map(f => TREE_ADULT_PUT(plancheTree(nm, "spring", f, ev))),
+        autumn: TREE_FRAMES.map(f => TREE_ADULT_PUT(plancheTree(nm, "autumn", f, ev))),
         /* ⚠️ hors-zip 2026-08-31 (session saule) — LE SAULE IMPORTÉ DEVIENT LE
            SEUL SAULE DE BERGE (voir `townTreeKind`, plus bas), et Guillaume
            demande « des variations de couleurs légères en automne » pour qu'un
@@ -17505,10 +17985,39 @@ export function buildSprites() {
            pas). N'existe QUE pour `treeWillow` : les 14 autres essences gardent
            exactement leur unique jeu d'images d'automne, inchangé. */
         autumnAlt: nm === "treeWillow"
-          ? [[-5, 0.95], [5, 1.05]].map(([hj, lj]) => [-1, 0, 1].map(f => plancheTree(nm, "autumn", f, ev, hj, lj)))
+          ? [[-5, 0.95], [5, 1.05]].map(([hj, lj]) => TREE_FRAMES.map(f => TREE_ADULT_PUT(plancheTree(nm, "autumn", f, ev, hj, lj))))
           : undefined,
       })),
-    ],
+      /* 2026-09-27 (phase 11) — `TT.REF_MAGNOLIA` n'est plus lu dans la planche :
+         redessiné en code, fleurs à leur taille (note de `magnoliaTree`). Même
+         indice, même gabarit adulte : `townTreeKind` n'a rien à savoir. */
+      {
+        w: TW_, h: TH_, base: TBASE_,
+        summer: TREE_FRAMES.map(f => TREE_ADULT_PUT(magnoliaTree("summer", f))),
+        spring: TREE_FRAMES.map(f => TREE_ADULT_PUT(magnoliaTree("spring", f))),
+        autumn: TREE_FRAMES.map(f => TREE_ADULT_PUT(magnoliaTree("autumn", f))),
+      },
+    ].map((t, k) => {
+      /* ⚠️ 2026-09-27 (phase 11) — LES TAILLES, EN ATLAS. Douze essences
+         dessinées en code × quatre tailles × trois saisons × trois souffles =
+         432 images : en canevas séparés, elles auraient plus que doublé le
+         compte de canevas retenus que WebKit plafonne sur iPad (§10 de
+         CLAUDE.md, 779 aujourd'hui). Une feuille par taille, quatre en tout.
+         Les trois essences de la PLANCHE qui restent (sapin, pommier, saule) n'ont
+         que leur adulte : un bitmap ne se redessine pas à une autre taille, il
+         s'agrandit — et le saule, Guillaume le veut tel quel (« absolument
+         magnifiques »). */
+      const sp = k < TREE_SPECS.length ? TREE_SPECS[k] : k === TT.REF_MAGNOLIA ? "magnolia" : null;
+      if (!sp) return t;
+      t.sizes = {};
+      for (const key of TREE_SIZE_KEYS) {
+        const z = TREE_SIZES[key], put = TREE_SIZE_ATLAS[key];
+        const one = (se, f) => put(sp === "magnolia" ? magnoliaTree(se, f, z) : withTreeGeom(z, () => townTreeSprite(sizedSpec(sp, z), se, f)));
+        t.sizes[key] = { w: z.geom[0], h: z.geom[1], base: z.geom[2],
+          summer: TREE_FRAMES.map(f => one("summer", f)), spring: TREE_FRAMES.map(f => one("spring", f)), autumn: TREE_FRAMES.map(f => one("autumn", f)) };
+      }
+      return t;
+    }),
     deadTree: deadTree(),
     stump: stump(),
     rock: rock(),

@@ -4696,7 +4696,7 @@ export const FERME_STR = {
     cauldronRowSub: "Ramené du monde maléfique. Pose-le où tu veux avec l'outil Construction : il sert alors à fabriquer la pommade de protection ou l'Essence d'étoile.",
     // Aide
     help1: "ZQSD/WASD/Flèches : bouger (8 directions) · Espace/Clic : utiliser l'outil",
-    help2: "1-8 : outils (5 = canne, 6 = construire) · E : interagir · Q : parler · F : cheval · T : chat · M : carte",
+    help2: "1-8 : outils (5 = canne, 6 = construire) · E : interagir · Q : parler · F : cheval · T : chat · M : carte · L : où suis-je",
     // Toasts
     toastTired: "Trop de fatigue ! Mange un casse-croûte ou attends demain.",
     toastFarShop: "Approche-toi de la boutique !",
@@ -6460,7 +6460,7 @@ export const FERME_STR = {
     troutLabel: "trout",
     pikeLabel: "pike",
     help1: "WASD/Arrows: move (8 directions) · Space/Click: use tool",
-    help2: "1-8: tools (5 = rod, 6 = build) · E: interact · Q: talk · F: horse · T: chat · M: map",
+    help2: "1-8: tools (5 = rod, 6 = build) · E: interact · Q: talk · F: horse · T: chat · M: map · L: where am I",
     toastTired: "Too tired! Eat a snack or wait for tomorrow.",
     toastFarShop: "Get closer to the shop!",
     toastFarBin: "Get closer to the sell bin!",

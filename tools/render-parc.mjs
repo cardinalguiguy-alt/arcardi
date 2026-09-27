@@ -639,8 +639,10 @@ console.log("\n=== 6. le sentier de la rive est se perd dans le bois ===\n");
     let n = 0; const cov = new Uint8Array(img.width * img.height);
     for (const t of trees) {
       if (t.y < l.y || t.y - l.y > 4 || Math.abs(t.x - l.x) > 2) continue;   // derrière elle, il ne la couvre pas
-      const k = A.townTreeKind(tw, t.x, t.y, t.o), ti = S.townTrees[k] && S.townTrees[k].summer[1];
-      if (!ti) continue;
+      const k = A.townTreeKind(tw, t.x, t.y, t.o), cell = S.townTrees[k] && S.townTrees[k].summer[1];
+      if (!cell) continue;
+      // 2026-09-27 (phase 11) : l'arbre adulte est une cellule d'atlas — on la recopie dans son canevas.
+      const ti = cell.sx === undefined ? cell : (() => { const c = makeCanvas(cell.w, cell.h); c.ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, 0, 0, cell.w, cell.h); return { __px: c.px, width: cell.w, height: cell.h }; })();
       const ta = px(ti), tpx = t.x * T + T / 2 - m0.w / 2, tpy = t.y * T + T - m0.base;
       for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
         if (la[(y * img.width + x) * 4 + 3] < 30) continue;
