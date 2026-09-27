@@ -5138,9 +5138,74 @@ export const TOWN_HOUSE_MODELS = {
           simple: { src: "refs/maison-n2.jpg",       crop: [88, 4, 886, 978] },
           riche:  { src: "refs/maison-n2-riche.jpg", crop: [88, 2, 892, 978] },
         } },
+  /* 2026-09-27 — S4, la maison asymétrique au pignon et à l'oriel. Peinte avec
+     S1 en 4e référence : Gemini a gardé au pixel sa fenêtre d'étage de gauche,
+     sa plinthe (pied 948) et la place de sa porte (1,34 H | 2,75 H) — même
+     emprise que S1 (1..7). L'enrichie a repeint ses colombages en BLEU MARINE
+     et posé des poteaux au rez-de-chaussée (Guillaume : « j'apprécie les
+     changements de couleurs de colombages ») ; la riche a gagné une LUCARNE à
+     gauche du toit (`only`, comme celle de N1 riche) et une jardinière sous la
+     fenêtre d'étage (`hv`). L'oriel : trois vitres, ses deux pans étroits et sa
+     face — un seul rectangle aurait pris l'enduit ocre entre eux pour un rideau. */
+  s4: { size: "std", door: 396, doorH: 220, foot: 948, wall: [102, 1001],   // vantail : 690 → 910
+        wins: [
+          { x: 764, y: 197, w: 50, h: 76 },                                               // pignon
+          { x: 296, y: 219, w: 60, h: 78, only: ["riche"] },                              // la lucarne de la riche
+          { x: 281, y: 422, w: 84, h: 111, hv: { riche: 86 } },                           // étage, à gauche
+          { x: 698, y: 400, w: 18, h: 122 }, { x: 749, y: 407, w: 82, h: 114 },           // l'oriel
+          { x: 860, y: 400, w: 18, h: 122 },
+          { x: 202, y: 697, w: 50, h: 115, g: 1 }, { x: 685, y: 697, w: 190, h: 92, g: 1 },
+          { x: 510, y: 717, w: 30, h: 28, lamp: 1 },                                      // la lanterne : son verre
+        ],
+        variants: {
+          simple:   { src: "refs/Maison-s4.jpeg",         crop: [28, 9, 1034, 972] },
+          enrichie: { src: "refs/maison-s4-enrichie.jpeg", crop: [28, 9, 1034, 972] },
+          riche:    { src: "refs/maison-s4-riche.jpg",    crop: [28, 9, 1034, 972] },
+        } },
+  /* 2026-09-27 — S3, LA MAISON DE MAÎTRE, PREMIÈRE MAISON LARGE. Demandée comme
+     une standard (« exactly as wide as the house in the fourth image »), Gemini
+     l'a peinte à quatre travées : à l'échelle de SON vantail (186 px, l'imposte
+     vitrée non comprise) son mur fait 5,3 H — 9 cases, la cible prévue pour
+     W1. Compter l'imposte dans la porte l'aurait ramenée à 7 cases avec un
+     vantail de 1,70 m, la tête au linteau : refusé le matin même pour S1
+     (Guillaume : « on implémente à l'échelle »). Elle FIXE donc l'emprise
+     large (x+0..x+8), que W1 à W3 devront copier. La « bordeaux » est son
+     enrichie : la même maison, repeinte lie-de-vin, boiseries crème — pas la
+     patine de la passe enrichie, un choix de Guillaume. */
+  s3: { size: "wide", door: 427, doorH: 186, foot: 948, wall: [53, 1034],   // vantail : 702 → 888 (imposte 667 → 692)
+        wins: [
+          { x: 748, y: 225, w: 58, h: 61 },                                               // lucarne
+          { x: 169, y: 407, w: 83, h: 142 }, { x: 392, y: 407, w: 84, h: 123 },           // étage (la 2e : sa jardinière)
+          { x: 625, y: 407, w: 82, h: 142 }, { x: 843, y: 407, w: 83, h: 142 },
+          { x: 372, y: 667, w: 105, h: 25 },                                              // l'imposte de la porte
+          { x: 169, y: 681, w: 83, h: 142, g: 1, hv: { riche: 114 } },                    // jardinières de la riche
+          { x: 625, y: 680, w: 83, h: 143, g: 1, hv: { riche: 115 } },
+          { x: 843, y: 681, w: 83, h: 142, g: 1, hv: { riche: 114 } },
+          { x: 529, y: 720, w: 23, h: 22, lamp: 1 },
+        ],
+        variants: {
+          simple:   { src: "refs/maison-s3.jpeg",          crop: [14, 7, 1060, 973] },
+          enrichie: { src: "refs/maison-s3-bordeaux.jpeg", crop: [14, 7, 1060, 973] },
+          riche:    { src: "refs/maison-s3-riche.jpeg",    crop: [14, 7, 1060, 973] },
+        } },
 };
 /* Les modèles d'une largeur, dans l'ordre où R les fait défiler. */
-export const TOWN_HOUSE_SIZES = ["narrow", "std"];
+export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide"];
+/* ⚠️ 2026-09-27 — LES PARCELLES LARGES, PAR POSITION (aucun état, §3). Cinq,
+   choisies pour la carte et pour que les trois versions de S3 se voient :
+   · (122,24), la terrasse de la haute-ville, sous la Maison Garfield — la
+     maison du notable, parmi « les belles adresses » (riche) ;
+   · (128,102), au bord du parc — riche aussi, loin de la première ;
+   · (60,144) et (140,144), la promenade du lac, une sur deux — des maisons
+     d'armateur face à l'eau, dans un port (enrichie : la bordeaux) ;
+   · (100,28), l'avenue du nord — la seule simple.
+   Toutes ont 12 cases libres à l'est au niveau du mur (mesuré sur la carte) :
+   le mur déborde de la parcelle jusqu'en x+8,6 sans rien toucher. Ce qui ne
+   suit PAS encore : la haie de l'est (x+7) passe sous le mur et devant sa
+   façade — les haies seront recalibrées autour des maisons (Guillaume, même
+   jour). ⚠️ Une parcelle ne change jamais de RANG (le propriétaire) : on ne
+   déplace aucune entrée de `TOWN_HOUSES`. */
+export const TOWN_HOUSE_WIDE_AT = [[122, 24], [128, 102], [60, 144], [140, 144], [100, 28]];
 export const townHouseModelsOf = (size) => Object.keys(TOWN_HOUSE_MODELS).filter(k => TOWN_HOUSE_MODELS[k].size === size);
 /* Le mur du rez-de-chaussée d'un modèle, en cases, relatif à la parcelle (la
    porte tombe en x + TOWN_HOUSE_W / 2). */
@@ -5192,6 +5257,7 @@ export const TOWN_HOUSE_RICH_AREA = { x: 40, y: 56, w: 96, h: 50 };
 const inRectXY = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 export function townHouseSize(hsn) {
   if (hsn.model) return TOWN_HOUSE_MODELS[hsn.model].size;
+  if (TOWN_HOUSE_WIDE_AT.some(([x, y]) => x === hsn.x && y === hsn.y)) return "wide";
   const mk = TOWN_MARKET;
   return hsn.x < mk.x + mk.w + 6 && hsn.y >= mk.y - 14 && hsn.y <= mk.y + mk.h + 4 ? "narrow" : "std";
 }
@@ -5277,7 +5343,7 @@ export const TOWN_SHOP_MODELS = {
      et pas plus : à gauche, la terrasse de la haute-ville s'arrête en x=120.
      La porte peinte tombe alors en x+5,8, pas au milieu du rectangle :
      `nearCivicDoor` accepte toute la façade (± w/2), rien à y changer. */
-  garfield: { site: "boutique", fit: "site", door: 746, doorH: 280, foot: 978, wall: [97, 996], demagenta: 12, magentaPockets: true,
+  garfield: { site: "boutique", fit: "site", lit: "carla", door: 746, doorH: 280, foot: 978, wall: [97, 996], demagenta: 12, magentaPockets: true,
     /* Les vitres, et comment chacune s'allume (`tools/lib-glow.mjs`) : `show`,
        une VITRINE (ses spots, sa réglette, ses montants, relevés au pixel sur
        la peinture) ; `interior`, la boutique vue par sa porte vitrée ; `sign`,
@@ -5297,13 +5363,37 @@ export const TOWN_SHOP_MODELS = {
       { x: 590, y: 667, w: 20, h: 53, lamp: 1 }, { x: 840, y: 304, w: 17, h: 45, lamp: 1 },
     ],
     variants: { simple: { src: "refs/boutique-garfield.jpg", crop: [30, 11, 1030, 968] } } },
+  /* LE SALON DE COIFFURE (`refs/Salon.jpg`, Guillaume, 2026-09-27) — art déco,
+     laiton et bleu nuit, deux vitrines à trois spots, une porte vitrée au
+     milieu. ⚠️ Comme la Maison Garfield, il REMPLIT son rectangle (`fit: "site"`,
+     choix du 2026-09-27) : à l'échelle de sa porte, son mur (3,25 H) ne couvrait
+     que 5,6 de ses 7 cases, et il se tient sur la même terrasse qu'elle — sa
+     porte vitrée fait ainsi 2,55 m, celle d'une boutique, pas d'une maison.
+     Pas de `lit` : personne ne le tient encore (« ouverture prochaine »), mais
+     ses vitrines s'allument le soir comme celles d'un commerce qui s'installe.
+     `sign` : l'enseigne peinte VIERGE, où le jeu écrit le nom (police pixel,
+     bilingue — §4 : un texte cuit ne se traduit pas). `pole` : le verre de
+     l'enseigne de barbier, dont le jeu fait TOURNER les bandes. */
+  salon: { site: "salon", fit: "site", door: 547, doorH: 277, foot: 978, wall: [100, 997],   // vantail : 670 → 947
+    sign: { x: 443, y: 538, w: 207, h: 49 },
+    pole: { x: 642, y: 702, w: 28, h: 84 },
+    wins: [
+      { x: 192, y: 660, w: 195, h: 198, g: 1,                                      // vitrine de gauche : trois spots sur leur rail
+        show: { spots: [234, 295, 357], lensY: 688, ambient: 0.4, rails: [[660, 667]] } },
+      { x: 709, y: 661, w: 191, h: 197, g: 1,
+        show: { spots: [740, 802, 863], lensY: 688, ambient: 0.4, rails: [[661, 667]] } },
+      { x: 500, y: 688, w: 94, h: 218, g: 1, interior: 1 },                        // la porte vitrée
+      { x: 486, y: 330, w: 116, h: 118, interior: 1 },                             // la porte-fenêtre du balcon
+      { x: 952, y: 682, w: 14, h: 56, lamp: 1 },                                   // l'applique : son verre
+    ],
+    variants: { simple: { src: "refs/Salon.jpg", crop: [21, 7, 1045, 971] } } },
 };
 /* Un modèle peint, maison ou commerce (les clés ne se recouvrent pas). */
 export const townPaintedModel = (mk) => TOWN_HOUSE_MODELS[mk] || TOWN_SHOP_MODELS[mk];
 export const townPaintedBitmapKey = (mk, vk) => TOWN_SHOP_MODELS[mk] ? `shop_${mk}_${vk}` : townHouseBitmapKey(mk, vk);
 /* Le rectangle d'un commerce. ⚠️ Pas de repli : un `site` inconnu doit casser. */
 export function townShopSite(m) {
-  const b = { boutique: TOWN_BOUTIQUE }[m.site];
+  const b = { boutique: TOWN_BOUTIQUE, salon: TOWN_SALON }[m.site];
   if (!b) throw new Error(`commerce peint : site inconnu « ${m.site} »`);
   return b;
 }

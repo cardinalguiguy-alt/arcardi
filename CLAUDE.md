@@ -7,32 +7,33 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-27 — Valley Town : maisons à l'échelle de leur porte ; 6b, la Maison Garfield et ses vitrines
+### 2026-09-27 (soir) — Valley Town : S3 (première LARGE), S4, le salon ; les maisons posent ; reflet du pont
 
-Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md` (phase 6), récit en tête du même
-fichier. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Reste : 6a (N3, S2 à S4,
-W1 à W3) · 6b gare et salon (quai en procédural ; boutique de plage sans place) · 7 composition — dont
-parcelles, haies et jardins à refaire AUTOUR des nouvelles maisons (Guillaume, 2026-09-27) · 8 intérieurs.**
-- **En jeu** : S1 (trois versions), N1 et N2 (simple, riche), la maison hantée, la Maison Garfield
-  (`TOWN_SHOP_MODELS`). Chaque modèle à l'échelle de SON vantail (`doorH`, `townDoorScale` : 27,6 px =
-  2,04 m pour un personnage de 23 px) ; la boutique remplit son rectangle (`fit: "site"`, porte vitrée de
-  2,95 m — « bien plus grande », demande de Guillaume). Emprise d'une largeur = réunion de ses modèles
-  (standard 1..7, étroite 1..6). Fabrication `node tools/build-maison-sprites.mjs` (maisons ET commerces) ;
-  prompts et tolérances en hauteurs de vantail : `refs/prompts-maisons.md`.
-- **Dernière livraison** : les vitrines de nuit — recettes `showWindow`/`shopInterior`/`signGold`
-  (`tools/lib-glow.mjs`) sur les spots et la réglette PEINTS, nappe `vitrine` au sol ; allumées quand Carla
-  tient la boutique.
-- Bancs ce jour-là : **29/29 `verify-*`** (`verify-vallee` 262, `verify-lumiere` 86), **24/24 `render-*`**,
-  `no-undef` propre, bundle, `next build` complet. Vu en jeu : N2 au zoom 5, S1 riche, la boutique de jour
-  et de nuit. **Pas vu** : les autres parcelles une à une, la maison hantée agrandie, deux joueurs. **Pas
-  de manipulation Supabase** (rien de persisté, aucune migration).
+Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md` (phases 6 et 7), récit en tête du
+même fichier. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond.
+⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Reste : 6a (S2
+à relancer, W1 à W3 — 4e image : S3 ; N3 mise de côté) · 6b la gare (quai en procédural ; boutique de
+plage sans place) · 7 composition — dont les HAIES, refaites entièrement (Guillaume : nouveaux sprites,
+textures, collisions) et les jardins · 8 intérieurs · 9 à 14, nées de l'AUDIT : ordre à trancher avec lui.**
+- **Livré** : S4 (trois versions, emprise 1..7) ; **S3, première maison LARGE** (9 cases à l'échelle de
+  son vantail, emprise x+0..x+8, sa « bordeaux » = son enrichie) sur cinq parcelles déduites de leur
+  position (`TOWN_HOUSE_WIDE_AT`, choisies sur la carte, aucun rang déplacé) ; **le salon** peint
+  (`TOWN_SHOP_MODELS.salon`, remplit ses 7 cases, nom écrit dans l'enseigne en police pixel, barbier qui
+  TOURNE, vitrines le soir). **Fin de l'effet « sticker »** : ombre de CONTACT sans soleil
+  (`drawPaintedGrounding` : bande sous le trottoir peint + flancs sur la profondeur de l'emprise), à la
+  place de l'ellipse, et touffes d'herbe devant le pied. **Reflet du pont** : pont entier, bout fondu.
+- Bancs à cette livraison : **29/29 `verify-*`** (`verify-vallee` 265, `verify-lumiere` 86), **24/24
+  `render-*`**, `no-undef` propre, bundle, `next build` complet. Vu en jeu (jour, nuit, pont) ; **pas vu** :
+  S3 simple, le salon la nuit en jeu, deux joueurs. **Pas de manipulation Supabase** (rien de persisté).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Le 2026-09-27 (6a, 6b)** : l'échelle des maisons (×1,17 à ×1,24 : porte de 2,04 m), la boutique
-  (×1,42, porte de 2,95 m, enseigne peinte sans plaque), ses vitrines de nuit ; la haie de l'est des
-  standard restée sous leur mur ; le puits et l'arbre de la pie de la parcelle #20 à demi derrière le toit.
+- **Le 2026-09-27 (6a, 6b)** : l'échelle des maisons (porte de 2,04 m), S3 en LARGE et le choix de ses
+  cinq parcelles, l'ombre de contact et les touffes (pas d'ombre orientée, exprès), le salon (enseigne,
+  barbier, vitrines allumées sans coiffeur), le reflet du pont ; la boutique (×1,42, porte de 2,95 m) et
+  ses vitrines — ⚠️ sa porte peinte (x+5,8) n'est pas dans l'axe de ses bancs ni de son arrêt (x+4) ;
+  le puits et l'arbre de la pie de la parcelle #20 à demi derrière le toit ; **et l'audit (phases 9 à
+  14) : l'ordre se tranche avec lui avant d'en corriger un.**
 - **La nuit du 2026-09-26 (6a)** : N2, et les maisons peintes en ville — la répartition par quartier (riche :
   centre et terrasse ; enrichie : lac et artisans), les étroites de la vieille ville, la maison hantée et
   la fréquence de sa lueur (`LUM.ruinGhostOn`).
@@ -69,17 +70,22 @@ parcelles, haies et jardins à refaire AUTOUR des nouvelles maisons (Guillaume, 
 
 ### ⏭️ ACTION SUIVANTE
 
-**Continuer 6a et 6b avec les images de Guillaume**, qui remplit `refs/` petit à petit, dans l'ordre du
-tableau en tête de `refs/prompts-maisons.md`. Chaque modèle : relever porte, VANTAIL (`doorH`, du seuil
-au sommet), pied, mur, vitres sur l'image simple (vitre = verre mesuré + 4 px ; lanterne = son verre
-seul ; vitrine = ses spots/réglette/montants, `show`) → entrée de `TOWN_HOUSE_MODELS` ou
-`TOWN_SHOP_MODELS` → `build-maison-sprites` → planche → jeu. ⚠️ Chaque modèle doit couvrir ≥ 30 % de
-chaque case de l'emprise de sa largeur (`verify-vallee`) : sinon, arbitrer avec lui. Les parcelles LARGES
-n'existent pas encore : les créer (par position, en passe FINALE du générateur) le jour où W1 arrive. Le
-cheval de bataille reste : lui faire JOUER phases 1-5, météo, 6c, 6a et la boutique en vraie séance.
-⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`) et `S.townBoutique`
-sont encore fabriquées au chargement sans plus être dessinées — `verify-lumiere` lit les fenêtres des
-premières, `render-echelle` mesure la seconde ; les retirer demande de réécrire ces sections de banc.
+**Continuer 6a avec les images de Guillaume**, dans l'ordre du tableau en tête de
+`refs/prompts-maisons.md` : la relance de S2 (porte décentrée) AVANT ses enrichie et riche, puis W1 à W3
+avec `maison-s3.jpeg` en 4e image (S3 fixe l'emprise large ; tolérances : porte à 1,4–2,0 H du bord
+gauche, 3,1–3,7 H du bord droit). ⚠️ **Avant d'intégrer une image, mesurer sa porte en H** : la ligne du
+prompt ne garantit rien (S2 sortie centrée, S3 sortie large). Chaque modèle : porte, VANTAIL (`doorH`),
+pied (948 chez les standard et S3), mur, vitres (verre + 4 px ; lanterne = son verre ; vitrine = `show`)
+→ `TOWN_HOUSE_MODELS` / `TOWN_SHOP_MODELS` → `build-maison-sprites` → planche → jeu ; chaque modèle
+couvre ≥ 30 % de chaque case de sa largeur (`verify-vallee`). **Ensuite, la phase 7 : les HAIES refaites**
+(sprites, textures, collisions) autour de chaque largeur — c'est leur contour qui donne le « décalage »
+porte / allée. **À trancher avec lui** : la gare (halte minuscule ou `TOWN_STATION` élargie à 6 cases),
+l'axe de la Maison Garfield, l'ordre des phases 9 à 14. Le cheval de bataille reste : lui faire JOUER
+phases 1-5, météo, 6c, 6a et les commerces en vraie séance.
+⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`), `S.townBoutique` et
+`S.townSalon` sont encore fabriquées au chargement sans plus être dessinées — `verify-lumiere` lit les
+fenêtres des premières, `render-echelle`/`render-tribunal` mesurent les deux autres ; les retirer demande
+de réécrire ces sections de banc.
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
 

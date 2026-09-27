@@ -227,6 +227,106 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
   return { img, glowImg, glowParts, left, top, dw, dh };
 }
+/* 2026-09-27 — L'ENSEIGNE DE BARBIER DU SALON, QUI TOURNE. Le verre peint est
+   recouvert, en px ÉCRAN (le salon est posé à 1:1, `drawScreenExactBitmap`),
+   de bandes rouge / blanc / bleu en biais qui MONTENT — l'illusion d'un
+   cylindre qui tourne. La phase est une fonction du temps et d'une vitesse
+   CONSTANTE (§4 : une cadence qui varierait devrait s'intégrer) ; l'ombre du
+   cylindre (bords sombres, reflet au tiers gauche) est posée par-dessus, colonne
+   par colonne. Des bandes par segments de rangée : trois `fillRect` par rangée
+   au plus, jamais un par pixel. */
+/* 2026-09-27 — L'OMBRE D'UN BÂTIMENT PEINT, à la place de l'ellipse
+   (`drawBuildingShadowConnected`, le modèle du personnage). Sous une façade de
+   six cases, l'ellipse était une flaque sombre qui débordait de 14 px sur la
+   pelouse, et le bas de l'image restait une règle tirée au cordeau : la maison
+   faisait « sticker » (Guillaume, 2026-09-27).
+   ⚠️ UNE OMBRE DE CONTACT, PAS UNE OMBRE PORTÉE. Aucun objet de la ville n'a
+   d'ombre orientée — personnages, arbres, étals posent une ellipse sous eux,
+   sans soleil — et une ombre « de soleil » sous les seules maisons aurait
+   désigné un soleil que rien d'autre ne voit (Guillaume : « quelque chose de
+   très propre »). Elle a donc la même physique que celles des personnages
+   (une lumière d'en haut), à la forme d'un bâtiment :
+   · SOUS le trottoir peint, une bande serrée qui s'estompe en sept rangées et
+     s'arrondit aux coins (le bâtiment POSE, il ne flotte pas) ;
+   · sur les deux FLANCS, le sol que les murs de côté ombrent, sur la profondeur
+     de l'emprise (`depth`, les rangées bloquantes derrière la façade) — c'est
+     elle qui donne un VOLUME à une image plate ; elle s'éteint en remontant.
+   Des rangées et des colonnes ENTIÈRES de px monde, en paliers : un dégradé
+   lissé jurerait avec le reste du décor, dessiné à la grille de l'art. */
+const GROUND_BAND = [0.34, 0.25, 0.17, 0.11, 0.065, 0.035, 0.015];
+const GROUND_FLANK = [0.24, 0.15, 0.085, 0.04, 0.015];
+function drawPaintedGrounding(ctx, baseL, baseR, byW, depth) {
+  const L = Math.round(baseL), R = Math.round(baseR), B = Math.round(byW);
+  ctx.save();
+  GROUND_BAND.forEach((a, r) => {
+    // Des coins en quart d'ellipse : l'encoche grandit avec la rangée.
+    const inset = Math.round(Math.max(0, r - 1) * 1.4);
+    ctx.fillStyle = `rgba(18,24,14,${a})`;
+    ctx.fillRect(L - 2 + inset, B + r, R - L + 4 - 2 * inset, 1);
+  });
+  const D = Math.round(depth), steps = 6;
+  for (const side of [-1, 1]) {
+    GROUND_FLANK.forEach((a, c) => {
+      const x = side < 0 ? L - 1 - c : R + c;
+      // Par paliers en remontant : pleine au pied, éteinte à `depth`.
+      for (let s2 = 0; s2 < steps; s2++) {
+        const y0 = B - Math.round(D * (s2 + 1) / steps), y1 = B - Math.round(D * s2 / steps);
+        const f = Math.pow(1 - s2 / steps, 1.6);
+        if (a * f < 0.006) continue;
+        ctx.fillStyle = `rgba(18,24,14,${(a * f).toFixed(3)})`;
+        ctx.fillRect(x, y0, 1, y1 - y0);
+      }
+    });
+  }
+  ctx.restore();
+}
+/* Le pont tel que l'eau le reflète (voir le reflet de l'`archBridge`) : le sprite
+   entier, dont les rangées du HAUT — celles qui tombent le plus loin dans le
+   miroir — s'effacent en paliers de 2 px sur `BRIDGE_REFL_FADE` px. Une image
+   par sprite, faite une fois (le pont ne change pas). */
+const BRIDGE_REFL_FADE = 30;
+const bridgeReflCache = new WeakMap();
+function bridgeReflImg(img) {
+  if (typeof document === "undefined") return null;
+  let c = bridgeReflCache.get(img);
+  if (c) return c;
+  c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = "destination-out";
+  for (let y = 0; y < BRIDGE_REFL_FADE; y += 2) {
+    g.fillStyle = `rgba(0,0,0,${(1 - (y + 1) / BRIDGE_REFL_FADE).toFixed(3)})`;
+    g.fillRect(0, y, img.width, 2);
+  }
+  g.globalCompositeOperation = "source-over";
+  bridgeReflCache.set(img, c);
+  return c;
+}
+const POLE_COLS = ["#c8303a", "#eef0f4", "#2f55c0", "#eef0f4"];
+function drawBarberPole(ctx, q, now) {
+  const x0 = Math.round(q.x), y0 = Math.round(q.y), w = Math.round(q.x + q.w) - x0, h = Math.round(q.y + q.h) - y0;
+  if (w < 2 || h < 2) return;
+  const band = Math.max(2, h / 7), shift = (now / 1000) * h * 0.45;   // une hauteur en ~2 s
+  for (let y = 0; y < h; y++) {
+    let x = 0;
+    while (x < w) {
+      // Le biais « / » : la bande d'un pixel dépend de y + x (0,9 : la pente peinte).
+      const t = (y + x * 0.9 + shift) / band, k = Math.floor(t);
+      const run = Math.max(1, Math.ceil(((k + 1) * band - (y + shift)) / 0.9 - x));
+      ctx.fillStyle = POLE_COLS[((k % 4) + 4) % 4];
+      ctx.fillRect(x0 + x, y0 + y, Math.min(run, w - x), 1);
+      x += run;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    const u = (x + 0.5) / w, edge = Math.abs(u - 0.5) * 2;
+    const a = 0.42 * Math.pow(edge, 2.2) - 0.22 * Math.max(0, 1 - Math.abs(u - 0.3) / 0.12);
+    if (a > 0.01) { ctx.fillStyle = `rgba(20,24,40,${a.toFixed(3)})`; ctx.fillRect(x0 + x, y0, 1, h); }
+    else if (a < -0.01) { ctx.fillStyle = `rgba(255,255,255,${(-a).toFixed(3)})`; ctx.fillRect(x0 + x, y0, 1, h); }
+  }
+}
+function mkShopCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
 // Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
 // convention que `ferme_lastcode` (essai/catch, préférence par machine).
 function readSavedZoomLevel() {
@@ -21775,7 +21875,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // dessine avec les maisons peintes (`queueTownShop`, plus bas), là où
       // leurs flaques de lumière se déclarent. `sprites.townBoutique` n'est
       // plus dessiné (dette : il est encore fabriqué au chargement).
-      drawCivic(C.TOWN_SALON, sprites.townSalon, 4);
+      // ⚠️ 2026-09-27 : le salon est PEINT à son tour (`queueTownShop`) ; son
+      // nom s'écrit dans son enseigne peinte, plus sur une plaque (dette :
+      // `sprites.townSalon` est encore fabriqué au chargement, comme la boutique).
       /* ⚠️⚠️ LEURS NOMS SONT ÉCRITS ICI, PAS DANS LEURS SPRITES. Deux raisons,
          la seconde étant celle qui tranche :
            1. Valley Town écrit déjà sur ses bâtiments de cette façon exactement
@@ -21808,8 +21910,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.textAlign = "left";
           });
         };
-        // La boutique n'a plus de plaque : son nom est peint sur l'oriel (voir `TOWN_SHOP_MODELS`).
-        plate(C.TOWN_SALON, sprites.townSalon, "Salon", L.salonPlate);
+        // La boutique n'a plus de plaque : son nom est peint sur l'oriel ; le salon
+        // écrit le sien dans son enseigne (voir `TOWN_SHOP_MODELS`, `queueTownShop`).
+        void plate;
       }
       /* LA GARE DE VALLEY TOWN (427) : le bâtiment de la ferme, tel quel. Une
          voie et des planches sans gare, c'est un arrêt de bus — et la demande
@@ -22020,10 +22123,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                sprite (sa bande grise est l'eau dans l'ombre du tablier) : le
                miroir retombe donc SOUS le pont, là où il y a de l'eau, et la
                passe des reflets le découpe à l'eau. Pas sur une terrasse. */
+            /* ⚠️ 2026-09-27 — LE REFLET ÉTAIT COUPÉ NET (Guillaume, en jouant).
+               Il ne reprenait que la face proche : son bord haut, coupé au milieu
+               du tablier (`SP`), devenait dans l'eau une ligne horizontale franche,
+               sous un pont qui n'en a pas. Le pont se reflète désormais ENTIER
+               (le garde-corps du fond donne au reflet la silhouette d'un pont, pas
+               d'une découpe), et son bout se FOND dans l'eau en paliers
+               (`bridgeReflImg`) au lieu de s'arrêter à une rangée. */
             if (be < 0.01) {
               const axis = bby - rise + bimg.height - C.TOWN_BRIDGE_REFL_UP;
               reflOnly.push({ rb: axis, axisOff: 0, rx: pr.x, re: 0,
-                fn: () => ctx.drawImage(bimg, 0, SP, bimg.width, LO, bx, bby - rise + SP, bimg.width, LO) });
+                fn: () => { const ri = bridgeReflImg(bimg); if (ri) ctx.drawImage(ri, bx, bby - rise); } });
             }
           }
           continue;
@@ -22326,6 +22436,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de plaque, pas de lanterne, et certaines nuits une lueur froide au
          pignon — personne n'habite là. */
       const houseLit = monumentLit(), houseDay = sharedRef.current.day || 1;
+      /* 2026-09-27 — LES TOUFFES AU PIED DES MAISONS PEINTES (Guillaume : « les
+         maisons ne doivent pas ressembler à des stickers posés sur un fond »).
+         Le bord bas d'une image peinte est une règle tirée au cordeau sur la
+         pelouse ; deux ou trois touffes d'herbe DEVANT lui, aux angles et à un
+         endroit du pied, le cassent — la maison sort du sol au lieu d'y être
+         collée. Elles se dessinent après la maison (clé = bas du trottoir) et
+         avant ce qui passe devant ; ni collision ni état (§3) : leur place et
+         leur forme se déduisent de la parcelle, jamais sur l'allée de la porte,
+         et elles plient au même vent que les hautes herbes de la ville. */
+      // Les basses de la table des hautes herbes (`A.TALLGRASS_VARIANTS`) : au pied d'un mur, pas de grande gerbe.
+      const TUFT_KINDS = A.TALLGRASS_VARIANTS.filter(v => /small|flat|round/.test(v));
+      const queueHouseTufts = (hsn, baseL, baseR, byW, doorWX, e) => {
+        const h0 = EAU.waterHash(hsn.x * 131 + 7, hsn.y * 37 + 3);
+        const spots = [baseL + 1, baseR - 1];
+        // Un troisième, le long du pied, hors de l'allée (± 1,6 case autour de la porte).
+        const u = ((h0 >> 4) % 1000) / 1000, along = baseL + 10 + u * (baseR - baseL - 20);
+        if (Math.abs(along - doorWX) > 26) spots.push(along);
+        spots.forEach((sx, i) => {
+          const hv = EAU.waterHash(h0 + i * 17, i * 29 + 5);
+          const variant = TUFT_KINDS[hv % TUFT_KINDS.length];
+          const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
+          const flip = (hv >> 3) & 1, by = byW + 1 + ((hv >> 5) & 1);
+          pushE(by, e, () => {
+            const lean = A.townTallGrassWaveLean(sx / T, by / T, now);
+            ctx.save();
+            ctx.translate(Math.round(sx), by);
+            ctx.transform(flip ? -1 : 1, 0, -lean / img.height, 1, 0, 0);
+            ctx.drawImage(img, -Math.round(img.width / 2), -img.height);
+            ctx.restore();
+          });
+        });
+      };
       const queueTownHouse = (hsn, look, o) => {
         const M = C.TOWN_HOUSE_MODELS[look.model], V = M.variants[look.variant];
         const SB = C.TOWN_BITMAPS[C.townHouseBitmapKey(look.model, look.variant)];
@@ -22357,8 +22499,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           glowA = on ? houseLit * (0.55 + 0.45 * Math.abs(Math.sin(now / 170) * Math.sin(now / 430 + 1.3))) : 0;
           if (on) for (const w of wins) if (w.ghost) rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
         }
+        /* Le trottoir peint (sous le pied du mur, plus large que lui) : ses bords,
+           en px monde — l'image a ~12 px de fond de chaque côté (mesuré). */
+        const baseL = cxW - (cw / 2 - 12) * k, baseR = cxW + (cw / 2 - 12) * k;
+        if (!o.ruin) queueHouseTufts(hsn, baseL, baseR, byW, doorWX, houseE);
         pushE(footWY, houseE, () => {
-          drawBuildingShadowConnected(ctx, (wallL + wallR) / 2, footWY, (wallR - wallL) / 2);
+          drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
           const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1 });
           if (r) {
             // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
@@ -22418,7 +22564,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cxW = doorWX + (c0 + cw / 2 - M.door) * k, byW = footWY + (c1 + ch - M.foot) * k;
         const wallL = doorWX + (M.wall[0] - M.door) * k, wallR = doorWX + (M.wall[1] - M.door) * k;
         const shopE = elAt(b.x, b.y + b.h - 1);
-        const glowA = carlaIsResident() ? houseLit : 0;
+        const glowA = M.lit === "carla" ? (carlaIsResident() ? houseLit : 0) : houseLit;
         /* La lumière des vitrines SUR LE PAVÉ (Guillaume : « bien travailler
            l'éclairage des vitrines, c'est important »). Une vitrine de trois
            cases n'est pas une fenêtre : un seul anneau devant son milieu faisait
@@ -22439,12 +22585,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
         pushE(footWY, shopE, () => {
-          drawBuildingFooting(ctx, (wallL + wallR) / 2, footWY, (wallR - wallL) / 2);
+          drawPaintedGrounding(ctx, cxW - (cw / 2 - 12) * k, cxW + (cw / 2 - 12) * k, byW, byW - footWY + b.h * T * 0.6);
           const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA);
           if (!r) return;
           // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
           lightBuilding(wallL, b.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
           if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, glowA);
+          // Un rectangle de la référence → l'écran (l'image est posée à 1:1, en px écran).
+          const scr = (q) => ({ x: r.left + (q.x - c0) * r.dw / cw, y: r.top + (q.y - c1) * r.dh / ch, w: q.w * r.dw / cw, h: q.h * r.dh / ch });
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if (M.pole) drawBarberPole(ctx, scr(M.pole), now);
+          if (M.sign) {
+            /* Le nom, dans l'enseigne vierge : police pixel à l'échelle ENTIÈRE
+               la plus grande qui y tienne (lisible au cran 1, net à tous). */
+            const q = scr(M.sign), txt = L.mapTownSalon;
+            if (PF.pixelTextSupported(txt)) {
+              let sc = Math.max(1, Math.floor(q.h / 9));
+              while (sc > 1 && (PF.pixelTextWidth(txt) + 2) * sc > q.w) sc--;
+              PF.drawPixelText(ctx, mkShopCanvas, txt, q.x + q.w / 2, q.y + q.h / 2 + 3 * sc, sc, "#1f2e52", "#e9dcb6");
+            }
+          }
+          ctx.restore();
         });
       };
       for (const mk of Object.keys(C.TOWN_SHOP_MODELS)) queueTownShop(mk);

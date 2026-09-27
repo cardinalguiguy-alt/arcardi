@@ -6,14 +6,15 @@ Une maison par image (une planche de dix ferait ~300 px par maison, flou au zoom
 
 | # | Modèle | 4e image jointe | À enregistrer dans `refs/` |
 |---|---|---|---|
-| 1 | N3 | `maison-n1.jpg` | `maison-n3.jpg`, `maison-n3-riche.jpg` — **pas d'enrichie** |
-| 2 | S2 | `maison-s1.jpg` | `maison-s2.jpg`, `maison-s2-enrichie.jpg`, `maison-s2-riche.jpg` |
-| 3 | S3 | `maison-s1.jpg` | idem en `s3` |
-| 4 | S4 | `maison-s1.jpg` | idem en `s4` |
-| 5 | W1 | `maison-s1.jpg` | idem en `w1` |
-| 6 | W2 | **`maison-w1.jpg`** (W1 validée en jeu d'abord) | idem en `w2` |
-| 7 | W3 | **`maison-w1.jpg`** | idem en `w3` |
-| 8 | GARE, SALON (✅ MAISON GARFIELD, en jeu le 2026-09-27) | `maison-s1.jpg` | `gare.jpg`, `salon.jpg` — une image chacun |
+| 1 | N3 — **mise de côté** (Guillaume, 2026-09-27 : la série se fait « sans N3 ») | `maison-n1.jpg` | `maison-n3.jpg`, `maison-n3-riche.jpg` — **pas d'enrichie** |
+| 2 | S2 — ⚠️ **relance à faire** (premier essai porte centrée, voir sa ligne) | `maison-s1.jpg` | `maison-s2.jpg`, `maison-s2-enrichie.jpg`, `maison-s2-riche.jpg` |
+| 3 | S3 — ✅ **EN JEU (2026-09-27), devenue la première LARGE** (9 cases à l'échelle de sa porte) | — | fait : `maison-s3.jpeg`, `-bordeaux` (son enrichie), `-riche` |
+| 4 | S4 — ✅ **EN JEU (2026-09-27)** | — | fait : `Maison-s4.jpeg`, `-enrichie`, `-riche` |
+| 5 | W1 | **`maison-s3.jpeg`** (S3 fixe l'emprise large) | `maison-w1.jpg`, `-enrichie`, `-riche` |
+| 6 | W2 | **`maison-s3.jpeg`** | idem en `w2` |
+| 7 | W3 | **`maison-s3.jpeg`** | idem en `w3` |
+| 8 | SALON — ✅ **EN JEU (2026-09-27)**, comme la Maison Garfield | — | fait : `Salon.jpg` |
+| 9 | GARE — ⚠️ **en attente**, voir sa ligne plus bas (emplacement de 4 cases) | `maison-s1.jpg` | `gare.jpg` — une image |
 
 ⚠️ **Les étroites n'ont pas d'enrichie** : compté le 2026-09-26, les 8 parcelles étroites tombent en
 4 simples + 4 riches, aucune dans le quartier enrichi (le lac, les artisans). Les standard : 8 simples,
@@ -115,6 +116,11 @@ a tall narrow stone house squeezed between two neighbours, clearly taller than w
 ```
 a stone cottage, about as wide as it is tall and exactly as wide as the house in the fourth image, under a thick rounded thatched roof with a grassy ridge and neatly trimmed eaves. One eyebrow dormer set into the thatch. The front door is a sturdy wooden door under a heavy stone lintel, left of centre at about one third of the façade from the left, at the same place and the same size as the door of the fourth house. One small deep-set window to the left of the door and two to its right, with wooden frames. A stone chimney rising through the thatch. No gutter and no drainpipe: the thatch overhangs instead.
 ```
+  ⚠️ Premier essai (`refs/maison-s2.jpeg`, 2026-09-27) : porte CENTRÉE malgré la ligne — 1,82 H | 1,84 H
+  pour 0,75–1,45 | 2,5–3,2, un seul carreau de chaque côté. Relance, dans la même conversation :
+```
+Same cottage, same size, same style and same materials, but the front door must NOT be centred: move the door, its heavy stone lintel, the doormat and the wall lamp to the LEFT, so that the door stands at about one third of the façade from the left. Then there is room for only ONE small window to the left of the door, and TWO small windows with flower boxes to the right of the door. Keep the eyebrow dormer and the chimney where they are. Keep the flat pure magenta #FF00FF background.
+```
 - **S3**
 ```
 a small "maison de maître" in light dressed stone, about as wide as it is tall and exactly as wide as the house in the fourth image, orderly and well proportioned. Two storeys of tall stone-mullioned windows in four regular columns. Three stone steps lead up to a panelled front door with a small fanlight: the door takes the place of the ground-floor window in the SECOND column from the left, so it stands left of centre, at the same place and the same size as the door of the fourth house. Red-brown flat-tiled roof with gently flared eaves, two chimneys, and a small half-timbered dormer gable on the right of the roof.
@@ -124,10 +130,17 @@ a small "maison de maître" in light dressed stone, about as wide as it is tall 
 an asymmetrical house, about as wide as it is tall and exactly as wide as the house in the fourth image. Stone ground floor; half-timbered upper floor with dark brown beams and pale ochre infill. The front door is left of centre, at about one third of the façade from the left, at the same place and the same size as the door of the fourth house, under a small slate canopy on two wooden brackets. On the right half, an off-centre gable facing the street, with a projecting wooden bay window on the upper floor resting on carved wooden corbels. Dark slate roof.
 ```
 
-## Larges (8 cases) — 4e image : `maison-s1.jpg` pour W1, puis `maison-w1.jpg` pour W2 et W3
+## Larges (9 cases) — 4e image : `maison-s3.jpeg`
+⚠️⚠️ **S3 A FIXÉ L'EMPRISE LARGE (2026-09-27)** : demandée comme une standard, Gemini l'a peinte à
+quatre travées — 5,3 H de mur à l'échelle de son vantail, porte à 2,0 H du bord gauche et 3,3 H du bord
+droit, emprise x+0..x+8. Elle est en jeu sur les cinq parcelles larges (`TOWN_HOUSE_WIDE_AT`). W1 à W3
+se règlent donc sur ELLE, avec la formule qui a tenu pour N2 : « exactly as wide as the house in the
+fourth image », « front door at the same place and the same size ». Tolérances (calculées, 1 H = 1,725
+case) : de la porte au bord gauche du mur 1,4 à 2,0 H, au bord droit 3,1 à 3,7 H — sinon l'emprise
+large change (et la collision des cinq parcelles), ou le modèle laisse de l'air à côté de son mur. La ligne de W1 a été réécrite en ce sens ; W2 et W3 le disaient déjà.
 - **W1**
 ```
-a long, low stone farmhouse (a Breton-style "longère"), about 1.6 times as wide as it is tall, one storey plus attic. The main house takes the LEFT two thirds of the façade, with its front door in the middle of that part, so the door stands at about one third of the whole façade from the left, NOT centred; one window on each side of the door and three dormers in the dark slate roof above. The RIGHT third is a lower attached barn wing with a big double wooden barn door (not the entrance). Stone chimneys at both gable ends of the main house.
+a long, low stone farmhouse (a Breton-style "longère"), one storey plus attic, exactly as wide as the house in the fourth image but much lower, so about twice as wide as it is tall. Its front door is exactly the same size as the door of the fourth house. The main house takes the LEFT two thirds of the façade, with its front door in the middle of that part, so the door stands at about one third of the whole façade from the left, NOT centred; one window on each side of the door and three dormers in the dark slate roof above. The RIGHT third is a lower attached barn wing with a big double wooden barn door (not the entrance). Stone chimneys at both gable ends of the main house.
 ```
 - **W2**
 ```
@@ -156,7 +169,15 @@ l'image ne se traduit pas (§4 de `CLAUDE.md`). 4e image : `maison-s1.jpg` (éch
 Emprises sur la carte : gare 4×3 (`TOWN_STATION`), Maison Garfield 8×5 (`TOWN_BOUTIQUE`), salon 7×4
 (`TOWN_SALON`) — l'image se calera sur leur porte, comme les maisons.
 
-- **GARE**
+- **GARE** — ⚠️ **EN ATTENTE (2026-09-27)** : `TOWN_STATION` ne fait que 4 cases de large, soit 2,3 H à
+  l'échelle de la porte — plus étroit que N1 (3,1 H). La gare ci-dessous, peinte par Gemini (~4 H et
+  plus), y serait réduite avec une porte plus petite que le personnage. À trancher avant de la lancer :
+  une toute petite halte (prompt à réécrire : ~60 % de la largeur de S1), ou un emplacement plus large
+  sur la carte. ⚠️ Ajouter alors des lampes VISIBLES sous l'auvent : la nuit s'allume par ses lampes peintes.
+  **Proposition (audit du 2026-09-27, carte relue)** : la DALLE de la gare fait déjà 6 cases (x = 5..10,
+  y = 62..65), le bâtiment 4 au milieu. Élargir `TOWN_STATION` à la dalle (x 5, w 6, passe FINALE du
+  générateur) donne 3,5 H à l'échelle de la porte, ~90 % de S1 : « about nine tenths as wide as the house
+  in the fourth image ». Le quai (x 4..5, dès y = 66) n'est pas touché.
 ```
 a small country railway station, about 1.6 times as wide as it is tall, its single ordinary front door exactly in the middle of the façade: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns along its front, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard with no letters on the gable. No tracks, no train, no platform.
 ```
@@ -164,9 +185,10 @@ a small country railway station, about 1.6 times as wide as it is tall, its sing
 ```
 an elegant little clothing and hat shop, about 1.6 times as wide as it is tall, in stone and dark green painted wood: a large shop window with small panes showing hats on stands and a tailor's dummy, a glazed shop door with a bell, a striped fabric awning in green and cream, a blank hanging signboard with no letters, flower boxes, an upper floor with one half-timbered gable.
 ```
-- **SALON DE COIFFURE**
+- **SALON DE COIFFURE** — largeur calée sur S1 (2026-09-27) : son mur de 4,0 H couvre les 7 cases de
+  `TOWN_SALON` à l'échelle de la porte ; « 1,75 fois plus large que haut » seul laissait Gemini choisir.
 ```
-a small barber and hairdresser shop, about 1.75 times as wide as it is tall, wide and low, its single ordinary glazed door exactly in the middle of the ground floor with a shop window on each side: stone ground floor, a red-white-blue striped barber's pole beside the door, shop windows with a mirror and a leather chair visible inside, lit by a few small spotlights on a ceiling track clearly visible inside the windows, a short blue awning, a blank signboard with no letters, a half-timbered upper floor with one window.
+a small barber and hairdresser shop, exactly as wide as the house in the fourth image but lower, wide and low, its single ordinary glazed door exactly in the middle of the ground floor and exactly the same size as the door of the fourth house, with a shop window on each side: stone ground floor, a red-white-blue striped barber's pole beside the door, shop windows with a mirror and a leather chair visible inside, lit by a few small spotlights on a ceiling track clearly visible inside the windows, a short blue awning, a blank signboard with no letters, a half-timbered upper floor with one window.
 ```
 - **BOUTIQUE D'OBJETS DE PLAGE** — ⚠️ à ne lancer qu'une fois son emplacement choisi (moyen terme, Guillaume)
 ```
