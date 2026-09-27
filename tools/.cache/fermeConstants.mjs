@@ -2039,21 +2039,25 @@ export const RESIDENT_TASK_BY_THEME = {
        revient supplier — un traitement qui n'a aucun sens pour quelqu'un qui a
        sa propre boutique en ville et n'a jamais eu besoin de la ferme. La
        partir serait SA décision, pas la nôtre.
-     `weeklyShift` (430) : ⚠️ **ELLE NE TRAVAILLE PAS TOUS LES JOURS.** Un jour
-       par semaine de jeu, à sa boutique. Les autres jours elle vit sa vie —
-       aucun tour de travail, et la Maison Garfield est FERMÉE. Voir
-       E.isShopDay et la note de CARLA_WORK_DAY. */export const CARLA_RID = 30;
+     `weeklyShift` (430, étendu à deux jours le 2026-09-27 : Guillaume, en
+       jouant, « faire travailler Carla deux jours au lieu d'un ») : ⚠️ **ELLE
+       NE TRAVAILLE PAS TOUS LES JOURS.** Deux jours par semaine de jeu, à sa
+       boutique. Les autres jours elle vit sa vie — aucun tour de travail, et
+       la Maison Garfield est FERMÉE. `weeklyShift` accepte un TABLEAU de jours
+       (`E.isShopDay` teste l'appartenance) — Carla reste le seul résident du
+       roster à porter ce drapeau, rien de plus n'a changé ailleurs. Voir
+       E.isShopDay et la note de CARLA_WORK_DAYS. */export const CARLA_RID = 30;
 export const CARLA_MIN_ARTISANS = 4;   // résidents à skill requis pour qu'elle daigne venir
-/* ⚠️ LE JOUR DE SERVICE EST DÉRIVÉ DU NUMÉRO DE JOUR, comme le cours du marché
-   et le jour d'orage : `day % 7 === CARLA_WORK_DAY`. Aucun état, aucun message,
-   aucune migration — et les deux joueurs d'un salon lisent forcément le même
-   jour. Un champ « prochain jour de service » dans `shared` aurait été un
-   compteur de plus à faire tourner, à diffuser et à réconcilier, pour quelque
-   chose qui est une pure fonction du calendrier.
-   ⚠️ ET IL EST DÉCALÉ DU JOUR DE MARCHÉ (MARKET_DAY_EVERY vaut 7, reste 0) :
-   les deux tombant le même jour, on aurait un jour où tout se passe et six où
-   rien ne se passe. Décalés, la semaine a deux rendez-vous. */
-export const CARLA_WORK_DAY = 3;
+/* ⚠️ LES JOURS DE SERVICE SONT DÉRIVÉS DU NUMÉRO DE JOUR, comme le cours du
+   marché et le jour d'orage : `CARLA_WORK_DAYS.includes(day % 7)`. Aucun état,
+   aucun message, aucune migration — et les deux joueurs d'un salon lisent
+   forcément le même jour. Un champ « prochain jour de service » dans `shared`
+   aurait été un compteur de plus à faire tourner, à diffuser et à réconcilier,
+   pour quelque chose qui est une pure fonction du calendrier.
+   ⚠️ ET ILS SONT DÉCALÉS DU JOUR DE MARCHÉ (MARKET_DAY_EVERY vaut 7, reste 0) :
+   un des deux tombant sur le marché, on aurait un jour où tout se passe et
+   d'autres où rien ne se passe. Décalés, la semaine a trois rendez-vous. */
+export const CARLA_WORK_DAYS = [3, 4];
 // Léo n'est PAS une entité : sa position est DÉRIVÉE de celle de Carla
 // (il marche dans ses pas avec ce retard, en unités de chemin parcouru, cf.
 // le principe des loups posés sur la piste du défi de fuite). Zéro message
@@ -2154,7 +2158,7 @@ export const VISITOR_ROSTER = [
      aurait fait deux boutiques pour une seule vendeuse.
      `minArtisans` reste : elle ne se dérange toujours pas pour un champ de
      patates. */
-  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS, noKick: true, weeklyShift: CARLA_WORK_DAY },
+  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS, noKick: true, weeklyShift: CARLA_WORK_DAYS },
 ];
 // Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).

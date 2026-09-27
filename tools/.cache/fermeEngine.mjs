@@ -3630,11 +3630,13 @@ export function marketApply(base, rate) {
 /* ⚠️ ZIP 430 — LE JOUR DE SERVICE D'UN RÉSIDENT « À LA SEMAINE ». Dérivé du
    numéro de jour, donc identique chez tous les clients sans qu'un octet ne
    circule (même astuce que le cours du marché juste au-dessus et que le jour
-   d'orage). `weeklyShift` est l'indice du jour dans la semaine ; un résident
-   qui ne le porte pas travaille tous les jours, comme avant. */
+   d'orage). `weeklyShift` est l'indice du jour dans la semaine, OU (2026-09-27,
+   Carla étendue à deux jours) un TABLEAU d'indices ; un résident qui ne le
+   porte pas travaille tous les jours, comme avant. */
 export function isShopDay(ro, day) {
   if (!ro || ro.weeklyShift === undefined || ro.weeklyShift === null) return true;
-  return ((day | 0) % 7) === (ro.weeklyShift | 0);
+  const d = (day | 0) % 7;
+  return Array.isArray(ro.weeklyShift) ? ro.weeklyShift.includes(d) : d === (ro.weeklyShift | 0);
 }
 export function marketPrice(day, item, basePrice) {
   const fam = marketFamilyOf(item);
