@@ -2123,12 +2123,15 @@ Deux libertés ajoutées, toutes deux portées par un **drapeau de roster** et n
   boutique en ville et n'a jamais eu besoin de la ferme. **Partir serait SA décision.**
   ⚠️ Le bouton DISPARAÎT de sa fiche et dit pourquoi — l'hôte refuse déjà, mais un bouton qui
   se laisse cliquer pour répondre « non » est le « le jeu propose puis refuse » du 426.
-- **`weeklyShift`** — elle tient boutique **un jour par semaine** (`CARLA_WORK_DAY`), pas tous
-  les jours. Les autres jours : aucun tour de travail, et la Maison Garfield est **fermée**.
-  ⚠️ Le jour est **dérivé du numéro de jour** (`E.isShopDay`), comme le cours du marché : aucun
-  état, et les deux joueurs d'un salon lisent forcément le même jour.
-  ⚠️ Il est **décalé du jour de marché** : les deux ensemble, la semaine n'aurait qu'un seul
-  jour où il se passe quelque chose.
+- **`weeklyShift`** — elle tient boutique **deux jours par semaine** (`CARLA_WORK_DAYS`,
+  `[3, 4]` — un jour depuis le 430, deux depuis le 2026-09-27, Guillaume en jouant : « faire
+  travailler Carla deux jours au lieu d'un »), pas tous les jours. Les autres jours : aucun tour
+  de travail, et la Maison Garfield est **fermée**. `weeklyShift` accepte un tableau
+  (`E.isShopDay` teste l'appartenance), sans rien changer pour un résident ordinaire.
+  ⚠️ Les jours sont **dérivés du numéro de jour** (`E.isShopDay`), comme le cours du marché :
+  aucun état, et les deux joueurs d'un salon lisent forcément le même jour.
+  ⚠️ Ils sont **décalés du jour de marché** : sinon l'un des deux tombant dessus, la semaine
+  perdrait un rendez-vous au lieu d'en gagner un.
   ⚠️ **Son jour de service, elle descend en ville d'office** — devant les autres et devant le
   plafond de visiteurs — et elle vise sa vitrine. Sans ça, la boutique serait « ouverte » avec
   personne dedans. Un devoir n'est pas une préférence : le goût du métier

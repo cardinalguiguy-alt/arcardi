@@ -28340,7 +28340,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ro = rosterOf(C.CARLA_RID);
     if (!ro || ro.weeklyShift == null) return 0;
     const day = (sharedRef.current.day | 0) || 1;
-    return ((ro.weeklyShift - (day % 7)) + 7) % 7;
+    const shifts = Array.isArray(ro.weeklyShift) ? ro.weeklyShift : [ro.weeklyShift];
+    return Math.min(...shifts.map(s => ((s - (day % 7)) + 7) % 7));
   }
   function carlaIsResident() {
     const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];

@@ -1436,17 +1436,18 @@ section("Valley Town habitée — la famille et la garde-robe");
      qui le lit. */
   ok("Carla n'a plus AUCUN des deux verrous du 376", !!carla && !carla.noStay && !carla.chatOnly);
   ok("on ne peut pas la virer", !!carla && carla.noKick === true);
-  ok("elle ne travaille qu'un jour par semaine", !!carla && carla.weeklyShift === C.CARLA_WORK_DAY);
+  ok("elle travaille deux jours par semaine", !!carla && Array.isArray(carla.weeklyShift) && carla.weeklyShift.length === 2
+    && carla.weeklyShift.every(d => C.CARLA_WORK_DAYS.includes(d)));
   {
-    // Le jour de service doit exister une fois par semaine, et TOMBER UN AUTRE
-    // JOUR QUE LE MARCHÉ : les deux ensemble, la semaine n'a plus qu'un seul
-    // jour où il se passe quelque chose.
+    // Les deux jours de service doivent exister une fois par semaine chacun,
+    // et TOMBER UN AUTRE JOUR QUE LE MARCHÉ : sinon la semaine perd un de ses
+    // rendez-vous au lieu d'en gagner un.
     let n = 0, clash = 0;
     for (let day = 1; day <= 700; day++) {
       if (E.isShopDay(carla, day)) { n++; if (E.isMarketDay(day)) clash++; }
     }
-    ok("sa boutique ouvre un jour sur sept", n === 100, `${n} jours sur 700`);
-    ok("son jour de service ne tombe pas le jour de marché", clash === 0, `${clash} collisions`);
+    ok("sa boutique ouvre deux jours sur sept", n === 200, `${n} jours sur 700`);
+    ok("aucun de ses deux jours de service ne tombe le jour de marché", clash === 0, `${clash} collisions`);
     // Et un résident ORDINAIRE travaille toujours tous les jours : le drapeau
     // ne doit pas fuir sur les autres.
     const greg = C.VISITOR_ROSTER.find(r2 => r2.skill === "lumberjack");

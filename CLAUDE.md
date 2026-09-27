@@ -25,6 +25,16 @@ textures, collisions) et les jardins · 8 intérieurs · 9 à 14, nées de l'AUD
 - Bancs à cette livraison : **29/29 `verify-*`** (`verify-vallee` 265, `verify-lumiere` 86), **24/24
   `render-*`**, `no-undef` propre, bundle, `next build` complet. Vu en jeu (jour, nuit, pont) ; **pas vu** :
   S3 simple, le salon la nuit en jeu, deux joueurs. **Pas de manipulation Supabase** (rien de persisté).
+- **Retour de partie, même soir** : Guillaume a joué et demandé (1) un signal plus visuel
+  d'ouvert/fermé pour la Maison Garfield, (2) Carla en service deux jours au lieu d'un.
+  **Livré, la partie mécanique seule** (délivrance partielle demandée par lui, pour ne pas traîner) :
+  `CARLA_WORK_DAYS = [3, 4]` (`fermeConstants.js`), `E.isShopDay`/`carlaDaysToOpen` généralisés à un
+  tableau de jours au lieu d'un entier — Carla reste le seul résident à porter ce drapeau, rien de
+  spécial ajouté ailleurs. `verify-vallee` 265/265 (chiffres inchangés), `no-undef` et bundle propres.
+  ⚠️ **Pas livré, exprès** : le signal visuel (rideau de fer discret mi-baissé + lumières réduites les
+  jours chômés ; bâtiment NEUTRE, sans rien qui évoque un commerce de vêtements, tant que Carla n'est
+  pas résidente). Ça touche une image importée (`refs/boutique-garfield.jpg`, §9) qui se pose en
+  regardant le rendu en jeu, pas à l'aveugle sur les coordonnées du modèle — voir ACTION SUIVANTE.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
@@ -88,6 +98,11 @@ fenêtres des premières, `render-echelle`/`render-tribunal` mesurent les deux a
 de réécrire ces sections de banc.
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
+⚠️ Dette laissée par ce soir : le **signal visuel ouvert/fermé de la Maison Garfield**, décidé avec
+Guillaume mais pas dessiné — rideau de fer discret mi-baissé + moins de lumières les jours chômés,
+bâtiment neutre (aucune trace de commerce de vêtements) tant que Carla n'est pas résidente. À poser
+sur `TOWN_SHOP_MODELS.garfield` (`fermeConstants.js`) et son dessin dans `FermeGame.js` (~22559,
+`queueTownShop`), en le regardant en jeu sur l'image réelle, pas en aveugle sur les coordonnées `wins`.
 
 ---
 
