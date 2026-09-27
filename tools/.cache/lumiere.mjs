@@ -208,14 +208,17 @@ export function ruinGhostOn(day, tmin) {
    `maxL` : le plafond de luminance du verre (vitres sombres). */
 export const MONUMENT_WINDOWS = {
   church: {
-    W3: 634, H3: 604,
+    /* PHASE 7 (2026-09-27) : l'église a grandi de moitié (`TOWN_BITMAPS.church`,
+       192 → 288) ; son cran 3 est passé de 634×604 à 950×906, et la table a été
+       rapportée par la même proportion (relevé d'origine : ×634/950, ×604/906). */
+    W3: 950, H3: 906,
     wins: [
-      { k: "disc", cx: 318, cy: 311, r: 47, kind: "stained", room: "nave" },                 // la rosace
-      { k: "rect", x0: 268, y0: 343, x1: 368, y1: 408, kind: "stained", room: "nave" },      // l'arcature sous la rosace
-      { k: "arch", x0: 191, x1: 229, y0: 324, y1: 428, kind: "stained", room: "nave" },      // grande lancette ouest
-      { k: "arch", x0: 407, x1: 445, y0: 324, y1: 428, kind: "stained", room: "nave" },      // grande lancette est
-      { k: "arch", x0: 196, x1: 228, y0: 476, y1: 558, kind: "stained", room: "aisle" },     // lancette basse ouest (bas-côté)
-      { k: "arch", x0: 409, x1: 441, y0: 476, y1: 558, kind: "stained", room: "aisle" },     // lancette basse est
+      { k: "disc", cx: 476, cy: 466, r: 70, kind: "stained", room: "nave" },                 // la rosace
+      { k: "rect", x0: 402, y0: 514, x1: 551, y1: 612, kind: "stained", room: "nave" },      // l'arcature sous la rosace
+      { k: "arch", x0: 286, x1: 343, y0: 486, y1: 642, kind: "stained", room: "nave" },      // grande lancette ouest
+      { k: "arch", x0: 610, x1: 667, y0: 486, y1: 642, kind: "stained", room: "nave" },      // grande lancette est
+      { k: "arch", x0: 294, x1: 342, y0: 714, y1: 837, kind: "stained", room: "aisle" },     // lancette basse ouest (bas-côté)
+      { k: "arch", x0: 613, x1: 661, y0: 714, y1: 837, kind: "stained", room: "aisle" },     // lancette basse est
     ],
   },
   townhall: {

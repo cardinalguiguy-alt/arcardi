@@ -127,26 +127,32 @@ const pct = (100 * reached / freeTiles);
 ok("au moins 92 % des cases libres sont atteignables à pied", pct >= 92, `${pct.toFixed(1)} % (${reached}/${freeTiles})`);
 
 // Les rues : une avenue coupée est le pire défaut possible.
-for (const ry of C.TOWN_ST_ROWS) {
-  let bad = 0, tot = 0;
-  for (let x = 12; x < W - 4; x++) { const i = idx(x, ry); if (tw.ground[i] === C.G_PATH) { tot++; if (!seen[i]) bad++; } }
-  ok(`avenue y=${ry} entièrement atteignable`, tot > 0 && bad === 0, `${tot} cases pavées, ${bad} isolées`);
+// PHASE 7 (2026-09-27) : une rue est un tracé de `TOWN_ROADS` ; on lit SES cases
+// (celles que le générateur a pavées), plus des rangées ou des colonnes entières.
+for (const r of C.TOWN_ROADS) {
+  let bad = 0, tot = 0; const lost = [];
+  for (const [x, y] of C.townRoadCells(r)) {
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const i = idx(x, y);
+    // la RUE : ses cases pavées en rue (une case de place ou de parvis où elle
+    // débouche appartient à la place, avec son mobilier)
+    if (tw.ground[i] === C.G_PATH) { tot++; if (!seen[i]) { bad++; if (lost.length < 8) lost.push(`(${x},${y})`); } }
+  }
+  ok(`rue « ${r.id} » entièrement atteignable`, tot > 0 && bad === 0, `${tot} cases pavées, ${bad} isolées ${lost.join(" ")}`);
 }
-for (const cx of C.TOWN_ST_COLS) {
-  let bad = 0, tot = 0;
-  for (let y = 12; y < H - 4; y++) { const i = idx(cx, y); if (tw.ground[i] === C.G_PATH) { tot++; if (!seen[i]) bad++; } }
-  ok(`artère x=${cx} entièrement atteignable`, tot > 0 && bad === 0, `${tot} cases pavées, ${bad} isolées`);
-}
+const ROAD_CELL = new Uint8Array(W * H);
+for (const r of C.TOWN_ROADS) for (const [x, y] of C.townRoadCells(r)) if (x >= 0 && y >= 0 && x < W && y < H) ROAD_CELL[idx(x, y)] = 1;
+const ALL_HOUSES = C.townAllHouses();
 
 // Les portes de maison : chacune doit s'atteindre (c'est là qu'on dort).
 {
   let bad = [];
-  for (let hi = 0; hi < C.TOWN_HOUSES.length; hi++) {
-    const h = C.TOWN_HOUSES[hi];
+  for (let hi = 0; hi < ALL_HOUSES.length; hi++) {
+    const h = ALL_HOUSES[hi];
     const dx = h.x + 2, dy = h.y + C.TOWN_HOUSE_H;
     if (!reach(dx, dy) && !reach(dx + 1, dy)) bad.push(`#${hi}(${h.x},${h.y})`);
   }
-  ok(`les ${C.TOWN_HOUSES.length} portes de maison sont accessibles`, bad.length === 0, bad.join(" "));
+  ok(`les ${ALL_HOUSES.length} portes de maison sont accessibles (${C.TOWN_HOUSES.length} parcelles + ${C.TOWN_TOWNHOUSES.length} maisons de ville)`, bad.length === 0, bad.join(" "));
   /* 2026-09-26 (phase 6a) — la maison hantée n'a pas de propriétaire, mais on
      doit pouvoir aller jusqu'à sa porte : son allée envahie traverse le bois. */
   const R = C.TOWN_RUIN, rx = R.x + 2, ry = R.y + C.TOWN_HOUSE_H;
@@ -223,7 +229,7 @@ for (const cx of C.TOWN_ST_COLS) {
        && G.variants[v].crop.join() === G.variants.simple.crop.join()), vks.map(v => `${v} ${G.variants[v] ? G.variants[v].src : "—"}`).join(" · "));
   }
   let bad = [], cells = 0;
-  for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) {
+  for (const h of [...ALL_HOUSES, C.TOWN_RUIN]) {
     const f = C.townHouseFoot(h);
     for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) { cells++; if (!tw.solid[idx(x, y)]) bad.push(`(${x},${y})`); }
     // la porte (x+3) tombe DANS l'emprise, sinon l'image n'est pas calée sur l'allée
@@ -231,7 +237,7 @@ for (const cx of C.TOWN_ST_COLS) {
   }
   ok("chaque emprise de maison peinte est solide sur la carte", bad.length === 0, `${cells} cases lues ; ${bad.slice(0, 8).join(" ")}`);
   const sizes = {}, looks = {};
-  for (const h of C.TOWN_HOUSES) {
+  for (const h of ALL_HOUSES) {
     sizes[C.townHouseSize(h)] = (sizes[C.townHouseSize(h)] || 0) + 1;
     const l = C.townHouseLook(h, 0), k = `${l.model}/${l.variant}`;
     looks[k] = (looks[k] || 0) + 1;
@@ -306,7 +312,7 @@ for (let y = C.TOWN_COURT_WING_ROW + 1; y <= C.TOWN_COURT.y + C.TOWN_COURT.h - 1
   for (let k = 1; k <= C.TOWN_COURT_RAMP_MARGIN; k++) { mark(span.x0 - k, y); mark(span.x1 + k, y); }
 }
 // 2026-09-26 (phase 6a) : l'emprise du mur PEINT (celle que pose le générateur), ruine comprise.
-for (const h of [...C.TOWN_HOUSES, C.TOWN_RUIN]) { const f = C.townHouseFoot(h); markRect({ x: f.x, y: f.y }, f.w, f.h); }
+for (const h of [...C.townAllHouses(), C.TOWN_RUIN]) { const f = C.townHouseFoot(h); markRect({ x: f.x, y: f.y }, f.w, f.h); }
 for (const p of tw.props) mark(p.x, p.y);
 /* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.
    Les marquer depuis les mêmes rectangles que la collision évite de réinventer
@@ -364,7 +370,7 @@ section("Valley Town — géométrie");
   const allB = [
     ...[C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]
       .map((b, k) => [["église", "mairie", "tribunal", "boutique", "salon", "gare"][k], b]),
-    ...C.TOWN_HOUSES.map((h, k) => [`maison#${k}`, C.townHouseFoot(h)]),
+    ...ALL_HOUSES.map((h, k) => [`maison#${k}`, C.townHouseFoot(h)]),
     ["maison hantée", C.townHouseFoot(C.TOWN_RUIN)],
   ];
   /* ⚠️⚠️ 2026-09-21 — UNE EXCEPTION NOMMÉE, MÊME FAMILLE QUE `WALKABLE`
@@ -401,8 +407,7 @@ section("Valley Town — géométrie");
       elevs.add(tw.elev[i]);
       if (e0 === null) e0 = tw.elev[i]; else if (Math.abs(tw.elev[i] - e0) > 0.001) mixed = true;
       if (tw.ground[i] === C.G_TOWN_STAIR) onStair = true;
-      for (const ry of C.TOWN_ST_ROWS) if (y === ry || y === ry + 1) onStreet = true;
-      for (const cx of C.TOWN_ST_COLS) if (x === cx || x === cx + 1) onStreet = true;
+      if (ROAD_CELL[i] && tw.ground[i] === C.G_PATH) onStreet = true;
     }
     if (onStreet && STREET_OK.has(name)) onStreet = false;
     if (mixed && MIXED_OK.has(name)) {
@@ -623,7 +628,7 @@ section("Valley Town — le perron du tribunal");
 {
   // Le lac ne doit pas avoir noyé une rue.
   let drowned = 0;
-  for (const ry of C.TOWN_ST_ROWS) for (let x = 10; x < W - 3; x++) { const i = idx(x, ry); if (tw.ground[i] === C.G_WATER) drowned++; }
+  for (let i = 0; i < W * H; i++) if (ROAD_CELL[i] && tw.ground[i] === C.G_WATER) drowned++;
   ok("aucune avenue n'est sous l'eau", drowned === 0, `${drowned} cases`);
 }
 

@@ -7,30 +7,30 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-27 (nuit, suite) — Valley Town : phase 11 livrée (arbres à l'échelle des maisons)
+### 2026-09-27 (soir) — Valley Town : phase 7a livrée (réseau, monuments, cœur dense)
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récit en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** **Ordre tranché par Guillaume :
-phases 9, 10, 11 (faites), 7, 12, 13, 14, 8 ; 6a/6b s'intègrent au fil de ses images.** « caveman on »
-était actif en fin de séance.
-⚠️ **PRINCIPE POSÉ PAR GUILLAUME : LA COHÉRENCE SOCIALE PAR QUARTIER** — une seule règle,
-`C.townStandingAt` / `C.townRankAt`, lue par les maisons et le sol ; tout ce qui se compose ensuite
-(jardins, décor, clôtures, lampadaires, arbres, qui habite où) doit la lire aussi.
-- **Livré** : quatre tailles par essence dessinée en code (`TREE_SIZES` : jeune clairsemé, tuteuré, trapu,
-  grand ×1,5 ; `townTreeSize` par lieu, rétrogradé en adulte devant une lanterne ou un bâtiment) ; le
-  magnolia redessiné (`magnoliaTree`, 28 tulipes de 3-5 px au lieu de six fleurs de 16 px) ; cerisier et
-  mimosa en nuages de petites fleurs (`paintBloom` `cluster`) ; la touche L (« où suis-je ? », `drawFindMe` :
-  les arbres cachent le joueur, voulu par Guillaume) ; le vent en cinq poses (`TREE_FRAMES`) ; tous les arbres de ville en atlas ; marges de
-  vue dérivées de `A.TOWN_TREE_MAX_H`. Saule, sapin et pommier de la planche : un seul gabarit, inchangés.
-  Au passage : `verify-densite` était rouge depuis la phase 10 — réparé (`tallGrassBitmap`).
-- Bancs : **53/53** (`verify-vallee` 269, `render-arbres` 25 contrôles dont §7-10 neufs, tous falsifiés),
-  `no-undef`, bundle. Vu en jeu : grand arbre au niveau des toits, jeune tuteuré, magnolias en fleurs,
-  bois de l'est, le repère de L sur un joueur caché. **Pas vu en jeu** : les jeunes éclaircis, le cerisier et le
-  mimosa neufs, les cinq poses (planches et banc), l'automne, deux joueurs. **Pas de manipulation Supabase.**
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre tranché par Guillaume :
+phases 9, 10, 11, 7a (faites), **12 (la neige, demandée pour la suite)**, 7b, 13, 14, 8 ; 6a/6b au fil de ses images.
+⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` (lus sur les
+monuments : les déplacer déplace le prestige) ; tout ce qui se compose doit la lire.
+⚠️ **PRINCIPE POSÉ LE 2026-09-27 : PAS DE BÂTIMENT SANS FONCTION** (d'où le tribunal descendu en ville plutôt
+qu'une « Cité du Palais » de bâtiments vides).
+- **Livré** : une rue = un tracé (`TOWN_ROADS`, 18 rues, voie B ; `TOWN_ST_ROWS/COLS` supprimées, l'ancienne
+  grille réécrite dans le modèle vérifiée identique case pour case avant tout changement) ; rues pavées à bord
+  libre (`townRoadField`, fermeArt.js) ; palais de justice sur sa place à l'ouest de la grand-place ; église ×1,5
+  en haut du grand escalier ; mail planté ; 15 maisons de ville (`TOWN_TOWNHOUSES`, sans plaque, habitées) ;
+  parcelles déménagées par rang (rangs 0-2 inchangés, `size` sur la parcelle) ; taxi sur l'axe vrai.
+- Bancs : **53/53** (`verify-vallee` 278, `verify-taxi` 15), `no-undef`, bundle. Vu en jeu (été) : place du
+  Palais, vieille ville, terrasse et église, mail, faubourg sud, front de lac. **Pas vu** : nuit, hiver, deux
+  joueurs, le taxi roulant, les Forges et l'est. **Pas de manipulation Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **La phase 7a (2026-09-27, soir)** : le tracé des rues et leur bord pavé courbe, l'église ×1,5 (au cran 5
+  son image dépasse la référence de ×1,58), le palais sur sa place, le mail, les rangées de maisons de ville,
+  les placettes ; les parcelles des joueurs 3+ ont déménagé.
 - **La phase 11 (2026-09-27, nuit, suite)** : les proportions des quatre tailles, leur répartition
   (108 grands, 142 jeunes, 75 trapus sur 844), le magnolia (été avec fleurs gardé exprès, pour le parc),
   le repère de L (2,6 s, pas de bouton tactile), le vent à cinq poses.
@@ -79,14 +79,14 @@ phases 9, 10, 11 (faites), 7, 12, 13, 14, 8 ; 6a/6b s'intègrent au fil de ses i
 
 ### ⏭️ ACTION SUIVANTE
 
-**La phase 7 — la composition** (checklist au tableau) : cœur dense autour de la place, jardins VÉCUS,
-haies REFAITES entièrement (sprites, textures — la matière y a été renvoyée depuis la phase 11 —, collisions,
-autour de chaque largeur de maison), lampadaires aux carrefours et aux portes, l'allée de la maison hantée,
-la cohérence sociale par quartier. ⚠️ Elle porte **le réseau de rues qui n'est plus une grille** : trois
-voies écrites au tableau (cosmétique, hybride recommandée, régénération) — **à trancher avec Guillaume même
-en « caveman on »** : c'est la phase la plus risquée (quête, chemins, bancs), et le choix engage la carte.
-Intégrer au fil de l'eau ses images si elles tombent dans `refs/` : W1 à W3 (`maison-s3.jpeg` en 4e
-image ; porte à 1,4–2,0 H du bord gauche, 3,1–3,7 H du bord droit).
+**La phase 12 — la neige** (demande de Guillaume, 2026-09-27 : « la neige ultra réaliste avec traces etc ») :
+checklist au tableau (l'hiver ne change rien en ville : herbe, fleurs, feuillage ; la neige ne tient nulle part —
+sol, toits, haies ; traces de pas). Poser les décisions structurantes AVANT d'écrire (§2) : ce qui garde la
+neige (sol, rues pavées au bord libre, toits peints en bitmap), la trace (locale ou partagée : §3, ce qui se
+déduit ne se diffuse pas), la fonte.
+**Puis la phase 7b** : haies et clôtures refaites par quartier, jardins vécus, lampadaires aux carrefours et aux
+portes, allée de la maison hantée, commerces de la Grand-Rue (prompts Gemini à écrire, §2).
+Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.
 ⚠️ **Avant d'intégrer une image, mesurer sa porte en H ET son cadrage** : la ligne du prompt ne garantit
 rien, et une retouche de Gemini peut décaler le dessin dans son fichier (`at`, mesuré par recouvrement
 des silhouettes avec le fond propre à CHAQUE image — leurs magentas diffèrent). Chaque modèle : porte,

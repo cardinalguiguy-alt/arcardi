@@ -162,11 +162,18 @@ for (const [name, atlas] of SURFACES) {
    révèlent les défauts (leçon de la place du 425 : « une esplanade qui s'arrête
    net dans l'herbe a l'air découpée aux ciseaux »). */
 const tw = E.generateTownWorld();
-const CX = C.TOWN_ST_COLS[2];                    // l'artère nord-sud du tribunal (x = 150)
+/* PHASE 7 (2026-09-27) : plus de colonne d'artère. Le carrefour de l'AVENUE est
+   celui de la rue du Parc (ses contrôles de bordure lisent l'avenue) ; la vue
+   « courbe » regarde celui de la rue des Jardins et de la rue du Parc, deux rues
+   COURBES — le bord libre des rues pavées (`townRoadField`) s'y juge. */
+const crossOf = (p, q) => C.townRoadCrossings().find((c) => (c.a === p && c.b === q) || (c.a === q && c.b === p));
+const CX = crossOf("gare", "parc").x0;             // la PREMIÈRE colonne de la rue transversale (l'ancien `TOWN_ST_COLS[2]`)
+const XC = crossOf("jardins", "parc"), CXc = Math.round(XC.cx), CYc = Math.round(XC.cy);
 const cm = C.TOWN_CEMETERY;
 const VIEWS = [
   ["artere", { x: 20, y: 62, w: 34, h: 16 }],    // la grande artère, ses bordures, une allée de maison
   ["carrefour", { x: CX - 12, y: 62, w: 28, h: 16 }],
+  ["courbe", { x: CXc - 14, y: CYc - 8, w: 28, h: 16 }],
   ["cimetiere", { x: cm.x - 2, y: cm.y - 1, w: cm.w + 4, h: cm.h + 3 }],
   /* ⚠️ LA QUATRIÈME EST CELLE QUE GUILLAUME A DEMANDÉE EN TOUTES LETTRES :
      « la rue nord-sud ne doit pas couper l'esplanade ». Un compteur à zéro le
@@ -188,6 +195,12 @@ for (const [name, v] of VIEWS) {
     if (g === C.G_PATH) { if (!A.drawTownRoadTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.path, px, py); }
     else if (g === C.G_PATH_STONE) { if (!A.drawTownFlagTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else if (g === C.G_WATER) { sh.ctx.fillStyle = "#3f7fd0"; sh.ctx.fillRect(px, py, T, T); }
+    /* PHASE 7 (2026-09-27) : l'herbe passe par la VRAIE fonction du jeu — c'est
+       elle qui pose la découpe d'une rue pavée courbe sur la case voisine
+       (`drawTownRoadSpill`). Peinte avec les vieilles tuiles, l'herbe coupait
+       chaque rue au bord de sa case, et ce banc montrait des marches que le jeu
+       ne dessine pas. */
+    else if ((g === C.G_GRASS || g === C.G_TOWN_LAWN) && A.drawTownGrassTile(sh.ctx, S, tw, x, y, px, py)) { /* peinte */ }
     else {
       const gt = S.townGrass;
       sh.ctx.drawImage(gt[(x * 37 + y * 17) % gt.length], px, py);
@@ -230,15 +243,14 @@ console.log("\n=== la chaussée : géométrie et axe ===\n");
   ok(inPlaza === 0, "l'esplanade n'est coupée par aucune chaussée", `${inPlaza} case(s) revêtue(s) dans la place`);
   // Et toutes les rues sont revêtues : une rue oubliée resterait en terre.
   let street = 0, plain = 0;
-  for (const ry of C.TOWN_ST_ROWS) {
-    const top = ry === C.TOWN_MAIN_ST_Y ? Y0 : ry, h = ry === C.TOWN_MAIN_ST_Y ? WD : 2;
-    for (let x = 12; x < tw.w - 4; x++) for (let dy = 0; dy < h; dy++) {
-      const i = (top + dy) * tw.w + x;
-      if (tw.ground[i] !== C.G_PATH) continue;
-      street++; if (!tw.road[i]) plain++;
-    }
+  // PHASE 7 : les cases de TOUTES les rues déclarées (`TOWN_ROADS`), plus des rangées.
+  for (const r of C.TOWN_ROADS) for (const [x, y] of C.townRoadCells(r)) {
+    if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+    const i = y * tw.w + x;
+    if (tw.ground[i] !== C.G_PATH) continue;
+    street++; if (!tw.road[i]) plain++;
   }
-  ok(plain === 0, "aucune rue est-ouest laissée en terre battue", `${street} cases de rue, ${plain} sans revêtement`);
+  ok(plain === 0, "aucune rue laissée en terre battue", `${street} cases de rue, ${plain} sans revêtement`);
 }
 
 console.log("\n=== l'allée du cimetière : centrée, en briques ===\n");

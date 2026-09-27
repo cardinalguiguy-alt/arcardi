@@ -374,7 +374,12 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
   for (let x = lk.x + 1; x < lk.x + lk.w - 1; x++) {
     if (!wild(x) || !wild(x - 1) || tops[x - lk.x] === null) continue;
     let has = false;
-    for (let y = lk.y - 4; y < lk.y + lk.h; y++) if (tw.ground[y * tw.w + x] === C.G_PATH) { has = true; break; }
+    /* PHASE 7 (2026-09-27) : le TABLIER du pont de l'anse est du sentier — on le
+       franchit sans quitter le chemin. Tant que la rue du sud passait en y=150,
+       ce contrôle trouvait la RUE au-dessus de l'anse et ne voyait jamais que le
+       sentier, lui, y était un pont (G_BRIDGE) : la rue du lac, qui suit
+       maintenant la rive, remonte à 148 à cet endroit. */
+    for (let y = lk.y - 4; y < lk.y + lk.h; y++) { const g = tw.ground[y * tw.w + x]; if (g === C.G_PATH || g === C.G_BRIDGE) { has = true; break; } }
     if (!has) holes++;
   }
   ok(holes === 0, "le sentier de rive ne s'interrompt pas", holes + " colonne(s) sans chemin");

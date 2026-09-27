@@ -22678,6 +22678,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           label: hsn.ownerName || L.townSaleSign,
         });
       }
+      /* PHASE 7 (2026-09-27) — LES MAISONS DE VILLE (`C.TOWN_TOWNHOUSES`) : bâties
+         et habitées par des gens qu'on ne joue pas. Même pose que les parcelles,
+         mais ni plaque, ni propriétaire, ni R : leur façade suit leur RANG après
+         les parcelles (`hi`), et leurs fenêtres s'allument le soir comme celles
+         d'une maison habitée. Sans cette ligne, leur emprise (posée par le
+         générateur) serait un mur invisible au milieu de la vieille ville. */
+      C.TOWN_TOWNHOUSES.forEach((hsn, k) => {
+        const hi = C.TOWN_HOUSES.length + k;
+        queueTownHouse(hsn, C.townHouseLook(hsn, hi), { hi, owned: true, asleep: false, label: null });
+      });
       queueTownHouse(C.TOWN_RUIN, C.townHouseLook(C.TOWN_RUIN), { ruin: true });
       /* 2026-09-27 (phase 6b) — LES COMMERCES PEINTS (`C.TOWN_SHOP_MODELS`).
          Même pose que les maisons — l'image calée sur sa PORTE PEINTE

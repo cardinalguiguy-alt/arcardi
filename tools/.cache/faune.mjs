@@ -314,10 +314,21 @@ export function faunaWorld(tw) {
      n'en garde qu'une sur deux au jardin, une sur trois ailleurs — par un
      tirage à part (graine 19), pour que les maisons gardées restent celles
      d'hier et ne se déplacent pas. */
+  /* ⚠️ PHASE 7 (2026-09-27) — UN DÉCOMPTE, PLUS UN TIRAGE. Les deux hachages
+     ci-dessus ne tenaient la règle (une fleur sur six au jardin, une sur neuf
+     ailleurs) qu'EN MOYENNE : sur une quarantaine de maisons, la nouvelle carte
+     a sorti 15 maisons de jardin pour 130 fleurs de jardin sur 301 — moins que
+     la part des fleurs, l'inverse de la règle (`verify-faune`). On compte donc,
+     dans l'ordre de lecture de la carte (les fleurs sont triées par y puis x),
+     une sur six au jardin et une sur neuf ailleurs, décalées par un hachage de
+     la première fleur de chaque sorte pour ne pas toujours partir du coin. */
   const bflyHomes = [];
+  const k0 = { g: 0, o: 0 };
+  const first = { g: null, o: null };
+  flowers.forEach((f) => { const c = f.g ? "g" : "o"; if (first[c] === null) first[c] = fh(Math.round(f.x * 2), Math.round(f.y * 2), 17); });
   flowers.forEach((f, i) => {
-    if (fh(Math.round(f.x * 2), Math.round(f.y * 2), 17) % 3 !== 0) return;
-    if (fh(Math.round(f.x * 2), Math.round(f.y * 2), 19) % 6 >= (f.g ? 3 : 2)) return;
+    const c = f.g ? "g" : "o", every = f.g ? 6 : 9;
+    if ((k0[c]++ + (first[c] || 0)) % every !== 0) return;
     bflyHomes.push({ id: i, x: f.x, y: f.y, g: f.g });
   });
   const flowerGrid = new Map();

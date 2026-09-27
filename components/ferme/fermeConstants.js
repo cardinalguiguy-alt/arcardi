@@ -3248,16 +3248,17 @@ export const TOWN_PLATFORM = { x: 4, y: 66, w: 2, h: 8 };
 export const TOWN_SPAWN = { x: 6, y: 70 };          // step off the train here
 export const TOWN_STATION_SIGN = { x: 7, y: 72 };   // E here to ride back to the farm
 
-/* LES RUES. Quatre est-ouest, trois nord-sud, toutes larges de deux cases.
+/* LES RUES (historique : jusqu'à la phase 7, quatre est-ouest et trois nord-sud).
    ⚠️ ELLES SONT DÉCLARÉES ICI ET NON DESSINÉES À LA MAIN DANS LE GÉNÉRATEUR,
    parce que trois autres endroits en ont besoin : le placement des parcelles
    (une maison a une allée qui rejoint la rue SOUS elle), l'écartement des
    arbres, et le mobilier urbain. Une rue recopiée est une rue qui bougera
    d'un côté seulement. */
 export const TOWN_MAIN_ST_Y = 70;                   // rue principale (gare → bord est) : lignes y..y+1
-export const TOWN_ST_ROWS = [34, 70, 108, 128, 150];     // toutes les rues est-ouest (426 : + celle du sud)
-export const TOWN_CROSS_ST_X = 92;                  // artère centrale nord-sud, colonnes x..x+1
-export const TOWN_ST_COLS = [34, 92, 150, 196];     // toutes les rues nord-sud (426 : + celle des artisans)
+// ⚠️ PHASE 7 (2026-09-27) : `TOWN_ST_ROWS` et `TOWN_ST_COLS` (les rues comme
+// rangées et colonnes entières) n'existent plus — voir `TOWN_ROADS`. Restent
+// l'axe de l'avenue ci-dessus et celui de la rue du Port, qui fait le ponton.
+export const TOWN_CROSS_ST_X = 92;                  // la rue du Port (plaza → ponton), colonnes x..x+1
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 434 — LE REVÊTEMENT DES RUES. UNE COUCHE, PAS DES IDENTIFIANTS DE SOL.
@@ -3302,6 +3303,119 @@ export const TR_GRAVEL = 4;    // gravier clair : promenades de parc et de rive,
    tuile et le taxi se décalerait d'une demi-case — visible, et pour rien. */
 export const TOWN_MAIN_ST_W = 4;
 export const TOWN_MAIN_ST_Y0 = TOWN_MAIN_ST_Y - (TOWN_MAIN_ST_W - 2) / 2;  // première rangée de goudron (dérivée, jamais réglée)
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHASE 7 (2026-09-27) — UNE RUE EST UN TRACÉ, PLUS UNE RANGÉE.
+   ───────────────────────────────────────────────────────────────────────────
+   Guillaume : « un réseau de routes et chemins qui ne soit pas une grille, plus
+   vivant, moins droit ». Jusqu'ici une rue était un NUMÉRO de rangée ou de
+   colonne (`TOWN_ST_ROWS` / `TOWN_ST_COLS`) : elle traversait donc forcément
+   toute la carte, droite, et chaque paire rangée × colonne était un carrefour
+   — même là où rien ne se croisait.
+   Désormais une rue est une LIGNE MÉDIANE en coordonnées de cases CONTINUES
+   (`pts`), une largeur `w` et un revêtement ; `curve: true` la fait passer par
+   ses points en douceur (Catmull-Rom). Tout le reste se DÉDUIT de la table
+   `TOWN_ROADS` (plus bas, après les lieux qu'elle relie) : les cases pavées
+   (`townRoadCells`), les carrefours (`townRoadCrossings`), l'allée d'une
+   maison vers la rue la plus proche, les alignements d'arbres, le revêtement.
+   ⚠️ LA RÈGLE DE RASTÉRISATION EST UNIQUE : une case appartient à la rue si son
+   CENTRE est à au plus `w/2` de la ligne médiane. Aux deux BOUTS de la rue le
+   bout est coupé net (pas d'arrondi) — sans ça, une rue de deux cases qui finit
+   en (x0, y) déborderait d'une case en diagonale, et la grille d'avant ne
+   pourrait pas se réécrire dans ce modèle à la case près (c'est ce qui a été
+   vérifié AVANT de toucher au tracé : même sol, même revêtement). Aux JOINTS
+   intérieurs, le raccord est arrondi : c'est ce qui fait tourner une rue sans
+   cran.
+   ⚠️ Deux rues se croisent si elles partagent au moins une case : une rue qui
+   en rejoint une autre doit donc FINIR sur sa ligne médiane, pas à son bord. */
+const townCatmull = (p0, p1, p2, p3, t) => {
+  const t2 = t * t, t3 = t2 * t;
+  const f = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+  return [f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])];
+};
+/* La ligne médiane effective : les points tels quels, ou la courbe qui passe
+   par eux, échantillonnée tous les quarts de case. */
+export function townRoadLine(r) {
+  const P = r.pts;
+  if (!r.curve || P.length < 3) return P;
+  const out = [];
+  for (let k = 0; k < P.length - 1; k++) {
+    const p0 = P[Math.max(0, k - 1)], p1 = P[k], p2 = P[k + 1], p3 = P[Math.min(P.length - 1, k + 2)];
+    const steps = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) * 4));
+    for (let s = 0; s < steps; s++) out.push(townCatmull(p0, p1, p2, p3, s / steps));
+  }
+  out.push(P[P.length - 1]);
+  return out;
+}
+/* Les cases de la rue, `[x, y, d]` (d = distance du centre de case à la ligne
+   médiane). Pure et mise en cache sur l'objet rue : la table est constante. */
+const TOWN_ROAD_CELLS = new WeakMap();
+export function townRoadCells(r) {
+  const hit = TOWN_ROAD_CELLS.get(r);
+  if (hit) return hit;
+  const L = townRoadLine(r), half = r.w / 2, last = L.length - 2;
+  const best = new Map();
+  for (let k = 0; k <= last; k++) {
+    const [ax, ay] = L[k], [bx, by] = L[k + 1];
+    const vx = bx - ax, vy = by - ay, vv = vx * vx + vy * vy;
+    const x0 = Math.floor(Math.min(ax, bx) - half - 1), x1 = Math.ceil(Math.max(ax, bx) + half + 1);
+    const y0 = Math.floor(Math.min(ay, by) - half - 1), y1 = Math.ceil(Math.max(ay, by) + half + 1);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const px = x + 0.5 - ax, py = y + 0.5 - ay;
+      let t = vv > 0 ? (px * vx + py * vy) / vv : 0;
+      if ((k === 0 && t < 0) || (k === last && t > 1)) continue;   // bouts coupés net
+      t = Math.max(0, Math.min(1, t));
+      const d = Math.hypot(px - t * vx, py - t * vy);
+      if (d > half + 1e-9) continue;
+      const key = y * 4096 + x, old = best.get(key);
+      if (old === undefined || d < old) best.set(key, d);
+    }
+  }
+  const out = [];
+  for (const [key, d] of best) out.push([key % 4096, Math.floor(key / 4096), d]);
+  out.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  TOWN_ROAD_CELLS.set(r, out);
+  return out;
+}
+/* Les carrefours : chaque paire de rues qui partagent des cases. `x0..y1` est
+   l'emprise commune (inclusive), `cx/cy` son centre. Pure, en cache. */
+let TOWN_CROSSINGS_CACHE = null;
+export function townRoadCrossings() {
+  if (TOWN_CROSSINGS_CACHE) return TOWN_CROSSINGS_CACHE;
+  const sets = TOWN_ROADS.map((r) => new Set(townRoadCells(r).map(([x, y]) => y * 4096 + x)));
+  const out = [];
+  for (let a = 0; a < TOWN_ROADS.length; a++) for (let b = a + 1; b < TOWN_ROADS.length; b++) {
+    if ((TOWN_ROADS[a].elev || 0) !== (TOWN_ROADS[b].elev || 0)) continue;
+    let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, n = 0;
+    for (const key of sets[a]) {
+      if (!sets[b].has(key)) continue;
+      const x = key % 4096, y = Math.floor(key / 4096);
+      n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (n) out.push({ a: TOWN_ROADS[a].id, b: TOWN_ROADS[b].id, x0, y0, x1, y1, cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2 });
+  }
+  TOWN_CROSSINGS_CACHE = out;
+  return out;
+}
+/* Un point de la ligne médiane et sa normale, à l'abscisse curviligne `s` —
+   pour poser ce qui LONGE une rue (arbres d'alignement) sans supposer qu'elle
+   est droite. `null` au-delà de ses bouts. */
+export function townRoadWalk(r, step, s0 = 0) {
+  const L = townRoadLine(r), out = [];
+  let acc = 0, next = s0;
+  for (let k = 0; k < L.length - 1; k++) {
+    const [ax, ay] = L[k], [bx, by] = L[k + 1];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len === 0) continue;
+    while (next <= acc + len) {
+      const t = (next - acc) / len;
+      out.push({ x: ax + (bx - ax) * t, y: ay + (by - ay) * t, nx: -(by - ay) / len, ny: (bx - ax) / len, s: next });
+      next += step;
+    }
+    acc += len;
+  }
+  return out;
+}
 
 /* LA PLACE CENTRALE. Elle a triplé (12×12 → 30×26) et n'est plus un simple
    rectangle dallé : voir townPlazaDeco() dans fermeEngine.js. */
@@ -3354,7 +3468,11 @@ export const TOWN_PARK = { x: 116, y: 74, w: 34, h: 26 };     // le parc et son 
    soit les rangées 69-72) : `TOWN_PARK` s'arrête lui aussi une case avant
    cette même rue, côté sud (74, une case après 72) — un jardin qui avale une
    rue de traversée casserait la seule route est-ouest qui longe le parc. */
-export const TOWN_PARK_NORTH = { x: 116, y: 52, w: 34, h: 15 };
+/* ⚠️ PHASE 7 (2026-09-27) — RÉTRÉCI DE QUATRE CASES DE CHAQUE CÔTÉ (116..149 →
+   120..145) : le MAIL de l'église (voir `TOWN_ROADS`) passe à son angle
+   nord-ouest, et la rue du parc longe désormais son flanc est. Son allée
+   centrale reste sur la colonne 133, celle du parc principal (x + w/2). */
+export const TOWN_PARK_NORTH = { x: 120, y: 52, w: 26, h: 15 };
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 435 — L'ÉTANG DU PARC : UN CONTOUR, PAS UNE ÉQUATION.
    ───────────────────────────────────────────────────────────────────────────
@@ -3543,7 +3661,13 @@ export const TOWN_STALL_TRADES = [
      * l'EST ajouté serait un pré aussi : les artisans lui donnent une rue.
    ⚠️ AUCUN NE MORD SUR UNE RUE NI SUR UNE PARCELLE — même règle qu'au 425, et
    c'est le générateur qui l'applique (il refuse toute case déjà pavée). */
-export const TOWN_CEMETERY = { x: 46, y: 40, w: 14, h: 16 };  // l'enclos de l'église, à l'ouest de son parvis
+/* ⚠️ PHASE 7 (2026-09-27) — LE CIMETIÈRE N'EST PLUS « L'ENCLOS DE L'ÉGLISE » :
+   l'église est montée sur la terrasse, et lui reste en bas, à l'ouest de la
+   place du Palais — c'est le CIMETIÈRE COMMUNAL, comme dans toute ville
+   française depuis qu'on a sorti les tombes des églises (1804). Décalé de
+   quatre cases à l'ouest et de deux au nord pour laisser respirer le palais de
+   justice ; sa rue passe sous sa grille (la rue de l'Orme). */
+export const TOWN_CEMETERY = { x: 42, y: 38, w: 14, h: 16 };
 /* ⚠️⚠️ ZIP 439 — LA HAUTEUR EST PASSÉE DE 12 À 14, ET C'EST UN BOGUE CORRIGÉ,
    PAS UN AGRANDISSEMENT. Le générateur du lac dit en toutes lettres, depuis le
    437, que « le lac touche le bas de la carte » — c'est même la justification
@@ -4838,29 +4962,128 @@ export const TOWN_COURT_BLOCK_SOLIDS = [
   { x: 147, y: 31, w: 1, h: 1, kind: "pot" },
 ];
 
-export const TOWN_HOUSES = [                        // door faces south onto a street
-  /* ⚠️ LES HUIT PREMIÈRES SONT LES HUIT D'AVANT, DANS LE MÊME ORDRE (quatre au
-     nord de la rue principale, quatre au sud) : voir la note d'en-tête. Elles
-     ont changé de coordonnées — la carte entière a changé — mais pas de RANG,
-     et c'est le rang qui désigne le propriétaire. */
-  { x: 14, y: 64 }, { x: 26, y: 64 }, { x: 46, y: 64 }, { x: 58, y: 64 },   // nord de la rue principale
-  { x: 14, y: 28 }, { x: 46, y: 28 }, { x: 58, y: 28 }, { x: 100, y: 28 },  // le long de l'avenue du nord
-  // Zip 425 : les parcelles nouvelles. Une ville neuf fois plus grande avec
-  // huit maisons se lit comme une ville abandonnée.
-  { x: 14, y: 102 }, { x: 26, y: 102 }, { x: 46, y: 102 }, { x: 58, y: 102 },
-  { x: 116, y: 102 }, { x: 128, y: 102 }, { x: 160, y: 102 },
-  { x: 46, y: 122 }, { x: 100, y: 122 }, { x: 160, y: 122 },
-  // ... et deux sur la terrasse : les hauteurs sont les belles adresses.
-  { x: 122, y: 24 }, { x: 152, y: 24 },
-  /* Zip 426 — les parcelles de l'agrandissement. ⚠️ ELLES SONT AJOUTÉES EN
-     QUEUE, jamais intercalées : le RANG désigne le propriétaire (voir
-     townHouseOwners), donc insérer une parcelle au milieu déménagerait tout le
-     monde d'une maison — silencieusement, et sans que rien ne le signale.
-     ⚠️ Chaque `y` est calé sur une avenue : la porte est en y+3 et l'allée
-     rejoint la rue si elle est à 8 rangées ou moins (générateur). */
-  { x: 200, y: 64 }, { x: 200, y: 102 }, { x: 200, y: 122 },   // le quartier des artisans, à l'est
-  { x: 26, y: 144 }, { x: 60, y: 144 }, { x: 100, y: 144 }, { x: 140, y: 144 }, // la rangée du sud, face au lac
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHASE 7 (2026-09-27) — LA TABLE DU RÉSEAU (voir « UNE RUE EST UN TRACÉ »,
+   plus haut, pour la règle de rastérisation).
+   ───────────────────────────────────────────────────────────────────────────
+   Voie B (hybride), tranchée par Guillaume : on GARDE les axes qui structurent
+   une ville de ce genre — l'avenue de la gare (le taxi, le goudron), la rue du
+   Port (l'axe place → monument → ponton), le boulevard du Nord le long du mur de
+   soutènement de la terrasse, la promenade de la haute-ville — et on refait tout
+   le secondaire comme il pousse dans une vraie ville : des rues qui SUIVENT
+   quelque chose (la rive, le pied de la terrasse, un jardin), qui se rejoignent
+   en T plutôt qu'en croix (les Prés et les Saules arrivent sur la rue du Port à
+   sept rangées l'une de l'autre, exprès), qui s'arrêtent là où il n'y a plus
+   rien à desservir (l'impasse de la gare), et une seule rue en biais, le MAIL,
+   qui prend l'église en perspective depuis la grand-place.
+   ⚠️ LES MAISONS NE TOURNENT PAS : tous les dessins regardent le sud. Les rues
+   HABITÉES sont donc à peu près est-ouest (ondulées, jamais droites) et les
+   rues nord-sud sont des liaisons ; c'est aussi ce que fait une ville à flanc
+   de vallée.
+   ⚠️ Une rue qui en rejoint une autre FINIT SUR SA LIGNE MÉDIANE (règle des
+   carrefours, plus haut) — d'où les points d'arrivée non entiers.
+   ⚠️ Le cratère de la quête (`STAR_CRATER_X/Y`, pré au sud du parc) est tenu à
+   plus de neuf cases de toute rue. */
+export const TOWN_ROADS = [
+  // L'avenue de la gare — inchangée : le taxi, le goudron, la ligne blanche.
+  { id: "gare", w: TOWN_MAIN_ST_W, surf: TR_ASPHALT, planted: true, pts: [[TOWN_PLATFORM.x, TOWN_MAIN_ST_Y + 1], [TOWN_MAP_W - 2, TOWN_MAIN_ST_Y + 1]] },
+  // La promenade de la haute-ville, sur la terrasse (altitude 1) — inchangée.
+  { id: "haute", w: 2, surf: TR_COBBLE, elev: 1, pts: [[TOWN_UPPER.x + 1, TOWN_UPPER.y + TOWN_UPPER.h - 3], [TOWN_UPPER.x + TOWN_UPPER.w - 1, TOWN_UPPER.y + TOWN_UPPER.h - 3]] },
+  // Le boulevard du Nord : droit le long du mur de la terrasse (un mur de
+  // soutènement est droit), il s'infléchit à l'ouest vers le verger et à l'est
+  // vers la route des artisans.
+  { id: "nord", w: 2, surf: TR_COBBLE, planted: true, curve: true, pts: [[10, 39], [24, 37.6], [42, 35.6], [62, 35], [92, 35], [118, 35], [186, 35], [204, 36.5], [TOWN_MAP_W - 2, 38]] },
+  // LE MAIL DE L'ÉGLISE : de l'angle nord-est de la grand-place au pied du grand
+  // escalier, en ligne droite — c'est la seule rue qui DOIT l'être, puisqu'elle
+  // n'existe que pour la perspective. Large, sablée, plantée des deux côtés.
+  { id: "mail", w: 4, surf: TR_GRAVEL, planted: { step: 3.5, both: true, conif: 0 }, pts: [[TOWN_PLAZA.x + TOWN_PLAZA.w - 2, TOWN_PLAZA.y + 1], [TOWN_STAIRS[0].x + TOWN_STAIRS[0].w / 2, TOWN_STAIRS[0].y + TOWN_STAIRS[0].len + 1]] },
+  // La rue du Port : de la grand-place au ponton, dans l'axe (inchangée au sud).
+  { id: "port", w: 2, surf: TR_COBBLE, pts: [[TOWN_CROSS_ST_X + 1, TOWN_PLAZA.y + TOWN_PLAZA.h - 1], [TOWN_CROSS_ST_X + 1, 151]] },
+  // La rue du Lac : elle suit la rive, quai compris.
+  { id: "lac", w: 2, surf: TR_COBBLE, planted: true, curve: true, pts: [[10, 148.5], [28, 148.6], [46, 150], [64, 150.6], [82, 151], [104, 151], [122, 150], [140, 149], [158, 147.6], [176, 147], [196, 147.4], [214, 146.2], [TOWN_MAP_W - 2, 146]] },
+  // La rue de l'Ouest : du boulevard au lac, entre le verger, le marché et les faubourgs.
+  { id: "ouest", w: 2, surf: TR_COBBLE, curve: true, pts: [[35, 36.3], [34, 47], [35.5, 59], [35, 71], [33.5, 84], [33.5, 97], [35, 109.2], [39.5, 121.5], [45, 135], [49, 150.2]] },
+  // La rue des Jardins : la grande rue résidentielle du sud, qui ondule.
+  { id: "jardins", w: 2, surf: TR_COBBLE, planted: true, curve: true, pts: [[10, 108.5], [22, 109.5], [35, 109.2], [52, 110.5], [66, 108.5], [80, 110], [93, 109.5], [108, 108], [122, 108.4], [136, 108.6], [152, 110.5], [168, 112], [184, 110.5], [197, 109.2], [210, 110], [TOWN_MAP_W - 2, 110.5]] },
+  // Les Prés : de la rue de l'Ouest à la rue du Port, en T aux deux bouts.
+  { id: "pres", w: 2, surf: TR_COBBLE, curve: true, pts: [[39.2, 121.3], [52, 124.5], [66, 127], [80, 126.5], [93, 125.5]] },
+  // Les Saules : de la rue du Port à la rue du Parc, SEPT RANGÉES PLUS BAS que
+  // les Prés (deux T décalés, pas une croix).
+  { id: "saules", w: 2, surf: TR_COBBLE, curve: true, pts: [[93, 133], [106, 133.5], [122, 135], [138, 134], [150.6, 132.2]] },
+  // La rue du Parc : des Tilleuls au lac, le long du flanc est des deux jardins.
+  { id: "parc", w: 2, surf: TR_COBBLE, curve: true, pts: [[150, 48.6], [151, 60], [151, 71], [151.5, 85], [150, 98], [152, 110.5], [150.5, 121], [150.6, 132.2], [153, 140], [156, 147.7]] },
+  // Les Tilleuls : partent du mail et rejoignent la route des artisans.
+  { id: "tilleuls", w: 2, surf: TR_COBBLE, planted: true, curve: true, pts: [[134, 43.9], [148, 48.4], [165, 50], [182, 49.2], [196.8, 50.5]] },
+  // Les Forges : de la rue du Parc au bord est, à travers les artisans.
+  { id: "forges", w: 2, surf: TR_COBBLE, curve: true, pts: [[150.5, 126.5], [166, 128.4], [182, 127], [197, 128], [210, 129.4], [TOWN_MAP_W - 2, 128.6]] },
+  // La route des artisans : la vieille route qui sort de la ville par l'est.
+  { id: "artisans", w: 2, surf: TR_COBBLE, curve: true, pts: [[197, 35.8], [196.5, 50.5], [197, 71], [198.5, 88], [196.5, 109.2], [197, 128], [196.5, 147.3]] },
+  // La rue de la Mairie : la ruelle entre le palais et l'hôtel de ville.
+  { id: "mairie", w: 2, surf: TR_COBBLE, curve: true, pts: [[81.5, TOWN_PLAZA.y + 1], [81, 48], [82.5, 35]] },
+  // La rue de l'Orme : sous la grille du cimetière, jusqu'à la place du Palais.
+  { id: "orme", w: 2, surf: TR_COBBLE, curve: true, pts: [[35.4, 57], [44, 55.7], [53, 55.6], [59, 57]] },
+  // L'impasse de la Gare : le petit quartier de la gare, au sud de l'avenue.
+  // ⚠️ DROITE, et la rue du Marché aussi : elles sont bordées d'une RANGÉE de
+  // maisons de ville, et une rangée est droite — la rue la suit, porte à une
+  // rangée du pavé (voir `dense`, plus bas).
+  { id: "impasse", w: 2, surf: TR_COBBLE, pts: [[9, 85], [33.9, 85]] },
+  // La rue du Marché : du coin du champ de foire à la rue du Port.
+  { id: "marche", w: 2, surf: TR_COBBLE, pts: [[62, 94], [93, 94]] },
 ];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES PARCELLES — ⚠️ LE RANG DÉSIGNE LE PROPRIÉTAIRE (`townHouseOwners` :
+   les fermiers d'abord, puis les résidents). On ne supprime, n'insère ni ne
+   réordonne jamais : une parcelle peut DÉMÉNAGER (la carte n'est pas
+   persistée, rien ne migre), elle garde son rang.
+   ⚠️ PHASE 7 (2026-09-27) — la carte a été refaite autour du nouveau réseau ;
+   les rangs 0 à 2 (les premiers joueurs) restent où ils étaient, les autres
+   ont suivi leurs rues. La LARGEUR est maintenant écrite sur la parcelle
+   (`size`) au lieu de deux listes de positions à tenir à côté ; `dense` =
+   une maison de ville, sans jardin clos : son devant est un trottoir pavé
+   jusqu'à la rue (voir le générateur). Chaque `y` est calé sur SA rue : la
+   porte est en y+3 et l'allée rejoint la première case de rue à 8 rangées ou
+   moins sous elle. */
+export const TOWN_HOUSES = [
+  { x: 14, y: 64, size: "narrow" }, { x: 26, y: 64, size: "narrow" },        // l'avenue, côté gare
+  { x: 46, y: 65, size: "narrow", dense: true },                           // l'avenue, vieille ville
+  { x: 110, y: 28, size: "std" },                                          // au pied de la terrasse
+  { x: 14, y: 28, size: "center" }, { x: 46, y: 28, size: "std" },         // le boulevard du Nord
+  { x: 58, y: 28, size: "std" }, { x: 100, y: 28, size: "wide" },
+  { x: 14, y: 102, size: "narrow" }, { x: 26, y: 102, size: "narrow" },    // la rue des Jardins, ouest
+  { x: 46, y: 102, size: "narrow" }, { x: 58, y: 102, size: "narrow" },
+  { x: 116, y: 102, size: "std" }, { x: 128, y: 102, size: "wide" },       // face au parc
+  { x: 160, y: 102, size: "std" },
+  { x: 44, y: 117, size: "center" },                                       // les Prés
+  { x: 100, y: 125, size: "center" },                                      // les Saules
+  { x: 160, y: 119, size: "std" },                                         // les Forges
+  // la terrasse — ⚠️ y 24 → 23 : leur mur (y..y+2) mordait la première rangée
+  // de la promenade depuis toujours ; la porte (y+3) donne maintenant SUR elle.
+  { x: 122, y: 23, size: "wide" }, { x: 152, y: 23, size: "std" },
+  { x: 200, y: 64, size: "center" }, { x: 200, y: 102, size: "std" },      // les artisans
+  { x: 200, y: 119, size: "std" },
+  { x: 26, y: 144, size: "std" }, { x: 60, y: 144, size: "wide" },         // la rue du Lac
+  { x: 100, y: 144, size: "std" }, { x: 140, y: 144, size: "wide" },
+];
+/* PHASE 7 — LES MAISONS DE LA VILLE QUI NE SONT À PERSONNE DE NOUS. Une ville
+   a des habitants qu'on ne joue pas : ces maisons sont bâties, habitées (leurs
+   fenêtres s'allument le soir), et ne sont PAS des parcelles — pas de rang, pas
+   de plaque « à vendre », pas de propriétaire. C'est ce qui permet de densifier
+   le cœur sans couvrir la ville de pancartes. Même dessin, même emprise, même
+   allée que les parcelles (le générateur les traite ensemble, `townAllHouses`). */
+export const TOWN_TOWNHOUSES = [
+  { x: 38, y: 65, size: "narrow", dense: true },                           // l'avenue, vieille ville
+  { x: 10, y: 80, size: "narrow", dense: true }, { x: 18, y: 80, size: "narrow", dense: true },   // l'impasse de la Gare
+  { x: 26, y: 80, size: "narrow", dense: true },
+  { x: 67, y: 89, size: "narrow", dense: true }, { x: 75, y: 89, size: "narrow", dense: true },   // la rue du Marché
+  { x: 83, y: 89, size: "narrow", dense: true },
+  { x: 152, y: 42, size: "std" }, { x: 163, y: 43, size: "wide" },         // les Tilleuls
+  { x: 175, y: 43, size: "std" }, { x: 186, y: 42, size: "std" },
+  { x: 58, y: 118, size: "std" },                                          // les Prés
+  { x: 108, y: 125, size: "std" },                                         // les Saules
+  { x: 72, y: 144, size: "std" }, { x: 116, y: 144, size: "std" },         // la rue du Lac
+];
+export const townAllHouses = () => TOWN_HOUSES.concat(TOWN_TOWNHOUSES);
 // Zip 260 (demande Guillaume) : plafond de résidents porté à 10, INDÉPENDANT
 // du nombre de maisons de Valley Town. L'attribution de maison sera revue plus
 // tard — pour l'instant, les résidents au-delà des maisons disponibles sont
@@ -4928,7 +5151,24 @@ export const MAX_RESIDENTS = 20;
    l'artère nord-sud, qu'elle bouchait ; on ne s'en apercevait pas parce que
    cette artère s'arrêtait avant. Sur une carte trois fois plus longue, une rue
    interrompue par un bâtiment se voit tout de suite. */
-export const TOWN_CHURCH = { x: 64, y: 46, w: 12, h: 5 };   // sprite bitmap 192×183 (2026-09-20) ; ex-8 cases/128×128 procédural (zip 235)
+/* ⚠️⚠️ PHASE 7 (2026-09-27) — L'ÉGLISE MONTE SUR LA TERRASSE, ET GRANDIT.
+   Guillaume : « la taille de l'église relativement à l'hôtel de ville » — elle
+   avait la même largeur que la mairie de brique et une porte deux fois plus
+   petite (~1,85 m contre ~3,7 m) : trois flèches gothiques à la hauteur d'une
+   petite mairie, une maquette. Et « l'emplacement du tribunal un peu wtf dans
+   une zone commerçante ». Les deux se règlent d'un seul geste, celui des
+   villes réelles : l'ÉGLISE en haut (Laon, Le Puy, Montmartre — un sanctuaire
+   se pose sur la hauteur et on y MONTE), le PALAIS DE JUSTICE en bas, sur sa
+   place, au bord de l'avenue, face au marché, à côté de l'hôtel de ville.
+   Le grand escalier, dessiné pour monter au tribunal, devient la montée à
+   l'église — c'est la plus vieille raison d'être d'un escalier monumental —
+   et le mail qui part de la place le prend en perspective (`TOWN_ROADS`).
+   Elle prend la place exacte du tribunal : centrée sur la colonne 142, celle
+   du palier haut, ses marches au-dessus du parvis qui touche l'escalier.
+   Emprise portée à 18 cases pour une image agrandie de moitié
+   (`TOWN_BITMAPS.church`) : la porte passe à ~2,8 m, et la flèche culmine à
+   ~1,2 case du haut de la carte (rien ne dépasse du monde). */
+export const TOWN_CHURCH = { x: 133, y: 16, w: 18, h: 5 };
 
 /* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
    des autres quelque part au centre ». Brique et pierre, beffroi à horloge :
@@ -4990,8 +5230,20 @@ export const TOWN_HALL_STEP_ROWS = 1;
    Posé au sommet de la volée monumentale, il est la RÉCOMPENSE de la montée —
    ce qui donne du même coup une raison d'être aux escaliers demandés par
    Guillaume, au lieu d'un escalier-démonstration qui ne mène nulle part.
-   Sprite 192×176 (12×11 cases), 7 rangées bloquantes. */
-export const TOWN_COURT = { x: 136, y: 14, w: 12, h: 7 };
+   Sprite 192×176 (12×11 cases), 7 rangées bloquantes.
+   ⚠️⚠️ PHASE 7 (2026-09-27) — IL DESCEND EN VILLE, ET LE PARAGRAPHE CI-DESSUS
+   EST DONC RÉVOLU. Vu par Guillaume : un tribunal entre une boutique de mode et
+   un salon de coiffure, « un peu wtf dans une zone commerçante ». Une Cité du
+   Palais (gendarmerie, étude de notaire) aurait gardé la hauteur, mais ces
+   bâtiments n'auraient rien fait — et Guillaume l'a posé en condition : pas de
+   bâtiment sans fonction. Il prend donc la place de l'ancienne église, à
+   l'ouest de la grand-place, sur SA place (la place du Palais, dallée et
+   plantée, voir le générateur) qui s'ouvre sur l'avenue de la gare, face au
+   champ de foire : c'est la place d'un palais de justice de sous-préfecture.
+   Son perron garde ses trois rangées en paliers : le relief se LIT sous lui
+   (`courtApron`), donc il monte de la place au lieu de monter de la terrasse.
+   L'église prend sa place en haut (voir `TOWN_CHURCH`). */
+export const TOWN_COURT = { x: 62, y: 49, w: 12, h: 7 };
 /* 2026-09-22 — LE PERRON DU TRIBUNAL, RÉELLEMENT EN PALIERS (demande de
    Guillaume, sur le nouveau sprite Gemini : « les escaliers devront être
    praticables, vraie physique à prévoir », « sensation d'altitude et de
@@ -5253,35 +5505,13 @@ export const TOWN_HOUSE_MODELS = {
 /* Les modèles d'une largeur, dans l'ordre où R les fait défiler.
    `center` (2026-09-27) : la standard à porte CENTRÉE (S2), voir sa note. */
 export const TOWN_HOUSE_SIZES = ["narrow", "std", "wide", "center"];
-/* ⚠️ 2026-09-27 — LES PARCELLES LARGES, PAR POSITION (aucun état, §3). Cinq,
-   choisies pour la carte et pour que les trois versions de S3 se voient :
-   · (122,24), la terrasse de la haute-ville, sous la Maison Garfield — la
-     maison du notable, parmi « les belles adresses » (riche) ;
-   · (128,102), au bord du parc — riche aussi, loin de la première ;
-   · (60,144) et (140,144), la promenade du lac, une sur deux — des maisons
-     d'armateur face à l'eau, dans un port (enrichie : la bordeaux) ;
-   · (100,28), l'avenue du nord — simple au premier jet ; ENRICHIE depuis le
-     prestige des adresses (`townHouseStanding`, même jour : 17 cases de la
-     terrasse). Aucune S3 n'est donc simple : la maison de maître ne va que
-     dans les beaux quartiers, et sa version simple attend une parcelle.
-   Toutes ont 12 cases libres à l'est au niveau du mur (mesuré sur la carte) :
-   le mur déborde de la parcelle jusqu'en x+8,6 sans rien toucher. Ce qui ne
-   suit PAS encore : la haie de l'est (x+7) passe sous le mur et devant sa
-   façade — les haies seront recalibrées autour des maisons (Guillaume, même
-   jour). ⚠️ Une parcelle ne change jamais de RANG (le propriétaire) : on ne
-   déplace aucune entrée de `TOWN_HOUSES`. */
-export const TOWN_HOUSE_WIDE_AT = [[122, 24], [128, 102], [60, 144], [140, 144], [100, 28]];
-/* ⚠️ 2026-09-27 — LES PARCELLES À PORTE CENTRÉE (S2, la chaumière), PAR
-   POSITION aussi. La maison la plus rustique, donc LOIN des lieux prisés (voir
-   `townHouseStanding`) : (14,28), au bout de l'avenue du nord ; (46,122), au
-   sud-ouest ; (200,64), chez les artisans — trois simples — et (100,122), entre
-   le parc et le lac, la seule enrichie. Aucune en riche : une chaumière cossue
-   au bord du parc aurait contredit la règle des quartiers (Guillaume, même
-   jour). Choisies parmi les standard dont la case x+0 est libre sur les trois
-   rangées du mur et dont la case x−1 ne porte aucun décor collé au mur (relevé
-   sur la carte) ; leur emprise, x+0..x+5, est exactement le rectangle que le
-   générateur leur réservait. */
-export const TOWN_HOUSE_CENTER_AT = [[14, 28], [46, 122], [200, 64], [100, 122]];
+/* ⚠️ 2026-09-27 — LES LARGEURS DE PARCELLE ÉTAIENT DEUX LISTES DE POSITIONS
+   (`TOWN_HOUSE_WIDE_AT`, `TOWN_HOUSE_CENTER_AT`) ; depuis la phase 7 elles sont
+   écrites SUR la parcelle (`size`, voir `TOWN_HOUSES`). Deux listes qui
+   désignaient une parcelle par ses coordonnées se seraient tues le jour où la
+   parcelle déménage — ce que la phase 7 fait à la moitié d'entre elles. Les
+   règles de goût, elles, restent : la S3 (large) ne va que dans les beaux
+   quartiers, la S2 (chaumière, porte centrée) loin des lieux prisés. */
 export const townHouseModelsOf = (size) => Object.keys(TOWN_HOUSE_MODELS).filter(k => TOWN_HOUSE_MODELS[k].size === size);
 /* Le mur du rez-de-chaussée d'un modèle, en cases, relatif à la parcelle (la
    porte tombe en x + TOWN_HOUSE_W / 2). */
@@ -5325,15 +5555,13 @@ export function townHouseSizeFoot(size) {
    qu'UNE emprise, la réunion de celles de ses modèles (`townHouseSizeFoot`,
    tenu par `verify-vallee`).
    · ÉTROITE : la vieille ville autour du marché (les rangées nord et sud) ;
-   · LARGE et À PORTE CENTRÉE : des listes de positions (`TOWN_HOUSE_WIDE_AT`,
-     `TOWN_HOUSE_CENTER_AT`) ;
+   · depuis la phase 7, écrite sur la parcelle (`size`) ; à défaut :
    · STANDARD : le reste.
    La VERSION (simple, enrichie, riche) vient du PRESTIGE de l'adresse, plus bas. */
 const inRectXY = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 export function townHouseSize(hsn) {
   if (hsn.model) return TOWN_HOUSE_MODELS[hsn.model].size;
-  if (TOWN_HOUSE_WIDE_AT.some(([x, y]) => x === hsn.x && y === hsn.y)) return "wide";
-  if (TOWN_HOUSE_CENTER_AT.some(([x, y]) => x === hsn.x && y === hsn.y)) return "center";
+  if (hsn.size) return hsn.size;
   const mk = TOWN_MARKET;
   return hsn.x < mk.x + mk.w + 6 && hsn.y >= mk.y - 14 && hsn.y <= mk.y + mk.h + 4 ? "narrow" : "std";
 }
@@ -5623,8 +5851,12 @@ function townShopBitmaps() {
    de « aucune perte de qualité ». La géométrie monde (`disp`, `dispH`, `grow`)
    ne bouge pas d'un pixel : pigeons, embase, halo du parvis restent calés. */
 export const TOWN_BITMAPS = {
+  /* PHASE 7 (2026-09-27) — ×1,5 (192 → 288) : voir `TOWN_CHURCH`. Porte à ~2,8 m,
+     un étage au-dessus de l'hôtel de ville. Au cran 5 l'image (1 584 px) dépasse
+     la référence (1 004 px) : agrandie ×1,58 par le Lanczos du script, jamais
+     par le jeu — à regarder au plus près avant de la croire. */
   church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", zooms: [1, 2, 3, 4, 5],
-                disp: 192, dispH: 183, grow: 1.1, smooth: false,
+                disp: 288, dispH: 274.5, grow: 1.1, smooth: false,
                 lights: [
                   { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6, room: "nave" },
                   { x: 212 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55, room: "aisle" },
@@ -5749,7 +5981,10 @@ export const TOWN_COURT_RAMP_MARGIN = 1;
    les autres de ce bloc ; les deux colonnes, elles, ne se recopient pas —
    elles se LISENT dans `courtStairSpan`, pour rester justes si la trapèze
    est un jour remesurée. */
-export const TOWN_COURT_URN_ROW = 19;
+/* PHASE 7 : écrit « 19 » quand le tribunal était en y=14 — c'est l'AVANT-DERNIÈRE
+   rangée de son emprise, et ça se dit comme ça (il a déménagé ; le nombre
+   aurait posé deux vasques invisibles au milieu de la terrasse). */
+export const TOWN_COURT_URN_ROW = TOWN_COURT.y + TOWN_COURT.h - 2;
 
 /* L'intervalle de cases FOULABLES de la volée, pour une rangée donnée. Le
    trapèze est interpolé sur le milieu de la rangée — pris au bord nord, on

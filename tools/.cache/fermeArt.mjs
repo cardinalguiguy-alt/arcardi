@@ -1002,6 +1002,20 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
     }
     return true;
   }
+  /* PHASE 7 — la rue pavée à bord libre (voir `townRoadField`) : au bord, de
+     l'herbe puis la découpe cuite ; en plein pavé, la tuile ordinaire, sans les
+     bordures case par case (le bord libre les porte). */
+  let edgeKind = 0;
+  if (rd === C.TR_COBBLE && RS.kerbTone) {
+    const RF = townRoadField(tw);
+    edgeKind = roadEdgeKind(RF, tw, x, y);
+    if (edgeKind === 2) {
+      drawTownGrassTile(ctx, S, tw, x, y, px, py, C.G_GRASS);
+      const cell = roadEdgeCell(RF, S, tw, x, y);
+      if (cell) ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+      return true;
+    }
+  }
   /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
      les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
      la différence avec l'ancienne tuile unique est là. */
@@ -1059,10 +1073,12 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
      bordure. La place n'est pas coupée, les allées débouchent, les carrefours
      restent ouverts. */
   const kb = rd === C.TR_BRICK ? RS.kerbBrick : RS.kerb;
-  if (!paved(x, y - 1)) ctx.drawImage(kb.n, ax, 0, T, KW, px, py, T, KW);
-  if (!paved(x, y + 1)) ctx.drawImage(kb.s, ax, 0, T, KW, px, py + T - KW, T, KW);
-  if (!paved(x - 1, y)) ctx.drawImage(kb.w, 0, ay, KW, T, px, py, KW, T);
-  if (!paved(x + 1, y)) ctx.drawImage(kb.e, 0, ay, KW, T, px + T - KW, py, KW, T);
+  if (!edgeKind) {
+    if (!paved(x, y - 1)) ctx.drawImage(kb.n, ax, 0, T, KW, px, py, T, KW);
+    if (!paved(x, y + 1)) ctx.drawImage(kb.s, ax, 0, T, KW, px, py + T - KW, T, KW);
+    if (!paved(x - 1, y)) ctx.drawImage(kb.w, 0, ay, KW, T, px, py, KW, T);
+    if (!paved(x + 1, y)) ctx.drawImage(kb.e, 0, ay, KW, T, px + T - KW, py, KW, T);
+  }
   /* ⚠️⚠️ 2026-09-25 (phase 4) — DEUX REVÊTEMENTS DURS QUI SE RENCONTRENT
      (goudron, pavés, briques) le font sur une BORDURE CONSTRUITE : une rangée
      de pavés posés en travers, à plat, comme dans une vraie ville — un ouvrage
@@ -1081,6 +1097,183 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   }
   if (F) softSpill(ctx, tw, F, x, y, px, py, 3);
   return true;
+}
+/* ══════════════════════════════════════════════════════════════════════════
+   PHASE 7 (2026-09-27) — LES RUES PAVÉES À BORD LIBRE.
+   ──────────────────────────────────────────────────────────────────────────
+   Le réseau n'est plus une grille (`C.TOWN_ROADS`) : une rue courbe ou en biais
+   peinte case par case, bordure comprise, serait un ESCALIER de 16 px — le
+   défaut exact que la phase 4 a corrigé sur les sentiers et sur l'eau. Les
+   sentiers meubles l'ont réglé par un champ binaire aux coins (`townSoftField`)
+   et une courbe à bosses : juste pour un chemin, trop mou pour une rue bâtie,
+   dont la bordure est un OUVRAGE qui suit la chaussée au pixel.
+   Ici on prend donc la GÉOMÉTRIE VRAIE : aux coins des cases, la distance
+   signée à la rue la plus proche (`w/2 − d`, positive dedans), et entre les
+   coins l'interpolation bilinéaire. Pour une rue droite, la distance est
+   linéaire et l'interpolation EXACTE — une rue alignée sur la grille garde ses
+   bords sur les bords de case, au pixel près. Pour une courbe, l'écart est
+   sous-pixel. Deux rues se rejoignent par un MAXIMUM ADOUCI (`smax`) : l'angle
+   rentrant d'un carrefour s'arrondit, comme une bordure de trottoir bâtie.
+   ⚠️ LE GOUDRON (l'avenue) ET LE GRAVIER (le mail) N'EN SONT PAS : le premier
+   est droit et garde ses caniveaux case par case, le second est un sentier
+   meuble qui a déjà son contour.
+   ⚠️ CE QUI SE PEINT, ET OÙ : une case de rue pavée qui touche le bord reçoit
+   l'herbe puis la découpe ; une case d'herbe que la rue mord reçoit la même
+   découpe par-dessus. La BORDURE (4 px, le profil de `townKerbStrip` : nez
+   éclairé côté herbe, face, caniveau côté chaussée, débitée tous les 8 px LE
+   LONG DU BORD) se pose sur la chaussée ; elle s'efface là où le dehors est
+   déjà dallé (une allée, un trottoir, une place) — sinon un trottoir barrerait
+   chaque allée de maison. Et une case de rue dont un bout sort du trait, mais
+   dont la voisine de ce côté est dallée, reste pavée : pas d'herbe entre une
+   allée et sa rue.
+   ⚠️ CUIT UNE FOIS : toutes les découpes dans UN atlas (une image, quelques
+   milliers de cases de 16 px), au premier dessin de la carte. Rien par image.
+   ══════════════════════════════════════════════════════════════════════════ */
+const ROAD_EDGE_KW = 4;                 // épaisseur de la bordure, px (= `kerbW`)
+const ROAD_SMAX_K = 0.8;                // rayon d'adoucissement des carrefours, en cases
+const smax = (a, b, k) => {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.max(a, b) + h * h * k * 0.25;
+};
+const ROAD_FIELDS = new WeakMap();
+export function townRoadField(tw) {
+  let F = ROAD_FIELDS.get(tw);
+  if (F) return F;
+  const W = tw.w, H = tw.h, W1 = W + 1;
+  const sdf = new Float32Array(W1 * (H + 1)).fill(-9);
+  const smooth = new Uint8Array(W * H);
+  const touched = new Uint8Array(W1 * (H + 1));
+  for (const r of C.TOWN_ROADS) {
+    if (r.surf !== C.TR_COBBLE) continue;
+    for (const [x, y] of C.townRoadCells(r)) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const i = y * W + x;
+      if (tw.ground[i] === C.G_PATH && tw.road && tw.road[i] === C.TR_COBBLE) smooth[i] = 1;
+    }
+    /* La distance de CETTE rue aux coins voisins (bouts coupés net, comme ses
+       cases — `townRoadCells`), puis l'union adoucie avec les rues déjà vues. */
+    const L = C.townRoadLine(r), half = r.w / 2, last = L.length - 2;
+    const own = new Map();
+    for (let k = 0; k <= last; k++) {
+      const [ax, ay] = L[k], [bx, by] = L[k + 1];
+      const vx = bx - ax, vy = by - ay, vv = vx * vx + vy * vy;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx) - half - 2)), x1 = Math.min(W, Math.ceil(Math.max(ax, bx) + half + 2));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by) - half - 2)), y1 = Math.min(H, Math.ceil(Math.max(ay, by) + half + 2));
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        const px = cx - ax, py = cy - ay;
+        let t = vv > 0 ? (px * vx + py * vy) / vv : 0;
+        if ((k === 0 && t < 0) || (k === last && t > 1)) continue;
+        t = Math.max(0, Math.min(1, t));
+        const s = half - Math.hypot(px - t * vx, py - t * vy);
+        const c = cy * W1 + cx, o = own.get(c);
+        if (o === undefined || s > o) own.set(c, s);
+      }
+    }
+    for (const [c, s] of own) {
+      sdf[c] = touched[c] ? smax(sdf[c], s, ROAD_SMAX_K) : s;
+      touched[c] = 1;
+    }
+  }
+  F = { sdf, smooth, cells: null };
+  ROAD_FIELDS.set(tw, F);
+  return F;
+}
+/* Les quatre coins d'une case (NO, NE, SO, SE). */
+function roadCorners(F, tw, x, y) {
+  const W1 = tw.w + 1, s = F.sdf;
+  return [s[y * W1 + x], s[y * W1 + x + 1], s[(y + 1) * W1 + x], s[(y + 1) * W1 + x + 1]];
+}
+const pavedGround = (g) => g === C.G_PATH || g === C.G_PATH_STONE || g === C.G_TOWN_STAIR || g === C.G_BRIDGE;
+/* La découpe d'une case, cuite à la demande dans l'atlas commun. `null` si la
+   rue n'y met aucun pixel. */
+function roadEdgeCell(F, S, tw, x, y) {
+  const i = y * tw.w + x;
+  if (!F.cells) F.cells = new Map();
+  if (F.cells.has(i)) return F.cells.get(i);
+  const RS = S.townRoad, T = SPR_T;
+  if (!F.cobblePx) F.cobblePx = RS.cobble.getContext("2d").getImageData(0, 0, RS.cobble.width, RS.cobble.height);
+  const [c00, c10, c01, c11] = roadCorners(F, tw, x, y);
+  const W = tw.w, H = tw.h, G = tw.ground;
+  const isRoadTile = !!F.smooth[i];
+  const gAt = (xx, yy) => (xx < 0 || yy < 0 || xx >= W || yy >= H ? C.G_GRASS : G[yy * W + xx]);
+  const hardOther = (xx, yy) => pavedGround(gAt(xx, yy)) && !(xx >= 0 && yy >= 0 && xx < W && yy < H && F.smooth[yy * W + xx]);
+  const tone = RS.kerbTone, rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const K = { top: rgb(tone.top), face: rgb(tone.face), alt: rgb(tone.faceAlt), dark: rgb(tone.dark), gut: rgb(tone.gutter) };
+  const img = new Uint8ClampedArray(T * T * 4);
+  const CP = F.cobblePx, CW = F.cobblePx.width, CH = F.cobblePx.height;
+  let any = false;
+  for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+    const u = (px + 0.5) / T, v = (py + 0.5) / T;
+    const s = c00 * (1 - u) * (1 - v) + c10 * u * (1 - v) + c01 * (1 - u) * v + c11 * u * v;
+    const wx = x * T + px, wy = y * T + py;
+    let col = null;
+    if (s >= 0) {
+      const gx = (c10 - c00) * (1 - v) + (c11 - c01) * v, gy = (c01 - c00) * (1 - u) + (c11 - c10) * u;
+      const gl = Math.hypot(gx, gy) || 1;
+      const depth = s / gl * T;                               // px jusqu'au bord
+      let kerb = depth < ROAD_EDGE_KW;
+      if (kerb) {
+        // le dehors, une demi-case au-delà du bord : déjà dallé → pas de bordure
+        const ox = (wx + 0.5) / T - (gx / gl) * (s / gl + 0.5), oy = (wy + 0.5) / T - (gy / gl) * (s / gl + 0.5);
+        if (pavedGround(gAt(Math.floor(ox), Math.floor(oy)))) kerb = false;
+      }
+      if (kerb) {
+        const d = Math.min(ROAD_EDGE_KW - 1, Math.floor(depth));
+        const along = Math.floor(wx * (-gy / gl) + wy * (gx / gl));   // coordonnée le long du bord
+        const a8 = ((along % 8) + 8) % 8;
+        const h = waterHash(wx, wy);
+        if (d === 0) col = K.top;
+        else if (d === ROAD_EDGE_KW - 1) col = a8 === 0 ? K.dark : K.gut;
+        else if (a8 === 0) col = K.dark;
+        else if (a8 === 1) col = K.alt;
+        else col = (h % 10) < 3 ? ((h >> 4) & 1 ? K.top : K.dark) : K.face;
+      }
+    } else if (isRoadTile) {
+      // hors du trait sur une case de rue : pavé si la voisine de ce côté est dallée
+      const dL = px, dR = T - 1 - px, dT = py, dB = T - 1 - py, m = Math.min(dL, dR, dT, dB);
+      const nx = m === dL ? x - 1 : m === dR ? x + 1 : x, ny = m === dT ? y - 1 : m === dB ? y + 1 : y;
+      if (hardOther(nx, ny)) col = "cobble";
+      else continue;
+    } else continue;
+    const o = (py * T + px) * 4;
+    if (col === null || col === "cobble") {
+      const q = ((((wy % CH) + CH) % CH) * CW + (((wx % CW) + CW) % CW)) * 4;
+      img[o] = CP.data[q]; img[o + 1] = CP.data[q + 1]; img[o + 2] = CP.data[q + 2]; img[o + 3] = 255;
+    } else { img[o] = col[0]; img[o + 1] = col[1]; img[o + 2] = col[2]; img[o + 3] = 255; }
+    any = true;
+  }
+  let cell = null;
+  if (any) {
+    if (!F.atlas || F.atlasN >= F.atlasCap) {
+      const c = document.createElement("canvas");
+      c.width = 1024; c.height = 1024;
+      F.atlas = c; F.atlasG = c.getContext("2d"); F.atlasN = 0; F.atlasCap = (1024 / T) * (1024 / T);
+    }
+    const n = F.atlasN++, cols = 1024 / T;
+    const sx = (n % cols) * T, sy = Math.floor(n / cols) * T;
+    // ⚠️ `new ImageData` là où il existe (le navigateur l'exige pour
+    // `putImageData`) ; le faux canevas des bancs se contente d'un objet nu.
+    const id = typeof ImageData !== "undefined" ? new ImageData(img, T, T) : { width: T, height: T, data: img };
+    F.atlasG.putImageData(id, sx, sy);
+    cell = { img: F.atlas, sx, sy };
+  }
+  F.cells.set(i, cell);
+  return cell;
+}
+/* Une case de rue pavée à bord libre : 0 = pas concernée, 1 = en plein
+   pavé (loin du bord), 2 = au bord (herbe + découpe). */
+function roadEdgeKind(F, tw, x, y) {
+  if (!F.smooth[y * tw.w + x]) return 0;
+  const m = Math.min(...roadCorners(F, tw, x, y));
+  return m >= ROAD_EDGE_KW / SPR_T + 0.35 ? 1 : 2;
+}
+/* La découpe d'une rue sur une case d'herbe ou de pelouse voisine. */
+export function drawTownRoadSpill(ctx, S, tw, x, y, px, py) {
+  if (!S || !S.townRoad || !S.townRoad.kerbTone) return;
+  const F = townRoadField(tw);
+  if (Math.max(...roadCorners(F, tw, x, y)) <= 0) return;
+  const cell = roadEdgeCell(F, S, tw, x, y);
+  if (cell) ctx.drawImage(cell.img, cell.sx, cell.sy, SPR_T, SPR_T, px, py, SPR_T, SPR_T);
 }
 /* 2026-09-27 (phase 10) — LE CANIVEAU d'une chaussée goudronnée : une rangée de
    pavés de granit sombres de trois pixels, posée au pied de la bordure, plus
@@ -1827,15 +2020,17 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
    TRAVERSENT les bords de case au lieu de s'arrêter dessus.
    ⚠️ Elle rend `false` si l'atlas manque, et l'appelant repose alors ses trois
    vieilles tuiles — même contrat que `drawTownRoadTile`. */
-export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
+export function drawTownGrassTile(ctx, S, tw, x, y, px, py, asGround) {
   const RS = S && S.townRoad;
   if (!RS || !RS.grass) return false;
   const T = SPR_T, sup = RS.sup;
   ctx.drawImage(RS.grass, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
   /* ⚠️ 2026-09-25 (phase 4) — LA PRAIRIE SEULE reçoit ses plaques et ses
      semis : une pelouse de square (G_TOWN_LAWN) est tondue et arrosée, et le
-     lit d'une case d'eau ou le dessous d'une marche ne se voient pas. */
-  const GL = S.townGrassLayers, g0 = tw.ground[y * tw.w + x];
+     lit d'une case d'eau ou le dessous d'une marche ne se voient pas.
+     PHASE 7 : `asGround` fait peindre une case comme si elle était de ce sol —
+     le bord d'une rue pavée courbe est de la prairie sous sa découpe. */
+  const GL = S.townGrassLayers, g0 = asGround !== undefined ? asGround : tw.ground[y * tw.w + x];
   const W1 = tw.w + 1, pos = (y % sup) * sup + (x % sup);
   const vr = waterHash(x * 5 + 3, y * 9 + 1) & 1;
   if (GL && g0 === C.G_GRASS) {
@@ -1881,6 +2076,8 @@ export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
       ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
     }
   }
+  // PHASE 7 — la découpe d'une rue pavée courbe qui mord sur cette case.
+  if (asGround === undefined && (g0 === C.G_GRASS || g0 === C.G_TOWN_LAWN)) drawTownRoadSpill(ctx, S, tw, x, y, px, py);
   return true;
 }
 /* Le champ des plaques, aux COINS de la carte (un octet par coin et par
@@ -17689,6 +17886,7 @@ export function buildSprites() {
     townRoad: {
       sup: ROAD_SUP,
       kerbW: 4,
+      kerbTone: KERB_STONE,          // PHASE 7 : le profil de la bordure courbe (`roadEdgeCell`)
       asphalt: townAsphaltSurface(0x2b93),
       /* 2026-09-27 (phase 10) — quatre goudrons au même grain, l'un par bloc de
          4×4 cases (voir `townAsphaltSurface`) : ni fissure ni reprise ne
