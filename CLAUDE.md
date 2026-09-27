@@ -1283,6 +1283,16 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
 
+⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-27 (après la phase 7a), À NE PAS PERDRE** — détail au
+tableau des phases de `components/ferme/README.md` (lignes 7 et « Projets en réserve ») :
+(1) **7b, HAIES ET CLÔTURES PAR QUARTIER** (« à bien travailler ») : muret de pierre + grille en fer forgé +
+portail chez les riches ; haie taillée (buis, charmille) + portillon de bois en classe moyenne ; palissade,
+piquets ou jardin ouvert avec potager chez les plus modestes ; dessinées en code avec un banc qui les regarde,
+calées sur la largeur RÉELLE de chaque maison (la haie ne passe plus sous le mur des larges) ; prompts Gemini de
+référence proposés, pas encore écrits ; (2) **UN TERRAIN DE FOOT** dans une prairie vide (idée de Guillaume) —
+emplacement, fonction et style À TRANCHER AVEC LUI (options au README) ; (3) **l'ordre** neige / haies / terrain
+n'est pas tranché : le bloc ⏭️ REPRISE garde la neige, mais proposer d'abord les haies (la neige doit tenir
+dessus).
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-26, À NE PAS PERDRE** : (1) le GAMEPLAY de la
 faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
 MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs
