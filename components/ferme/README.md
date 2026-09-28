@@ -1,5 +1,39 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-28
 
+## 2026-09-28 (soir) — PHASE 12a : LA NEIGE DE VALLEY TOWN
+
+Guillaume : « la neige ultra réaliste avec traces », puis « la qualité graphique doit être bluffante, les
+ombres, le grain, les textures », « le meilleur rendu possible sur une perspective type Stardew », « le dépôt
+et la fonte très progressifs ». Décisions prises avec lui : toits en calque hors ligne, arbres à trois états
+dont la neige tombe, fonte réaliste, circulation implicite et piquets à neige, traces locales.
+
+- **Le manteau** (`neige.js` §2) : une pure fonction de la météo des quatre jours passés (sol au soleil, à
+  l'ombre, chaussée, congères, toits chauffés et froids, charge des arbres). Rien ne circule.
+- **Le sol** (§5-§6) : par parcelle de 128 px, une SURFACE (relief du sol × drapé, rides du vent par plaques,
+  ondulation, empreintes) éclairée depuis le nord-ouest ; ombre propre sous un soleil bas (le fond d'un pas),
+  creux moins éclairés, occlusion au pied de ce qui se dresse, OMBRES PORTÉES au sud-est — bâtiments en bloc de
+  40 px, clôtures à leur hauteur de voxel (ajourées), arbres projetés depuis leur dessin d'hiver (la dentelle
+  des branches). Onze tons, deux rampes (soleil / couvert), tramage au bruit bleu (le grain). Couverture par
+  ORDRE au pixel (plaques + grain + brins) : la neige prend par taches et fond par taches, le sol est mouillé
+  autour ; la neige reste dans les ombres portées. Chaussée tassée, ornières qui ondulent, bourrelets.
+- **Ce qui se dresse** : clôtures, portails et potagers (coussin lissé, ombre de contact bleue), murs de
+  soutènement et nez de marche, grand escalier (girons), mobilier (chapeau lu dans ses pixels), buissons
+  hivernés (ajourés, sans fleurs), fontaine gelée, gare (toit lu dans ses pixels), piquets rouge et blanc.
+- **Les toits peints** (`tools/build-snow-roofs.mjs`) : deux calques par cran (léger : les rangs ; épais :
+  pan, bourrelet d'égout, stalactites, chapeaux de cheminée), toit lu par matière au-dessus de l'égout du
+  modèle, pignons et vitrines exclus à la main, mousse et rouille comblées, lucarnes épargnées ; corniches et
+  dômes des monuments ; plantes peintes fanées et coiffées.
+- **Les arbres d'hiver** (fermeArt.js) : feuillus nus, sapins enneigés étage par étage, ombre cuite remplacée
+  par une ombre de contact bleue quand ils sont dans la neige ; décharge progressive quand on les heurte.
+- **Les personnages** : ombre bleue, pieds dans un bourrelet ; traces des joueurs, habitants, chats, pigeons.
+- Bancs : `verify-neige` 17 (falsifié : saut, aplat, ombre, comble, fleurs), `render-neige` 2 (+ planches,
+  falsifié : cadre), `verify-densite` 513 (apprend les calques), `render-haies` 48, `verify-vallee` 279,
+  `verify-collision` 111, `render-escaliers` 16, `verify-taxi` 15, `render-arbres` 30, `verify-meteo` 40,
+  `verify-lumiere` 86, `render-rues` 16, `render-eau` 4 ; `no-undef`, bundle, `next build` verts. Vu en jeu :
+  midi, nuit, chute de neige, 1 cm, hiver sans neige, place, parvis, mairie, tribunal, vieille ville, pas,
+  pigeons, choc d'un sapin. **Pas vu** : à deux clients, la fonte réelle sur plusieurs jours, le grand
+  escalier et les piquets de près, les autres zooms que 1 à 4.
+
 ## 2026-09-28 — PHASE 7b (PREMIÈRE MOITIÉ) : LES CLÔTURES PAR QUARTIER ; ET LES FAÇADES ÉCLAIRÉES LA NUIT
 
 Guillaume : « d'abord le retravail sur les haies » (avant la neige, qui devra tenir dessus) ; décisions du jour
@@ -833,7 +867,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 9 | **Défauts nets (audit du 2026-09-27) — livrée le 2026-09-27 (nuit)**. ✅ Les deux lampadaires des allées (28,68) et (60,68) passent côté jardin. ✅ Nénuphars cuits réservés à l'étang et aux roselières. ✅ Porte de la maison hantée dégagée. ✅ Reflets : l'axe est la RIVE devant l'objet, et derrière un quai la bande du parement est cachée (les bancs du quai, au bord, étaient justes ; ce qui collait à l'eau, c'étaient les arbres derrière le quai). ➡️ Parcelle (160,102), la haie nord derrière le toit : renvoyée en phase 7 (haies refaites). ✅ Le grand escalier : **REFAIT le 2026-09-27 (nuit)** — volée droite dans l'axe du portail, qui enjambe le boulevard (récit en tête) | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
 | ✅ | 10 | **Sols, seconde passe — livrée le 2026-09-27 (nuit)** (récit en tête) : goudron refait (gris, caniveaux, traces de roues, variantes par bloc) ; trois dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des terrasses) ; herbe selon le quartier (tonte, pré, semis) ; massifs de saison en rangs ; rebord est-ouest des terrasses (chaperon et ombre) ; herbes hautes en bouquets teintés. ⬜ Reste : l'usure qui suit les passages sur les dallages (« chemins de désir », avec la phase 4) | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
 | ✅ | 11 | **Végétation à l'échelle des maisons — livrée le 2026-09-27 (nuit)** (récit en tête) : quatre tailles par essence dessinée en code (jeune clairsemé, tuteuré, trapu, grand ×1,5), le magnolia redessiné (fleurs de 3 à 5 px), cerisier et mimosa en nuages de petites fleurs, repère « où suis-je ? » (L), vent en cinq poses ; ➡️ la matière des haies part en phase 7. Constat d'origine : ~~Les arbres sont trop petits depuis que les maisons ont grandi (×1,17 à ×1,24 : un feuillu arrive au premier étage), et un seul gabarit par essence — même taille, même silhouette ; en forêt, un papier peint. Deux ou trois tailles par essence, des silhouettes variées, de grands arbres isolés (tilleul de place, marronnier). ⬜ Haies : barres lisses peu texturées, au niveau des anciennes maisons (leur placement est en 7, leur matière ici). Balancement : deux poses échangées d'un coup~~ | avant 7 : la composition place des arbres, il faut d'abord les bons |
-| ⬜ | 12 | **Saisons et intempéries en ville**. ⬜ L'hiver ne change rien : herbe verte, fleurs, pommes aux arbres, feuillage d'été sous la neige ; la neige ne tient nulle part (sol, toits, haies). La ferme a ses arbres de saison (`oakAutumn`, `oakSpring`), la ville non. ⬜ La durée du jour ne suit pas la saison (`skyAt` ne la connaît pas) : l'hiver, les lampes s'allument à 19 h sous un ciel de plein jour. ⬜ Pluie : chaussée sèche, aucun reflet des lampadaires, ni flaque ni éclaboussure. ⬜ Aucune cheminée ne fume (le soir, l'hiver, chez qui habite là) | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
+| 🟨 | 12 | **Saisons et intempéries en ville**. ✅ **12a, la neige (2026-09-28)** : manteau intégré sur quatre jours de météo (`neige.js`), sol éclairé en relief avec ombres portées bleues (bâtiments, clôtures ajourées, dentelle des arbres nus), grain au bruit bleu, rides du vent, mottes, débris sous les arbres, dépôt et fonte progressifs par plaques (sol mouillé autour), chaussée tassée à ornières, congères du chasse-neige, empreintes locales (joueurs, habitants, chats, pigeons) comblées par la neige fraîche ; toits peints en deux calques par cran (`build-snow-roofs`), gare, grand escalier, murs de soutènement, clôtures, portails, potagers, mobilier ; arbres d'hiver à trois états (sapins étage par étage, feuillus nus) dont la neige tombe au vent et au choc ; buissons hivernés, fontaine gelée, piquets à neige, pieds enfoncés, ombres bleues ; menu dev local. ⬜ **12b** pluie (chaussée mouillée, flaques, reflets). ⬜ **12c** durée du jour, cheminées qui fument. ⬜ La ferme n'a pas de neige (Valley Town seule) | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
 | ⬜ | 13 | **Lumière et animation, finitions**. ⬜ Ombres portées des bâtiments : quadrilatères à bord franc qui ignorent le toit (à droite de l'hôtel de ville, un rectangle net) ; celles des maisons, une tache ovale. ⬜ Fanions du marché figés (0 pixel changé en une seconde) alors que l'herbe ondule. ⬜ Fontaine : le jet vit à peine, le bassin ne ride pas, aucune goutte ne retombe | morceaux restés de 3 et de 5 ; se glissent entre deux phases |
 | ⬜ | 14 | **Texte du monde**. ⬜ Une seule écriture : les noms sont en `pixelFont`, mais les plaques des maisons, les bulles de dialogue et les enseignes (« MARCHÉ », salon) en `monospace` système (38 appels `ctx.font` dans `FermeGame.js`). ⬜ La plaque « À vendre » ou du propriétaire flotte au faîte du toit : un panneau planté au portail serait un objet du monde, pas une étiquette. ⬜ Panneaux indicateurs vides (deux planches blanches) : y écrire les destinations, en police pixel, dans la langue du joueur | indépendante du reste, se place où l'on veut |
 

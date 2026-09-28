@@ -7,31 +7,40 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-28 — les clôtures par quartier (7b, première moitié) et les façades éclairées ; la neige est la suivante
+### 2026-09-28 (soir) — la neige de Valley Town (phase 12a) est livrée ; les BUIS sont les suivants
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre : 9, 10, 11, 7a, 7b-clôtures
-(faites), **12 (la neige)**, reste de 7b, 13, 14, 8 ; 6a/6b au fil de ses images.
-⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` / `townHouseDistrict`
-(lus sur les monuments) ; tout ce qui se compose doit la lire. ⚠️ **PAS DE BÂTIMENT SANS FONCTION.**
-⚠️ **PAS DE CLÔTURE PARTOUT** (Guillaume, 2026-09-28) : un jardin sur trois reste ouvert, dans chaque rang.
-- **Livré** : `clotures.js` (nouveau) — cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 (haie de
-  buis, muret + grille, palissade blanche, planches, piquets et fil), portails à deux vantaux qui pivotent vers
-  le jardin à l'approche (local, déduit), potagers de saison des jardins ouverts modestes ; atlas paresseux
-  (`S.townEnclos`). Enclos en U calé sur l'image de la LARGEUR (`townFenceLayout`), flancs partagés, devant sur la
-  dernière rangée d'herbe contiguë au seuil ; passe finale « LES CLÔTURES » de `generateTownWorld`, l'ancien
-  anneau reste la graine. `tw.hedge` = code de matière (1 = haie, lecteurs booléens intacts). Façades :
-  `build-monument-flood.mjs` → calques `flood` par cran (`floodK` : église 1, mairie 0,85, tribunal 0,9), ajoutés
-  après la nuit ; vitraux de l'église en lueur ambrée (`build-monument-glow`, mairie/tribunal inchangés au bit).
-- Bancs : **53/53** (`render-haies` 48, falsifié deux fois ; `verify-vallee` 279 ; `verify-collision` 35 ;
-  `render-escaliers` 43 ; `verify-taxi` 15 ; `verify-densite` 283), `no-undef`, bundle, `next build`. Vu en jeu
-  (zooms 1-3, jour et nuit sous la pluie) : cinq matières, traversée d'un portail, potagers d'automne, trois
-  façades. **Pas vu** : à deux clients, un habitant qui ouvre un portail, potagers des autres saisons, hiver.
-  **Pas de Supabase.**
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre restant : les buis, le reste
+de 7b, 12b (pluie), 12c (durée du jour, cheminées), 13, 14, 8 ; 6a/6b au fil de ses images.
+⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` / `townHouseDistrict` ;
+tout ce qui se compose doit la lire. ⚠️ **PAS DE BÂTIMENT SANS FONCTION.** ⚠️ **PAS DE CLÔTURE PARTOUT** (un
+jardin sur trois reste ouvert, dans chaque rang).
+- **Livré (12a)** : `neige.js` (nouveau) — manteau PURE fonction de 4 jours de météo ; sol par parcelles de 128 px
+  en atlas : relief éclairé, ombres portées bleues au sud-est (bâtiments en bloc de 40 px, clôtures au voxel via
+  `townFenceHeights`, arbres projetés depuis leur dessin d'hiver), grain au bruit bleu, couverture par ORDRE au
+  pixel (dépôt et fonte par plaques, sol mouillé autour), chaussée tassée, empreintes locales comblées par la
+  neige fraîche. `A.townSnowEnv` (fermeArt.js) : ce que la neige lit du sol, écrit une fois pour le jeu et les
+  bancs. Toits peints : `tools/build-snow-roofs.mjs` → `-snowl`/`-snowh` par cran (230 PNG, 7,5 Mo), déclarés
+  `snowL`/`snowH` dans `TOWN_BITMAPS`, posés par `drawScreenExactBitmap` (`glowOpts.snow`). Arbres d'hiver à
+  trois états (sapins étage par étage), buissons hivernés (`NG.winterizePixels`), fontaine gelée, piquets
+  (`A.townSnowStakes`), pieds enfoncés, ombres bleues (`groundSnowK`), menu dev local « Neige (sur cet écran) ».
+- Bancs : `verify-neige` 17 (falsifié cinq fois), `render-neige` 2 (+ planches), `verify-densite` 513,
+  `render-haies` 48, `verify-vallee` 279, `verify-collision` 111, `render-escaliers` 16, `verify-taxi` 15,
+  `render-arbres` 30, `verify-meteo` 40, `verify-lumiere` 86, `render-rues` 16, `render-eau` 4 ; `no-undef`,
+  bundle, `next build` verts. Vu en jeu : midi, nuit, chute de neige, 1 cm, hiver sans neige, place, parvis,
+  mairie, tribunal, vieille ville, pas, pigeons, choc d'un sapin. **Pas vu** : à deux clients ; la fonte sur
+  plusieurs jours de vraie météo ; le grand escalier et les piquets de près. **Pas de Supabase.**
+- ⚠️ **Dette connue** : la ferme n'a pas de neige (Valley Town seule) ; les plantes PEINTES des bitmaps ne fanent
+  que sous la neige (un hiver sans neige les garde fleuries) ; l'église n'a que des liserés (pas de grand pan) ;
+  `verify-neige` §4/§5 falsifiés en forçant le verdict, pas en sabotant la donnée.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **La neige (2026-09-28, soir)** : tout est réglage, à juger à l'écran — la force des ombres portées
+  (`NEIGE.SHADOW_K` 0,45, bloc de 40 px pour une maison), le grain (un tiers de ton), la vitesse du dépôt
+  (`COV0`/`COVR`, couvert vers 2,5 cm), la chaussée et ses ornières, les calques de toit (dont les liserés
+  de l'église), les sapins alourdis, les buissons ajourés, les piquets, la fontaine gelée.
 - **Les clôtures et les façades (2026-09-28)** : la matière de chaque clôture (buis, grille, blanc, planches,
   fil), la part de jardins ouverts (11 sur 34), les potagers, les portails (six poses, 0,4 s pour s'ouvrir, une
   seconde avant de se refermer), le pilier de grille tous les quatre ; l'or des façades, leur force (`floodK`),
@@ -89,17 +98,9 @@ chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** 
 
 ### ⏭️ ACTION SUIVANTE
 
-**La phase 12 — la neige** (demande de Guillaume, 2026-09-27 : « la neige ultra réaliste avec traces etc ») :
-checklist au tableau (l'hiver ne change rien en ville : herbe, fleurs, feuillage ; la neige ne tient nulle part —
-sol, toits, haies ; traces de pas). Poser les décisions structurantes AVANT d'écrire (§2) — préparées le
-2026-09-28, à lui soumettre : (1) l'épaisseur comme PURE FONCTION de l'historique météo (`meteo.js` est déjà une
-fonction du jour et de l'heure : on intègre `snow` moins la fonte, rien ne circule) ; (2) les traces LOCALES,
-déduites des positions que chaque client voit (§3), qui se recouvrent sous la neige fraîche ; (3) les toits des
-bitmaps : un calque `snow` par cran fabriqué hors ligne (comme `flood`), toit détecté par modèle, ou des versions
-d'hiver peintes par Gemini ; (4) les arbres d'hiver (aucune essence n'a de pose `winter`) ; (5) la découper en
-12a neige/hiver, 12b pluie (chaussée mouillée, flaques, reflets), 12c durée du jour et cheminées. ⚠️ Les clôtures
-sont des VOLUMES : la neige s'y pose en blanchissant les faces du dessus (`paintVoxels`, `clotures.js`) ; le
-grand escalier est peint d'un tenant et ses garde-corps sont des décors ; une trace sur une case du pont a deux sols.
+**Refaire les BUIS** (demande de Guillaume, 2026-09-28 : les bandes vertes « interactives » simplistes et les
+petits buis à baies laids) — poser les décisions structurantes AVANT d'écrire (§2) ; la neige doit continuer à
+s'y poser (le coussin lissé de `withSnow`, clotures.js, et `NG.winterizePixels` pour les décors).
 **Puis le reste de 7b** : jardins vécus, lampadaires aux carrefours et aux portes, allée de la maison hantée,
 commerces de la Grand-Rue (prompts Gemini à écrire, §2).
 Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.
@@ -411,6 +412,10 @@ dépôt.
   voit une chaussée — c'est voulu (taxi, rues, arbres inchangés) — mais tout MARCHEUR qui l'y lit voit le pont
   comme un mur : les deux bancs qui ont leur propre marcheur ont rougi pour ça, et un A* sur des cases seules
   « ferme » la marche dès qu'un trajet a longé le pont par dessous. Nœuds (case, niveau), mémoire par marcheur.
+- ⚠️⚠️ **UNE TRANSITION QUI SE VOIT SE FAIT PAR UN ORDRE AU PIXEL OU PAR UNE DURÉE, JAMAIS PAR UN SEUIL
+  COMMUN** (neige, 2026-09-28) : un seuil unique sur une grandeur continue bascule tous les pixels (ou tout
+  l'arbre) dans la même image — la neige « tombait » d'un coup, un sapin heurté passait d'alourdi à léger
+  sans transition. Chaque pixel a son seuil (un ordre fixe : plaques, grain), chaque décharge a sa durée.
 - ⚠️⚠️⚠️ **UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL
   COUPE, LE JOUR OÙ « FINI » GAGNE UNE SUITE** (2026-09-13, `starNearby()` de `FermeGame.js`).
   `if (!e || Q.starDone(e)) return null;` voulait dire « plus rien à faire une fois la quête finie » —
@@ -644,6 +649,7 @@ dépôt.
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
 | `components/ferme/clotures.js` | **LES CLÔTURES (phase 7b, 2026-09-28)** : cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 par l'algorithme du peintre (`paintVoxels`), le voisinage d'une case (`townFenceConf`), les portails tournés autour de leurs gonds, les potagers de saison, la haie-décor du quai ; atlas paresseux (`S.townEnclos`). Qui a quoi : `townParcelFence`/`townFenceLayout` (fermeConstants.js). Banc : `render-haies` |
+| `components/ferme/neige.js` | **LA NEIGE DE VALLEY TOWN (phase 12a, 2026-09-28), pure** : le manteau (`snowPack`, pure fonction de 4 jours de météo), le sol par parcelles en atlas (`makeSnowField` : relief éclairé, ombres portées, grain au bruit bleu, couverture par ordre au pixel), les empreintes locales (`makeWalkers`), les chapeaux et toits lus dans les pixels (`snowCapPixels`, `snowRoofPixels`, `snowStairPixels`), l'hiver du mobilier (`winterizePixels`). Ce que la neige lit du sol : `A.townSnowEnv` (fermeArt.js). Toits peints : `tools/build-snow-roofs.mjs`. Bancs : `verify-neige`, `render-neige` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |

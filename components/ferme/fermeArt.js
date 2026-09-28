@@ -31,7 +31,8 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers";
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau";
 import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
-import { makeFenceCache, drawTownFenceTile, hedgeRowSprite } from "./clotures";
+import { makeFenceCache, drawTownFenceTile, hedgeRowSprite, townFenceHeights } from "./clotures";
+import { treeSnowMix } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
 
 /* ---------------------------------------------------------------- PALETTE ---
@@ -1537,6 +1538,40 @@ export function drawTownCliffFace(ctx, S, tw, x, y, px, py, fh) {
    un débord y serait effacé — c'est d'ailleurs ce qui arrivait à l'ombre au
    pied du 447, peinte sous le mur et recouverte aussitôt : elle est désormais
    posée par la case du bas (`drawTownWallFoot`). */
+/* 2026-09-28 (phase 12a) — LA NEIGE SUR UN MUR DE SOUTÈNEMENT (ou le nez d'une
+   marche) : un COUSSIN sur le chaperon, qui déborde d'un pixel au-dessus du
+   parement et y pend en coulures (deux à quatre pixels, de loin en loin) ; sous
+   une neige épaisse, des paquets accrochés aux assises et aux touffes du
+   parement. Tout au hachage de la case (deux joueurs voient la même). `lvl` :
+   1 léger, 2 épais ; `stair` : un nez de marche (pas de coulures). */
+const SNOW_WALL = ["#fbfcfe", "#e6eef8", "#cbd8ec", "#a8bad8", "#7c90b8"];
+export function drawTownWallSnow(ctx, x, y, px, py, fh, lvl, stair) {
+  if (!lvl) return;
+  const T = SPR_T, top = py + T;
+  for (let c = 0; c < T; c++) {
+    const h = waterHash(x * 31 + c * 7, y * 17 + 5);
+    if (lvl === 1 && h % 10 < 3) continue;                 // une neige légère laisse voir la pierre
+    const thick = lvl >= 2 ? 2 + (h % 4 === 0 ? 1 : 0) : 1;
+    ctx.fillStyle = SNOW_WALL[0]; ctx.fillRect(px + c, top - thick, 1, 1);
+    if (thick > 1) { ctx.fillStyle = SNOW_WALL[1]; ctx.fillRect(px + c, top - thick + 1, 1, thick - 1); }
+    ctx.fillStyle = SNOW_WALL[2]; ctx.fillRect(px + c, top, 1, 1);          // le débord, dans l'ombre
+    if (!stair && lvl >= 2 && h % 7 === 0) {
+      const L = 2 + ((h >>> 5) % 3);
+      ctx.fillStyle = SNOW_WALL[2]; ctx.fillRect(px + c, top + 1, 1, Math.min(L, fh - 1));
+      ctx.fillStyle = SNOW_WALL[3]; ctx.fillRect(px + c, top + Math.min(L, fh - 1), 1, 1);
+    }
+  }
+  if (!stair && lvl >= 2 && fh > 6) {
+    // Des paquets accrochés aux assises du parement.
+    for (let k = 0; k < 3; k++) {
+      const h = waterHash(x * 13 + k * 101, y * 29 + k * 7);
+      if (h % 3) continue;
+      const cx = px + (h >>> 3) % (T - 3), cy = top + 3 + ((h >>> 9) % Math.max(1, fh - 5));
+      ctx.fillStyle = SNOW_WALL[1]; ctx.fillRect(cx, cy, 2 + ((h >>> 13) & 1), 1);
+      ctx.fillStyle = SNOW_WALL[3]; ctx.fillRect(cx, cy + 1, 2, 1);
+    }
+  }
+}
 const WALL_COPE = ["#d2cdc1", "#bdb8ac", "#a39e93"];
 export function drawTownWallDress(ctx, tw, x, y, px, py, fh) {
   const T = SPR_T, E = tw.elev, W = tw.w;
@@ -1739,8 +1774,8 @@ export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
    la note d'alors : le choix du dessin est UNE lecture du voisinage
    (`townFenceConf`), et il vit hors de la closure du rendu pour qu'un banc
    (`tools/render-haies.mjs`) l'appelle. */
-export function drawTownHedgeTile(ctx, S, tw, x, y, px, py) {
-  return drawTownFenceTile(ctx, S, tw, x, y, px, py);
+export function drawTownHedgeTile(ctx, S, tw, x, y, px, py, snow) {
+  return drawTownFenceTile(ctx, S, tw, x, y, px, py, snow);
 }
 
 /* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER, D'UN SEUL TENANT (voir
@@ -1748,11 +1783,15 @@ export function drawTownHedgeTile(ctx, S, tw, x, y, px, py) {
    passants, les rampes et les piliers se posent dessus. Son haut est le bord du
    palier (une unité au-dessus de la rangée de tête), son bas le sol du pied.
    `dx/dy` servent aux bancs qui cadrent une fenêtre locale ; le jeu passe zéro. */
-export function drawTownGrandFlight(ctx, S, dx = 0, dy = 0) {
+/* `snowOf(img)` (phase 12a, facultatif) : rend les calques de neige à poser
+   par-dessus — [{ c, a }] (`neige.js`, `snowStairPixels`), ou rien. */
+export function drawTownGrandFlight(ctx, S, dx = 0, dy = 0, snowOf) {
   const im = S?.townGrandStair?.flight;
   if (!im) return false;
   const F = C.TOWN_GRAND_STAIR.flight;
-  ctx.drawImage(im, F.x * C.TILE + dx, F.y * C.TILE - C.TOWN_ELEV_PX + dy);
+  const x = F.x * C.TILE + dx, y = F.y * C.TILE - C.TOWN_ELEV_PX + dy;
+  ctx.drawImage(im, x, y);
+  if (snowOf) for (const l of snowOf(im) || []) if (l.c && l.a > 0.01) { ctx.globalAlpha = l.a; ctx.drawImage(l.c, x, y); ctx.globalAlpha = 1; }
   return true;
 }
 /* LA BOUCHE DU PASSAGE : la chaussée s'assombrit vers la volée qui l'enjambe
@@ -1774,22 +1813,29 @@ export function drawStairBridgeMouth(ctx, px, py, dir) {
    de tri — l'altitude est déjà appliquée par l'appelant. Tout est ancré au bas
    de la case, comme les autres décors. */
 const GS_RAIL_H = 13;   // la main courante au-dessus du giron, en px
-export function drawGrandStairProp(ctx, S, pr) {
+/* `capOf(img)` (phase 12a, facultatif) : le chapeau de neige d'une image
+   (`neige.js`, `snowCapPixels`), posé par-dessus — un canevas avec son `pad`. */
+export function drawGrandStairProp(ctx, S, pr, capOf) {
   const GS = S?.townGrandStair;
   if (!GS) return false;
   const T = C.TILE, px = pr.x * T, by = (pr.y + 1) * T;
+  const put = (im, x, y) => {
+    ctx.drawImage(im, x, y);
+    const cp = capOf && capOf(im);
+    if (cp) for (const l of cp) if (l.c && l.a > 0.01) { ctx.globalAlpha = l.a; ctx.drawImage(l.c, x, y - (l.c.pad || 0)); ctx.globalAlpha = 1; }
+  };
   if (pr.kind === "stairPost") {
     const im = pr.tall ? GS.postTall : pr.foot ? GS.postFoot : GS.post;
-    ctx.drawImage(im, px, by - im.height + 2);
+    put(im, px, by - im.height + 2);
   } else if (pr.kind === "stairBalus") {
-    ctx.drawImage(GS.balus, px, by - GS.balus.height + 2);
+    put(GS.balus, px, by - GS.balus.height + 2);
   } else if (pr.kind === "stairSide") {
-    ctx.drawImage(GS.side, px, pr.y * T - GS_RAIL_H);
+    put(GS.side, px, pr.y * T - GS_RAIL_H);
   } else if (pr.kind === "stairRail") {
     // Un morceau par marche : du haut de SON giron au haut du giron suivant.
-    ctx.drawImage(GS.rail, px, pr.y * T - GS_RAIL_H);
+    put(GS.rail, px, pr.y * T - GS_RAIL_H);
   } else if (pr.kind === "stairPot") {
-    ctx.drawImage(GS.pot, px + T / 2 - (GS.pot.width >> 1), by - GS.pot.height + 2);
+    put(GS.pot, px + T / 2 - (GS.pot.width >> 1), by - GS.pot.height + 2);
   } else return false;
   return true;
 }
@@ -2344,12 +2390,22 @@ export function townTreeSize(tw, x, y, obj) {
 /* L'image et son gabarit. ⚠️ Depuis la phase 11 elle rend `{ img, m }` : une
    taille vit dans un ATLAS (une cellule `{img,sx,sy,w,h}`, lue par `blitCell`)
    et a son propre ancrage — l'adulte, lui, reste un canevas. */
-export function townTreeImg(S, tw, x, y, seasonKey, obj, now) {
+/* 2026-09-28 (phase 12a) — les essences qui gardent leur feuillage l'hiver
+   (elles lisent la charge des conifères, qui tient plus longtemps). */
+export function townTreeEvergreen(k) { return k === TT.FIR || k === TT.PINE || k === TT.CYPRESS || k === TT.REF_FIR || k === TT.MIMOSA; }
+export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
   const set = S && S.townTrees;
   if (!set) return null;
   const k = townTreeKind(tw, x, y, obj);
   if (k === null || !set[k]) return null;
   const size = set[k].sizes ? townTreeSize(tw, x, y, obj) : "adult";
+  /* L'HIVER (phase 12a) : l'image vient de l'atlas paresseux des arbres
+     d'hiver — même pose de vent, même phase par case. */
+  if (seasonKey === "winter" && S.townTreesWinter) {
+    const fi = !now ? 1 : TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + (waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000) * 8) & 7];
+    const cell = S.townTreesWinter.get(k, size, snowLvl | 0, fi, onSnow);
+    if (cell) return { img: cell, m: cell.m, k };
+  }
   const m = size === "adult" ? set[k] : set[k].sizes[size];
   const seasonName = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
   let frames = m[seasonName];
@@ -2373,13 +2429,192 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now) {
    phase 11 chaque taille a le sien (`m.w`, `m.base`) — un décalage écrit en dur
    dans la boucle de rendu planterait les grands arbres trente pixels trop bas,
    sans erreur. */
-export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
-  const r = townTreeImg(S, tw, x, y, seasonKey, obj, now);
+/* `load` (phase 12a, facultatif) : { tl, tc, ground } — la charge de neige des
+   feuillus et des persistants (`neige.js`, déjà diminuée de ce que cet arbre a
+   secoué), et la neige au sol à son pied (cm : au-delà d'un, son ombre cuite
+   cède la place à l'ombre projetée sur la neige).
+   L'hiver, l'arbre se dessine dans son état, et dans le suivant par-dessus
+   pendant le fondu (`treeSnowMix`, seuils décalés d'un arbre à l'autre). */
+export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load) {
+  let mix = null;
+  if (seasonKey === "winter" && load) {
+    const k = townTreeKind(tw, x, y, obj);
+    mix = treeSnowMix(townTreeEvergreen(k) ? load.tc : load.tl, (waterHash(x * 5 + 1, y * 11 + 7) % 1000) / 1000);
+  }
+  const onSnow = !!(load && load.ground > 1);
+  const r = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix ? mix.a : 0, onSnow);
   if (!r || !r.img) return false;
   const dx = px + SPR_T / 2 - r.m.w / 2, dy = py + SPR_T - r.m.base;
   if (r.img.sx !== undefined) blitCell(ctx, r.img, dx, dy);
   else ctx.drawImage(r.img, dx, dy);
+  if (mix && mix.k > 0.01) {
+    const r2 = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix.b, onSnow);
+    if (r2 && r2.img) {
+      ctx.globalAlpha = mix.k;
+      if (r2.img.sx !== undefined) blitCell(ctx, r2.img, dx, dy); else ctx.drawImage(r2.img, dx, dy);
+      ctx.globalAlpha = 1;
+    }
+  }
   return true;
+}
+
+/* 2026-09-28 (phase 12a) — LES PIQUETS À NEIGE (décision de Guillaume :
+   « circulation implicite + piquets à neige »). Plantés l'hiver au bord des
+   rues goudronnées, pour que le chasse-neige trouve le trottoir : sur une case
+   d'herbe libre qui touche la chaussée, tous les six ou sept pas le long d'elle
+   (hachage de la case : deux joueurs voient les mêmes), jamais deux à moins de
+   trois cases. Rend [{ x, y, px, py }] — (px, py) : le pied, en px monde, contre
+   le bord de la case côté rue. Mémo par carte. */
+const STAKES_MEMO = new WeakMap();
+export function townSnowStakes(tw) {
+  const hit = STAKES_MEMO.get(tw);
+  if (hit) return hit;
+  const W = tw.w, H = tw.h, T = SPR_T, out = [];
+  const street = (x, y) => x >= 0 && y >= 0 && x < W && y < H && tw.ground[y * W + x] === C.G_PATH && tw.road && tw.road[y * W + x] === C.TR_ASPHALT;
+  const props = new Set((tw.props || []).map((p) => p.y * W + p.x));
+  const taken = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x, g = tw.ground[i];
+    if ((g !== C.G_GRASS && g !== C.G_TOWN_LAWN) || tw.solid[i] || (tw.hedge && tw.hedge[i]) || props.has(i) || tw.objects[i]) continue;
+    const side = street(x, y + 1) ? "s" : street(x, y - 1) ? "n" : street(x + 1, y) ? "e" : street(x - 1, y) ? "w" : null;
+    if (!side) continue;
+    const along = side === "s" || side === "n" ? x : y;
+    if (((along * 2654435761) >>> 0) % 13 > 1) continue;              // ~ un pas sur six ou sept
+    let near = false;
+    for (let dy = -3; dy <= 3 && !near; dy++) for (let dx = -3; dx <= 3; dx++) if (taken[(y + dy) * W + x + dx]) { near = true; break; }
+    if (near) continue;
+    taken[i] = 1;
+    const px = side === "e" ? x * T + 14 : side === "w" ? x * T + 1 : x * T + 8;
+    const py = side === "s" ? y * T + 15 : side === "n" ? y * T + 4 : y * T + 11;
+    out.push({ x, y, px, py });
+  }
+  STAKES_MEMO.set(tw, out);
+  return out;
+}
+/* Un piquet : une perche de deux pixels (le côté ouest éclairé), à bandes
+   rouges et blanches de trois pixels, un bouchon sombre ; `snow` (cm) coiffe sa
+   tête et enfouit son pied. */
+export function drawSnowStake(ctx, px, py, snow) {
+  const H = 17, sink = Math.min(4, Math.round((snow || 0) / 6));
+  for (let k = sink; k < H; k++) {
+    const band = Math.floor(k / 3) % 2 === 0;
+    ctx.fillStyle = band ? "#f2eee6" : "#c4302b"; ctx.fillRect(px, py - k, 1, 1);
+    ctx.fillStyle = band ? "#c9c3b8" : "#8e1f1c"; ctx.fillRect(px + 1, py - k, 1, 1);
+  }
+  ctx.fillStyle = "#2c2622"; ctx.fillRect(px, py - H, 2, 1);
+  if (snow > 1) { ctx.fillStyle = "#f8fafd"; ctx.fillRect(px, py - H - 1, 2, 1); }
+  ctx.fillStyle = "rgba(40,56,98,0.28)"; ctx.fillRect(px + 2, py - sink, 3, 1);   // son ombre, au sud-est
+}
+
+/* 2026-09-28 (phase 12a) — CE QUE LA NEIGE DOIT SAVOIR DU SOL DESSINÉ
+   (`neige.js`, `makeSnowField`) : où tient-elle sur une marche (le giron éclairé,
+   pas la contremarche), où se remplit-elle d'abord (les joints d'un dallage),
+   où sont les couronnes des arbres et ce qui se dresse. ⚠️ ÉCRIT UNE FOIS, ICI,
+   pour le jeu ET pour `tools/render-neige.mjs` : la neige d'un banc qui aurait
+   sa propre lecture des marches mesurerait une autre neige. Le choix de l'atlas
+   de dallage passe par `townPavingFamily` (celui de `drawTownFlagTile`) : si la
+   famille d'une case change, la neige suit. `waterAt(wx, wy)` : l'eau au pixel
+   (la cuisson de `eau.js` quand elle est prête — l'appelant la fournit). */
+export function townSnowEnv(tw, S, waterAt) {
+  const lumOf = (cv) => {
+    if (!cv || !cv.getContext) return null;
+    try {
+      const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+      const L = new Uint8Array(cv.width * cv.height);
+      let sum = 0;
+      for (let i = 0; i < L.length; i++) { const v = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) | 0; L[i] = v; sum += v; }
+      return { L, w: cv.width, h: cv.height, mean: sum / L.length };
+    } catch (e) { return null; }
+  };
+  const ST = S && S.townStone, RS = S && S.townRoad;
+  const stairV = lumOf(ST && ST.stair && ST.stair.v), stairH = lumOf(ST && ST.stair && ST.stair.h);
+  const flags = { civic: lumOf(RS && RS.flag), terrace: lumOf((RS && RS.flagTerrace) || (RS && RS.flag)), market: lumOf((RS && RS.setts) || (RS && RS.flag)) };
+  const supS = (ST && ST.sup) || 4, supR = (RS && RS.sup) || 4;
+  const lumAt = (A2, ax, ay) => (A2 ? A2.L[(ay % A2.h) * A2.w + (ax % A2.w)] : 128);
+  const tall = (i) => tw.solid[i] && tw.ground[i] !== C.G_WATER && tw.objects[i] !== C.O_TREE && tw.objects[i] !== C.O_TREE2 && !(tw.soft && tw.soft[i]);
+  const propTiles = new Set((tw.props || []).map((p) => p.y * tw.w + p.x));
+  const casterMemo = new Map(), shadowMemo = new Map();
+  const trees = [];
+  for (let i = 0; i < tw.w * tw.h; i++) {
+    const o = tw.objects[i];
+    if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+    const x = i % tw.w, y = (i / tw.w) | 0, k = townTreeKind(tw, x, y, o);
+    trees.push({ x, y, size: townTreeSize(tw, x, y, o), kind: k, ever: townTreeEvergreen(k) });
+  }
+  return {
+    waterAt,
+    /* Le giron d'une marche : plus clair que la moyenne de son atlas. */
+    stairTread: (x, y, lx, ly) => {
+      const vert = townStairVertical(tw, x, y), At = vert ? stairV : stairH;
+      if (!At) return 1;
+      const ax = vert ? (x % supS) * SPR_T + lx : lx, ay = vert ? ly : (y % supS) * SPR_T + ly;
+      return lumAt(At, ax, ay) >= At.mean - 6 ? 1 : 0;
+    },
+    /* Un joint : nettement plus sombre que la pierre autour. */
+    jointAt: (x, y, lx, ly) => {
+      const At = flags[townPavingFamily(x, y)] || flags.civic;
+      if (!At) return 0;
+      return lumAt(At, (x % supR) * SPR_T + lx, (y % supR) * SPR_T + ly) < At.mean - 18 ? 1 : 0;
+    },
+    trees,
+    tall,
+    /* CE QUI PORTE UNE OMBRE, au pixel (hauteur en px d'art) : une clôture à la
+       hauteur de ses voxels (`townFenceHeights` : l'ombre est ajourée comme
+       elle), un bâtiment en bloc de 40 px (sa vraie hauteur n'est pas dans la
+       carte : un plafond commun, pour qu'une maison ne noie pas son jardin), le
+       mobilier rien (sa case entière ferait un bloc — ses ombres viendront de
+       son dessin). Mémo par case : le voisinage d'une clôture coûte cher. */
+    casterAt: (wx, wy) => {
+      const x = Math.floor(wx / SPR_T), y = Math.floor(wy / SPR_T);
+      if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return 0;
+      const i = y * tw.w + x;
+      let c = casterMemo.get(i);
+      if (c === undefined) {
+        if (tw.hedge && tw.hedge[i]) c = townFenceHeights(tw, x, y) || 0;
+        else c = !propTiles.has(i) && tall(i) ? 40 : 0;
+        casterMemo.set(i, c);
+      }
+      return typeof c === "number" ? c : c[(wy - y * SPR_T) * SPR_T + (wx - x * SPR_T)];
+    },
+    /* L'OMBRE D'UN ARBRE D'HIVER, projetée au sud-est depuis son dessin nu (la
+       dentelle des branches sur la neige) : chaque pixel du bois, à `h` px
+       au-dessus du pied, tombe à (h·k, h·k·ky) du pied. Rend { ox, oy, w, h, a }
+       — `a` : couverture 0..255, (ox, oy) : son coin, en px, depuis le coin de
+       la case de l'arbre. Mémo par essence et par taille. */
+    treeShadow: (t, k, ky) => {
+      const key = `${t.kind}|${t.size}|${k}|${ky}`;
+      if (shadowMemo.has(key)) return shadowMemo.get(key);
+      let out = null;
+      try {
+        const cell = S.townTreesWinter && S.townTreesWinter.get(t.kind, t.size, 0, 1, true);
+        if (cell) {
+          const d = cell.img.getContext("2d").getImageData(cell.sx, cell.sy, cell.w, cell.h).data;
+          const base = cell.m.base, cw = cell.w, chh = cell.h;
+          const ox = SPR_T / 2 - cell.m.w / 2, ext = Math.ceil(base * k) + 3;
+          const w = cw + ext + 2, h = Math.ceil(base * k * ky) + 6, oy = SPR_T - 3;
+          const F = new Float32Array(w * h);
+          for (let sy = 0; sy < Math.min(chh, base - 1); sy++) for (let sx = 0; sx < cw; sx++) {
+            const al = d[(sy * cw + sx) * 4 + 3];
+            if (al < 60) continue;
+            const hg = base - sy, a = al >= 150 ? 1 : (al / 255) * 0.9;
+            const gx = Math.round(sx + hg * k) + 1, gy = Math.round(hg * k * ky) + 3;
+            if (gx < 0 || gy < 0 || gx >= w || gy >= h) continue;
+            if (a > F[gy * w + gx]) F[gy * w + gx] = a;
+          }
+          // Un soupçon de flou : la pénombre d'un rameau fin, pas un trait net.
+          const a8 = new Uint8Array(w * h);
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            let s = F[y * w + x] * 4, n = 4;
+            for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h) { s += F[yy * w + xx]; n++; } }
+            a8[y * w + x] = Math.min(255, Math.round(255 * Math.min(1, (s / n) * 1.35)));
+          }
+          out = { ox: ox - 1, oy, w, h, a: a8 };
+        }
+      } catch (e) { out = null; }
+      shadowMemo.set(key, out);
+      return out;
+    },
+  };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -13766,7 +14001,24 @@ export function buildSprites() {
     }
   }
 
-  function townTreeSprite(sp, season, frame) {
+  /* 2026-09-28 (phase 12a) — la neige posée sur un arbre, de l'éclat au bleu de
+     l'ombre (la rampe du sol, `neige.js`), et l'ombre de CONTACT d'un arbre
+     planté dans la neige : bleue, serrée au pied du fût — le reste de son ombre
+     est projeté sur la neige, depuis son dessin (`townSnowEnv.treeShadow`). */
+  const SNW_T = ["#fbfcfe", "#eaf0f8", "#d3dff0", "#b8c9e3", "#9aafd3"];
+  function contactOnSnow(g, sp) {
+    const rx = (sp.tw || 6) / 2 + 3.5;
+    for (let y = TBASE_ - 2; y <= TBASE_ + 2; y++) for (let x = 2; x < TW_ - 2; x++) {
+      const u = (x + 0.5 - (TCX_ + 1)) / rx, v = (y + 0.5 - (TBASE_ + 0.6)) / 1.9, d = u * u + v * v;
+      if (d > 1) continue;
+      P(g, x, y, 1, 1, d > 0.4 ? "rgba(46,62,104,0.16)" : "rgba(40,56,98,0.34)");
+    }
+  }
+  /* `snowLvl` (phase 12a) : 0..2, la neige des conifères (dessinée étage par
+     étage) ; `onSnow` : l'arbre est planté DANS la neige — son ombre cuite se
+     réduit à l'ombre de contact au pied du fût (l'ombre portée est projetée sur
+     la neige par `neige.js`, depuis le dessin de l'arbre). */
+  function townTreeSprite(sp, season, frame, snowLvl, onSnow) {
     const [c, g] = cv(TW_, TH_);
     const pal = (season === "autumn" && sp.autumn) ? Object.assign({}, sp, sp.autumn)
               : (season === "spring" && sp.spring) ? Object.assign({}, sp, sp.spring) : sp;
@@ -13788,14 +14040,15 @@ export function buildSprites() {
        vient du nord-ouest (cf. les arêtes claires du muret, du banc, de la
        berge). Une ombre centrée sous l'objet est une ombre de midi pile, et
        elle contredit tout le reste du décor. */
-    for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
+    if (onSnow) contactOnSnow(g, sp);
+    else for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
       const u = (x - (TCX_ + 1.5)) / (sp.shadowRx || 17), v = (y - (TBASE_ + 1.0)) / 4.0;
       const d = u * u + v * v;
       if (d > 1) continue;
       P(g, x, y, 1, 1, d > 0.44 ? "rgba(18,34,14,0.18)" : "rgba(12,26,10,0.38)");
     }
     if (sp.stake) treeStake(g, sp);   // 2026-09-27 (phase 11) : le jeune arbre planté, avant son fût
-    if (sp.conifer) { townConifer(g, sp, pal, frame); return c; }
+    if (sp.conifer) { townConifer(g, sp, pal, frame, snowLvl | 0); return c; }
     /* 2026-09-27 (phase 11) — deux crochets pour le magnolia redessiné : sa
        charpente à troncs multiples (`drawWood`) et ses bouquets posés aux pointes
        de ses branches (`clumpList`) au lieu d'un anneau sur une ellipse. Tout le
@@ -13987,7 +14240,7 @@ export function buildSprites() {
      pas l'empilement de triangles — c'est ce que faisait `pineTree` depuis le
      zip 232, et ça se lit comme un arbre de Noël en carton. Chaque étage a donc
      un bord inférieur en DENTS, un côté clair, un côté sombre et un cerne. */
-  function townConifer(g, sp, pal, frame) {
+  function townConifer(g, sp, pal, frame, snowLvl) {
     const [nd, ndL, ndD] = pal.leaf;
     const bot = TBASE_, top = sp.crownTop, tiers = sp.tiers;
     /* ⚠️ 2026-09-22 — LE PIN RÉUTILISE `treeTrunk()` (retour de Guillaume : le
@@ -14010,6 +14263,8 @@ export function buildSprites() {
     }
     const span = bot - sp.bare - top;
     const mask = new Uint8Array(TW_ * TH_);
+    // 2026-09-28 (phase 12a) — l'hiver : ce que la neige couvre, et quel étage a peint chaque pixel.
+    const snowM = snowLvl ? new Uint8Array(TW_ * TH_) : null, rowOf = snowLvl ? new Uint8Array(TW_ * TH_) : null;
     for (let i = 0; i < tiers; i++) {
       const yT = top + Math.round(i * span / tiers) - (i ? sp.overlap : 0);
       const yB = top + Math.round((i + 1) * span / tiers) + sp.overlap;
@@ -14028,6 +14283,7 @@ export function buildSprites() {
           const d = (x - cxs) / Math.max(1, hw);
           P(g, x, y, 1, 1, d < -0.30 ? ndL : d > 0.42 ? ndD : nd);
           mask[y * TW_ + x] = 1;
+          if (snowM) { snowM[y * TW_ + x] = 0; rowOf[y * TW_ + x] = i + 1; }
         }
       }
       // L'ombre portée de l'étage sur celui du dessous : c'est elle qui creuse.
@@ -14035,20 +14291,54 @@ export function buildSprites() {
         const yy = Math.min(TH_ - 2, yB);
         if (mask[yy * TW_ + x]) P(g, x, yy, 1, 1, pal.edge);
       }
+      /* 2026-09-28 (phase 12a) — LA NEIGE SUR L'ÉTAGE : elle se pose sur le
+         DESSUS de chaque étage (la pente qui regarde le ciel), jamais sur le
+         feston du bas. Légère : un liseré, par endroits, plus franc du côté du
+         vent (l'ouest). Alourdie : un COUSSIN de deux à quatre pixels qui épouse
+         la pente, pend en paquets sous son bord, et bleuit du côté de l'ombre
+         (l'est) — les branches ploient, le vert ne se voit plus qu'au feston. */
+      if (snowLvl) {
+        for (let x = 1; x < TW_ - 1; x++) {
+          let y0 = -1;
+          for (let y = yT; y <= yB && y < TH_ - 1; y++) if (mask[y * TW_ + x] && snowM[y * TW_ + x] === 0 && rowOf[y * TW_ + x] === i + 1) { y0 = y; break; }
+          if (y0 < 0) continue;
+          const d = (x - TCX_) / Math.max(1, half), hh = ((x * 73856093) ^ (i * 19349663) ^ 0x5bd1e995) >>> 0;
+          let n;
+          if (snowLvl >= 2) n = Math.round(2 + 1.6 * (1 - Math.abs(d)) + (hh % 3 === 0 ? 1 : 0));
+          else n = hh % 10 < 7 && Math.abs(d) < 0.92 ? (d < -0.3 && hh % 4 === 0 ? 2 : 1) : 0;
+          for (let k = 0; k < n; k++) {
+            const y = y0 + k;
+            if (y > yB || !mask[y * TW_ + x]) break;
+            const t = (y - yT) / Math.max(1, yB - yT);
+            if (t > (snowLvl >= 2 ? 0.8 : 0.55)) break;
+            const shadeSide = d > 0.35 ? 2 : d > -0.1 ? 1 : 0;
+            const col = k === 0 ? SNW_T[Math.min(3, shadeSide)] : k === n - 1 ? SNW_T[Math.min(4, shadeSide + 2)] : SNW_T[Math.min(4, shadeSide + 1)];
+            P(g, x, y, 1, 1, col);
+            snowM[y * TW_ + x] = 1;
+          }
+          // Un paquet qui pend sous le coussin, de loin en loin.
+          if (snowLvl >= 2 && n && hh % 5 === 0) {
+            const y = y0 + n;
+            if (y <= yB && mask[y * TW_ + x]) { P(g, x, y, 1, 1, SNW_T[d > 0.35 ? 4 : 3]); snowM[y * TW_ + x] = 1; }
+          }
+        }
+      }
     }
     const on = (x, y) => (x < 1 || y < 1 || x >= TW_ - 1 || y >= TH_ - 1) ? 0 : mask[y * TW_ + x];
     for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
       if (!mask[y * TW_ + x]) continue;
       if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
-      P(g, x, y, 1, 1, pal.out);
+      // Le cerne d'une neige posée sur le bord : froid, pas vert noir (DESSIN.md : un cerne sert aussi sur fond clair).
+      P(g, x, y, 1, 1, snowM && snowM[y * TW_ + x] ? (on(x, y - 1) ? SNW_T[4] : "#7282a6") : pal.out);
     }
     // La flèche, bornée à y = 1 : le §4 en flagrant délit au 437 (elle sortait).
     const spY = Math.max(1, top - 3);
     P(g, TCX_ + Math.round(frame * 1.4), spY, 1, 4, ndL);
+    if (snowLvl >= 2) P(g, TCX_ + Math.round(frame * 1.4), spY, 1, 2, SNW_T[0]);
     if (pal.cone) for (let i = 0; i < tiers - 1; i++) {
       const y = top + Math.round((i + 0.8) * span / tiers);
       const x = TCX_ + (i % 2 ? 4 + i : -5 - i);
-      if (on(x, y)) { P(g, x, y, 2, 3, pal.cone); P(g, x, y, 1, 1, "#8a6d47"); }
+      if (on(x, y) && !(snowM && snowM[y * TW_ + x])) { P(g, x, y, 2, 3, pal.cone); P(g, x, y, 1, 1, "#8a6d47"); }
     }
   }
 
@@ -14409,7 +14699,10 @@ export function buildSprites() {
          cerne, même vent. Premier jet, un disque par pointe peint ici : des
          sucettes vertes sur des bâtons (vu sur la planche). Les bouquets sont
          posés aux pointes et aux nœuds, assez gros pour se fondre en couronne. */
-      const leafy = season !== "spring";
+      /* 2026-09-28 (phase 12a) — L'HIVER : le bois nu, comme au printemps, sans
+         fleur — mais avec ses BOURGEONS, des gaines grises et duveteuses au bout
+         des rameaux (le magnolia les porte tout l'hiver). */
+      const leafy = season !== "spring" && season !== "winter";
       let c;
       if (leafy) {
         const rr = 4.3 * (z.rs || 1);
@@ -14443,6 +14736,7 @@ export function buildSprites() {
          roses, l'un plus pâle : quarante fois le même dessin redeviendrait un
          papier peint. */
       const bloom = season === "spring" ? pts : season === "summer" ? pts.filter((p, i) => i % 3 === 0 && p.v < 0.2) : [];
+      if (season === "winter") for (const o of pts) { paint(o.x, o.y - 1, "#d8d4c6"); paint(o.x, o.y, "#a9a495"); }
       const PALE = { base: "#b86a92", mid: "#eeb2cb", light: "#fbe0eb", tip: "#fffafc" };
       bloom.map((o, i) => [i, o]).sort((a, b) => a[1].y - b[1].y).forEach(([i, o]) => {
         const x = o.x, y = o.y, P5 = (i % 3 === 1) ? PALE : MAG_PETAL;
@@ -14459,6 +14753,7 @@ export function buildSprites() {
           paint(x, y + 1, P5.base);
         }
       });
+      if (season === "winter") return c;
       /* Le cerne des fleurs, À L'EXTÉRIEUR et du côté de l'ombre seulement (sud
          et est). ⚠️ Posé SUR le bord comme chez les autres essences, il
          mangerait une fleur de trois pixels sur deux ; tout autour, il en ferait
@@ -14478,6 +14773,317 @@ export function buildSprites() {
       }
       return c;
     });
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ PHASE 12a (2026-09-28) — L'HIVER DES ARBRES DE LA VILLE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : « trois états possibles, nu, légèrement enneigé et alourdi par
+     la neige ; tu t'inspireras d'images réelles de sapins, d'arbres enneigés ».
+     · LES FEUILLUS PERDENT LEURS FEUILLES. Leur charpente est dessinée comme
+       celle du magnolia (dont c'est la méthode, note de `magnoliaTree`) : les
+       POINTES d'abord, semées dans l'enveloppe de la couronne de l'essence (la
+       même ellipse que ses bouquets : l'arbre garde sa silhouette d'une saison
+       à l'autre), puis on remonte — pointe → branche → charpentière → fût. Au
+       bout des rameaux, les brindilles ; autour, la BRUME des rameaux fins,
+       semi-transparente : c'est elle qui fait lire de loin un houppier d'hiver
+       (un gris violacé, pas un squelette de fil de fer). Le chêne est tortueux
+       et large, l'érable ovale, le bouleau a des rameaux rougeâtres qui
+       retombent, le cerisier s'étale, le pommier est tordu et bas, et le saule
+       pleureur devient un rideau de rameaux DORÉS (l'or de ses jeunes pousses,
+       tout l'hiver).
+     · LES PERSISTANTS GARDENT LEUR FEUILLAGE : les conifères (dans la palette
+       sombre d'arrière-saison), et le MIMOSA, qui FLEURIT en hiver.
+     · LA NEIGE SE POSE SUR CE QUI REGARDE LE CIEL, lu dans les pixels du
+       dessin (`winterSnowPass`) : le dessus des branches et des brindilles pour
+       un feuillu, les étages d'un sapin (chaque étage sous le rebord sombre de
+       celui du dessus), le haut des masses d'un feuillage. Légère : un liseré,
+       par endroits. Alourdie : des bourrelets de deux pixels, la brume des
+       rameaux blanchie (la neige prise dans les brindilles — l'arbre de carte
+       postale), des paquets qui pendent sous les étages, et le fût plâtré du
+       côté du vent (l'ouest).
+     ⚠️ PARESSEUX, EN ATLAS : une image se fabrique à son premier affichage, dans
+     des pages de 1024 × 1024 (§10 de CLAUDE.md : le nombre de canevas). */
+  const BARE = {
+    oak:    { limbs: 5, spread: 1.05, dmin: 3.3, rise: 0.62, gnarl: 1.0, twig: "#5a4636", haze: "rgba(78,62,50,0.34)" },
+    maple:  { limbs: 4, spread: 0.72, dmin: 3.1, rise: 0.8, gnarl: 0.45, twig: "#5f4a3e", haze: "rgba(88,68,60,0.32)" },
+    birch:  { limbs: 3, spread: 0.55, dmin: 2.8, rise: 0.86, gnarl: 0.25, twig: "#6b3c34", haze: "rgba(116,64,58,0.36)", droop: 2 },
+    willow: { limbs: 4, spread: 0.95, dmin: 3.6, rise: 0.66, gnarl: 0.3, twig: "#a88c42", haze: "rgba(170,144,72,0.3)", weep: true },
+    cherry: { limbs: 4, spread: 1.0, dmin: 3.5, rise: 0.66, gnarl: 0.55, twig: "#5e3b35", haze: "rgba(98,62,60,0.32)" },
+    apple:  { limbs: 4, spread: 1.12, dmin: 3.5, rise: 0.58, gnarl: 1.25, twig: "#54402f", haze: "rgba(86,66,50,0.34)" },
+    magnolia: { limbs: 3, spread: 0.8, dmin: 3.4, rise: 0.7, gnarl: 0.3, twig: "#5c5250", haze: "rgba(96,88,86,0.3)" },
+  };
+  /* Un feuillu nu, au gabarit courant (`withTreeGeom`). Rend { c, mask } —
+     `mask` : 1 brume, 2 rameau, 3 branche, 4 fût (la neige s'en sert). */
+  function bareTree(sp, frame, B, seed, onSnow) {
+    const [c, g] = cv(TW_, TH_);
+    const rnd = makeRnd(seed);
+    const mask = new Uint8Array(TW_ * TH_);
+    // L'ombre d'un arbre nu : légère et froide (la lumière passe entre les branches).
+    const srx = sp.shadowRx || 17;
+    if (onSnow) contactOnSnow(g, sp);
+    else for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 3; x < TW_ - 3; x++) {
+      const u = (x - (TCX_ + 1.5)) / srx, v = (y - (TBASE_ + 1.0)) / 4.0, d = u * u + v * v;
+      if (d <= 1) P(g, x, y, 1, 1, d > 0.44 ? "rgba(40,52,82,0.10)" : "rgba(34,46,76,0.2)");
+    }
+    if (sp.stake) treeStake(g, sp);
+    treeTrunk(g, sp);
+    const x0 = TCX_ - (sp.tw >> 1);
+    for (let y = sp.trunkTop; y < TBASE_; y++) for (let x = x0; x < x0 + sp.tw; x++) mask[y * TW_ + x] = 4;
+    const cr = sp.crown, cx = cr.cx, cy = cr.cy, rx = cr.rx * 1.08, ry = cr.ry * 1.05;
+    const top = sp.trunkTop + 1;
+    const pts = [];
+    const dmin = B.dmin * (sp.twigs ? 1.25 : 1);
+    for (let tries = 0; tries < 3000 && pts.length < 130; tries++) {
+      const u = rnd() * 2 - 1, v = rnd() * 2 - 1;
+      if (u * u + v * v > 1 || v > 0.62) continue;
+      const x = cx + u * rx, y = cy + v * ry;
+      if (y > top - 3) continue;
+      if (pts.some(p => (p.x - x) ** 2 + (p.y - y) ** 2 < dmin * dmin)) continue;
+      pts.push({ x, y });
+    }
+    if (!pts.length) return { c, mask };
+    const nL = sp.twigs ? 2 : B.limbs;
+    const reach = Math.max(4, top - (cy - ry * 0.15));
+    const limbs = [];
+    for (let i = 0; i < nL; i++) {
+      const f = nL === 1 ? 0 : (i / (nL - 1)) * 2 - 1;
+      const th = f * B.spread + (rnd() - 0.5) * 0.22;
+      limbs.push({ th, x: TCX_ + Math.sin(th) * rx * 0.6, y: top - Math.cos(th) * reach * B.rise * (0.85 + rnd() * 0.2), tips: [] });
+    }
+    for (const p of pts) {
+      const a = Math.atan2(p.x - TCX_, top - p.y);
+      let best = limbs[0];
+      for (const l of limbs) if (Math.abs(l.th - a) < Math.abs(best.th - a)) best = l;
+      best.tips.push(p);
+    }
+    const segs = [];
+    const W0 = Math.max(2, Math.min(3, sp.tw - 3));
+    const bendOf = (len) => (rnd() - 0.5) * B.gnarl * len * 0.28;
+    for (const l of limbs) {
+      segs.push({ x: TCX_ + Math.sin(l.th) * 1.2, y: top + 1, x2: l.x, y2: l.y, w: W0, bend: bendOf(reach) });
+      if (!l.tips.length) continue;
+      const ang = (p) => Math.atan2(p.x - l.x, l.y - p.y);
+      l.tips.sort((a, b) => ang(a) - ang(b));
+      const groups = Math.max(1, Math.min(3, Math.round(l.tips.length / 4)));
+      for (let gi = 0; gi < groups; gi++) {
+        const grp = l.tips.slice(Math.floor(gi * l.tips.length / groups), Math.floor((gi + 1) * l.tips.length / groups));
+        if (!grp.length) continue;
+        const mx = grp.reduce((a2, p) => a2 + p.x, 0) / grp.length, my = grp.reduce((a2, p) => a2 + p.y, 0) / grp.length;
+        const nd = { x: l.x + (mx - l.x) * 0.5, y: l.y + (my - l.y) * 0.5 };
+        segs.push({ x: l.x, y: l.y, x2: nd.x, y2: nd.y, w: W0 > 2 ? 2 : 1, bend: bendOf(Math.hypot(mx - l.x, my - l.y)) });
+        for (const p of grp) { segs.push({ x: nd.x, y: nd.y, x2: p.x, y2: p.y, w: 1, bend: bendOf(Math.hypot(p.x - nd.x, p.y - nd.y)) * 0.6, tip: true }); p.from = nd; }
+      }
+    }
+    const topY = Math.min(...pts.map(t => t.y));
+    const sw = (y) => { const h = Math.max(0, Math.min(1, (TBASE_ - 8 - y) / Math.max(1, TBASE_ - 8 - topY))); return frame * h * h * 1.8; };
+    const put = (x, y, col, m) => {
+      const xx = Math.round(x + sw(y)), yy = Math.round(y);
+      if (xx < 1 || yy < 1 || xx >= TW_ - 1 || yy >= TH_ - 1) return;
+      P(g, xx, yy, 1, 1, col);
+      if (m > mask[yy * TW_ + xx]) mask[yy * TW_ + xx] = m;
+    };
+    const [bark, barkL, barkD] = sp.trunk;
+    // Le bois, du plus épais au plus fin : un rameau passe DEVANT ce qui le porte.
+    for (const sg of segs.slice().sort((a, b) => b.w - a.w)) {
+      const len = Math.hypot(sg.x2 - sg.x, sg.y2 - sg.y), n = Math.max(2, Math.ceil(len * 2));
+      const nx = -(sg.y2 - sg.y) / (len || 1), ny = (sg.x2 - sg.x) / (len || 1);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, b = sg.bend * 4 * t * (1 - t);
+        const x = sg.x + (sg.x2 - sg.x) * t + nx * b, y = sg.y + (sg.y2 - sg.y) * t + ny * b;
+        const w = Math.max(1, Math.round(sg.w - t * 0.7));
+        if (w === 1) put(x, y, sg.tip ? B.twig : barkD, sg.tip ? 2 : 3);
+        else for (let k = 0; k < w; k++) put(x - (w >> 1) + k, y, k === 0 ? barkL : k === w - 1 ? barkD : bark, 3);
+      }
+    }
+    // Les brindilles : deux ou trois traits courts qui prolongent chaque pointe en éventail.
+    for (const p of pts) {
+      const f = p.from || { x: TCX_, y: top };
+      let dx = p.x - f.x, dy = p.y - f.y; const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+      for (const a of [-0.55, 0.5, 0.05]) {
+        if (a === 0.05 && rnd() < 0.5) continue;
+        const ca = Math.cos(a), sa = Math.sin(a), ux = dx * ca - dy * sa, uy = dx * sa + dy * ca;
+        const L = 2 + Math.floor(rnd() * 2);
+        for (let k = 1; k <= L; k++) put(p.x + ux * k, p.y + uy * k, B.twig, 2);
+      }
+      if (B.droop) for (let k = 1; k <= B.droop; k++) put(p.x + dx * 0.5 * k, p.y + k, B.twig, 2);
+    }
+    // Le saule : le rideau de rameaux dorés, une colonne sur deux de ce que la charpente couvre.
+    if (B.weep) {
+      const lowOf = new Map();
+      for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) if (mask[y * TW_ + x] >= 2 && mask[y * TW_ + x] < 4) lowOf.set(x, y);
+      for (const [x, low] of lowOf) {
+        const edgeF = 0.45 + 0.55 * Math.sin((x - TCX_) / Math.max(8, rx) * 1.6 + 1.57);
+        const len = Math.round((sp.weep || 18) * Math.max(0.25, edgeF) * (0.75 + 0.25 * Math.sin(x * 1.7)));
+        for (let q = 1; q <= len && low + q < TBASE_ - 2; q++) {
+          const xx = x + (q > len * 0.6 ? (x < TCX_ ? -1 : 1) : 0) - Math.round(sw(low + q));
+          put(xx, low + q, (x + q) % 3 === 0 ? "#c9ad5c" : B.twig, 2);
+        }
+      }
+    }
+    /* LA BRUME DES RAMEAUX : autour des pointes, dans l'enveloppe, un pixel sur
+       deux ou trois, semi-transparent — la masse de milliers de brindilles
+       qu'aucun trait ne peut dessiner à cette échelle. */
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+      if (mask[y * TW_ + x]) continue;
+      const xs = x - sw(y);
+      const u = (xs - cx) / (rx * 1.05), v = (y - cy) / (ry * 1.05);
+      if (u * u + v * v > 1 || v > 0.7) continue;
+      let near = false;
+      for (const p of pts) if ((p.x - xs) ** 2 + (p.y - y) ** 2 <= 7.5) { near = true; break; }
+      if (!near || ((x * 7 + y * 13) % 5) < 2) continue;
+      P(g, x, y, 1, 1, B.haze);
+      mask[y * TW_ + x] = 1;
+    }
+    return { c, mask };
+  }
+  const SNW = [[247, 249, 252], [233, 239, 246], [217, 226, 237], [195, 207, 224]];
+  /* LA NEIGE SUR UN ARBRE, lue dans ses pixels. `mask` (feuillus nus) ou, s'il
+     manque, la luminance (persistants : un étage est plus clair que le rebord
+     sombre de celui du dessus — c'est là que la neige se pose). */
+  function winterSnowPass(c, lvl, seed, mask) {
+    const g = c.getContext("2d"), W = c.width, H = c.height;
+    const im = g.getImageData(0, 0, W, H), d = im.data;
+    const A = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : d[(y * W + x) * 4 + 3]);
+    const Lm = (x, y) => { const o = (y * W + x) * 4; return d[o] * 0.3 + d[o + 1] * 0.59 + d[o + 2] * 0.11; };
+    const hh = (x, y) => (((x * 73856093) ^ (y * 19349663) ^ (seed * 83492791)) >>> 0) % 97;
+    const M = (x, y) => (mask && x >= 0 && y >= 0 && x < W && y < H ? mask[y * W + x] : 0);
+    // L'ombre portée cuite (vert sombre) devient froide : sur la neige, une ombre est bleue.
+    for (let o = 0; o < d.length; o += 4) {
+      if (d[o + 3] > 0 && d[o + 3] < 120 && d[o] < 60 && d[o + 1] < 70 && d[o + 1] >= d[o]) { d[o] = 40; d[o + 1] = 54; d[o + 2] = 86; }
+    }
+    if (!lvl) { g.putImageData(im, 0, 0); return c; }
+    const out = new Uint8ClampedArray(d);
+    const set = (x, y, col, a) => {
+      if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
+      const o = (y * W + x) * 4;
+      out[o] = col[0]; out[o + 1] = col[1]; out[o + 2] = col[2]; out[o + 3] = a == null ? 255 : a;
+    };
+    const tone = (x, k) => SNW[Math.min(3, k + (x > TCX_ + 3 ? 1 : 0))];
+    const floorY = H - (H - TBASE_) - 3;
+    for (let y = 1; y < floorY; y++) for (let x = 1; x < W - 1; x++) {
+      const a = A(x, y);
+      if (mask) {
+        const m = M(x, y);
+        if (m === 4) {
+          // Le fût plâtré par le vent, du côté ouest, sous une neige épaisse.
+          if (lvl >= 2 && M(x - 1, y) !== 4 && hh(x, y) % 3 !== 0) set(x, y, SNW[1]);
+          continue;
+        }
+        if (m === 1) { if (lvl >= 2 && hh(x, y) % 5 < 3) set(x, y, SNW[0], 170); else if (lvl === 1 && hh(x, y) % 7 === 0) set(x, y, SNW[1], 140); continue; }
+        if (m < 2) continue;
+        if (M(x, y - 1) >= 2) continue;                        // pas un dessus
+        const thick = m === 3;
+        if (lvl === 1) {
+          if (thick) { if (hh(x, y) % 5) set(x, y - 1, tone(x, 0)); }
+          else if (hh(x, y) % 3 === 0) set(x, y, tone(x, 0));
+        } else {
+          set(x, y - 1, tone(x, 0));
+          set(x, y, tone(x, 1));
+          if (thick && hh(x, y) % 3 === 0 && M(x, y - 2) < 2) set(x, y - 2, tone(x, 0));
+        }
+        continue;
+      }
+    }
+    /* LES PERSISTANTS SANS MASQUE (le sapin de la planche, le mimosa, le
+       magnolia) : un COUSSIN le long de tout ce qui regarde le ciel — les
+       premiers pixels de chaque colonne sous un vide (les pentes, les rebords
+       des étages qui débordent de celui du dessus) et sous un REBORD (un pixel
+       nettement plus clair que celui du dessus : le haut d'un étage, sous le
+       feston sombre du précédent). Épais de deux ou trois pixels sous une neige
+       lourde, d'un seul sous une légère ; bleui du côté de l'ombre (l'est). */
+    if (!mask) {
+      for (let x = 1; x < W - 1; x++) {
+        let run = -1;
+        for (let y = 1; y < floorY; y++) {
+          if (A(x, y) < 200) { run = -1; continue; }
+          if (run < 0 || (run > 3 && Lm(x, y) > Lm(x, y - 1) + 10)) run = 0;
+          const h = hh(x, y), side = x > TCX_ + 3 ? 1 : 0;
+          const n = lvl >= 2 ? 3 + (h % 3 === 0 ? 1 : 0) : (h % 10 < 7 ? 1 : 0);
+          if (run < n) {
+            set(x, y, SNW[Math.min(3, (run === 0 ? 0 : run === n - 1 ? 2 : 1) + side)]);
+            if (run === 0 && lvl >= 2 && A(x, y - 1) < 120 && h % 2) set(x, y - 1, SNW[side]);
+          } else if (run === n && lvl >= 2 && h % 6 === 0) set(x, y, SNW[2 + side]);   // un paquet qui pend
+          run++;
+        }
+      }
+    }
+    im.data.set(out);
+    g.putImageData(im, 0, 0);
+    return c;
+  }
+  /* L'ombre cuite d'un arbre de la planche (gris sombre, sous le fût) : dans la
+     neige, elle cède la place à l'ombre de contact bleue et à l'ombre projetée. */
+  function stripBakedShadow(c, sp) {
+    const g = c.getContext("2d"), W = c.width, H = c.height;
+    const im = g.getImageData(0, 0, W, H), d = im.data;
+    for (let y = TBASE_ - 5; y < H; y++) for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4;
+      if (!d[o + 3]) continue;
+      const mx = Math.max(d[o], d[o + 1], d[o + 2]), mn = Math.min(d[o], d[o + 1], d[o + 2]);
+      if (mx - mn < 26 && mx < 120 && (d[o + 3] < 250 || y >= TBASE_ - 1)) d[o + 3] = 0;
+    }
+    g.putImageData(im, 0, 0);
+    contactOnSnow(g, sp);
+  }
+  /* L'atlas paresseux des arbres d'hiver : des pages de 1024², rangées en étagères. */
+  function makeWinterTrees() {
+    const pages = [];
+    const memo = new Map();
+    const place = (src) => {
+      const w = src.width, h = src.height;
+      let pg = pages[pages.length - 1];
+      if (!pg || (pg.x + w > 1024 && pg.y + pg.rowH + h > 1024) || pg.y + Math.max(pg.rowH, h) > 1024) {
+        const cnv = document.createElement("canvas"); cnv.width = 1024; cnv.height = 1024;
+        const gg = cnv.getContext("2d"); gg.imageSmoothingEnabled = false;
+        pg = { c: cnv, g: gg, x: 0, y: 0, rowH: 0 }; pages.push(pg);
+      }
+      if (pg.x + w > 1024) { pg.x = 0; pg.y += pg.rowH; pg.rowH = 0; }
+      pg.g.drawImage(src, pg.x, pg.y);
+      const cell = { img: pg.c, sx: pg.x, sy: pg.y, w, h };
+      pg.x += w; pg.rowH = Math.max(pg.rowH, h);
+      return cell;
+    };
+    const ADULT = { geom: [48, 64, 58, 24], sx: 1, sy: 1, twS: 1, rs: 1 };
+    const build = (k, size, lvl, fi, onSnow) => {
+      const z = size === "adult" ? ADULT : TREE_SIZES[size];
+      const frame = TREE_FRAMES[fi];
+      const seed = 7919 + k * 131 + (TREE_SIZE_KEYS.indexOf(size) + 1) * 17;
+      return withTreeGeom(z, () => {
+        const sized = (sp) => (size === "adult" ? sp : sizedSpec(sp, z));
+        let c, mask = null, native = false;
+        if (k === TT.REF_FIR) { c = plancheTree("treeFir", "autumn", frame, 1); if (onSnow) stripBakedShadow(c, { tw: 4 }); }
+        else if (k === TT.REF_MAGNOLIA) { c = magnoliaTree("winter", frame, size === "adult" ? undefined : z); if (onSnow) stripBakedShadow(c, { tw: 5 }); }
+        else if (k === TT.REF_APPLE || k === TT.REF_WILLOW) {
+          const sp = TREE_SPECS[k === TT.REF_APPLE ? TT.APPLE : TT.WILLOW];
+          const r = bareTree(sp, frame, BARE[sp.id], seed, onSnow); c = r.c; mask = r.mask;
+        } else {
+          const sp = TREE_SPECS[k];
+          if (!sp) return null;
+          // Les conifères portent leur neige étage par étage, dessinée avec eux (`townConifer`).
+          if (sp.conifer) { c = townTreeSprite(sized(sp), "autumn", frame, lvl, onSnow); native = true; }
+          else if (sp.id === "mimosa") c = townTreeSprite(sized(sp), "spring", frame, 0, onSnow);
+          else { const r = bareTree(sized(sp), frame, BARE[sp.id] || BARE.oak, seed, onSnow); c = r.c; mask = r.mask; }
+        }
+        winterSnowPass(c, native ? 0 : lvl, seed + lvl, mask);
+        const cell = place(c);
+        cell.m = { w: z.geom[0], h: z.geom[1], base: z.geom[2] };
+        return cell;
+      });
+    };
+    return {
+      /* `k` : l'essence (`TT`), `size` : sa taille, `lvl` : 0 nu, 1 léger, 2
+         alourdi, `fi` : la pose de vent (indice de `TREE_FRAMES`). */
+      get(k, size, lvl, fi, onSnow) {
+        const key = `${k}|${size}|${lvl}|${fi}|${onSnow ? 1 : 0}`;
+        if (memo.has(key)) return memo.get(key);
+        let cell = null;
+        try { cell = build(k, size, lvl, fi, !!onSnow); } catch (e) { cell = null; }
+        memo.set(key, cell);
+        return cell;
+      },
+      pages: () => pages.length,
+    };
   }
 
 
@@ -18509,5 +19115,7 @@ house: house(),
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker, look || null);
     return S.chars[key];
   };
+  /* 2026-09-28 (phase 12a) — les arbres d'hiver, fabriqués à leur premier affichage. */
+  S.townTreesWinter = makeWinterTrees();
   return S;
 }

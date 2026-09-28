@@ -185,6 +185,9 @@ export function makeCanvas(W, H) {
         const i = (yy * W + xx) * 4; px[i] = px[i + 1] = px[i + 2] = px[i + 3] = 0;
       }
     },
+    /* 2026-09-28 (phase 12a) — la neige rend ses parcelles dans une ImageData
+       qu'elle pose dans son atlas (`neige.js`, `makeSnowField`). */
+    createImageData(w, h) { return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h }; },
     getImageData(x, y, w, h) {
       const out = new Uint8ClampedArray(w * h * 4);
       for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {

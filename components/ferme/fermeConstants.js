@@ -5831,7 +5831,8 @@ function townHouseBitmaps() {
   const out = {};
   for (const [mk, m] of Object.entries(TOWN_HOUSE_MODELS)) for (const [vk, v] of Object.entries(m.variants)) {
     const key = townHouseBitmapKey(mk, vk), base = `/town/maison-${mk}-${vk}`;
-    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, zooms: [1, 2, 3, 4, 5],
+    // 2026-09-28 (phase 12a) : `snowL`/`snowH`, la neige légère et épaisse du toit (`tools/build-snow-roofs.mjs`).
+    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, snowL: `${base}-snowl`, snowH: `${base}-snowh`, zooms: [1, 2, 3, 4, 5],
                  disp: v.crop[2] * townDoorScale(m), dispH: v.crop[3] * townDoorScale(m), grow: 1, smooth: false,
                  house: { model: mk, variant: vk } };
   }
@@ -5994,7 +5995,7 @@ function townShopBitmaps() {
   const out = {};
   for (const [mk, m] of Object.entries(TOWN_SHOP_MODELS)) for (const [vk, v] of Object.entries(m.variants)) {
     const key = townPaintedBitmapKey(mk, vk), base = `/town/boutique-${mk}-${vk}`;
-    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, zooms: [1, 2, 3, 4, 5],
+    out[key] = { grid: "screen", day: `${base}-day`, glow: `${base}-glow`, snowL: `${base}-snowl`, snowH: `${base}-snowh`, zooms: [1, 2, 3, 4, 5],
                  disp: v.crop[2] * townShopScale(m), dispH: v.crop[3] * townShopScale(m), grow: 1, smooth: false,
                  shop: { model: mk, variant: vk } };
   }
@@ -6051,7 +6052,7 @@ export const TOWN_BITMAPS = {
      un étage au-dessus de l'hôtel de ville. Au cran 5 l'image (1 584 px) dépasse
      la référence (1 004 px) : agrandie ×1,58 par le Lanczos du script, jamais
      par le jeu — à regarder au plus près avant de la croire. */
-  church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", flood: "/town/eglise-flood", floodK: 1, zooms: [1, 2, 3, 4, 5],
+  church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", flood: "/town/eglise-flood", snowL: "/town/eglise-snowl", snowH: "/town/eglise-snowh", floodK: 1, zooms: [1, 2, 3, 4, 5],
                 disp: 288, dispH: 274.5, grow: 1.1, smooth: false,
                 lights: [
                   { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6, room: "nave" },
@@ -6059,7 +6060,7 @@ export const TOWN_BITMAPS = {
                   { x: 426 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55, room: "aisle" },
                 ],
                 ref: "refs/eglise-nouvelle.jpg", build: "tools/build-eglise-sprite.mjs" },
-  townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", flood: "/town/townhall-flood", floodK: 0.85, zooms: [1, 2, 3, 4, 5],
+  townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", flood: "/town/townhall-flood", snowL: "/town/townhall-snowl", snowH: "/town/townhall-snowh", floodK: 0.85, zooms: [1, 2, 3, 4, 5],
                 disp: 192, dispH: 173, grow: 1.1, smooth: false,
                 lights: [
                   { x: 241 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
@@ -6081,7 +6082,7 @@ export const TOWN_BITMAPS = {
      cran 3, comme les perchoirs des pigeons. `room` (phase 6c) : la pièce de
      `LUM.MONUMENT_WINDOWS` dont la flaque suit l'heure — sans elle, allumée
      toute la nuit (lanternes). */
-  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", flood: "/town/courthouse-flood", floodK: 0.9, zooms: [1, 2, 3, 4, 5],
+  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", flood: "/town/courthouse-flood", snowL: "/town/courthouse-snowl", snowH: "/town/courthouse-snowh", floodK: 0.9, zooms: [1, 2, 3, 4, 5],
                 disp: TOWN_COURT_SPRITE.disp, dispH: TOWN_COURT_SPRITE.ih * TOWN_COURT_SPRITE.disp / TOWN_COURT_SPRITE.iw,
                 grow: TOWN_COURT_SPRITE.grow, smooth: false,
                 lights: [
@@ -6105,6 +6106,7 @@ export const TOWN_BITMAPS = {
 export function townBitmapMip(b, z) {
   return {
     z, day: `${b.day}-z${z}.png`, glow: b.glow ? `${b.glow}-z${z}.png` : null, flood: b.flood ? `${b.flood}-z${z}.png` : null,
+    snowL: b.snowL ? `${b.snowL}-z${z}.png` : null, snowH: b.snowH ? `${b.snowH}-z${z}.png` : null,
     w: Math.round(b.disp * b.grow * z), h: Math.round(b.dispH * b.grow * z),
   };
 }

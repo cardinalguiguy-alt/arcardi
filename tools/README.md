@@ -301,6 +301,22 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   le 2026-09-25, l'église et l'hôtel de ville se reproduisaient au pixel près, le tribunal NON (388 px
   gommés à la main) — la gomme vit maintenant dans son script.
 
+- **`tools/verify-neige.mjs` — 17 contrôles, 17/17 (2026-09-28 : la neige, phase 12a).** Il JOUE
+  `components/ferme/neige.js` : le manteau est une PURE fonction (lu en avant et en arrière, même
+  nombre) ; un hiver blanc un midi sur deux ou trois sans ensevelir (il imprime le maximum), le
+  printemps qui fond ; le dépôt PROGRESSIF (aucun saut de couverture d'un cran de 2 mm, il imprime la
+  courbe) ; le GRAIN (part des pixels hors du ton dominant) ; l'OMBRE PORTÉE au sud-est d'un bâtiment,
+  pas au nord-ouest, et celle des arbres ; les empreintes creusées puis comblées ; plus une fleur sur
+  un buisson hiverné ; les 230 calques de neige des toits présents et à la taille de leur image ; la
+  hauteur des clôtures au voxel, ajourée. Falsifié : `FALSIFY=saut|aplat|ombre|comble|fleurs` (⚠️
+  `aplat` et `ombre` forcent le verdict au lieu de saboter la donnée — à durcir).
+- **`tools/render-neige.mjs` — 2 contrôles + planches (2026-09-28).** L'ATELIER de la neige : de vrais
+  morceaux de la carte (`rue`, `jardins`) avec le sol, la neige, les clôtures et les arbres d'hiver du
+  jeu, en PNG ×3 (`node tools/render-neige.mjs [lieu] [cm] [soleil|gris]`) ; il vérifie qu'aucune
+  clôture enneigée ne touche le haut de sa cellule et qu'aucun arbre d'hiver ne touche le bord de son
+  canevas (falsifié : `FALSIFY=cadre`). ⚠️ Il ne voit ni la lumière de la scène ni les maisons (des
+  pavés gris) : la neige se juge ensuite en jeu. `tools/build-snow-roofs.mjs` fabrique les calques des
+  toits et sa planche (`tools/out/toits-neige.png`).
 - **`tools/verify-meteo.mjs` — 40 contrôles, 40/40 (2026-09-26 : la météo).** Il JOUE
   `components/ferme/meteo.js` sur 4 000 journées par saison : le temps est une PURE fonction (deux
   clients tirent le même) ; les SAISONS (au moins deux fois plus de jours de pluie à l'automne qu'en

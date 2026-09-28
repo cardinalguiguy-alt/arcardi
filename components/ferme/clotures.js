@@ -73,7 +73,7 @@ const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 /* ── 2. LES MATIÈRES ET LEURS PALETTES ─────────────────────────────────────
    Du plus sombre au plus clair ; l'indice vient de l'éclairage. */
 const M = { LEAF: 1, STONE: 2, COPING: 3, IRON: 4, PAINT: 5, WOOD: 6, PLANK: 7, WIRE: 8, GRASS: 9, BALL: 10,
-            SOIL: 11, CABBAGE: 12, LEEK: 13, LETTUCE: 14, TOMATO: 15, PUMPKIN: 16, STRAW: 17, STAKE: 18 };
+            SOIL: 11, CABBAGE: 12, LEEK: 13, LETTUCE: 14, TOMATO: 15, PUMPKIN: 16, STRAW: 17, STAKE: 18, SNOW: 19 };
 const PAL = {
   [M.LEAF]: pal(["#142b18", "#1c3a21", "#264c2b", "#305f35", "#3c7340", "#4b884b", "#5e9d57", "#79b468"]),
   [M.STONE]: pal(["#5f584c", "#766e60", "#8b8272", "#a09684", "#b3a995", "#c5bba6"]),
@@ -92,6 +92,8 @@ const PAL = {
   [M.TOMATO]: pal(["#6e1c14", "#94281b", "#b93824", "#d65233", "#e97a53"]),
   [M.PUMPKIN]: pal(["#7a3a10", "#9e5116", "#c26b1f", "#dd8a2f", "#eeab4e"]),
   [M.STRAW]: pal(["#7d6a3d", "#9a8550", "#b5a065", "#cdb97c", "#e0cf95"]),
+  // 2026-09-28 (phase 12a) — la neige : la palette de `neige.js` (SNOW_TONES), bleue dans l'ombre.
+  [M.SNOW]: pal(["#8598c3", "#9badd3", "#b2c3e1", "#c8d6ed", "#dce6f5", "#edf2fa", "#f8fafd", "#fffdf6"]),
 };
 /* Les planches d'une palissade sont de bois inégalement grisé : cinq teintes
    de bois vieilli, une par planche (au hachage de la planche, pas du pixel). */
@@ -116,7 +118,8 @@ const L = [LX / LN, LY / LN, LZ / LN];
    qu'il ne faut ni face avant ni cerne sur la couture. `d` : les pixels RGBA
    de la cellule (`W` de large), l'origine au sol (u=0, v=0) est à (ox, oy).
    `u0..u1` : les colonnes à peindre (une case : 0..15). */
-function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shadow) {
+function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shadow, shadowRGB) {
+  const SR = shadowRGB || [18, 28, 14];
   const layer = new Uint8ClampedArray(W * H * 4);
   const kind = new Uint8Array(W * H);             // la matière peinte à chaque pixel (le cerne s'en sert)
   const put = (x, y, c, m) => {
@@ -159,7 +162,7 @@ function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shad
     const u = x - ox, v = y - oy;
     if (u < u0 || u > u1 || v < v0 || v > v1) continue;
     const a = shadow(u, v);
-    if (a > 0) { d[o] = 18; d[o + 1] = 28; d[o + 2] = 14; d[o + 3] = Math.round(a * 255); }
+    if (a > 0) { d[o] = SR[0]; d[o + 1] = SR[1]; d[o + 2] = SR[2]; d[o + 3] = Math.round(a * 255); }
   }
 }
 /* L'ombre de contact d'un modèle : sous et au pied de ce qui touche le sol. */
@@ -210,6 +213,73 @@ function leafLevel(face, wx, wy, z) {
   if (Math.sqrt(d2) - Math.sqrt(d1) < 0.7) l -= 0.2;
   if (face === "front" && z <= 1) l -= 0.12;
   return l;
+}
+
+/* ── 4 bis. LA NEIGE (phase 12a, 2026-09-28) ───────────────────────────────
+   « La neige n'aura qu'à blanchir les faces du dessus » (en-tête) : elle fait
+   mieux, elle AJOUTE DES VOXELS — une colonne de `k` voxels de neige sur toute
+   face du dessus (un, sous une neige légère ; trois, sous une neige épaisse,
+   deux au bord d'un ouvrage : le bourrelet s'arrondit). Chaque matière en
+   hérite sans une ligne : le chaperon du muret, la boule du pilier, chaque
+   barreau de la grille, chaque piquet de la palissade, les trois brins du fil
+   (un voxel seulement — un fil ne porte pas un bourrelet), les touffes du buis,
+   les choux du potager. ⚠️ Pas de cerne autour de la neige : sur un ouvrage
+   mince, il remplirait la claire-voie (note de `paintVoxels`). */
+/* ⚠️ LA SURFACE DE LA NEIGE EST LISSÉE (premier jet : `k` voxels posés sur
+   chaque colonne, vu en jeu et au banc) : le dessus d'une haie est bombé en
+   marches d'un voxel (le bord s'arrondit), et la neige les recopiait — chaque
+   marche faisait une contremarche bleue, le chapeau se lisait en RAYURES. La
+   neige comble : sa surface est le plus haut dessus des colonnes voisines (3 ×
+   3) plus son épaisseur, un voxel de moins au bord de l'ouvrage (le coussin
+   s'arrondit), jamais moins d'un voxel sur une colonne. Le fil n'en porte
+   qu'un. `u0..v1` : la fenêtre du dessin (la carte des dessus s'y calcule). */
+function withSnow(model, lvl, u0, u1, v0, v1) {
+  if (!lvl) return model;
+  const k = lvl >= 2 ? 3 : 1, P = 2;
+  const W = u1 - u0 + 1 + 2 * P, H = v1 - v0 + 1 + 2 * P;
+  const top = new Int16Array(W * H).fill(-1), mat = new Uint8Array(W * H);
+  for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
+    for (let z = 31; z >= 0; z--) { const m = model(u + u0 - P, v + v0 - P, z); if (m && m !== M.GRASS) { top[v * W + u] = z; mat[v * W + u] = m; break; } }
+  }
+  const sTop = new Int16Array(W * H).fill(-1);
+  const uu0 = (u) => u + u0 - P, vv0 = (v) => v + v0 - P;
+  for (let v = 1; v < H - 1; v++) for (let u = 1; u < W - 1; u++) {
+    const i = v * W + u, t = top[i];
+    if (t < 0) continue;
+    if (mat[i] === M.WIRE) { sTop[i] = t + 1; continue; }
+    let mx = t, edge = 0;
+    for (let dv = -1; dv <= 1; dv++) for (let du = -1; du <= 1; du++) {
+      const tt = top[i + dv * W + du];
+      if (tt < 0) { if (!du || !dv) edge = 1; continue; }
+      /* Seuls les dessus VOISINS (à `k` près) se rejoignent : la neige comble les
+         marches d'une haie, pas l'écart entre un barreau et le chaperon du muret
+         (premier jet : la grille entière noyée dans un panneau de neige). */
+      if (mat[i + dv * W + du] !== M.WIRE && tt > mx && tt <= t + k) mx = tt;
+    }
+    // Une neige légère ne couvre pas tout : trois colonnes sur dix restent nues (les feuilles, la pierre percent).
+    if (k === 1 && (hash2(uu0(u) >> 1, vv0(v) >> 1) % 10) < 3) continue;
+    sTop[i] = Math.max(t + 1, mx + k - edge);
+  }
+  return (u, v, z) => {
+    const m = model(u, v, z);
+    if (m) return m;
+    const uu = u - u0 + P, vv = v - v0 + P;
+    if (uu < 0 || vv < 0 || uu >= W || vv >= H) return 0;
+    const i = vv * W + uu;
+    return top[i] >= 0 && z > top[i] && z <= sTop[i] ? M.SNOW : 0;
+  };
+}
+const SNOW_SHADOW = [44, 60, 102];
+function snowColor(base) {
+  return (m, face, u, v, z, nb) => {
+    if (m !== M.SNOW) return base(m, face, u, v, z, nb);
+    // Le dessus : l'éclat, grené d'un demi-ton ; la face : le bleu de l'ombre, plus clair à l'ouest.
+    let l = face === "top" ? 0.82 + ((hash2(u * 7 + z, v * 13) % 5) - 2) * 0.03 : 0.42;
+    if (nb.w) l += 0.1;
+    if (nb.e) l -= 0.14;
+    if (face === "top" && nb.n) l += 0.06;
+    return pick(PAL[M.SNOW], l);
+  };
 }
 
 /* ── 5. LES MODÈLES DES CLÔTURES ───────────────────────────────────────────
@@ -466,22 +536,47 @@ export function townFenceConf(tw, x, y) {
 }
 
 /* ── 8. CE QUE LE JEU APPELLE ──────────────────────────────────────────── */
-function paintFenceCell(d, W, H, style, cf, px, py) {
-  const model = MODELS[style](cf, px, py);
-  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, fenceColor(px, py), contactShadow(model));
+function paintFenceCell(d, W, H, style, cf, px, py, snow) {
+  const base = MODELS[style](cf, px, py);
+  const model = withSnow(base, snow | 0, 0, T - 1, 0, T - 1);
+  // Sur la neige, l'ombre de contact est bleue (DESSIN.md, neige.js).
+  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, snowColor(fenceColor(px, py)), contactShadow(base), snow ? SNOW_SHADOW : null);
 }
 /* Une case de clôture, dessinée à (px, py) = son coin haut-gauche au sol.
-   Rend faux si la case n'en porte pas (l'appelant a son repli). */
-export function drawTownFenceTile(ctx, S, tw, x, y, px, py) {
+   Rend faux si la case n'en porte pas (l'appelant a son repli). `snow` : 0, 1
+   (légère) ou 2 (épaisse) — trois cellules en cache au plus par voisinage. */
+export function drawTownFenceTile(ctx, S, tw, x, y, px, py, snow) {
   const cache = S && S.townEnclos;
   if (!cache || !tw.hedge) return false;
   const { style, cf } = townFenceConf(tw, x, y);
   if (!MODELS[style]) return false;
-  const bx = x & 3, by = y & 3;
-  const key = `f${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}`;
-  const cell = cacheCell(cache, key, T, CH, (d, W, H) => paintFenceCell(d, W, H, style, cf, bx, by));
+  const bx = x & 3, by = y & 3, sn = snow | 0;
+  const key = `f${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}${sn ? "s" + sn : ""}`;
+  const cell = cacheCell(cache, key, T, CH, (d, W, H) => paintFenceCell(d, W, H, style, cf, bx, by, sn));
   blit(ctx, cell, px, py - FENCE_OV);
   return true;
+}
+/* 2026-09-28 (phase 12a) — LA HAUTEUR DE LA CLÔTURE AU PIXEL (en voxels, 0 là
+   où il n'y a rien), lue dans le MÊME modèle que son dessin : l'ombre qu'elle
+   porte sur la neige (`neige.js`) est donc ajourée comme elle — les jours entre
+   les piquets, les barreaux de la grille, les trois brins du fil. Un tableau de
+   256 octets par voisinage (mémo, comme les cellules du dessin). */
+const HEIGHT_MEMO = new Map();
+export function townFenceHeights(tw, x, y) {
+  if (!tw.hedge) return null;
+  const { style, cf } = townFenceConf(tw, x, y);
+  if (!MODELS[style]) return null;
+  const bx = x & 3, by = y & 3;
+  const key = `${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}`;
+  let h = HEIGHT_MEMO.get(key);
+  if (h) return h;
+  const model = MODELS[style](cf, bx, by);
+  h = new Uint8Array(T * T);
+  for (let v = 0; v < T; v++) for (let u = 0; u < T; u++) {
+    for (let z = 30; z >= 0; z--) if (model(u, v, z) && model(u, v, z) !== M.GRASS) { h[v * T + u] = z + 1; break; }
+  }
+  HEIGHT_MEMO.set(key, h);
+  return h;
 }
 
 /* ── 9. LES PORTAILS ───────────────────────────────────────────────────────
@@ -536,7 +631,7 @@ function leafModel(style) {
     return s % 3 !== 2 && z >= 1 && z <= 12 ? M.WOOD : 0;
   };
 }
-function paintGate(d, W, H, style, frame) {
+function paintGate(d, W, H, style, frame, snow) {
   const th = (frame / (GATE_FRAMES - 1)) * (Math.PI / 2);
   const leaf = leafModel(style);
   const hy = 8.5;                                        // l'axe de la clôture (la rangée de pixels 8)
@@ -552,16 +647,19 @@ function paintGate(d, W, H, style, frame) {
     }
     return 0;
   };
-  const color = fenceColor(0, 0);
-  paintVoxels(d, W, H, GATE_PAD, FENCE_OV, model, 24, -GATE_PAD, 2 * T + GATE_PAD - 1, -9, T - 1, color, null);   // ouvert, un vantail remonte de 16 px au nord de son axe (8,5)
+  const color = snowColor(fenceColor(0, 0));
+  paintVoxels(d, W, H, GATE_PAD, FENCE_OV, withSnow(model, snow | 0, -GATE_PAD, 2 * T + GATE_PAD - 1, -9, T - 1), 27, -GATE_PAD, 2 * T + GATE_PAD - 1, -9, T - 1, color, null);   // ouvert, un vantail remonte de 16 px au nord de son axe (8,5)
 }
-/* Le portail `g` (une entrée de `tw.gates`), ouvert à `open` ∈ [0, 1]. */
-export function drawTownGate(ctx, S, g, open) {
+/* Le portail `g` (une entrée de `tw.gates`), ouvert à `open` ∈ [0, 1]. ⚠️ Un
+   portail qu'on ouvre DANS la neige garde la sienne : elle tourne avec lui (la
+   même revoxelisation) — le coup de balai du vantail sur le sol, lui, n'est
+   pas dessiné. */
+export function drawTownGate(ctx, S, g, open, snow) {
   const cache = S && S.townEnclos;
   if (!cache) return false;
   const frame = Math.max(0, Math.min(GATE_FRAMES - 1, Math.round(open * (GATE_FRAMES - 1))));
-  const W = 2 * T + 2 * GATE_PAD;
-  const cell = cacheCell(cache, `g${g.style}${frame}`, W, CH, (d, w, h) => paintGate(d, w, h, g.style, frame));
+  const W = 2 * T + 2 * GATE_PAD, sn = snow | 0;
+  const cell = cacheCell(cache, `g${g.style}${frame}${sn ? "s" + sn : ""}`, W, CH, (d, w, h) => paintGate(d, w, h, g.style, frame, sn));
   blit(ctx, cell, g.x * T - GATE_PAD, g.y * T - FENCE_OV);
   return true;
 }
@@ -622,15 +720,15 @@ function plotColor() {
   };
 }
 /* Le potager `p` (une entrée de `tw.plots`) pour la saison `season`. */
-export function drawTownPlot(ctx, S, p, season) {
+export function drawTownPlot(ctx, S, p, season, snow) {
   const cache = S && S.townEnclos;
   if (!cache) return false;
   const sk = season === "spring" || season === "autumn" || season === "winter" ? season : "summer";
-  const seed = (p.x * 7 + p.y * 3) & 3;
+  const seed = (p.x * 7 + p.y * 3) & 3, sn = snow | 0;
   const W = p.w * T, H = p.h * T + PLOT_OV;
-  const cell = cacheCell(cache, `p${p.w}x${p.h}${sk}${seed}`, W, H, (d, w, h) => {
-    const model = plotModel(p.w, p.h, sk, seed);
-    paintVoxels(d, w, h, 0, PLOT_OV, model, 14, 0, p.w * T - 1, 0, p.h * T - 1, plotColor(), contactShadow(model));
+  const cell = cacheCell(cache, `p${p.w}x${p.h}${sk}${seed}${sn ? "s" + sn : ""}`, W, H, (d, w, h) => {
+    const base = plotModel(p.w, p.h, sk, seed);
+    paintVoxels(d, w, h, 0, PLOT_OV, withSnow(base, sn, 0, p.w * T - 1, 0, p.h * T - 1), 17, 0, p.w * T - 1, 0, p.h * T - 1, snowColor(plotColor()), contactShadow(base), sn ? SNOW_SHADOW : null);
   });
   blit(ctx, cell, p.x * T, p.y * T - PLOT_OV);
   return true;
@@ -658,4 +756,4 @@ export function hedgeRowSprite(W, H) {
 }
 
 /* Pour les bancs : ce qui se dessine hors du jeu. */
-export const FENCE_TEST = { CH, GATE_PAD, PLOT_OV, paintFenceCell, paintGate, MODELS, PAL, M };
+export const FENCE_TEST = { CH, GATE_PAD, PLOT_OV, paintFenceCell, paintGate, MODELS, PAL, M, withSnow };

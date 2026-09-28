@@ -75,6 +75,7 @@ import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au p
 import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
 import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
 import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui montent, selon la saison, forçage partagé
+import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -211,6 +212,17 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   ctx.imageSmoothingEnabled = !exact;   // transitoire seulement — voir la note
   if (!exact) ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, left, top, dw, dh);
+  /* 2026-09-28 (phase 12a) — LA NEIGE DU TOIT (`tools/build-snow-roofs.mjs`) : le
+     calque léger (les rangs d'ardoise), puis l'épais par-dessus, à la force que
+     donne l'épaisseur sur les toits (`glowOpts.snow` : { l, h }). Chargés au
+     premier flocon seulement. */
+  const sn = glowOpts && glowOpts.snow;
+  if (sn && (sn.l > 0.01 || sn.h > 0.01)) {
+    const a0 = ctx.globalAlpha;
+    if (sn.l > 0.01 && mip.snowL) { const im = loadBitmap(mip.snowL); if (im) { ctx.globalAlpha = a0 * sn.l; ctx.drawImage(im, left, top, dw, dh); } }
+    if (sn.h > 0.01 && mip.snowH) { const im = loadBitmap(mip.snowH); if (im) { ctx.globalAlpha = a0 * sn.h; ctx.drawImage(im, left, top, dw, dh); } }
+    ctx.globalAlpha = a0;
+  }
   let glowImg = null, glowParts = null;
   if (mip.glow && nightA > 0.01 && !(glowOpts && glowOpts.rects && !glowOpts.rects.length)) {
     glowImg = loadBitmap(mip.glow);
@@ -590,7 +602,7 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
 // sous un personnage.
 function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
   ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillStyle = groundSnowK > 0.5 ? "rgba(30,46,94,0.28)" : "rgba(0,0,0,0.25)";
   ctx.beginPath();
   const rx = Math.max(10, halfW * 0.8);
   const ry = Math.max(3, rx / 3);
@@ -598,13 +610,18 @@ function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
   ctx.fill();
   ctx.restore();
 }
+/* 2026-09-28 (phase 12a) — LE SOL EST-IL ENNEIGÉ (0..1) ? Posé par la boucle de
+   la ville à chaque image, remis à zéro à sa sortie : les ombres de pied des
+   bâtiments y virent au BLEU (une ombre sur la neige reflète le ciel), et le
+   halo chaud du parvis de l'église s'efface (sur la neige, il la salissait). */
+let groundSnowK = 0;
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
-  ctx.fillStyle = "rgba(35,26,16,0.30)";
+  ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,96,0.30)" : "rgba(35,26,16,0.30)";
   ctx.beginPath();
   ctx.ellipse(cx, groundY - 1, Math.max(5, halfW * 0.8), 3, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "rgba(60,42,24,0.22)";
+  ctx.fillStyle = groundSnowK > 0.5 ? "rgba(52,70,116,0.2)" : "rgba(60,42,24,0.22)";
   ctx.beginPath();
   ctx.ellipse(cx, groundY + 1, Math.max(6, halfW * 0.7), 2.2, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -964,6 +981,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const townMeetNextRef = useRef(0);
   const guestTrailsRef = useRef(new Map());
   const gateOpenRef = useRef(new Map());   // 2026-09-28 (phase 7b) : l'ouverture de chaque portail, locale (voir « LES PORTAILS »)
+  /* 2026-09-28 (phase 12a) — LA NEIGE AU SOL, LOCALE : le champ (parcelles rendues,
+     empreintes) de la carte de la ville, les marcheurs qu'on suit, la chute cumulée
+     depuis l'ouverture (elle comble les traces) et le réglage LOCAL du menu dev
+     (épaisseur et charge des arbres imposées sur CET écran, pour juger). */
+  const snowFieldRef = useRef(null);
+  const snowWalkersRef = useRef(null);
+  const snowPackMemoRef = useRef({ at: 0, pack: null, key: "" });
+  const snowDevRef = useRef({ depth: null, trees: null });
+  const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
@@ -8290,6 +8316,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const sh = sharedRef.current;
     return WX.weatherAtMs(ms == null ? Date.now() : ms, sh.dayStartAt || Date.now(), sh.day || 1,
       (ds) => E.seasonAt(ds).key, sh.forcedWeather || null);
+  }
+  /* 2026-09-28 (phase 12a) — LE MANTEAU NEIGEUX À L'INSTANT (`neige.js`) : une pure
+     fonction du jour, de l'heure de jeu, des saisons des jours remontés et du
+     forçage — rien ne circule. La saison d'un jour passé est celle de son début
+     RÉEL (`dayStartAt` moins k journées) : quand la saison bascule, la neige de la
+     semaine d'hiver fond au lieu de s'effacer d'un coup. Mis en mémo 150 ms (la
+     boucle le lit plusieurs fois par image). Le réglage LOCAL du menu dev
+     (`snowDevRef`) remplace l'épaisseur et la charge des arbres, sur cet écran
+     seulement. */
+  function snowPackNow() {
+    const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
+    const dev = snowDevRef.current;
+    const key = `${dev.depth}|${dev.trees}`;
+    if (mm.pack && now - mm.at < 150 && mm.key === key) return mm.pack;
+    const day = sh.day || 1, ds = sh.dayStartAt || now;
+    const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
+    const pk = NG.snowPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null);
+    if (dev.depth != null) {
+      const g = dev.depth;
+      Object.assign(pk, { g, s: g * 1.08, r: Math.min(NG.NEIGE.ROAD_CAP, g * 0.3), berm: g * 1.1, rh: g * 0.8, rc: g });
+    }
+    if (dev.trees != null) { const L = [0, 0.3, 0.8][dev.trees]; pk.tl = L; pk.tc = L; }
+    mm.at = now; mm.pack = pk; mm.key = key;
+    return pk;
   }
   /* ⚠️ Nommée `faunaEnvLive` et pas `faunaEnvNow` : la boucle de la ville a une
      VARIABLE `faunaEnvNow` (l'environnement de l'image, passé à la lumière), qui
@@ -16490,6 +16540,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         updateTaxi(dt);
         if (overlayUp) return;   // zip 425, même raison exactement
         drawTownFrame(now, dt);
+        groundSnowK = 0;   // 2026-09-28 (phase 12a) : la neige de la ville ne teinte jamais les ombres d'une autre carte
         if (mapOpenRef.current) drawFullMap();   // zip 426 : la carte marche enfin en ville
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
@@ -20262,8 +20313,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            d'escalier change de marche sur l'axe X puis se voit refuser l'axe Y
            s'il compare encore à l'altitude d'avant — on se retrouve à monter en
            crabe, une case sur deux. Deux lectures d'un tableau ne coûtent rien. */
-        if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx;
-        if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny;
+        if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx; else if (dx) noteTreeBump(tw, nx, m.y);
+        if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny; else if (dy) noteTreeBump(tw, m.x, ny);
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
         /* ⚠️⚠️ ZIP 459 — LA RÈGLE DE JUSTICE DU 458 N'A PAS DISPARU, ELLE A REMONTÉ
@@ -20332,6 +20383,178 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       maybeSendPos();
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-28 (phase 12a) — LE CHAMP DE NEIGE DE LA VILLE (`neige.js`).
+       ╚══════════════════════════════════════════════════════════════════════
+       Créé à la première image enneigée (ou d'hiver), une fois par carte. Il lit
+       ce que le sol DESSINE pour savoir où la neige tient : la luminance des
+       atlas de marches (le giron éclairé la garde, la contremarche non) et de
+       dallage (les joints se remplissent d'abord), et l'eau AU PIXEL dans la
+       cuisson de `eau.js` (la neige s'arrête à la ligne d'eau, pas au bord de la
+       case). ⚠️ Tant que la cuisson n'est pas prête, l'eau se lit à la case : le
+       champ est refait une fois, quand elle l'est — sinon chaque rive garderait
+       à jamais son escalier de 16 px.
+       ⚠️ LE CHOIX DE L'ATLAS DE DALLAGE REPREND `drawTownFlagTile` (fermeArt.js)
+       par sa fonction `townPavingFamily`, pas par une copie : si la famille d'une
+       case change, la neige suit. */
+    /* 2026-09-28 (phase 12a) — LE CHAPEAU DE NEIGE D'UNE IMAGE (mobilier, arbres
+       de la planche…), en cache par image, niveau et enfouissement. Niveau 9 : la
+       silhouette entière blanchie (ce qui est couché au sol et que la neige
+       recouvre). ⚠️ Un canevas par (image, niveau) — une vingtaine de sortes de
+       décor en tout, pas un par décor posé. */
+    const snowCapMemo = new WeakMap();
+    function snowCapCanvas(img, lvl, bury) {
+      if (!img || !img.width) return null;
+      let m = snowCapMemo.get(img);
+      if (!m) { m = new Map(); snowCapMemo.set(img, m); }
+      const k = lvl * 10 + (bury | 0);
+      if (m.has(k)) return m.get(k);
+      let out = null;
+      try {
+        const w = img.width, h = img.height;
+        const src = document.createElement("canvas"); src.width = w; src.height = h;
+        const sg = src.getContext("2d"); sg.drawImage(img, 0, 0);
+        const px = sg.getImageData(0, 0, w, h).data;
+        let r;
+        if (lvl === 9) {
+          r = { w, h, pad: 0, px: new Uint8ClampedArray(w * h * 4) };
+          const S = NG.SNOW_TONES;
+          for (let i = 0; i < w * h; i++) {
+            if (px[i * 4 + 3] < 40) continue;
+            const y = (i / w) | 0, up = y > 0 && px[(i - w) * 4 + 3] >= 40;
+            const c = up ? S[4] : S[5];
+            r.px[i * 4] = c[0]; r.px[i * 4 + 1] = c[1]; r.px[i * 4 + 2] = c[2]; r.px[i * 4 + 3] = px[i * 4 + 3];
+          }
+        } else if (lvl >= 21) r = { w, h, pad: 0, px: NG.snowStairPixels(px, w, h, lvl - 20) };      // 21/22 : les girons du grand escalier
+        else if (lvl >= 11) r = { w, h, pad: 0, px: NG.snowRoofPixels(px, w, h, lvl - 10, 0.55) };   // 11/12 : le toit d'un bâtiment dessiné en code
+        else r = NG.snowCapPixels(px, w, h, lvl, w * 31 + h, bury | 0);
+        out = document.createElement("canvas"); out.width = r.w; out.height = r.h;
+        const og = out.getContext("2d"), id = og.createImageData(r.w, r.h);
+        id.data.set(r.px); og.putImageData(id, 0, 0);
+        out.pad = r.pad;
+      } catch (e) { out = null; }
+      m.set(k, out);
+      return out;
+    }
+    const winterPropMemo = new WeakMap();
+    function winterPropCanvas(img, mode) {
+      if (!img || !img.width) return null;
+      let m = winterPropMemo.get(img);
+      if (!m) { m = new Map(); winterPropMemo.set(img, m); }
+      if (m.has(mode)) return m.get(mode);
+      let out = null;
+      try {
+        const w = img.width, h = img.height;
+        const src = document.createElement("canvas"); src.width = w; src.height = h;
+        const sg = src.getContext("2d"); sg.drawImage(img, 0, 0);
+        const px = NG.winterizePixels(sg.getImageData(0, 0, w, h).data, w, h, mode, w * 17 + h);
+        out = document.createElement("canvas"); out.width = w; out.height = h;
+        const og = out.getContext("2d"), id = og.createImageData(w, h);
+        id.data.set(px); og.putImageData(id, 0, 0);
+      } catch (e) { out = null; }
+      m.set(mode, out);
+      return out;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-28 (phase 12a) — LA NEIGE QUI TOMBE DES BRANCHES (Guillaume :
+       ║ « périodiquement, ou quand on entre en collision avec les arbres, la
+       ║ neige doit un peu tomber des branches, quand il y a beaucoup de neige »).
+       ╚══════════════════════════════════════════════════════════════════════
+       LOCAL, comme les traces : chaque client voit ses paquets tomber. Un arbre
+       qui s'est déchargé garde moins de neige (`treeSnowLocal` : ce qu'il a
+       perdu, rendu peu à peu par la neige qui tombe ensuite) — il passe d'alourdi
+       à légèrement enneigé sous les yeux de celui qui l'a secoué.
+       · De lui-même : au vent, un arbre alourdi lâche un paquet de temps en temps
+         (plus souvent quand le vent forcit).
+       · Heurté (on marche dedans : le pas est refusé contre son fût), il est
+         SECOUÉ : il tremble une demi-seconde et lâche une averse de neige.
+       Les paquets tombent en chute (pesanteur, un peu de dérive au vent), se
+       défont en poudre, et laissent un petit cratère dans la neige au sol. */
+    const treeSnowLocal = new Map();      // case → { drop, cumAt, shakeAt }
+    /* La force des deux calques de neige des toits peints, pour l'image en cours :
+       `house` (chauffés, `rh`) et `cold` (monuments, `rc`). Écrite par
+       `drawTownFrame`, lue par les maisons, les commerces et `monumentGlowOpts`. */
+    let roofSnowFrame = null;
+    /* L'épaisseur de neige sous les pieds d'un personnage (cm), pour `drawCharacter`
+       (l'ombre bleue, les pieds enfoncés) — posée par `drawTownFrame`, lue
+       seulement quand on regarde la ville (le piège des deux cartes, §4). */
+    let charSnowAt = null;
+    let birdSnowSeq = 0;   // un identifiant local par oiseau, pour ses traces
+    const roofSnowOf = (cm) => {
+      const sm = (v) => (v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v));
+      const h = sm((cm - 2.5) / 5), l = sm((cm - 0.25) / 1.4) * (1 - h);
+      return { l, h };
+    };
+    const snowFalls = [];                 // paquets en l'air
+    let treeBump = null;                  // { i, at } : le dernier arbre heurté
+    const CROWN_ABOVE = { young: 22, planted: 22, adult: 35, short: 30, tall: 54 };
+    const CROWN_RX = { young: 7, planted: 7, adult: 12, short: 16, tall: 16 };
+    function noteTreeBump(tw, nx, ny) {
+      const fx = Math.floor(C.footX(nx)), fy = Math.floor(C.footY(ny));
+      for (let yy = fy - 1; yy <= fy + 1; yy++) for (let xx = fx - 1; xx <= fx + 1; xx++) {
+        if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) continue;
+        const i = yy * tw.w + xx, o = tw.objects[i];
+        if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+        if (Math.abs(C.footX(nx) - (xx + 0.5)) < 1.05 && Math.abs(C.footY(ny) - (yy + 0.6)) < 0.9) { treeBump = { i, at: performance.now() }; return; }
+      }
+    }
+    /* La charge de CET arbre : celle du manteau, moins ce qu'il a lâché. ⚠️ Ce qu'il
+       lâche d'un coup s'en va en ~0,7 s (le temps que les paquets tombent) : un
+       arbre qui passait d'alourdi à léger dans la même image « sautait » (vu en
+       jeu) — la décharge glisse, et l'état suit son fondu (`treeSnowMix`). */
+    const dropNow = (L, now2) => {
+      const u = Math.max(0, Math.min(1, (now2 - (L.t0 || 0)) / 700)), sm = u * u * (3 - 2 * u);
+      return (L.drop0 || 0) + (L.drop - (L.drop0 || 0)) * sm;
+    };
+    function treeLoadAt(i, pk, cum) {
+      const L = treeSnowLocal.get(i);
+      if (!L) return pk;
+      const rem = Math.max(0, dropNow(L, performance.now()) - (cum - L.cumAt) * 0.2);
+      if (rem <= 0.001 && performance.now() - L.shakeAt > 2000) { treeSnowLocal.delete(i); return pk; }
+      return { tl: Math.max(0, pk.tl - rem), tc: Math.max(0, pk.tc - rem) };
+    }
+    /* Un paquet (ou une averse) qui part de la couronne de l'arbre (x, y). */
+    function dropTreeSnow(tw, i, x, y, e, size, load, big, cum, windK) {
+      const L = treeSnowLocal.get(i) || { drop: 0, cumAt: cum, shakeAt: 0 };
+      const nowD = performance.now(), rem = Math.max(0, dropNow(L, nowD) - (cum - L.cumAt) * 0.2);
+      L.drop0 = rem; L.t0 = nowD;
+      L.drop = rem + (big ? Math.min(load * 0.8, 0.4) : 0.035); L.cumAt = cum;
+      if (big) L.shakeAt = performance.now();
+      treeSnowLocal.set(i, L);
+      const above = CROWN_ABOVE[size] || 35, rx = CROWN_RX[size] || 12;
+      const n = big ? Math.round(18 + load * 40) : Math.round(6 + load * 10);
+      const bursts = big ? 4 : 1;
+      for (let b = 0; b < bursts; b++) {
+        const ox = (Math.random() * 2 - 1) * rx * (big ? 0.9 : 0.7), oz = above + (Math.random() * 2 - 1) * above * 0.28;
+        for (let k = 0; k < n / bursts; k++) {
+          snowFalls.push({
+            x: (x + 0.5) * T + ox + (Math.random() * 2 - 1) * 2.5, gy: (y + 1) * T - 1 + Math.random() * 3, e,
+            z: oz + (Math.random() * 2 - 1) * 2, vx: windK * (8 + Math.random() * 10) + (Math.random() * 2 - 1) * 6,
+            vz: -(Math.random() * 12), big: Math.random() < 0.35, t0: performance.now() + Math.random() * (big ? 160 : 60),
+            land: null,
+          });
+        }
+      }
+    }
+    function townSnowField(tw) {
+      const cur = snowFieldRef.current;
+      const bake = EAU.townWaterBakeReady(tw);
+      if (cur && cur.tw === tw && (cur.baked || !bake)) return cur.f;
+      /* Ce que la neige doit savoir du sol dessiné : `A.townSnowEnv`, écrit une
+         fois pour le jeu et pour `tools/render-neige.mjs`. */
+      const env = A.townSnowEnv(tw, spritesRef.current, (wx, wy) => {
+        if (bake) return EAU.bakedLevelAt(bake, wx, wy) >= 0;
+        const x = Math.floor(wx / T), y = Math.floor(wy / T);
+        return x >= 0 && y >= 0 && x < tw.w && y < tw.h && tw.ground[y * tw.w + x] === C.G_WATER;
+      });
+      env.makeCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+      const f = NG.makeSnowField(tw, env);
+      // Les empreintes de l'ancien champ (même carte) survivent à sa reconstruction.
+      if (cur && cur.tw === tw && cur.f.carryPrints) f.adoptPrints && f.adoptPrints(cur.f);
+      snowFieldRef.current = { tw, f, baked: !!bake };
+      if (!snowWalkersRef.current) snowWalkersRef.current = NG.makeWalkers();
+      return f;
     }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
@@ -20484,6 +20707,74 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const TOWN_REFL_ROWS = Math.ceil(A.TOWN_TREE_MAX_H / T) + 2;
       const yR0 = Math.max(0, y0 - TOWN_REFL_ROWS);
       const xL = Math.max(0, x0 - 2), xR = Math.min(tw.w - 1, x1 + 2);
+      /* ╔══════════════════════════════════════════════════════════════════
+         ║ 2026-09-28 (phase 12a) — LA NEIGE AU SOL : le manteau de l'instant,
+         ║ les parcelles de la vue, et le réglage de l'image.
+         ╚══════════════════════════════════════════════════════════════════
+         Elle se pose CASE PAR CASE, juste après le sol de la case (et son eau,
+         ses rails), AVANT ses falaises : c'est la seule façon qu'une terrasse
+         enneigée monte avec sa case — une nappe posée d'un bloc ignorerait le
+         relief. L'hiver sans neige, les mêmes parcelles portent l'herbe
+         dormante et la gelée du matin. */
+      const snowPk = snowPackNow();
+      const snowSeason = E.seasonOf().key;
+      roofSnowFrame = { house: roofSnowOf(snowPk.rh), cold: roofSnowOf(snowPk.rc) };
+      charSnowAt = null;
+      groundSnowK = Math.max(0, Math.min(1, (snowPk.g - 0.3) / 1.5));
+      let snowF = null;
+      if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter") {
+        snowF = townSnowField(tw);
+        const Wsn = wxFrame();
+        const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+        /* La gelée blanche : les matins d'hiver clairs, de l'aube à dix heures,
+           là où il n'y a pas de neige. */
+        const frost = snowSeason === "winter" && snowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
+        const wetRoad = Math.min(1, snowPk.r * 0.5 + (snowPk.g > 0.5 ? 0.4 : 0));
+        /* Le soleil sur la neige (0..1) : ombres bleues franches et éclats par
+           beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
+        const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
+        snowF.setParams(snowPk, { winter: snowSeason === "winter", frost, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 });
+        // Ce qui tombe pendant cette image comble les traces (une heure de jeu = 48 s réelles).
+        snowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
+        snowF.view(xL, Math.max(0, y0 - 1), xR, yBot);
+        snowF.update(6, () => performance.now());
+        const sfNow = snowF;
+        charSnowAt = (p) => sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T);
+      }
+      /* LES PAS DANS LA NEIGE (locaux, décision de Guillaume) : chaque client
+         creuse ce qu'il voit marcher. ⚠️ Ce qui marche SUR le grand escalier
+         au-dessus de la chaussée (`townOverpassCell`, niveau de marche) ne
+         marque pas la chaussée dessous — une trace sur une case du pont a deux
+         sols. ⚠️ Appelé dans la BOUCLE, jamais dans un `pushE` : la passe des
+         reflets rejoue les dessins, et chaque pas y serait posé deux fois. */
+      const snowWalk = (id, kind, fx, fy, lvl, k) => {
+        if (!snowF) return;
+        const tx = Math.floor(fx), ty = Math.floor(fy);
+        if (lvl != null && C.townOverpassCell(tx, ty) && lvl > elAt(tx, ty) + 0.3) return;
+        snowWalkersRef.current.step(id, kind, fx * T, fy * T, now, snowF, k || 1);
+      };
+      /* Le chapeau de neige d'un décor à cette épaisseur : { list: [{ c, a }] } —
+         deux niveaux (léger, épais) en fondu, plus le pied enfoui. `flat` : un
+         décor couché au sol, que le manteau RECOUVRE (sa silhouette blanchit). */
+      const propSnowOverlay = (img, pr, flat) => {
+        const d = snowF.depthAt(pr.x * T + 8, pr.y * T + 8);
+        if (d < 0.6) return null;
+        const bury = Math.min(3, Math.floor(d / 7.4));
+        if (flat) return { list: [{ c: snowCapCanvas(img, 9, 0), a: Math.min(1, (d - 0.6) / 7) }] };
+        const k2 = Math.max(0, Math.min(1, (d - 3) / 5));
+        const list = [];
+        if (k2 < 1) list.push({ c: snowCapCanvas(img, 1, bury), a: Math.min(1, (d - 0.6) / 1.5) * (1 - k2) });
+        if (k2 > 0) list.push({ c: snowCapCanvas(img, 2, bury), a: k2 });
+        return { list };
+      };
+      const drawSnowOverlay = (ov, x, y) => {
+        for (const e of ov.list) {
+          if (!e.c || e.a <= 0.01) continue;
+          if (e.a < 1) ctx.globalAlpha = e.a;
+          ctx.drawImage(e.c, x, y - e.c.pad);
+          if (e.a < 1) ctx.globalAlpha = 1;
+        }
+      };
       for (let y = yR0; y <= yBot; y++) for (let x = xL; x <= xR; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         /* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER EST PEINTE D'UN TENANT
@@ -20739,6 +21030,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              sol de la rangée suivante — elle ne s'est jamais vue depuis le 447. */
           if (surMarche) { ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2); }
           else A.drawTownWallDress(ctx, tw, x, y, px, py, fh);
+          // 2026-09-28 (phase 12a) — la neige du chaperon (et du nez de la marche), selon l'épaisseur sur la terrasse.
+          if (snowF) {
+            const wm = NG.depthSnowMix(snowF.depthAt(x * T + 8, y * T + 8), (NG.h32(x, y, 9) % 100) / 100);
+            const lv = wm.k > 0.5 ? wm.b : wm.a;
+            if (lv) A.drawTownWallSnow(ctx, x, y, px, py, fh, lv, surMarche);
+          }
         }
         /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
            vue de côté, elle n'a pas d'épaisseur.
@@ -20793,6 +21090,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
           A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
         }
+        /* 2026-09-28 (phase 12a) — la neige de cette case (voir plus haut). Le
+           tablier d'un pont en arc monte avec son dos d'âne : sa neige aussi. */
+        if (snowF && y >= y0 - 1) {
+          const sc = snowF.cell(x, y);
+          if (sc) ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T);
+        }
         /* ⚠️ ZIP 435 — LE « REFLET RESPIRANT » DU 425 EST SUPPRIMÉ, PAS
            DÉPLACÉ. C'était `rgba(190,225,255, 0.25 + sin(now/900 + (x+y))·0.12)`
            sur la case entière : deux cases voisines en diagonale partageant la
@@ -20833,8 +21136,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              AUCUN banc ne pouvait les appeler — c'est le piège n°1 de CLAUDE.md
              dans sa forme la plus coûteuse, sur le décor le plus répandu de la
              ville. `tools/render-haies.mjs` les regarde désormais. */
+          /* 2026-09-28 (phase 12a) — la neige sur la haie ou la clôture : trois
+             états en fondu (`NG.depthSnowMix`), selon l'épaisseur à SA case. */
+          const hMix = snowF ? NG.depthSnowMix(snowF.depthAt(x * T + 8, y * T + 8), (NG.h32(x, y, 5) % 100) / 100) : null;
           pushE((y + 1) * T, e, () => {
             const hx = x * T, hy = y * T;
+            if (hMix && (hMix.a || hMix.b)) {
+              if (A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.a)) {
+                if (hMix.k > 0.01) { ctx.globalAlpha = hMix.k; A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.b); ctx.globalAlpha = 1; }
+                return;
+              }
+            }
             if (!A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy)) {
               // Repli : l'ancien dessin, si l'atlas n'a pas la haie de la planche.
               ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy + T - 3, T, 3);
@@ -20872,6 +21184,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                rend `false` s'il n'a pas d'atlas, et le repli du 232 suit. */
             const fallback = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak)
                                             : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine);
+            /* 2026-09-28 (phase 12a) — l'hiver : la charge de CET arbre, ses
+               paquets qui tombent, et le tremblement quand on l'a heurté. */
+            let tLoad = null, shakeDx = 0;
+            if (snowF && _se === "winter") {
+              const cum = snowF.fallCum(), tl0 = treeLoadAt(i, snowPk, cum);
+              // La neige au pied : au-delà d'un centimètre, l'ombre de l'arbre est projetée sur elle (`neige.js`).
+              tLoad = { tl: tl0.tl, tc: tl0.tc, ground: snowF.depthAt(x * T + 8, y * T + 8) };
+              const L = treeSnowLocal.get(i);
+              if (L && L.shakeAt) {
+                const u = (performance.now() - L.shakeAt) / 520;
+                if (u < 1) shakeDx = Math.round(Math.sin(u * 26) * 1.6 * (1 - u));
+              }
+              if (y >= y0 - 1) {
+                const ever = A.townTreeEvergreen(A.townTreeKind(tw, x, y, o));
+                const ld = ever ? tLoad.tc : tLoad.tl, size = A.townTreeSize(tw, x, y, o);
+                const Wt = wxFrame(), windK = 0.4 + Wt.wind * 1.6;
+                if (treeBump && treeBump.i === i && performance.now() - treeBump.at < 120 && ld > 0.12
+                    && (!L || performance.now() - L.shakeAt > 900)) {
+                  treeBump = null;
+                  dropTreeSnow(tw, i, x, y, e, size, ld, true, cum, windK);
+                } else if (ld > 0.42 && Math.random() < dt * (ld - 0.38) * 0.05 * (1 + Wt.wind * 3)) {
+                  dropTreeSnow(tw, i, x, y, e, size, ld, false, cum, windK);
+                }
+              }
+            }
             pushE((y + 1) * T, e, () => {
               /* ⚠️ UN ARBRE ENTAMÉ S'ASSOMBRIT, ET ÇA PASSE PAR `ctx.filter`,
                  PAS PAR UN RECTANGLE. Premier jet : un `fillRect` teinté sur
@@ -20883,7 +21220,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                  contexte, il contaminerait tout ce qui est dessiné ensuite. */
               const che2 = che && che.hp ? 1 - che.hp / C.TREE_HP : 0;
               if (che2 > 0) ctx.filter = `brightness(${(1 - che2 * 0.45).toFixed(2)})`;
-              if (!A.drawTownTree(ctx, sprites, tw, x, y, x * T, y * T, _se, o, now)) ctx.drawImage(fallback, x * T - 8, (y + 1) * T - 48);
+              if (!A.drawTownTree(ctx, sprites, tw, x, y, x * T + shakeDx, y * T, _se, o, now, tLoad)) ctx.drawImage(fallback, x * T - 8, (y + 1) * T - 48);
               if (che2 > 0) {
                 ctx.filter = "none";
                 // ... et des copeaux au pied, qui disent où l'on tape.
@@ -20895,6 +21232,70 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);   // la transformation commune, rendue — voir la note du trait vert
+      /* 2026-09-28 (phase 12a) — LES PAILLETTES DE LA NEIGE AU SOLEIL : quelques
+         cristaux d'un pixel qui s'allument et s'éteignent, chacun à sa phase (un
+         hachage du pixel) — jamais tirés au hasard à chaque image. Le jour, sous
+         un ciel dégagé, quand rien ne tombe. */
+      if (snowF && snowPk.g > 1) {
+        const Wg = wxFrame(), ds0 = sharedRef.current.dayStartAt || Date.now();
+        const hrG = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - ds0) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+        const sunG = NG.sunAt(hrG, snowSeason) * Math.max(0, 1 - 1.5 * Wg.dark) * (Wg.snow > 0.02 ? 0 : 1);
+        if (sunG > 0.12) {
+          const tS = performance.now() / 1000;
+          ctx.fillStyle = "#ffffff";
+          for (const [gx, gy, ph] of snowF.glints()) {
+            if (((tS * 0.55 + ph / 1000) % 1) > 0.05 * sunG) continue;
+            ctx.fillRect(gx, gy - elAt(gx >> 4, gy >> 4) * EP, 1, 1);
+          }
+        }
+      }
+      /* 2026-09-28 (phase 12a) — LES PIQUETS À NEIGE, l'hiver, au bord des rues
+         (`A.townSnowStakes`, une fois par carte). */
+      if (snowSeason === "winter") {
+        for (const sk of A.townSnowStakes(tw)) {
+          if (sk.x < xL || sk.x > xR || sk.y < yR0 || sk.y > yBot) continue;
+          const de = snowF ? snowF.depthAt(sk.px, sk.py - 2) : 0, se = elAt(sk.x, sk.y);
+          pushE(sk.py + 0.5, se, () => A.drawSnowStake(ctx, sk.px, sk.py, de));   // pushE translate déjà de l’altitude
+        }
+      }
+      /* Les paquets tombés des branches (voir `dropTreeSnow`) : la chute, puis
+         une bouffée de poudre au sol et un petit cratère dans la neige. Rangés
+         dans la file à la rangée de leur arbre : ils passent devant son fût. */
+      if (snowFalls.length) {
+        const nowP = performance.now(), ddt = Math.min(dt, 0.05);
+        const S5 = "#f7f9fc", S3 = "#c3cfe0";
+        for (let k = snowFalls.length - 1; k >= 0; k--) {
+          const f = snowFalls[k];
+          if (nowP < f.t0) continue;
+          if (f.land) { if (nowP - f.land > 420) snowFalls.splice(k, 1); continue; }
+          f.vz -= (f.big ? 300 : 150) * ddt;
+          f.vz *= f.big ? 0.995 : 0.955;
+          f.z += f.vz * ddt; f.x += f.vx * ddt; f.vx *= 0.985;
+          if (f.z <= 0) {
+            f.z = 0; f.land = nowP;
+            if (f.big && snowF && Math.random() < 0.5) snowF.stamp(NG.PRINTS.plop, f.x, f.gy, 1, 0, 0.45);
+          }
+        }
+        if (snowFalls.length > 700) snowFalls.splice(0, snowFalls.length - 700);
+        for (const f of snowFalls) {
+          if (nowP < f.t0) continue;
+          pushE(f.gy + 0.4, f.e, () => {
+            const px2 = Math.round(f.x), py2 = Math.round(f.gy - f.z);
+            if (f.land) {
+              const u = (nowP - f.land) / 420, r = 1 + Math.round(u * 3);
+              ctx.globalAlpha = 0.75 * (1 - u);
+              ctx.fillStyle = S5;
+              ctx.fillRect(px2 - r, py2 - 1, 1, 1); ctx.fillRect(px2 + r, py2 - 1, 1, 1); ctx.fillRect(px2, py2 - 1 - (r >> 1), 1, 1);
+              ctx.globalAlpha = 1;
+            } else if (f.big) {
+              ctx.fillStyle = S5; ctx.fillRect(px2, py2, 2, 2);
+              ctx.fillStyle = S3; ctx.fillRect(px2 + 1, py2 + 1, 1, 1);
+            } else {
+              ctx.globalAlpha = 0.85; ctx.fillStyle = S5; ctx.fillRect(px2, py2, 1, 1); ctx.globalAlpha = 1;
+            }
+          });
+        }
+      }
       /* ══════════════════════════════════════════════════════════════════════
          2026-09-28 (phase 7b) — LES PORTAILS ET LES POTAGERS DES JARDINS.
          ──────────────────────────────────────────────────────────────────────
@@ -20926,13 +21327,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             sg.a = want ? Math.min(1, sg.a + dt / 0.4) : Math.max(0, sg.a - dt / 0.8);
             st.set(k, sg);
             const a = sg.a * sg.a * (3 - 2 * sg.a);        // pas d'à-coup aux deux bouts du geste
-            pushE((g.y + 1) * T, g.e, () => A.drawTownGate(ctx, sprites, g, a));
+            const gMix = snowF ? NG.depthSnowMix(snowF.depthAt(g.x * T + 8, g.y * T + 8), 0.5) : null;
+            pushE((g.y + 1) * T, g.e, () => {
+              A.drawTownGate(ctx, sprites, g, a, gMix ? gMix.a : 0);
+              if (gMix && gMix.k > 0.01) { ctx.globalAlpha = gMix.k; A.drawTownGate(ctx, sprites, g, a, gMix.b); ctx.globalAlpha = 1; }
+            });
           }
         }
         const plotSeason = E.seasonOf().key;
         for (const pt of (tw.plots || [])) {
           if (pt.x + pt.w < xL || pt.x > xR || pt.y + pt.h < yR0 || pt.y > yBot) continue;
-          pushE((pt.y + pt.h) * T, pt.e, () => A.drawTownPlot(ctx, sprites, pt, plotSeason));
+          const pMix = snowF ? NG.depthSnowMix(snowF.depthAt(pt.x * T + 16, pt.y * T + 16), 0.5) : null;
+          pushE((pt.y + pt.h) * T, pt.e, () => {
+            A.drawTownPlot(ctx, sprites, pt, plotSeason, pMix ? pMix.a : 0);
+            if (pMix && pMix.k > 0.01) { ctx.globalAlpha = pMix.k; A.drawTownPlot(ctx, sprites, pt, plotSeason, pMix.b); ctx.globalAlpha = 1; }
+          });
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -21299,9 +21708,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const wob = 0.5 + Math.sin(now / 900) * 0.5;
           // Ombre au sol : deux disques, pour un bord qui s'éteint au lieu de
           // s'arrêter net.
-          ctx.fillStyle = "rgba(20,26,16,0.22)";
+          ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.22)" : "rgba(20,26,16,0.22)";
           ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 27, 7, 0, 0, 7); ctx.fill();
-          ctx.fillStyle = "rgba(20,26,16,0.11)";
+          ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.11)" : "rgba(20,26,16,0.11)";
           ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 31, 9, 0, 0, 7); ctx.fill();
           // Un anneau d'ondulation qui s'éteint en s'élargissant — réutilisé
           // pour le remous du jet et pour l'arrivée du débordement.
@@ -21328,6 +21737,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             { wy: fBy - FG.bowlY, rx: FG.bowlRX, ry: FG.bowlRY, bands: [WR[0], WR[2], WR[4], WR[6]] },
           ];
           const spillY0 = fBy - FG.bowlY + FG.bowlRY * 1.1, spillY1 = fBy - FG.basinY - FG.basinRY * 0.15;
+          /* 2026-09-28 (phase 12a) — L'HIVER, LA FONTAINE EST COUPÉE ET PRISE PAR LA
+             GLACE : les deux bassins gelés (un blanc bleuté, deux fêlures, la
+             neige qui tient sur la glace par plaques), la margelle coiffée, des
+             stalactites aux deux points où débordait l'eau. Plus de jet ni de
+             gouttes : une fontaine qui coule dans la neige se lit comme un oubli. */
+          if (snowSeason === "winter") {
+            const fdep = snowF ? snowF.depthAt(fCx, fBy - 8) : 0;
+            const ICE = ["#9fb6d0", "#b7cbe0", "#cbdcec", "#dfe9f4"];
+            for (const b of basins) {
+              for (let i = 0; i < ICE.length; i++) {
+                const t = i / (ICE.length - 1);
+                ctx.fillStyle = ICE[i];
+                ctx.beginPath(); ctx.ellipse(fCx - b.rx * 0.06 * t, b.wy - b.ry * 0.08 * t, Math.max(1, b.rx * (1 - t * 0.7)), Math.max(1, b.ry * (1 - t * 0.7)), 0, 0, 7); ctx.fill();
+              }
+              ctx.fillStyle = "rgba(70,96,140,0.55)";   // les fêlures
+              ctx.fillRect(fCx - b.rx * 0.5, b.wy, b.rx * 0.35, 1);
+              ctx.fillRect(fCx + b.rx * 0.1, b.wy - b.ry * 0.3, 1, b.ry * 0.5);
+              if (fdep > 0.6) {                              // la neige sur la glace, par plaques
+                ctx.fillStyle = "#f4f7fc";
+                for (let k = 0; k < 7; k++) {
+                  const a = k * 0.9 + 0.4, rr = 0.55 + (k % 3) * 0.12;
+                  if (k * 13 % 7 > Math.min(6, fdep)) continue;
+                  ctx.fillRect(fCx + Math.cos(a) * b.rx * rr - 2, b.wy + Math.sin(a) * b.ry * rr - 1, 3 + (k & 1), 2);
+                }
+              }
+            }
+            ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
+            const fm = NG.depthSnowMix(Math.max(fdep, 0.9), 0.5);
+            for (const [lv, a] of [[fm.a, 1], [fm.b, fm.k]]) {
+              const cv = lv && a > 0.01 ? snowCapCanvas(im, lv, 0) : null;
+              if (cv) { ctx.globalAlpha = a; ctx.drawImage(cv, fCx - im.width / 2, fBy - im.height - cv.pad); ctx.globalAlpha = 1; }
+            }
+            // Les stalactites, là où l'eau débordait.
+            for (const sgn of [-1, 1]) {
+              const sx = Math.round(fCx + sgn * FG.spillX);
+              ctx.fillStyle = "rgba(226,238,250,0.95)"; ctx.fillRect(sx, Math.round(spillY0), 1, 4);
+              ctx.fillStyle = "rgba(190,212,236,0.9)"; ctx.fillRect(sx + sgn, Math.round(spillY0), 1, 2);
+            }
+            return;
+          }
           for (const b of basins) {
             for (let i = 0; i < b.bands.length; i++) {
               const t = i / (b.bands.length - 1);
@@ -21401,7 +21850,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          passants, les rampes et les piliers se posent dessus. */
       {
         const F = C.TOWN_GRAND_STAIR.flight;
-        if (F.x + F.w >= x0 - 1 && F.x <= x1 + 1 && F.y + F.len >= y0 - 4 && F.y - 4 <= yBot) A.drawTownGrandFlight(ctx, sprites);
+        /* 2026-09-28 (phase 12a) — sa neige : les girons (`NG.snowStairPixels`), à
+           l'épaisseur au pied de la volée — deux niveaux en fondu. */
+        const flightSnow = snowF ? (im) => {
+          const d = snowF.depthAt((F.x + F.w / 2) * T, (F.y + F.len) * T + 8), mx = NG.depthSnowMix(d, 0.5);
+          const out = [];
+          if (mx.a) out.push({ c: snowCapCanvas(im, 20 + mx.a, 0), a: 1 });
+          if (mx.k > 0.01 && mx.b) out.push({ c: snowCapCanvas(im, 20 + mx.b, 0), a: mx.k });
+          return out;
+        } : null;
+        if (F.x + F.w >= x0 - 1 && F.x <= x1 + 1 && F.y + F.len >= y0 - 4 && F.y - 4 <= yBot) A.drawTownGrandFlight(ctx, sprites, 0, 0, flightSnow);
       }
       /* ══════════════════════════════════════════════════════════════════════
          LES TROIS MONUMENTS (425) — église, hôtel de ville, tribunal.
@@ -21717,6 +22175,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           aura.addColorStop(0.55, "rgba(198,158,104,0.15)");
           aura.addColorStop(1, "rgba(198,158,104,0)");
           ctx.save();
+          ctx.globalAlpha = 1 - groundSnowK;   // 2026-09-28 (phase 12a) : pas de halo chaud sur la neige
           ctx.fillStyle = aura;
           ctx.beginPath();
           ctx.ellipse(cx2, by + 6, dw * 0.64, dw * 0.64 * 0.32, 0, 0, Math.PI * 2);
@@ -22125,6 +22584,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              où son hypothèse de sol ne tient pas. Exactement le raisonnement
              appliqué à l'église, à la mairie et au tribunal. */
           ctx.drawImage(sprites.station, ts.x * T, tsBy - sprites.station.height);
+          // 2026-09-28 (phase 12a) — la neige de son toit (`NG.snowRoofPixels`), légère puis épaisse.
+          const rsf = roofSnowFrame && roofSnowFrame.house;
+          if (rsf && (rsf.l > 0.01 || rsf.h > 0.01)) {
+            for (const [lv, a] of [[11, rsf.l], [12, rsf.h]]) {
+              const cv = a > 0.01 ? snowCapCanvas(sprites.station, lv, 0) : null;
+              if (!cv) continue;
+              ctx.globalAlpha = a; ctx.drawImage(cv, ts.x * T, tsBy - sprites.station.height); ctx.globalAlpha = 1;
+            }
+          }
           drawBuildingFooting(ctx, tcx, tsBy, sprites.station.width / 2);
           // 2026-09-25 (phase 3) : la gare arrête la lumière (lumiere.js).
           lightBuilding(ts.x * T, ts.y * T, ts.x * T + sprites.station.width, tsBy, sprites.station,
@@ -22295,7 +22763,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            pots. Une rampe au-dessus de la chaussée porte l'altitude de SA marche
            (`pr.e`) — sa case, elle, est la chaussée. */
         if (pr.kind === "stairPost" || pr.kind === "stairBalus" || pr.kind === "stairSide" || pr.kind === "stairRail" || pr.kind === "stairPot") {
-          pushE((pr.y + 1) * T, pr.e !== undefined ? pr.e : elAt(pr.x, pr.y), () => A.drawGrandStairProp(ctx, sprites, pr));
+          // 2026-09-28 (phase 12a) : le chapeau de neige des rampes, des piliers, du pot.
+          const gsCap = snowF ? (() => { const mx = NG.depthSnowMix(snowF.depthAt(pr.x * T + 8, pr.y * T + 8), 0.5); return (im) => { const o = []; if (mx.a) o.push({ c: snowCapCanvas(im, mx.a, 0), a: 1 }); if (mx.k > 0.01 && mx.b) o.push({ c: snowCapCanvas(im, mx.b, 0), a: mx.k }); return o; }; })() : null;
+          pushE((pr.y + 1) * T, pr.e !== undefined ? pr.e : elAt(pr.x, pr.y), () => A.drawGrandStairProp(ctx, sprites, pr, gsCap));
           continue;
         }
         if (pr.kind === "tallGrass") { drawTownTallGrass(pr); continue; }
@@ -22370,7 +22840,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            étant posés tous les quatre pas, TOUTE LA RANGÉE sortait de la même
            couleur (vu au banc de rendu). Le générateur, lui, connaît l'indice de
            l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
-        const img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
+        let img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
                   : pr.kind === "bench" ? sprites.plazaBench
                   : pr.kind === "topiary" ? sprites.plazaTopiary
                   /* ⚠️ ZIP 431 — LE MODULO SUIT LA TABLE, il n'est plus écrit en
@@ -22449,7 +22919,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "starNestTree" ? sprites.starNestTree
                   : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
+        /* 2026-09-28 (phase 12a) — L'HIVER DU MOBILIER VÉGÉTAL (`NG.winterizePixels`) :
+           plus une fleur, le caduc en brindilles, la graminée en paille — même
+           dessin, mis en cache par image. */
+        const wMode = snowSeason === "winter" ? NG.WINTER_PROP_MODE[pr.kind] : null;
+        if (wMode) img = winterPropCanvas(img, wMode) || img;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
+        /* 2026-09-28 (phase 12a) — LA NEIGE SUR LE MOBILIER : un chapeau lu dans
+           les pixels du sprite (`NG.snowCapPixels`, mis en cache par image et par
+           niveau), et le pied enfoui ; ce qui est COUCHÉ au sol (pas japonais,
+           massifs, pierres plates) disparaît peu à peu sous le manteau. Pas sur
+           l'eau (nénuphars, roseaux dans l'eau). */
+        const snowOver = snowF && pr.kind !== "lily" && pr.kind !== "reedsWater" ? propSnowOverlay(img, pr, EAU.WATER_FLAT_PROPS.has(pr.kind)) : null;
         /* 2026-09-25 (phase 4) : tout ce qui se tient DEBOUT se reflète ; ce qui
            est couché au sol ou flotte (nénuphars, pas japonais, pierres plates,
            massifs) n'a pas de reflet à donner. */
@@ -22461,7 +22942,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ombres décalées sous chaque objet — le genre de défaut qu'on ne
              nomme pas en jouant mais qui fait dire « ça fait sale ». */
           if (!PLANCHE_PROPS.has(pr.kind)) {
-            ctx.fillStyle = "rgba(20,26,16,0.22)";
+            ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.24)" : "rgba(20,26,16,0.22)";   // bleue sur la neige (phase 12a)
             ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
           }
           /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LE FRISSON EST UN CISAILLEMENT ANCRÉ AU
@@ -22494,8 +22975,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.translate(cxp, by);
             ctx.transform(1, 0, -lean / Math.max(1, img.height), 1, 0, 0);
             ctx.drawImage(img, -img.width / 2, -img.height);
+            if (snowOver) drawSnowOverlay(snowOver, -img.width / 2, -img.height);
             ctx.restore();
-          } else ctx.drawImage(img, cxp - img.width / 2, by - img.height);
+          } else {
+            ctx.drawImage(img, cxp - img.width / 2, by - img.height);
+            if (snowOver) drawSnowOverlay(snowOver, cxp - img.width / 2, by - img.height);
+          }
         }, 0, reflX);
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -22728,7 +23213,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!o.ruin) queueHouseTufts(hsn, baseL, baseR, byW, doorWX, houseE);
         pushE(footWY, houseE, () => {
           drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1 });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house });
           if (r) {
             // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
             lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
@@ -22893,10 +23378,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         pushE(footWY, shopE, () => {
           drawPaintedGrounding(ctx, cxW - (cw / 2 - 12) * k, cxW + (cw / 2 - 12) * k, byW, byW - footWY + b.h * T * 0.6);
           // Le fondu : l'étape d'avant dessous, pleine, la nouvelle par-dessus, qui monte.
-          if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0);
+          const shopSnow = roofSnowFrame && roofSnowFrame.house;
+          if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0, { snow: shopSnow });
           const a0 = ctx.globalAlpha;
           if (SBfrom && fadeA < 1) ctx.globalAlpha = a0 * fadeA;
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, glowOpts);
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, { ...(glowOpts || {}), snow: shopSnow });
           ctx.globalAlpha = a0;
           if (!r) return;
           // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
@@ -22959,6 +23445,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else townBushPress(tw, dx2, dy2, 0, 0);
           const rAnim = isHost ? (res.animT || 0) : (rp.animT || 0);
           const pe = sitting ? townElevAt(tw, dx2, dy2 + 0.2) : townLvl(tw, "rd:" + res.rid, dx2, dy2 + 0.2);
+          if (!sitting) snowWalk("r:" + res.rid, ro.skill === "voyager" ? "hoof" : "boot", C.footX(dx2), C.footY(dy2), pe);
           const charOf = (extra) => ({
             id: "res" + res.rid, name: ro.name, gender: ro.gender, outfit: ro.outfit,
             overalls: ro.overalls, cap: ro.cap, look: ro.look,
@@ -22980,6 +23467,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const gp = trailFollow(tr, rx, ry, rMoving, C.TOWN_GUEST_FOLLOW_DIST);
             const gAnim = rMoving ? (performance.now() / 110) : 0;
             const gpe = townLvl(tw, "g:" + res.rid, C.footX(gp.x), C.footY(gp.y));
+            snowWalk("g:" + res.rid, guest.small ? "child" : "boot", C.footX(gp.x), C.footY(gp.y), gpe);
             pushE((gp.y + 1) * T - 1, gpe, () => drawCharacter({
               id: "guest" + res.rid, name: guest.name, x: gp.x, y: gp.y, dir: gp.dir,
               moving: rMoving, animT: gAnim, gender: guest.gender, outfit: guest.outfit,
@@ -23097,6 +23585,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                saut, au milieu d'un vol. */
             if (b.st === "ground") b.e = elAt(Math.floor(b.x), Math.floor(b.y));
             const be = b.e || 0, bb = b;
+            // 2026-09-28 (phase 12a) — les pattes d'un oiseau qui marche dans la neige (traces locales).
+            if (b.st === "ground" && !(b.alt > 0.05)) { if (!b.snowId) b.snowId = "b" + (++birdSnowSeq); snowWalk(b.snowId, "bird", b.x, b.y, be); }
             pushE(bb.y * T, be, () => {
               const set = set0[bb.kind]; if (!set) return;
               const flying = bb.st === "fly" || bb.st === "land";
@@ -23137,7 +23627,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               if (bb.alt > 0.02) {
                 const k2 = Math.max(0.28, 1 - bb.alt / C.BIRD_ALT_MAX);
                 ctx.globalAlpha = 0.26 * k2 * bb.a;
-                ctx.fillStyle = "#1a1a1a";
+                ctx.fillStyle = groundSnowK > 0.5 ? "#1c2c5c" : "#1a1a1a";
                 ctx.beginPath(); ctx.ellipse(gx, gy, 4.5 * k2, 1.8 * k2, 0, 0, 7); ctx.fill();
                 ctx.globalAlpha = 1;
               }
@@ -23228,7 +23718,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.globalAlpha = a0;
           };
           const groundShadow = (gx, gy, w, a) => {
-            ctx.globalAlpha = a; ctx.fillStyle = "#1a1a1a";
+            ctx.globalAlpha = a; ctx.fillStyle = groundSnowK > 0.5 ? "#1c2c5c" : "#1a1a1a";   // bleue sur la neige (phase 12a)
             ctx.fillRect(snapF(gx - w / 2), snapF(gy) - 1, Math.round(w), 2);
             ctx.globalAlpha = 1;
           };
@@ -23356,6 +23846,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (!inView(c.x, c.y, 2)) continue;
             const cell = FAS.cat[c.coat] && FAS.cat[c.coat][c.pose];
             const gx = c.x * T, gy = c.y * T, ce = townLvl(tw, "cat:" + c.coat, c.x, c.y);
+            snowWalk("cat:" + c.coat, "paw", c.x, c.y, ce);
             pushE(gy, ce, () => { groundShadow(gx, gy, 9, 0.18); blitF(cell, gx, gy, c.face); }, 0, Math.floor(c.x));
           }
           // ── Les petits effets : le cœur du chat qui dit bonjour.
@@ -23455,6 +23946,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            feuille ne bouge est pire que de ne pas avoir l'effet du tout : ça dit
            que le décor n'appartient qu'à soi. */
         townBushPress(tw, p.x, p.y, p.vx || 0, p.vy || 0);
+        if (!p.taxi) snowWalk("p:" + p.id, "boot", C.footX(p.x), C.footY(p.y), playerElevTown(tw, p));
         /* ⚠️ 425 — L'ALTITUDE D'UN JOUEUR DISTANT SE LIT SOUS SES PIEDS, elle
            ne se reçoit pas. C'est tout l'intérêt d'avoir mis la hauteur dans la
            CASE et non dans le personnage : les x/y qui circulaient déjà
@@ -23496,6 +23988,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
       if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, Math.floor(m.x + 0.5));
+      if (!inCar && !m.sleeping && !jpv.active && !m.sitOn) snowWalk("me", "boot", C.footX(m.x), C.footY(m.y), myE);
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 456 — LA POSTURE DU CRATÈRE SE VOIT ENFIN.
          ╚══════════════════════════════════════════════════════════════════════
@@ -26557,7 +27050,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          profondeur. Les nombres viennent donc des constantes, sans quoi on
          aurait deux descriptions du même sol (§8) — et c'est exactement ce qui
          a laissé la collision décalée d'une demi-case pendant vingt zips. */
-      if (!swimmingHere) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill(); }
+      /* 2026-09-28 (phase 12a) — DANS LA NEIGE : l'ombre est bleue (le ciel s'y
+         reflète), et les pieds s'enfoncent (un bourrelet, plus bas). */
+      const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === "town" && !inBoat ? charSnowAt(p) : 0;
+      if (!swimmingHere) { ctx.fillStyle = snowFeet > 1 ? "rgba(36,54,104,0.32)" : "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill(); }
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
          encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
@@ -26755,6 +27251,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
+      /* LES PIEDS DANS LA NEIGE : un bourrelet de neige autour des chaussures, un
+         pixel par ~5 cm (trois au plus), bombé (plus étroit en haut), bleu à son
+         pied — les pieds ne sont pas coupés, ils sont DANS la neige. Pas à
+         cheval, pas assis (une monture a ses propres pattes). */
+      if (snowFeet > 1.5 && !riding && !swimmingHere && !(p.sitOn)) {
+        const sk = Math.min(3, Math.max(1, Math.round(snowFeet / 5))), fy = py + 15, cx0 = px + 8;
+        const SN = ["#f8fafd", "#e4ecf7", "#c3d2ea"];
+        for (let r = 0; r < sk; r++) {
+          const half = 3 + r + (sk - 1 - r === 0 ? 1 : 0), yy = fy - (sk - 1 - r);
+          ctx.fillStyle = r === sk - 1 ? SN[2] : r === 0 ? SN[0] : SN[1];
+          ctx.fillRect(cx0 - half, yy, half * 2, 1);
+        }
+      }
       if (inBoat && isPilot && sprites.drawBoatFront) sprites.drawBoatFront(ctx, basePx + 8, py + 14, T, p.dir);
       // Torche allumée (chantier 2026-07) : dessinée collée à la main côté
       // sens de la marche, flamme qui vacille légèrement.
@@ -26973,7 +27482,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function monumentGlowOpts(key) {
       const sh = sharedRef.current;
       return { key, tmin: E.gameTimeMin(sh.dayStartAt, Date.now()), day: sh.day || 1,
-        flick: key === "church" ? LUM.candleFlicker(Date.now()) : 1 };
+        flick: key === "church" ? LUM.candleFlicker(Date.now()) : 1, snow: roofSnowFrame && roofSnowFrame.cold };
     }
     /* Un monument peint (phase 1 : une image par cran, à 1:1) : son emprise
        (repère courant), sa silhouette et son calque de nuit (ce que
@@ -38306,6 +38815,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {[null, "spring", "summer", "autumn", "winter"].map(k => (
                     <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => sendReq({ kind: "devSky", season: k })}>{L.devSeasonBtn(k)}</button>
                   ))}
+                </div>
+                {/* 2026-09-28 (phase 12a) — LA NEIGE, LOCALE (`snowDevRef`, lu par `snowPackNow`). */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSnowSection}</div>
+                <div className="ferme-dev-hint">{L.devSnowHint}</div>
+                <div className="ferme-dev-grid">
+                  {[null, 0, 0.5, 1, 2, 4, 12, 30].map(v => (
+                    <button key={"devsnow-" + v} className={"ferme-dev-btn" + (snowDevUi.depth === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, depth: v }; setSnowDevUi(u => ({ ...u, depth: v })); }}>{L.devSnowDepth(v)}</button>
+                  ))}
+                </div>
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, 0, 1, 2].map(v => (
+                    <button key={"devsnowt-" + v} className={"ferme-dev-btn" + (snowDevUi.trees === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, trees: v }; setSnowDevUi(u => ({ ...u, trees: v })); }}>{L.devSnowTrees(v)}</button>
+                  ))}
+                  <button className="ferme-dev-btn" onClick={() => { const sf = snowFieldRef.current; if (sf && sf.f) sf.f.clearPrints(); }}>{L.devSnowClear}</button>
                 </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
                 <div className="ferme-dev-hint">{L.devFaunaHint}</div>
