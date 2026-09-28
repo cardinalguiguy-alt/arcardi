@@ -84,9 +84,9 @@ const CASES = [
   ["roseaux d'eau", S.townReedsWater],
   ["roseaux", S.townReedTuft],
   ["touffe d'herbe", S.townGrassTuft],
-  ["haie — tronçon", S.townHedge.mid],
-  ["haie — bout", S.townHedge.w],
-  ["haie — isolée", S.townHedge.solo],
+  // 2026-09-28 (phase 7b) : la haie en tuiles est retirée ; ses cases se dessinent
+  // en volumes (clotures.js, regardées par render-haies). Reste le décor du quai.
+  ["haie du quai", S.townHedgeRow],
   ["lame de ponton", S.townDeck],
 ];
 

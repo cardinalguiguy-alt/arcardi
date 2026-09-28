@@ -151,6 +151,7 @@ function glassColor(rg, X, Y) {
   }
   return G_BLUE;
 }
+const AMBER = [232, 158, 84];                               // la lueur des cierges, vue du dehors (2026-09-28)
 function tintGlass(g, c, srcL) {
   // Mêlée à l'ambre (86 % de verre — à 60 %, bleu + ambre donnait du lilas grisé, vu sur la planche), modulée par la luminance de la peinture :
   // les plombs sombres restent sombres, les clairs de la peinture éclairent.
@@ -229,14 +230,25 @@ for (const M of MONUMENTS) {
         if (rg.kind === "pane") g = shadePane(g, rg.st, u, v, rg.room !== "always");
         else if (rg.kind === "curtain" && g[3] >= 0.5 && g[0] > 200 && g[2] < 190) g = shadePane(g, rg.st, u, v, false);
         else if (rg.kind === "stained") {
-          if (lum(src[0], src[1], src[2]) >= 30) g = tintGlass(g, glassColor(rg, X, Y), lum(src[0], src[1], src[2]));
-          // Des cierges en bas de la nef : la chaleur monte du bas, le haut
-          // garde le bleu et le rouge du verre, plus saturés.
-          const m = (g[0] + g[1] + g[2]) / 3, sat = 1.08;
+          /* ⚠️⚠️ 2026-09-28 — LUEUR CHAUDE, COULEURS ÉTEINTES. Guillaume : « les
+             vitraux de l'église de nuit sont trop irréalistes, flashy ». Un
+             vitrail vu du DEHORS, la nuit, n'est éclairé que par les cierges et
+             la lampe du sanctuaire : une lueur ambrée, sourde, où l'on DEVINE
+             le bleu et le rubis sans qu'ils brillent. La composition du maître
+             verrier (`glassColor`) reste — c'est elle qu'on devine — mais au
+             cinquième, mêlée à l'ambre, désaturée, et à 60 % de la force
+             d'avant. C'est la FAÇADE qui porte maintenant la lumière de la nuit
+             (`build-monument-flood.mjs`). */
+          const L0 = lum(src[0], src[1], src[2]);
+          if (L0 >= 30) {
+            const c = glassColor(rg, X, Y), k = 0.42 + 0.5 * clamp(L0 / 150, 0, 1);
+            g = [0, 1, 2].map((q) => clamp((AMBER[q] * 0.8 + c[q] * 0.2) * k, 0, 255)).concat([g[3]]);
+          }
+          const m = (g[0] + g[1] + g[2]) / 3, sat = 0.7;
           g = [m + (g[0] - m) * sat, m + (g[1] - m) * sat, m + (g[2] - m) * sat, g[3]];
-          const w = 0.22 * v;
-          g = [g[0] * (1 - w) + 255 * w, g[1] * (1 - w) + 196 * w, g[2] * (1 - w) + 120 * w, g[3] * (0.88 + 0.12 * v)];
-          if (rg.k === "disc") { const d = Math.hypot(X - rg.cx, Y - rg.cy) / rg.r; g = [g[0], g[1], g[2], g[3] * (1 - 0.25 * d * d)]; }
+          const w = 0.18 * v;                                   // les cierges : un peu plus chaud en bas
+          g = [g[0] * (1 - w) + 240 * w, g[1] * (1 - w) + 170 * w, g[2] * (1 - w) + 96 * w, g[3] * (0.55 + 0.1 * v)];
+          if (rg.k === "disc") { const d = Math.hypot(X - rg.cx, Y - rg.cy) / rg.r; g = [g[0], g[1], g[2], g[3] * (1 - 0.3 * d * d)]; }
         }
       }
       out.data[o] = clamp(Math.round(g[0]), 0, 255); out.data[o + 1] = clamp(Math.round(g[1]), 0, 255);

@@ -235,7 +235,12 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
     }
   }
   ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
-  return { img, glowImg, glowParts, left, top, dw, dh };
+  /* 2026-09-28 — LA FAÇADE ÉCLAIRÉE (`mip.flood`, build-monument-flood.mjs) : elle
+     n'est PAS posée ici, avant la nuit — la nuit l'éteindrait avec le reste. On
+     la charge et on la rend ; `lightMonument` l'ajoute APRÈS la nuit, comme les
+     vitres, mais à sa propre force (sans cierges ni pièces). */
+  const floodImg = mip.flood && nightA > 0.01 ? loadBitmap(mip.flood) : null;
+  return { img, glowImg, glowParts, floodImg, left, top, dw, dh };
 }
 /* 2026-09-27 — L'ENSEIGNE DE BARBIER DU SALON, QUI TOURNE. Le verre peint est
    recouvert, en px ÉCRAN (le salon est posé à 1:1, `drawScreenExactBitmap`),
@@ -958,6 +963,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const townTripNextCheckRef = useRef(0);
   const townMeetNextRef = useRef(0);
   const guestTrailsRef = useRef(new Map());
+  const gateOpenRef = useRef(new Map());   // 2026-09-28 (phase 7b) : l'ouverture de chaque portail, locale (voir « LES PORTAILS »)
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
@@ -20890,6 +20896,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);   // la transformation commune, rendue — voir la note du trait vert
       /* ══════════════════════════════════════════════════════════════════════
+         2026-09-28 (phase 7b) — LES PORTAILS ET LES POTAGERS DES JARDINS.
+         ──────────────────────────────────────────────────────────────────────
+         Un portail s'OUVRE quand quelqu'un s'en approche (soi, un camarade, un
+         habitant) et se referme une seconde après son passage. ⚠️ RIEN NE
+         CIRCULE : l'ouverture se DÉDUIT des positions que chaque client voit
+         déjà (§3) — deux joueurs voient le même portail s'ouvrir devant le même
+         passant, à la latence près, et c'est tout ce qu'il faut. La case de
+         l'allée reste praticable, ouverte ou non : le portail est un DESSIN, il
+         ne ferme rien (personne ne doit jamais rester bloqué devant). */
+      {
+        const gts = tw.gates || [];
+        if (gts.length) {
+          const walkers = [];
+          if (m && !m.sleeping && !m.taxi) walkers.push([C.footX(m.x), C.footY(m.y)]);
+          for (const p of playersRef.current.values()) if (p.zone === "town" && !p.sleeping && !p.taxi) walkers.push([C.footX(p.x), C.footY(p.y)]);
+          for (const res of ((sharedRef.current.station && sharedRef.current.station.residents) || [])) {
+            if (resZone(res) === "town" && Number.isFinite(res.x)) walkers.push([C.footX(res.x), C.footY(res.y)]);
+          }
+          const st = gateOpenRef.current, nowG = performance.now();
+          for (const g of gts) {
+            if (g.x + g.w < xL || g.x > xR || g.y < yR0 || g.y > yBot) continue;
+            const cx = g.x + g.w / 2, cy = g.y + 0.5;
+            const near = walkers.some(([wx, wy]) => Math.abs(wx - cx) < 2.2 && Math.abs(wy - cy) < 2.4);
+            const k = g.y * tw.w + g.x;
+            const sg = st.get(k) || { a: 0, t: 0 };
+            if (near) sg.t = nowG;
+            const want = nowG - sg.t < 1100 ? 1 : 0;       // il reste ouvert une seconde après le passage
+            sg.a = want ? Math.min(1, sg.a + dt / 0.4) : Math.max(0, sg.a - dt / 0.8);
+            st.set(k, sg);
+            const a = sg.a * sg.a * (3 - 2 * sg.a);        // pas d'à-coup aux deux bouts du geste
+            pushE((g.y + 1) * T, g.e, () => A.drawTownGate(ctx, sprites, g, a));
+          }
+        }
+        const plotSeason = E.seasonOf().key;
+        for (const pt of (tw.plots || [])) {
+          if (pt.x + pt.w < xL || pt.x > xR || pt.y + pt.h < yR0 || pt.y > yBot) continue;
+          pushE((pt.y + pt.h) * T, pt.e, () => A.drawTownPlot(ctx, sprites, pt, plotSeason));
+        }
+      }
+      /* ══════════════════════════════════════════════════════════════════════
          ZIP 444 — LE CRATÈRE, DANS LE PRÉ DE L'EST.
          ──────────────────────────────────────────────────────────────────────
          ⚠️ IL SE PEINT ICI, JUSTE APRÈS LES TUILES ET AVANT TOUT CE QUI SE POSE
@@ -26952,6 +26998,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       };
       const flick = go ? go.flick : 1;
       if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, Math.min(1, lit * flick));
+      /* 2026-09-28 — la mise en lumière de la façade (Guillaume : « un éclairage
+         de la façade, comme à Bordeaux ou Paris », or chaud, toute la nuit) :
+         les projecteurs ne vacillent pas et n'ont pas d'heure de bureau — seule
+         l'obscurité les règle, à la force du monument (`floodK`). */
+      if (r.floodImg) lightScreenGlow(r.floodImg, r.left, r.top, r.dw, r.dh, Math.min(1, lit * (SB.floodK == null ? 1 : SB.floodK)));
       if (lit <= 0.01) return;
       for (const l of (SB && SB.lights) || []) {
         const sx = r.left + l.x * r.dw;
@@ -27530,7 +27581,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (gr === C.G_WATER) col = [58, 123, 200];
         else if (gr === C.G_BRIDGE) col = [140, 100, 60];
         if (o === C.O_TREE || o === C.O_TREE2) col = [42, 100, 40];
-        if (tw.hedge && tw.hedge[i]) col = [46, 108, 44];
+        if (tw.hedge && tw.hedge[i]) col = [null, [46, 108, 44], [58, 60, 66], [226, 222, 208], [118, 98, 76], [150, 146, 130]][tw.hedge[i]] || [46, 108, 44];   // 7b : la carte montre la matière de la clôture
         // Tout ce qui bloque et n'est ni arbre ni haie est bâti : une seule
         // teinte chaude pour les maisons, les monuments et le mobilier — la
         // carte doit se lire d'un coup d'œil, pas se déchiffrer.

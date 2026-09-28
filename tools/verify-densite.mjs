@@ -99,7 +99,7 @@ title("1. tout bitmap passe par la table");
   }
   /* `want.day` / `mip.glow` : les deux appels de `screenBitmapPick` /
      `drawScreenExactBitmap` (FermeGame.js), dont l'URL sort de `townBitmapMip`. */
-  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|mip\.glow|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;
+  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|mip\.glow|mip\.flood|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée
   const grassTpl = "`/town/${variant}.png`";
   const stray = calls.filter(c => !tableRef.test(c.arg) && c.arg !== grassTpl);
   /* « Un banc qui compte des occurrences doit publier combien il en a LUES »
@@ -142,6 +142,10 @@ title("2. les PNG déclarés existent, à la taille annoncée");
           const g = pub(m.glow), gs = fs.existsSync(g) ? pngSize(g) : null;
           ok(gs && gs.w === m.w && gs.h === m.h, `${k} cran ${z} : calque de nuit à la même taille`, gs ? `${gs.w}×${gs.h}` : "absent");
         }
+        if (m.flood) {
+          const g = pub(m.flood), gs = fs.existsSync(g) ? pngSize(g) : null;
+          ok(gs && gs.w === m.w && gs.h === m.h, `${k} cran ${z} : façade éclairée à la même taille`, gs ? `${gs.w}×${gs.h}` : "absent");
+        }
       }
       continue;
     }
@@ -172,7 +176,7 @@ title("2. les PNG déclarés existent, à la taille annoncée");
 {
   const refd = new Set();
   for (const b of Object.values(T)) {
-    if (b.grid === "screen") for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); if (m.glow) refd.add(m.glow); }
+    if (b.grid === "screen") for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); if (m.glow) refd.add(m.glow); if (m.flood) refd.add(m.flood); }
     else if (!b.prefix) { if (b.day) refd.add(b.day); if (b.glow) refd.add(b.glow); }
   }
   const dir = path.join(ROOT, "public", "town");

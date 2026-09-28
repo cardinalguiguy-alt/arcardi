@@ -5670,6 +5670,146 @@ export function townHouseLook(hsn, style) {
   return { model, variant: TOWN_HOUSE_MODELS[model].variants[want] ? want : "simple" };
 }
 export const townHouseBitmapKey = (model, variant) => `house_${model}_${variant}`;
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ PHASE 7b (2026-09-28) — LES CLÔTURES PAR QUARTIER.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décisions de Guillaume (2026-09-28) : les 32 jardins changent de clôture
+   selon le RANG de l'adresse (la même règle que les versions des maisons,
+   `townHouseDistrict`), avec de la variété dans un même rang ; l'enclos est
+   en U — le devant et les deux flancs, calés sur l'IMAGE de la maison — et il
+   n'a plus de côté nord (il se cachait derrière le toit, et dépassait) ; deux
+   voisines trop proches PARTAGENT leur flanc ; tout est dessiné en code
+   (`clotures.js`).
+   · riche     : muret de pierre, grille en fer forgé, piliers, portail ;
+   · enrichie  : haie de buis taillée OU palissade blanche à claire-voie ;
+   · simple    : palissade de planches, piquets et fil, OU jardin OUVERT
+                 (pas de clôture, un potager devant la maison).
+   ⚠️ ET PAS DE CLÔTURE PARTOUT (Guillaume, même soir : « pas besoin de mettre
+   des clôtures autour de toutes les propriétés ») : dans chaque rang, une part
+   des jardins reste OUVERTE — une pelouse qui donne sur la rue. Le potager ne
+   pousse que chez les plus modestes.
+   ⚠️ La matière se lit dans `tw.hedge` : 0 = rien, sinon un code de
+   `TOWN_FENCE`. Tout lecteur qui testait `tw.hedge[i]` comme un booléen
+   (« une haie est là ») reste juste — c'est voulu, et c'est pourquoi la haie
+   des parcs vaut 1 (`HEDGE`), comme avant.
+   ⚠️ Rien ne circule : le style, l'enclos et le partage se DÉDUISENT de la
+   position des parcelles (§3 de CLAUDE.md), et la carte les pose en passe
+   FINALE, sans un tirage (§4 : `generateTownWorld`, « LES CLÔTURES »). */
+export const TOWN_FENCE = { HEDGE: 1, IRON: 2, PICKET: 3, BOARD: 4, WIRE: 5 };
+export const TOWN_FENCE_KEYS = [null, "hedge", "iron", "picket", "board", "wire"];
+/* Quand deux parcelles partagent un flanc, l'ouvrage le plus lourd l'emporte :
+   on ne coupe pas une grille de fer pour y raccorder trois piquets. */
+const TOWN_FENCE_WEIGHT = [0, 3, 5, 2, 1, 0];
+/* Un hachage entier de la parcelle : la variété dans un rang est une propriété
+   de l'ADRESSE, pas un tirage (deux joueurs voient la même palissade). */
+function fenceHash(x, y) {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul((y | 0) + 0x165667b1, 0x9e3779b1);
+  h ^= h >>> 15; h = Math.imul(h, 0x85ebca77); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+/* La clôture d'une parcelle : un code de `TOWN_FENCE`, 0 pour le jardin
+   ouvert, −1 pour une maison de ville (elle n'a pas de jardin, `dense`). */
+/* ⚠️ UN CYCLE PAR RANG, PAS UN SEUIL : sur une douzaine de jardins par rang, un
+   seuil de hachage répartit au hasard — le premier jet donnait 16 jardins ouverts
+   sur 34 et plus un seul fil de fer. Les jardins d'un rang sont rangés dans
+   l'ordre de leur hachage et reçoivent le cycle à tour de rôle : un sur trois
+   ouvert, toutes les matières présentes, et l'ordre reste une propriété de
+   l'ADRESSE (rien ne se tire). */
+const TOWN_FENCE_CYCLE = {
+  riche: [TOWN_FENCE.IRON, TOWN_FENCE.IRON, 0],
+  enrichie: [TOWN_FENCE.HEDGE, 0, TOWN_FENCE.PICKET, TOWN_FENCE.HEDGE, TOWN_FENCE.PICKET, 0],
+  simple: [TOWN_FENCE.BOARD, 0, TOWN_FENCE.WIRE, TOWN_FENCE.BOARD, 0, TOWN_FENCE.WIRE],
+};
+let TOWN_FENCE_OF = null;
+export function townParcelFence(hsn) {
+  if (hsn.dense) return -1;
+  if (!TOWN_FENCE_OF) {
+    TOWN_FENCE_OF = new Map();
+    const by = {};
+    for (const h of townAllHouses()) {
+      if (h.dense) continue;
+      const d = townHouseDistrict(h);
+      (by[d] = by[d] || []).push(h);
+    }
+    for (const [d, list] of Object.entries(by)) {
+      list.sort((a, b) => fenceHash(a.x, a.y) - fenceHash(b.x, b.y));
+      const cyc = TOWN_FENCE_CYCLE[d];
+      list.forEach((h, k) => TOWN_FENCE_OF.set(h.x + "," + h.y, cyc[k % cyc.length]));
+    }
+  }
+  const v = TOWN_FENCE_OF.get(hsn.x + "," + hsn.y);
+  return v === undefined ? 0 : v;
+}
+/* L'IMAGE d'une largeur : la réunion de celles de ses modèles et de leurs
+   versions (la ruine exceptée : ce n'est pas une parcelle). C'est elle que la
+   clôture contourne — un joueur change de façade avec R, la clôture ne bouge
+   pas (même raison que `townHouseSizeFoot` pour la collision). */
+export function townSizeImageSpan(size) {
+  let L = Infinity, R = -Infinity;
+  for (const k of townHouseModelsOf(size)) for (const vk of Object.keys(TOWN_HOUSE_MODELS[k].variants)) {
+    if (vk === "ruine") continue;
+    const s = townHouseImageSpan(k, vk);
+    L = Math.min(L, s.L); R = Math.max(R, s.R);
+  }
+  return { L, R };
+}
+/* L'écart minimal, en cases, entre le bord de l'image et l'axe d'un flanc.
+   ⚠️ L'axe, pas le bord de l'ouvrage : une haie a 0,25 case de chaque côté de
+   son axe, un poteau 0,06. À 0,25, la haie d'une standard frôle son image
+   (0,03 case) sans jamais passer dessous — le défaut qu'on corrige. */
+export const TOWN_FENCE_MARGIN = 0.25;
+/* L'enclos d'une parcelle, en cases absolues : les deux colonnes des flancs,
+   la rangée du fond (celle du mur arrière : au-delà, le toit cache tout) et
+   celle du devant (l'ancienne haie sud, `y + TOWN_HOUSE_H + 2`), et les deux
+   colonnes de l'allée (où se pose le portail). */
+export function townParcelEnclosure(hsn) {
+  const s = townSizeImageSpan(townHouseSize(hsn));
+  return {
+    west: hsn.x + Math.floor(s.L - 0.5 - TOWN_FENCE_MARGIN),
+    east: hsn.x + Math.ceil(s.R - 0.5 + TOWN_FENCE_MARGIN),
+    back: hsn.y, front: hsn.y + TOWN_HOUSE_H + 2,
+    gateX: hsn.x + 2, imgL: hsn.x + s.L, imgR: hsn.x + s.R,
+  };
+}
+/* Deux flancs à moins de `TOWN_FENCE_SHARE` colonnes l'un de l'autre n'en font
+   qu'un : deux clôtures parallèles à une case l'une de l'autre dessinent un
+   couloir de rien, et à zéro elles se superposent (la large de (100,28) et la
+   standard de (110,28) se touchent). */
+export const TOWN_FENCE_SHARE = 2;
+/* La table des clôtures de la ville : une entrée par jardin, flancs partagés
+   résolus. Pure et mise en cache (la carte est fixe) ; le générateur la pose,
+   les bancs la relisent. `westStyle`/`eastStyle` : la matière de chaque flanc
+   (celle du voisin quand il l'emporte), `westCol`/`eastCol` : sa colonne (null
+   pour un jardin ouvert, qui n'a pas de flanc à lui). */
+let TOWN_FENCE_LAYOUT = null;
+export function townFenceLayout() {
+  if (TOWN_FENCE_LAYOUT) return TOWN_FENCE_LAYOUT;
+  const list = [];
+  for (const hsn of townAllHouses()) {
+    const style = townParcelFence(hsn);
+    if (style < 0) continue;
+    const en = townParcelEnclosure(hsn);
+    list.push({ hsn, style, rank: townRankAt(hsn.x + TOWN_HOUSE_W / 2, hsn.y + TOWN_HOUSE_H), ...en,
+                westCol: style ? en.west : null, eastCol: style ? en.east : null, westStyle: style, eastStyle: style });
+  }
+  for (const a of list) for (const b of list) {
+    if (b.hsn.x <= a.hsn.x || (!a.style && !b.style)) continue;
+    if (a.back > b.front || b.back > a.front) continue;         // pas sur les mêmes rangées
+    if (b.west - a.east > TOWN_FENCE_SHARE) continue;
+    /* La colonne commune : celle qui s'écarte le plus des DEUX images, dans
+       l'intervalle que les deux flancs bornent. */
+    let best = null, bestD = -Infinity;
+    for (let c = Math.min(a.east, b.west); c <= Math.max(a.east, b.west); c++) {
+      const d = Math.min(c + 0.5 - a.imgR, b.imgL - (c + 0.5));
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    const st = TOWN_FENCE_WEIGHT[a.style] >= TOWN_FENCE_WEIGHT[b.style] ? a.style : b.style;
+    if (a.style) { a.eastCol = best; a.eastStyle = st; }
+    if (b.style) { b.westCol = best; b.westStyle = st; }
+  }
+  return (TOWN_FENCE_LAYOUT = list);
+}
 /* Les vitres d'une version, hauteur résolue — la SEULE lecture de `wins`/`hv`/
    `only` : le script de fabrication cuit ces rectangles, le jeu allume les
    mêmes, un par un, à l'heure de `LUM.windowLit`. */
@@ -5901,12 +6041,17 @@ function townShopBitmaps() {
    plus FIN que le décor en gros pixels qui l'entoure. C'est le prix, accepté,
    de « aucune perte de qualité ». La géométrie monde (`disp`, `dispH`, `grow`)
    ne bouge pas d'un pixel : pigeons, embase, halo du parvis restent calés. */
+/* ⚠️ 2026-09-28 — `flood` : la MISE EN LUMIÈRE de la façade (projecteurs au pied,
+   or chaud), un calque par cran fabriqué par `tools/build-monument-flood.mjs`
+   depuis les images de jour ; `floodK` : sa force (l'église pleine, la mairie et
+   le tribunal dosés — décision de Guillaume). Ajoutée après la nuit, à part du
+   calque des vitres : elle ne vacille pas et ne suit pas les pièces. */
 export const TOWN_BITMAPS = {
   /* PHASE 7 (2026-09-27) — ×1,5 (192 → 288) : voir `TOWN_CHURCH`. Porte à ~2,8 m,
      un étage au-dessus de l'hôtel de ville. Au cran 5 l'image (1 584 px) dépasse
      la référence (1 004 px) : agrandie ×1,58 par le Lanczos du script, jamais
      par le jeu — à regarder au plus près avant de la croire. */
-  church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", zooms: [1, 2, 3, 4, 5],
+  church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", flood: "/town/eglise-flood", floodK: 1, zooms: [1, 2, 3, 4, 5],
                 disp: 288, dispH: 274.5, grow: 1.1, smooth: false,
                 lights: [
                   { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6, room: "nave" },
@@ -5914,7 +6059,7 @@ export const TOWN_BITMAPS = {
                   { x: 426 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55, room: "aisle" },
                 ],
                 ref: "refs/eglise-nouvelle.jpg", build: "tools/build-eglise-sprite.mjs" },
-  townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", zooms: [1, 2, 3, 4, 5],
+  townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", flood: "/town/townhall-flood", floodK: 0.85, zooms: [1, 2, 3, 4, 5],
                 disp: 192, dispH: 173, grow: 1.1, smooth: false,
                 lights: [
                   { x: 241 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
@@ -5936,7 +6081,7 @@ export const TOWN_BITMAPS = {
      cran 3, comme les perchoirs des pigeons. `room` (phase 6c) : la pièce de
      `LUM.MONUMENT_WINDOWS` dont la flaque suit l'heure — sans elle, allumée
      toute la nuit (lanternes). */
-  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", zooms: [1, 2, 3, 4, 5],
+  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", flood: "/town/courthouse-flood", floodK: 0.9, zooms: [1, 2, 3, 4, 5],
                 disp: TOWN_COURT_SPRITE.disp, dispH: TOWN_COURT_SPRITE.ih * TOWN_COURT_SPRITE.disp / TOWN_COURT_SPRITE.iw,
                 grow: TOWN_COURT_SPRITE.grow, smooth: false,
                 lights: [
@@ -5959,7 +6104,7 @@ export const TOWN_BITMAPS = {
    trois ; une taille recopiée serait fausse d'un pixel au premier arrondi. */
 export function townBitmapMip(b, z) {
   return {
-    z, day: `${b.day}-z${z}.png`, glow: b.glow ? `${b.glow}-z${z}.png` : null,
+    z, day: `${b.day}-z${z}.png`, glow: b.glow ? `${b.glow}-z${z}.png` : null, flood: b.flood ? `${b.flood}-z${z}.png` : null,
     w: Math.round(b.disp * b.grow * z), h: Math.round(b.dispH * b.grow * z),
   };
 }

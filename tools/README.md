@@ -258,6 +258,19 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   le faux canevas ne compose pas — vu en jeu seulement (§10 de `CLAUDE.md`). La planche
   `tools/out/monuments-nuit.png` (écrite par `tools/build-monument-glow.mjs`) montre les trois monuments
   de jour et de nuit : c'est elle qu'on regarde avant le jeu.
+- **`build-monument-flood.mjs` (2026-09-28) — pas un banc, un script de fabrication** : la mise en lumière
+  des façades des trois monuments (projecteurs posés en fractions de l'image, or chaud qui multiplie la couleur
+  du jour, rien sur les vitres), un calque par cran lu dans les images de JOUR versionnées. Sa planche
+  `tools/out/monuments-facade.png` (chaque monument de nuit, sans puis avec la façade, à la force `floodK` du
+  jeu) est ce qu'on regarde avant le jeu. `verify-densite` tient les tailles et l'absence d'orphelins.
+- **`render-haies.mjs` (refait le 2026-09-28, phase 7b) — les clôtures de `clotures.js`**, 48 contrôles : les
+  cinq matières (continuité sur les deux axes, pied au milieu de la case, volume), les portails (fermé barré,
+  ouvert libre, vantaux vers le nord), la vraie carte (aucune clôture sous une maison, aucune rangée nord,
+  matière du rang, portails tenus des deux côtés, part de jardins ouverts), aucun cadre d'atlas découpé.
+  Falsifié deux fois (marge d'image négative → 33 cases sous des maisons ; sens d'ouverture inversé → 5
+  échecs). Planches `haies-styles.png`, `haies-parcelle.png`. ⚠️ Deux contrôles mal écrits au premier jet
+  (un pied mesuré sur une case de fil SANS piquet, un portail peint hors du cadre de mesure) : un banc neuf se
+  relit contre ce qu'il prétend mesurer avant de corriger le dessin.
 - **`build-maison-sprites.mjs` (phase 6a, 2026-09-26) — pas un banc, un script de fabrication**, comme
   `build-monument-glow` : les maisons peintes (Gemini) détourées de leur fond magenta, une image par cran,
   jour et calque de nuit, depuis `TOWN_HOUSE_MODELS`. Sa planche `tools/out/maisons.png` (chaque version de

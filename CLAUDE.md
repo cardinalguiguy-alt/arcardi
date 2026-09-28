@@ -7,28 +7,35 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-28 (nuit du 27) — le grand escalier de l'église, refait ; la phase 12 (neige) reste la suivante
+### 2026-09-28 — les clôtures par quartier (7b, première moitié) et les façades éclairées ; la neige est la suivante
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre tranché par Guillaume :
-phases 9, 10, 11, 7a (faites), **12 (la neige, demandée pour la suite)**, 7b, 13, 14, 8 ; 6a/6b au fil de ses images.
-⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` (lus sur les
-monuments : les déplacer déplace le prestige) ; tout ce qui se compose doit la lire.
-⚠️ **PRINCIPE POSÉ LE 2026-09-27 : PAS DE BÂTIMENT SANS FONCTION.**
-- **Livré (sur sa référence `refs/référence nouvel escalier.jpg`)** : volée droite dans l'axe du portail
-  (`TOWN_GRAND_STAIR`, dérivée de l'église, du bord de terrasse et de `TOWN_NORD_Y`), 8 marches, même largeur ;
-  palier dallé et parvis agrandi jusqu'à lui ; balustrades, piliers, rampes et pots en décors triés ; ses deux
-  premières marches ENJAMBENT le boulevard du Nord — on passe dessous (case à deux niveaux, `tw.deck`,
-  `E.townLevelE`), on y disparaît (découpe dans `pushE`). Mail redressé vers le pied. Bloc 467 retiré.
-- ⚠️ **La génération tourne sur l'ANCIENNE emprise** (`TOWN_STAIR_SEED`, `TOWN_ROADS_SEED`) et l'escalier se pose
-  en dernière passe : ne JAMAIS « nettoyer » ces nombres, ils tiennent en place tous les arbres de la ville.
-- Bancs : **53/53** (`verify-vallee` 279, `verify-collision` 35, `render-escaliers` 43, `verify-taxi` 15),
-  `no-undef`, bundle, `next build`. Vu en jeu : jour, crépuscule, zooms 1-2, montée, descente, rampes, passage
-  dessous, À DEUX clients. **Pas vu** : hiver, pluie, taxi sous le pont, résidents en vrai. **Pas de Supabase.**
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre : 9, 10, 11, 7a, 7b-clôtures
+(faites), **12 (la neige)**, reste de 7b, 13, 14, 8 ; 6a/6b au fil de ses images.
+⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` / `townHouseDistrict`
+(lus sur les monuments) ; tout ce qui se compose doit la lire. ⚠️ **PAS DE BÂTIMENT SANS FONCTION.**
+⚠️ **PAS DE CLÔTURE PARTOUT** (Guillaume, 2026-09-28) : un jardin sur trois reste ouvert, dans chaque rang.
+- **Livré** : `clotures.js` (nouveau) — cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 (haie de
+  buis, muret + grille, palissade blanche, planches, piquets et fil), portails à deux vantaux qui pivotent vers
+  le jardin à l'approche (local, déduit), potagers de saison des jardins ouverts modestes ; atlas paresseux
+  (`S.townEnclos`). Enclos en U calé sur l'image de la LARGEUR (`townFenceLayout`), flancs partagés, devant sur la
+  dernière rangée d'herbe contiguë au seuil ; passe finale « LES CLÔTURES » de `generateTownWorld`, l'ancien
+  anneau reste la graine. `tw.hedge` = code de matière (1 = haie, lecteurs booléens intacts). Façades :
+  `build-monument-flood.mjs` → calques `flood` par cran (`floodK` : église 1, mairie 0,85, tribunal 0,9), ajoutés
+  après la nuit ; vitraux de l'église en lueur ambrée (`build-monument-glow`, mairie/tribunal inchangés au bit).
+- Bancs : **53/53** (`render-haies` 48, falsifié deux fois ; `verify-vallee` 279 ; `verify-collision` 35 ;
+  `render-escaliers` 43 ; `verify-taxi` 15 ; `verify-densite` 283), `no-undef`, bundle, `next build`. Vu en jeu
+  (zooms 1-3, jour et nuit sous la pluie) : cinq matières, traversée d'un portail, potagers d'automne, trois
+  façades. **Pas vu** : à deux clients, un habitant qui ouvre un portail, potagers des autres saisons, hiver.
+  **Pas de Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Les clôtures et les façades (2026-09-28)** : la matière de chaque clôture (buis, grille, blanc, planches,
+  fil), la part de jardins ouverts (11 sur 34), les potagers, les portails (six poses, 0,4 s pour s'ouvrir, une
+  seconde avant de se refermer), le pilier de grille tous les quatre ; l'or des façades, leur force (`floodK`),
+  les vitraux éteints ; le poids des 15 calques de façade (11 Mo, un cran chargé à la fois).
 - **Le grand escalier (2026-09-27, nuit)** : la lecture du passage dessous (le passant découpé, la bouche
   assombrie, son nom qui reste), les rampes en bandeau et les piliers dessinés en code (le reste du bloc 467
   est parti, sauf son pot), le palier de 12 cases, les deux points de vue (`view`) à côté des piliers de tête,
@@ -84,12 +91,17 @@ monuments : les déplacer déplace le prestige) ; tout ce qui se compose doit la
 
 **La phase 12 — la neige** (demande de Guillaume, 2026-09-27 : « la neige ultra réaliste avec traces etc ») :
 checklist au tableau (l'hiver ne change rien en ville : herbe, fleurs, feuillage ; la neige ne tient nulle part —
-sol, toits, haies ; traces de pas). ⚠️ Le grand escalier est peint d'UN tenant (`townGrandFlightSurface`) et ses
-garde-corps sont des décors : la neige doit s'y poser aussi, et une trace sur une case du pont a deux sols. Poser les décisions structurantes AVANT d'écrire (§2) : ce qui garde la
-neige (sol, rues pavées au bord libre, toits peints en bitmap), la trace (locale ou partagée : §3, ce qui se
-déduit ne se diffuse pas), la fonte.
-**Puis la phase 7b** : haies et clôtures refaites par quartier, jardins vécus, lampadaires aux carrefours et aux
-portes, allée de la maison hantée, commerces de la Grand-Rue (prompts Gemini à écrire, §2).
+sol, toits, haies ; traces de pas). Poser les décisions structurantes AVANT d'écrire (§2) — préparées le
+2026-09-28, à lui soumettre : (1) l'épaisseur comme PURE FONCTION de l'historique météo (`meteo.js` est déjà une
+fonction du jour et de l'heure : on intègre `snow` moins la fonte, rien ne circule) ; (2) les traces LOCALES,
+déduites des positions que chaque client voit (§3), qui se recouvrent sous la neige fraîche ; (3) les toits des
+bitmaps : un calque `snow` par cran fabriqué hors ligne (comme `flood`), toit détecté par modèle, ou des versions
+d'hiver peintes par Gemini ; (4) les arbres d'hiver (aucune essence n'a de pose `winter`) ; (5) la découper en
+12a neige/hiver, 12b pluie (chaussée mouillée, flaques, reflets), 12c durée du jour et cheminées. ⚠️ Les clôtures
+sont des VOLUMES : la neige s'y pose en blanchissant les faces du dessus (`paintVoxels`, `clotures.js`) ; le
+grand escalier est peint d'un tenant et ses garde-corps sont des décors ; une trace sur une case du pont a deux sols.
+**Puis le reste de 7b** : jardins vécus, lampadaires aux carrefours et aux portes, allée de la maison hantée,
+commerces de la Grand-Rue (prompts Gemini à écrire, §2).
 Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.
 ⚠️ **Avant d'intégrer une image, mesurer sa porte en H ET son cadrage** : la ligne du prompt ne garantit
 rien, et une retouche de Gemini peut décaler le dessin dans son fichier (`at`, mesuré par recouvrement
@@ -390,8 +402,8 @@ dépôt.
   compare l'empreinte d'avant. ⚠️ **Changer une case de `solid` en cours de génération déplace autant
   qu'un tirage** (les refus changent) : 717 cases de Valley Town pour une emprise de maison (2026-09-26) —
   une emprise qui change se pose en passe FINALE — et quand c'est le RELIEF qui change (569 décors déplacés
-  le 2026-09-27), la génération garde l'ANCIENNE emprise comme graine (`TOWN_STAIR_SEED`) et la rend au terrain
-  en dernière passe. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
+  le 2026-09-27), la génération garde l'ANCIENNE emprise comme graine (`TOWN_STAIR_SEED` ; l'anneau de haie des parcelles,
+  2026-09-28) et la rend au terrain en dernière passe. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
   violé 400 jours plus tard par la repousse des ARBRES : *une règle entre deux objets se vérifie chez
   les deux qui peuvent naître*, pas seulement chez le nouveau venu.
 - ⚠️⚠️ **UNE CASE À DEUX SOLS (un pont qu'on passe dessus ET dessous) : `elev` y reste le SOL, et le niveau
@@ -518,6 +530,9 @@ dépôt.
   parfaitement juste : il est tombé à l'instant exact, pour la mauvaise raison. *Un banc qui lit du
   SOURCE doit énumérer toutes les écritures de ce qu'il cherche, ou n'en chercher aucune.*
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
+- ⚠️⚠️ **UNE CLÉ EN DOUBLE DANS UN LITTÉRAL NE LÈVE RIEN : LA SECONDE GAGNE** (2026-09-28 : `townFence`, le cache
+  des clôtures, écrasait la clôture de bois de la rive dans `buildSprites` — 900 lignes plus haut). Avant de
+  nommer une clé de `buildSprites`, `grep -n "nom:"` sur le fichier ; `render-rive` l'a vu, pas la relecture.
 - ⚠️⚠️ **UNE BORNE DE BOUCLE RECALCULÉE À CHAQUE TOUR SUR CE QUE LA BOUCLE MODIFIE S'ARRÊTE TROP TÔT, SANS
   ERREUR** (`for (k = 0; k < total - w[0] * n; k++) w[k]++`, `roadSplit`, 2026-09-27 : un reste de 4
   n'ajoutait qu'un pixel). Et un défaut vieux de vingt zips a des dessins RÉGLÉS DESSUS : le corriger en
@@ -628,6 +643,7 @@ dépôt.
 | `components/ferme/meteo.js` | **LA MÉTÉO (2026-09-26), pure** : épisodes par jour et par saison (`dayWeather`), huit canaux avec leur fenêtre dans la montée (`weatherAt`, `weatherAtMs`), forçage du menu dev qui commence à SON heure (`normalizeForce`), abri de la faune (`wetness`), éclairs et tonnerre (`boltOdds`, `flashGain`, `thunderFor`), prévision du matin (`forecast`). Le forçage et la saison forcée (`E.setForcedSeason`) passent par `applyForcedSky` (FermeGame.js) et par personne d'autre. Banc : `verify-meteo` |
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
+| `components/ferme/clotures.js` | **LES CLÔTURES (phase 7b, 2026-09-28)** : cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 par l'algorithme du peintre (`paintVoxels`), le voisinage d'une case (`townFenceConf`), les portails tournés autour de leurs gonds, les potagers de saison, la haie-décor du quai ; atlas paresseux (`S.townEnclos`). Qui a quoi : `townParcelFence`/`townFenceLayout` (fermeConstants.js). Banc : `render-haies` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
@@ -1295,15 +1311,9 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
 
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-27 (après la phase 7a), À NE PAS PERDRE** — détail au
-tableau des phases de `components/ferme/README.md` (lignes 7 et « Projets en réserve ») :
-(1) **7b, HAIES ET CLÔTURES PAR QUARTIER** (« à bien travailler ») : muret de pierre + grille en fer forgé +
-portail chez les riches ; haie taillée (buis, charmille) + portillon de bois en classe moyenne ; palissade,
-piquets ou jardin ouvert avec potager chez les plus modestes ; dessinées en code avec un banc qui les regarde,
-calées sur la largeur RÉELLE de chaque maison (la haie ne passe plus sous le mur des larges) ; prompts Gemini de
-référence proposés, pas encore écrits ; (2) **UN TERRAIN DE FOOT** dans une prairie vide (idée de Guillaume) —
-emplacement, fonction et style À TRANCHER AVEC LUI (options au README) ; (3) **l'ordre** neige / haies / terrain
-n'est pas tranché : le bloc ⏭️ REPRISE garde la neige, mais proposer d'abord les haies (la neige doit tenir
-dessus).
+tableau des phases de `components/ferme/README.md` : **UN TERRAIN DE FOOT** dans une prairie vide (idée de
+Guillaume) — emplacement, fonction et style À TRANCHER AVEC LUI (options au README). (Les clôtures par quartier :
+faites le 2026-09-28 ; l'ordre haies → neige : tranché par lui le même jour.)
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-26, À NE PAS PERDRE** : (1) le GAMEPLAY de la
 faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
 MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs

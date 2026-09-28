@@ -7882,6 +7882,127 @@ export function generateTownWorld() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-28 (phase 7b) — LES CLÔTURES PAR QUARTIER.
+     ───────────────────────────────────────────────────────────────────────
+     L'anneau de haie de 10 × 7 cases posé autour de chaque maison (« LE JARDIN
+     CLOS », plus haut) reste la GRAINE de la carte : tout ce qui s'est posé
+     depuis l'a contourné, et le retirer plus tôt déplacerait les arbres de
+     toute la ville (§4, la leçon de `TOWN_STAIR_SEED`). On le rend ici au
+     jardin, puis on pose l'enclos en U que décrit `C.townFenceLayout()` —
+     calé sur l'image de chaque largeur (l'anneau passait sous le mur des
+     standard et des larges), sans côté nord (il dépassait derrière le toit),
+     flancs voisins partagés. ⚠️ SANS UN TIRAGE.
+     · Une clôture ne se pose que sur de l'herbe ou de la pelouse, à l'altitude
+       de la porte, hors de toute emprise de maison (liste BLANCHE, comme
+       `plantTree`) ; un arbre ou une végétation basse qui s'y trouvait
+       s'efface, un décor dur (lampadaire, banc) garde sa case — la clôture
+       s'y interrompt.
+     · Le portail : là où l'allée perce le devant et où les deux cases qui la
+       bordent portent la clôture (`gates`, dessiné et animé par le client).
+     · Le jardin OUVERT n'a aucune clôture (il y en a dans chaque rang) ; chez
+       les plus modestes, un potager en carrés surélevés (`plots`, bloquants —
+       on ne marche pas dans les légumes), et son herbe redevient un pré. */
+  const gates = [], plots = [];
+  {
+    const green = (i) => ground[i] === C.G_GRASS || ground[i] === C.G_TOWN_LAWN;
+    const isTree = (o) => o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
+    const inFoot = new Uint8Array(W * H);
+    for (const hsn of C.townAllHouses()) rect(C.townHouseFoot(hsn), (x, y, i) => { inFoot[i] = 1; });
+    // 1. L'ANCIEN ANNEAU, rendu au jardin (ses cases n'étaient pleines que par lui, ou par un mur).
+    for (const hsn of C.townAllHouses()) {
+      if (hsn.dense) continue;
+      const gx = hsn.x - 2, gy = hsn.y - 1, gw = C.TOWN_HOUSE_W + 4, gh = C.TOWN_HOUSE_H + 4;
+      rect({ x: gx, y: gy, w: gw, h: gh }, (x, y, i) => {
+        if (!hedge[i] || !(x === gx || x === gx + gw - 1 || y === gy || y === gy + gh - 1)) return;
+        hedge[i] = 0; solid[i] = inFoot[i];
+      });
+    }
+    /* 2. UNE CASE DE CLÔTURE. Rend vrai si la case porte la clôture. */
+    const place = (x, y, style, e0) => {
+      if (!inMap(x, y)) return false;
+      const i = id(x, y);
+      if (hedge[i]) { hedge[i] = style; return true; }            // un flanc partagé, déjà posé
+      if (elev[i] !== e0 || !green(i) || inFoot[i] || deck[i] >= 0) return false;   // `deck` vaut −1 hors du pont
+      let hard = false;
+      const soft = [];
+      for (let k = 0; k < props.length; k++) {
+        const p = props[k];
+        if (Math.abs(p.x - x) > 5 || p.y < y || p.y - y > 5) continue;
+        if (!(p.x === x && p.y === y) && !C.townPropCovers(p.kind, p.x, p.y, x, y)) continue;
+        if (C.TOWN_SOFT_PROPS.has(p.kind)) soft.push(k); else hard = true;
+      }
+      if (hard) return false;
+      if (solid[i] && !isTree(objects[i]) && !soft.length) return false;
+      for (let k = soft.length - 1; k >= 0; k--) {
+        const p = props[soft[k]];
+        props.splice(soft[k], 1);
+        if (inMap(p.x, p.y) && !hedge[id(p.x, p.y)]) solid[id(p.x, p.y)] = 0;
+      }
+      if (isTree(objects[i])) { objects[i] = C.O_NONE; objHp.delete(i); }
+      hedge[i] = style; solid[i] = 1; bloom[i] = 0;
+      return true;
+    };
+    /* ⚠️ LE DEVANT SE POSE SUR LA DERNIÈRE RANGÉE D'HERBE CONTIGUË AU SEUIL, pas
+       sur `L.front` les yeux fermés : une rue passe parfois juste devant la
+       porte (la phase 7 a courbé les rues), et le premier jet posait le devant
+       de la clôture DE L'AUTRE CÔTÉ de la chaussée — trois parcelles, vues sur
+       la carte en caractères du banc. Une rangée compte si les trois quarts de sa
+       largeur (hors allée) est de l'herbe à l'altitude de la porte. Sans une
+       rangée de jardin devant le seuil (la terrasse, une porte sur la rue), il
+       n'y a pas d'enclos du tout : un flanc seul le long d'un mur ne clôt rien. */
+    const frontOf = (L, e0) => {
+      const xs = [];
+      for (let x = Math.ceil(L.imgL); x <= Math.floor(L.imgR); x++) if (x !== L.gateX && x !== L.gateX + 1) xs.push(x);
+      const rowOk = (r) => xs.filter((x) => inMap(x, r) && green(id(x, r)) && elev[id(x, r)] === e0).length >= xs.length * 0.75;
+      let last = null;
+      for (let r = L.hsn.y + C.TOWN_HOUSE_H; r <= L.front && rowOk(r); r++) last = r;
+      return last !== null && last > L.hsn.y + C.TOWN_HOUSE_H ? last : null;
+    };
+    const layout = C.townFenceLayout();
+    const fronts = new Map();
+    for (const L of layout) {
+      const hsn = L.hsn, e0 = elev[id(hsn.x + 2, hsn.y + C.TOWN_HOUSE_H)] | 0, front = frontOf(L, e0);
+      fronts.set(L, front);
+      if (front === null || !L.style) continue;
+      if (L.westCol !== null) for (let y = L.back; y <= front; y++) place(L.westCol, y, L.westStyle, e0);
+      if (L.eastCol !== null) for (let y = L.back; y <= front; y++) place(L.eastCol, y, L.eastStyle, e0);
+      for (let x = L.westCol + 1; x < L.eastCol; x++) place(x, front, L.style, e0);
+    }
+    // 3. L'INTÉRIEUR : pelouse tondue chez les riches et la classe moyenne, pré chez les plus modestes.
+    for (const L of layout) {
+      const hsn = L.hsn, e0 = elev[id(hsn.x + 2, hsn.y + C.TOWN_HOUSE_H)] | 0, front = fronts.get(L);
+      if (front === null) continue;
+      const x0 = L.style ? L.westCol + 1 : hsn.x - 2, x1 = L.style ? L.eastCol - 1 : hsn.x + C.TOWN_HOUSE_W + 1;
+      const want = L.rank >= 2 ? C.G_GRASS : C.G_TOWN_LAWN;
+      for (let y = L.back; y < front + (L.style ? 0 : 1); y++) for (let x = x0; x <= x1; x++) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        if (elev[i] === e0 && green(i) && !hedge[i]) ground[i] = want;
+      }
+      // 4. LE PORTAIL, si l'allée perce vraiment le devant entre deux cases de clôture.
+      if (L.style) {
+        const gy = front, gx = L.gateX;
+        const path = (x) => inMap(x, gy) && ground[id(x, gy)] === C.G_PATH && elev[id(x, gy)] === e0;
+        const fence = (x) => inMap(x, gy) && hedge[id(x, gy)] > 0;
+        if (path(gx) && path(gx + 1) && fence(gx - 1) && fence(gx + 2)) gates.push({ x: gx, y: gy, w: 2, style: L.style, e: e0 });
+        continue;
+      }
+      // 5. LE POTAGER du jardin ouvert des plus modestes : deux carrés de 3 × 2, de part et d'autre de l'allée.
+      if (L.rank < 2) continue;
+      for (const bx of [hsn.x + 5, hsn.x - 1]) {
+        const r = { x: bx, y: hsn.y + C.TOWN_HOUSE_H, w: 3, h: 2 };
+        let ok = true;
+        rect(r, (x, y, i) => {
+          if (elev[i] !== e0 || !green(i) || solid[i] || hedge[i] || inFoot[i] || objects[i] !== C.O_NONE || propCover(x, y)) ok = false;
+        });
+        if (!ok || r.x < 0 || r.x + r.w > W) continue;
+        rect(r, (x, y, i) => { solid[i] = 1; bloom[i] = 0; });
+        plots.push({ ...r, e: e0 });
+      }
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
      2026-09-27 (nuit) — LE GRAND ESCALIER DE L'ÉGLISE, EN DERNIÈRE PASSE.
      ───────────────────────────────────────────────────────────────────────
      Voir `TOWN_GRAND_STAIR` (la géométrie) et `TOWN_STAIR_SEED` (pourquoi ici) :
@@ -8058,7 +8179,7 @@ export function generateTownWorld() {
     for (let i = 0; i < soft.length; i++) if (hard[i] || !solid[i]) soft[i] = 0;
   }
 
-  return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY };
+  return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY, gates, plots };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

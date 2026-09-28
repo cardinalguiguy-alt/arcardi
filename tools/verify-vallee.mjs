@@ -288,6 +288,9 @@ for (let i = 0; i < W * H; i++) {
   if (tw.objects[i] === C.O_TREE || tw.objects[i] === C.O_TREE2 || tw.objects[i] === C.O_STUMP) explained[i] = 1;
   if (tw.ground[i] === C.G_WATER) explained[i] = 1;
 }
+/* 2026-09-28 (phase 7b) — les potagers des jardins ouverts : bloquants, et peints
+   (`drawTownPlot`, clotures.js). */
+for (const pt of tw.plots || []) markRect(pt);
 /* ⚠️ ZIP 427 — LES TROIS BÂTIMENTS NOUVEAUX ENTRENT ICI, ET LE BANC LES A
    RÉCLAMÉS TOUT SEUL : au premier lancement après leur ajout au générateur, il a
    sorti 80 cases bloquantes orphelines — les emprises de la boutique, du salon
