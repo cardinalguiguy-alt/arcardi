@@ -4616,8 +4616,10 @@ export function generateTownWorld() {
   ]) addProp(bx, by, "bench", true);
   // Arbres taillés au centre de chaque parterre : quatre masses vertes qui
   // donnent son échelle à la place.
+  // 2026-09-28 — `v: 0` : le buis SUR TIGE (buis.js), le même aux quatre coins —
+  // un champ posé sur le décor, aucun tirage, la carte ne bouge pas.
   for (const [ox, oy] of [[5, 5], [pz.w - 6, 5], [5, pz.h - 6], [pz.w - 6, pz.h - 6]]) {
-    addProp(pz.x + ox, pz.y + oy, "topiary", true);
+    addProp(pz.x + ox, pz.y + oy, "topiary", true, { v: 0 });
   }
   /* Lampadaires le long de la rue principale, tous les huit pas, hors place.
      ⚠️ 426 — ET JAMAIS SUR UN CARREFOUR. Le banc de circulation
@@ -5142,8 +5144,9 @@ export function generateTownWorld() {
        espacées de 0,69 case) : deux résidents s'asseyaient au même pixel, ce
        que `verify-vallee.mjs` refuse depuis le 428. Deux descriptions du même
        « où s'assied-on au bord de l'étang », donc une de trop — §8. */
+    // 2026-09-28 — `v: 0` : le buis sur tige, comme ceux de la place (buis.js).
     for (const [tx, ty] of [[cx - 3, cy + 4], [cx + 4, cy + 4], [cx - 3, cy - 4], [cx + 4, cy - 4]]) {
-      if (inMap(tx, ty) && !solid[id(tx, ty)] && ground[id(tx, ty)] !== C.G_WATER) { props.push({ x: tx, y: ty, kind: "topiary" }); solid[id(tx, ty)] = 1; }
+      if (inMap(tx, ty) && !solid[id(tx, ty)] && ground[id(tx, ty)] !== C.G_WATER) { props.push({ x: tx, y: ty, kind: "topiary", v: 0 }); solid[id(tx, ty)] = 1; }
     }
     /* ═══════════════════════════════════════════════════════════════════════
        ZIP 437 — CE QUI FAIT D'UNE PELOUSE UN PARC.
@@ -6065,7 +6068,10 @@ export function generateTownWorld() {
       else if (h % 7 === 0 && r !== null && r - 1 > aveAt(x)) {
         // Un rideau de saules et de buissons : ce qui donne son épaisseur à une
         // rive naturelle, c'est ce qui pousse DERRIÈRE elle.
-        if ((h >> 3) % 3 === 0) plantTree(x, r - 1); else addGarden(x, r - 1, "shrub");
+        // 2026-09-28 — `wild` : un buis LIBRE (buis.js) — la rive sauvage n'a
+        // rien de construit, et une boule taillée est un ouvrage. Un champ posé
+        // sur le décor accepté, aucun tirage : la carte ne bouge pas.
+        if ((h >> 3) % 3 === 0) plantTree(x, r - 1); else if (addGarden(x, r - 1, "shrub")) props[props.length - 1].wild = 1;
       }
       // Le semis de fleurs des prés, entre le sentier et l'eau.
       if (r !== null) beds.push({ x, y: r + 1, w: 1, h: Math.max(1, tops[x] - r - 1), kind: C.BL_WILD, dens: 0.5 });
@@ -6386,10 +6392,13 @@ export function generateTownWorld() {
         const r = trailRow(x);
         if (r === null) continue;
         const h = (townHash2(x, 313) * 1000) | 0;
+        /* 2026-09-28 — `wild` sur ce qui pousse ici : le massif de buis de la
+           liste (`grassTuft`) y est LIBRE (buis.js). Un champ sur le décor
+           accepté, aucun tirage : la carte ne bouge pas. */
         // Entre le sentier et l'eau : ce qui pousse les pieds dans la vase.
-        if ((h % 5) === 0 && r + 2 < tops[x]) addGarden(x, r + 2, WILD[(h >> 3) % WILD.length]);
+        if ((h % 5) === 0 && r + 2 < tops[x] && addGarden(x, r + 2, WILD[(h >> 3) % WILD.length])) props[props.length - 1].wild = 1;
         // Derrière le sentier : la frange haute.
-        if ((h % 7) === 2 && r - 2 > aveAt(x)) addGarden(x, r - 2, WILD[(h >> 5) % WILD.length]);
+        if ((h % 7) === 2 && r - 2 > aveAt(x) && addGarden(x, r - 2, WILD[(h >> 5) % WILD.length])) props[props.length - 1].wild = 1;
       }
       /* LA TABLE, sur la rive sauvage de l'est, dos aux saules. Elle vient avec
          ses deux tabourets — c'est UN sprite sur la planche (voir l'atlas). */
@@ -6663,9 +6672,11 @@ export function generateTownWorld() {
        (déclaré juste en dessous, ligne ~4729) — l'appeler avant lèverait
        « Cannot access before initialization ». Ce bloc-ci tourne après, comme
        toutes les jardinières `addGarden` de ce fichier. */
+    /* 2026-09-28 — `v: 0` : quatre boules de buis ÉGALES (buis.js) — un collier
+       régulier, pas un tirage de gabarits. Un champ sur le décor accepté. */
     for (const [ox, oy] of [[5, 5], [pz2.w - 6, 5], [5, pz2.h - 6], [pz2.w - 6, pz2.h - 6]]) {
       const tx = pz2.x + ox, ty = pz2.y + oy;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) addGarden(tx + dx, ty + dy, "shrub");
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (addGarden(tx + dx, ty + dy, "shrub")) props[props.length - 1].v = 0;
     }
   }
   /* ═══ ZIP 427 — LE MOBILIER DE LA VIE SOCIALE ═══

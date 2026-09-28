@@ -76,6 +76,7 @@ import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routi
 import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
 import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui montent, selon la saison, forçage partagé
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
+import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -21141,13 +21142,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const hMix = snowF ? NG.depthSnowMix(snowF.depthAt(x * T + 8, y * T + 8), (NG.h32(x, y, 5) % 100) / 100) : null;
           pushE((y + 1) * T, e, () => {
             const hx = x * T, hy = y * T;
+            // 2026-09-28 : la saison du buis (la haie en est un — clotures.js, « la matière du buis »).
             if (hMix && (hMix.a || hMix.b)) {
-              if (A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.a)) {
-                if (hMix.k > 0.01) { ctx.globalAlpha = hMix.k; A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.b); ctx.globalAlpha = 1; }
+              if (A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.a, snowSeason)) {
+                if (hMix.k > 0.01) { ctx.globalAlpha = hMix.k; A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, hMix.b, snowSeason); ctx.globalAlpha = 1; }
                 return;
               }
             }
-            if (!A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy)) {
+            if (!A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy, 0, snowSeason)) {
               // Repli : l'ancien dessin, si l'atlas n'a pas la haie de la planche.
               ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy + T - 3, T, 3);
               ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy + T - 20, T, 18);
@@ -22740,7 +22742,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const PLANCHE_PROPS = new Set(["archBridge", "fence", "woodBox", "lowWall", "stoneBlock",
         "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
-        "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
+        "hedgeRow", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
         "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);
       /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
          premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
@@ -22769,6 +22771,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           continue;
         }
         if (pr.kind === "tallGrass") { drawTownTallGrass(pr); continue; }
+        /* 2026-09-28 (phase 7b, suite) — LES BUIS (`buis.js`) : la boule, le massif
+           en nuage, le buis taillé — taillés ou libres selon le quartier. Leur
+           hiver et leur neige sont DANS leur dessin (une cellule d'atlas par
+           saison et par neige, deux niveaux en fondu comme les clôtures) : ni
+           `winterPropCanvas` ni le chapeau lu dans les pixels. Ils portent leur
+           ombre de contact ; debout, ils se reflètent. Le frisson au passage est
+           celui de tout décor mou (`townBushLean`). */
+        if (BU.BUIS_KINDS.has(pr.kind) && sprites.townEnclos) {
+          const bp = BU.townBuisPick(tw, pr);
+          const bMix = snowF ? NG.depthSnowMix(snowF.depthAt(pr.x * T + 8, pr.y * T + 8), (NG.h32(pr.x, pr.y, 5) % 100) / 100) : null;
+          const bA = BU.buisCell(sprites.townEnclos, bp.form, bp.variant, snowSeason, bMix ? bMix.a : 0);
+          const bB = bMix && bMix.k > 0.01 && bMix.b !== bMix.a ? BU.buisCell(sprites.townEnclos, bp.form, bp.variant, snowSeason, bMix.b) : null;
+          const bcx = pr.x * T + T / 2, bby = (pr.y + 1) * T;
+          pushE(bby, elAt(pr.x, pr.y), () => {
+            const lean = tw.soft ? townBushLean(pr.y * tw.w + pr.x, now) : 0;
+            BU.drawBuisCell(ctx, bA, bcx, bby, lean);
+            if (bB) { ctx.globalAlpha = bMix.k; BU.drawBuisCell(ctx, bB, bcx, bby, lean); ctx.globalAlpha = 1; }
+          }, 0, pr.x);
+          continue;
+        }
         /* ⚠️⚠️⚠️ ZIP 439 — LE PONT SE DESSINE EN DEUX MOITIÉS, ET LE JOUEUR
            PASSE ENTRE ELLES. C'est la réponse à « il doit être praticable, pour
            l'instant on le traverse ». Posé en un seul morceau, l'ouvrage était
@@ -22840,9 +22862,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            étant posés tous les quatre pas, TOUTE LA RANGÉE sortait de la même
            couleur (vu au banc de rendu). Le générateur, lui, connaît l'indice de
            l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
+        // (le buis taillé, la boule et le massif en nuage sont dessinés plus haut : `BU.BUIS_KINDS`)
         let img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
                   : pr.kind === "bench" ? sprites.plazaBench
-                  : pr.kind === "topiary" ? sprites.plazaTopiary
                   /* ⚠️ ZIP 431 — LE MODULO SUIT LA TABLE, il n'est plus écrit en
                      dur. `% 4` sur six métiers aurait rendu deux étals invisibles
                      tout en laissant leur case solide : un mur invisible, le
@@ -22861,11 +22883,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   // BELVÉDÈRE").
                   : pr.kind === "pier" ? sprites.townPier
                   : pr.kind === "telescope" ? sprites.townTelescope
-                  /* ZIP 437 — le buisson fleuri du parc et le bloc erratique de
-                     la rive sauvage. La variante vient de la POSITION (hachage),
-                     jamais d'un tirage : trois buissons alignés tirés au sort
-                     changeraient de couleur à chaque image. */
-                  : pr.kind === "shrub" ? (sprites.townShrub || [])[((pr.x * 7 + pr.y * 13) >>> 0) % Math.max(1, (sprites.townShrub || []).length)]
+                  /* ZIP 437 — le bloc erratique de la rive sauvage. La variante
+                     vient de la POSITION (hachage), jamais d'un tirage : trois
+                     blocs alignés tirés au sort changeraient à chaque image. */
                   : pr.kind === "boulder" ? (sprites.townBoulder || [])[((pr.x * 11 + pr.y * 5) >>> 0) % Math.max(1, (sprites.townBoulder || []).length)]
                   /* ══ ZIP 439 — LE MOBILIER DE RIVE, SPRITES DE LA PLANCHE ══
                      ⚠️ LES VARIANTES SE TIRENT DE LA POSITION, jamais d'un
@@ -22898,8 +22918,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "bloomRow" ? sprites.townBloomRow
                   : pr.kind === "rockBed" ? sprites.townRockBed
                   : pr.kind === "hedgeAngle" ? sprites.townHedgeAngle
-                  : pr.kind === "hedgeRow" ? sprites.townHedgeRow
-                  : pr.kind === "grassTuft" ? sprites.townGrassTuft
                   : pr.kind === "flatStone" ? sprites.townFlatStone
                   : pr.kind === "goldBush" ? pick(sprites.townGoldBush, pr)
                   : pr.kind === "lavender" ? pick(sprites.townLavender, pr)

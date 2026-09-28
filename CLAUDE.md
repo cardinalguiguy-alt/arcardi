@@ -7,42 +7,47 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-28 (soir) — la neige de Valley Town (phase 12a) est livrée ; les BUIS sont les suivants
+### 2026-09-28 (nuit) — les BUIS (7b, suite) sont livrés ; le reste de 7b est le suivant
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre restant : les buis, le reste
-de 7b, 12b (pluie), 12c (durée du jour, cheminées), 13, 14, 8 ; 6a/6b au fil de ses images.
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre restant : le reste de 7b,
+12b (pluie), 12c (durée du jour, cheminées), 13, 14, 8 ; 6a/6b au fil de ses images.
 ⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` / `townHouseDistrict` ;
 tout ce qui se compose doit la lire. ⚠️ **PAS DE BÂTIMENT SANS FONCTION.** ⚠️ **PAS DE CLÔTURE PARTOUT** (un
 jardin sur trois reste ouvert, dans chaque rang).
-- **Livré (12a)** : `neige.js` (nouveau) — manteau PURE fonction de 4 jours de météo ; sol par parcelles de 128 px
-  en atlas : relief éclairé, ombres portées bleues au sud-est (bâtiments en bloc de 40 px, clôtures au voxel via
-  `townFenceHeights`, arbres projetés depuis leur dessin d'hiver), grain au bruit bleu, couverture par ORDRE au
-  pixel (dépôt et fonte par plaques, sol mouillé autour), chaussée tassée, empreintes locales comblées par la
-  neige fraîche. `A.townSnowEnv` (fermeArt.js) : ce que la neige lit du sol, écrit une fois pour le jeu et les
-  bancs. Toits peints : `tools/build-snow-roofs.mjs` → `-snowl`/`-snowh` par cran (230 PNG, 7,5 Mo), déclarés
-  `snowL`/`snowH` dans `TOWN_BITMAPS`, posés par `drawScreenExactBitmap` (`glowOpts.snow`). Arbres d'hiver à
-  trois états (sapins étage par étage), buissons hivernés (`NG.winterizePixels`), fontaine gelée, piquets
-  (`A.townSnowStakes`), pieds enfoncés, ombres bleues (`groundSnowK`), menu dev local « Neige (sur cet écran) ».
-- Bancs : `verify-neige` 17 (falsifié cinq fois), `render-neige` 2 (+ planches), `verify-densite` 513,
-  `render-haies` 48, `verify-vallee` 279, `verify-collision` 111, `render-escaliers` 16, `verify-taxi` 15,
-  `render-arbres` 30, `verify-meteo` 40, `verify-lumiere` 86, `render-rues` 16, `render-eau` 4 ; `no-undef`,
-  bundle, `next build` verts. Vu en jeu : midi, nuit, chute de neige, 1 cm, hiver sans neige, place, parvis,
-  mairie, tribunal, vieille ville, pas, pigeons, choc d'un sapin. **Pas vu** : à deux clients ; la fonte sur
-  plusieurs jours de vraie météo ; le grand escalier et les piquets de près. **Pas de Supabase.**
-- ⚠️ **Dette connue** : la ferme n'a pas de neige (Valley Town seule) ; les plantes PEINTES des bitmaps ne fanent
-  que sous la neige (un hiver sans neige les garde fleuries) ; l'église n'a que des liserés (pas de grand pan) ;
-  `verify-neige` §4/§5 falsifiés en forçant le verdict, pas en sabotant la donnée.
+- **Livré (les buis)** : `buis.js` (nouveau) — boule (`shrub`, l'ancien buisson à « baies »), massif en nuage
+  (`grassTuft` : l'ancienne « bande verte », un rectangle de la planche mal nommé à l'import), buis taillé
+  (`topiary` : tige, cône, double boule), haie du quai (`hedgeRow`) ; TAILLÉS ou LIBRES selon le quartier
+  (`townBuisTrimmed` : pelouse municipale et rangs 0-1 taillés, rang 2 et rive sauvage `pr.wild` libres ; la
+  ferme a le buis libre). La haie des clôtures refaite dans la MÊME matière (`clotures.js`, « la matière du
+  buis » : touffes posées sur la surface, sept paliers, pousses au printemps, hiver terni), même emprise. Neige :
+  `withSnow` + `accept` (la pente de la forme). Tout dans l'atlas des clôtures. Couture nord-sud des clôtures
+  corrigée (`paintVoxels`). Carte inchangée (empreinte de `generateTownWorld` identique).
+- Bancs : `render-buis` 26 (neuf, falsifié six fois), `render-haies` 49 (+ couture), `verify-neige` 17,
+  `render-neige` 2, `render-buissons` 17, `verify-vallee` 279, `verify-lumiere` 86, `verify-meteo` 40,
+  `verify-taxi` 15, `verify-faune` 74 ; `render-etoile`, `render-parc`, `render-rive`, `verify-compo`,
+  `verify-collision`, `render-eau`, `verify-densite`, `render-arbres`, `render-rues`, `render-escaliers` verts ;
+  `no-undef`, bundle, `next build` verts. Vu en jeu : place (été, printemps), parc (été ; hiver sous 12 cm),
+  quai, cimetière, Haute-Ville. **Pas vu** : à deux clients, le frisson au passage d'un buis, la ferme en jeu,
+  la nuit. **Pas de Supabase.**
+- ⚠️ **Dette connue** : le buis TAILLÉ à la faux de la ferme (`farmBushTrimSprite`) garde son ancien dôme ; la
+  ferme n'a pas de neige ; les plantes PEINTES des bitmaps ne fanent que sous la neige ; l'église n'a que des
+  liserés ; `verify-neige` §4/§5 falsifiés en forçant le verdict ; `townHedgeAngle` (planche 2) est construit
+  et posé nulle part.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Les buis (2026-09-28, nuit)** : la matière (touffes, sept paliers), les six gabarits de boule et leur
+  mélange dans un massif, les massifs en nuage à la place des bandes, les trois buis taillés, la règle
+  taillé/libre (carte `tools/out/buis-carte.png`), les pousses du printemps, l'hiver terni, les chapeaux de neige
+  (deux voxels au sommet, rien au-delà de 57°), la haie des clôtures et celle du quai refaites.
 - **La neige (2026-09-28, soir)** : tout est réglage, à juger à l'écran — la force des ombres portées
   (`NEIGE.SHADOW_K` 0,45, bloc de 40 px pour une maison), le grain (un tiers de ton), la vitesse du dépôt
   (`COV0`/`COVR`, couvert vers 2,5 cm), la chaussée et ses ornières, les calques de toit (dont les liserés
   de l'église), les sapins alourdis, les buissons ajourés, les piquets, la fontaine gelée.
-- **Les clôtures et les façades (2026-09-28)** : la matière de chaque clôture (buis, grille, blanc, planches,
-  fil), la part de jardins ouverts (11 sur 34), les potagers, les portails (six poses, 0,4 s pour s'ouvrir, une
+- **Les clôtures et les façades (2026-09-28)** : la matière de chaque clôture (grille, blanc, planches, fil — la
+  haie est passée aux buis), la part de jardins ouverts (11 sur 34), les potagers, les portails (six poses, 0,4 s pour s'ouvrir, une
   seconde avant de se refermer), le pilier de grille tous les quatre ; l'or des façades, leur force (`floodK`),
   les vitraux éteints ; le poids des 15 calques de façade (11 Mo, un cran chargé à la fois).
 - **Le grand escalier (2026-09-27, nuit)** : la lecture du passage dessous (le passant découpé, la bouche
@@ -98,11 +103,9 @@ jardin sur trois reste ouvert, dans chaque rang).
 
 ### ⏭️ ACTION SUIVANTE
 
-**Refaire les BUIS** (demande de Guillaume, 2026-09-28 : les bandes vertes « interactives » simplistes et les
-petits buis à baies laids) — poser les décisions structurantes AVANT d'écrire (§2) ; la neige doit continuer à
-s'y poser (le coussin lissé de `withSnow`, clotures.js, et `NG.winterizePixels` pour les décors).
-**Puis le reste de 7b** : jardins vécus, lampadaires aux carrefours et aux portes, allée de la maison hantée,
-commerces de la Grand-Rue (prompts Gemini à écrire, §2).
+**Le reste de 7b** : jardins vécus, lampadaires aux carrefours et aux portes, allée de la maison hantée,
+commerces de la Grand-Rue (prompts Gemini à écrire, §2) — poser les décisions structurantes AVANT d'écrire.
+Tout décor végétal neuf se fait dans la matière du buis (`clotures.js`) ou le dit.
 Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.
 ⚠️ **Avant d'intégrer une image, mesurer sa porte en H ET son cadrage** : la ligne du prompt ne garantit
 rien, et une retouche de Gemini peut décaler le dessin dans son fichier (`at`, mesuré par recouvrement
@@ -648,7 +651,8 @@ dépôt.
 | `components/ferme/meteo.js` | **LA MÉTÉO (2026-09-26), pure** : épisodes par jour et par saison (`dayWeather`), huit canaux avec leur fenêtre dans la montée (`weatherAt`, `weatherAtMs`), forçage du menu dev qui commence à SON heure (`normalizeForce`), abri de la faune (`wetness`), éclairs et tonnerre (`boltOdds`, `flashGain`, `thunderFor`), prévision du matin (`forecast`). Le forçage et la saison forcée (`E.setForcedSeason`) passent par `applyForcedSky` (FermeGame.js) et par personne d'autre. Banc : `verify-meteo` |
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
-| `components/ferme/clotures.js` | **LES CLÔTURES (phase 7b, 2026-09-28)** : cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 par l'algorithme du peintre (`paintVoxels`), le voisinage d'une case (`townFenceConf`), les portails tournés autour de leurs gonds, les potagers de saison, la haie-décor du quai ; atlas paresseux (`S.townEnclos`). Qui a quoi : `townParcelFence`/`townFenceLayout` (fermeConstants.js). Banc : `render-haies` |
+| `components/ferme/clotures.js` | **LES CLÔTURES (phase 7b, 2026-09-28)** : cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 par l'algorithme du peintre (`paintVoxels`), le voisinage d'une case (`townFenceConf`), les portails tournés autour de leurs gonds, les potagers de saison ; atlas paresseux (`S.townEnclos`) ; **LA MATIÈRE DU BUIS** (`boxLight`, `boxColor`, palettes, saisons), partagée avec `buis.js`. Qui a quoi : `townParcelFence`/`townFenceLayout` (fermeConstants.js). Banc : `render-haies` |
+| `components/ferme/buis.js` | **LES BUIS (7b, suite, 2026-09-28)** : boule (`shrub`), massif en nuage (`grassTuft`), buis taillé (`topiary`), haie du quai (`hedgeRow`) et leurs formes LIBRES ; taillé ou libre par le quartier (`townBuisTrimmed`) ; cellules dans l'atlas des clôtures, hiver et neige dans le dessin (ni `winterizePixels` ni chapeau lu dans les pixels). Banc : `render-buis` |
 | `components/ferme/neige.js` | **LA NEIGE DE VALLEY TOWN (phase 12a, 2026-09-28), pure** : le manteau (`snowPack`, pure fonction de 4 jours de météo), le sol par parcelles en atlas (`makeSnowField` : relief éclairé, ombres portées, grain au bruit bleu, couverture par ordre au pixel), les empreintes locales (`makeWalkers`), les chapeaux et toits lus dans les pixels (`snowCapPixels`, `snowRoofPixels`, `snowStairPixels`), l'hiver du mobilier (`winterizePixels`). Ce que la neige lit du sol : `A.townSnowEnv` (fermeArt.js). Toits peints : `tools/build-snow-roofs.mjs`. Bancs : `verify-neige`, `render-neige` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -953,6 +957,10 @@ prétend tenir, et on exige de le voir ROUGIR avant de le croire.** C'est ce qui
 pénalité du réveil sert vraiment à quelque chose (sans elle, le martèlement gagne en 6 s) — et c'est
 la seule vérification qui aurait aussi attrapé l'inversion. *Un banc neuf se falsifie le jour où on
 l'écrit, ou il n'est pas écrit.*
+⚠️⚠️ **ET QUAND LE VRAI DÉFAUT EXISTE (le code d'avant), C'EST LUI QU'ON REJOUE** (2026-09-28, la couture
+des clôtures) : la mesure a rougi sur sa falsification fabriquée — un trait plein — et restait verte sur le
+vrai défaut, partiel. *Une falsification plus franche que le défaut prouve le banc contre un défaut qui
+n'existe pas* ; le seuil se pose entre les deux mesures, celle du code fautif et celle du juste.
 
 ⚠️⚠️⚠️ **ET LE 444 A AJOUTÉ LA LIMITE DE FOND, CELLE QUI VAUT POUR TOUS : SIX BANCS AU VERT N'ONT
 PAS VU DIX DÉFAUTS QU'UNE SÉANCE DE JEU DE VINGT MINUTES A TROUVÉS**, dont cinq qui rendaient un

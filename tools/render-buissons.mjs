@@ -5,8 +5,8 @@
    ⚠️ 2026-09-20 (demande Guillaume : « les buissons sont cheap, je veux les
    mêmes que sur Valley Town ») : L'ÉTAT SAUVAGE N'A PLUS SON PROPRE ATLAS
    (`S.farmBush` ne porte plus que `.trim`) — `drawFarmBush` pioche directement
-   parmi les quatre espèces de ville (`townShrub`/`townGoldBush`/`townLavender`
-   /`townFlowerClump`). Les contrôles d'atlas (bord, silhouette par saison,
+   parmi les quatre espèces de ville (le buis LIBRE de `buis.js` depuis le
+   2026-09-28, `townGoldBush`/`townLavender`/`townFlowerClump`). Les contrôles d'atlas (bord, silhouette par saison,
    volume de tons) ne veulent donc plus rien dire pour le sauvage : ils
    resteraient verts en testant une image que le jeu ne dessine plus (le banc
    imaginaire du §10 de CLAUDE.md, à l'envers). Remplacés par un contrôle sur

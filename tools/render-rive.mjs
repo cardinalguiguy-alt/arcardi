@@ -40,9 +40,13 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine"]);
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine", "buis"]);
 const A = mods.fermeArt;
 const S = A.buildSprites();
+/* 2026-09-28 — la « touffe d'herbe » de la planche (une bande verte plate) est
+   devenue un massif de buis en volumes (`buis.js`) : taillé en ville, libre sur
+   la rive sauvage — les deux sont posés ici. */
+const buisIm = (form, v) => mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, form, v, "summer", 0);
 
 let fail = 0;
 const ok = (cond, label, detail) => {
@@ -83,10 +87,11 @@ const CASES = [
   ["nénuphars", S.townLilyPads[1]],
   ["roseaux d'eau", S.townReedsWater],
   ["roseaux", S.townReedTuft],
-  ["touffe d'herbe", S.townGrassTuft],
+  ["massif de buis (taillé)", buisIm("cloud", 0)],
+  ["massif de buis (libre)", buisIm("mound", 0)],
   // 2026-09-28 (phase 7b) : la haie en tuiles est retirée ; ses cases se dessinent
   // en volumes (clotures.js, regardées par render-haies). Reste le décor du quai.
-  ["haie du quai", S.townHedgeRow],
+  ["haie du quai", buisIm("hedge", 0)],
   ["lame de ponton", S.townDeck],
 ];
 

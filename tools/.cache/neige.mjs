@@ -932,11 +932,13 @@ export function winterizePixels(src, w, h, mode, seed) {
   }
   return out;
 }
-/* Le genre d'hiver d'un décor (null : il ne change pas). */
+/* Le genre d'hiver d'un décor (null : il ne change pas). ⚠️ Les BUIS (`shrub`,
+   `grassTuft`, `topiary`, `hedgeRow` — buis.js) n'y sont plus : leur hiver est dans leur
+   dessin (un persistant terni, pas des brindilles de caduc ni de la paille). */
 export const WINTER_PROP_MODE = {
-  goldBush: "bare", shrub: "bare", clump: "bare", roseBox: "bare",
-  lavender: "ever", topiary: "ever", hedgeRow: "ever", hedgeAngle: "ever", bonsai: "ever",
-  grassTuft: "straw", reedTuft: "straw", potReeds: "straw", tallGrass: "straw",
+  goldBush: "bare", clump: "bare", roseBox: "bare",
+  lavender: "ever", hedgeAngle: "ever", bonsai: "ever",
+  reedTuft: "straw", potReeds: "straw", tallGrass: "straw",
   flowerTrough: "pot", potPink: "pot", flowerCart: "pot", planter: "pot", bloomBed: "pot", bloomRow: "pot",
 };
 

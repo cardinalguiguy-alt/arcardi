@@ -78,6 +78,12 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   sprite** (il redevient un harmonium, et on perd ce pour quoi on l'avait fait haut) : ce qui est
   aussi haut qu'un mur EST un mur, et on le dessine dans la passe des MURS. *On ne règle pas un
   tri, on change de passe.*
+- ⚠️⚠️ **UN CERNE CALCULÉ DANS UNE CELLULE NE VOIT PAS SA VOISINE — IL SE POSE SUR ELLE** (2026-09-28,
+  les clôtures). Une case cerne ce qui borde SON dessin ; au-dessus de son faîte, il y avait la haie de la case
+  du nord, peinte dans une autre cellule — un trait sombre en travers de chaque haie et de chaque muret
+  nord-sud, à chaque case, depuis la 7b. Ce qui se raccorde d'une cellule à l'autre doit savoir ce qu'il y a de
+  l'autre côté : `paintVoxels` marque les pixels du voisin sans les peindre. Même famille que la période du
+  motif : la couture est un défaut de RACCORD, invisible sur une case seule.
 - ⚠️⚠️ **UN OUVRAGE CONTINU NE PORTE PAS UNE OMBRE PAR CASE** (441). L'ombre portée d'un meuble
   isolé est juste ; répétée sous les huit cases d'un banc de nef ou les vingt d'un garde-corps,
   elle donne une file de taches grises sous une masse continue. Ce qui se répète porte son ombre

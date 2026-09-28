@@ -105,6 +105,43 @@ for (const st of STYLES) {
     if (!any) vholes++;
   }
   ok(vholes === 0, `${nm} : tronçon nord-sud de ${RUN} cases, aucune rangée vide`, `${vholes} rangée(s)`);
+  /* ⚠️ 2026-09-28 — LA COUTURE : une rangée PLEINE n'est pas une rangée JUSTE.
+     Chaque case posait son cerne au-dessus de son faîte, donc sur la haie de la
+     case du nord : un trait sombre en travers du tronçon, à chaque case — que la
+     mesure du dessus (« aucune rangée vide ») laissait passer. On cherche une
+     rangée de matière nettement plus sombre que ses deux voisines (moins de la
+     moitié de leur moyenne, et sombre en soi). Mesurée sur la haie (la matière
+     épaisse qui court le plus) ; FALSIFY=couture trace le trait à chaque case.
+     ⚠️ LA PRISE : UNE SUITE DE PIXELS DE CERNE À L'INTÉRIEUR DE LA HAIE (trois
+     de suite, les deux bords de la rangée exclus — ce sont ses cernes à elle).
+     Premier jet, écrit puis jeté : « une rangée plus sombre que ses voisines »
+     — le vrai trait est PARTIEL (il suit le faîte festonné de la case du nord)
+     et s'étale sur deux rangées, sa moyenne ne descendait jamais assez : le
+     contrôle restait vert sur le défaut qu'il cherchait (vérifié en rejouant le
+     peintre sans sa correction). Mesuré sur tout le tronçon, aux quatre places
+     de la période : le peintre fautif fait 14 rangées à trois pixels de cerne
+     d'affilée, le juste jamais plus de deux (un creux entre deux touffes). */
+  if (st === F.HEDGE) {
+    // La haie est en x = 1, peinte avec une case de marge (`paint`) : ses colonnes sont 2T + 4 … 2T + 11.
+    if (process.env.FALSIFY === "couture") for (let k = 2; k < RUN; k++) {
+      const y = OV + (1 + k) * T - 13;
+      for (let x = 2 * T + 5; x < 2 * T + 8; x++) { const o = (y * iv.W + x) * 4; iv.px[o] = 16; iv.px[o + 1] = 34; iv.px[o + 2] = 20; iv.px[o + 3] = 255; }
+    }
+    const seams = [];
+    for (let y = OV + 2 * T; y < OV + RUN * T; y++) {
+      let xa = -1, xb = -1;
+      for (let x = 0; x < iv.W; x++) if (iv.px[(y * iv.W + x) * 4 + 3] > 200) { if (xa < 0) xa = x; xb = x; }
+      if (xa < 0) continue;
+      let run = 0, best = 0;
+      for (let x = xa + 1; x < xb; x++) {
+        const o = (y * iv.W + x) * 4, L = iv.px[o] * 0.3 + iv.px[o + 1] * 0.59 + iv.px[o + 2] * 0.11;
+        run = iv.px[o + 3] > 200 && L < 38 ? run + 1 : 0;
+        best = Math.max(best, run);
+      }
+      if (best >= 3) seams.push(y - OV);
+    }
+    ok(seams.length === 0, `${nm} : tronçon nord-sud sans couture sombre d'une case à l'autre`, seams.slice(0, 6).join(", ") || "aucune suite de cerne dans la haie");
+  }
 
   /* Le pied : sur quatre cases du milieu du tronçon est-ouest (un poteau y
      tombe toujours — le fil de fer ne touche le sol que par ses piquets), la

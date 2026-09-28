@@ -65,7 +65,6 @@ function hash2(x, y) {
   h ^= h >>> 15; h = Math.imul(h, 0x85ebca77); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
   return h >>> 0;
 }
-const hash3 = (x, y, z) => hash2(x + Math.imul(z | 0, 0x3c6ef372), y ^ Math.imul(z | 0, 0x1b873593));
 const hex = (s) => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
 const pal = (a) => a.map(hex);
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -118,8 +117,14 @@ const L = [LX / LN, LY / LN, LZ / LN];
    qu'il ne faut ni face avant ni cerne sur la couture. `d` : les pixels RGBA
    de la cellule (`W` de large), l'origine au sol (u=0, v=0) est à (ox, oy).
    `u0..u1` : les colonnes à peindre (une case : 0..15). */
-function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shadow, shadowRGB) {
+/* `opt` (2026-09-28, les buis) : `{ thick, cerne }` remplace l'ensemble des
+   matières cernées et leurs couleurs — un buis cerne aussi sa neige (un chapeau
+   blanc sur un sol blanc se perdrait sans lui, DESSIN.md), ce qu'une clôture
+   ne peut pas faire (sa neige coiffe des barreaux d'un pixel). Absent : le
+   comportement des clôtures, inchangé. */
+function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shadow, shadowRGB, opt) {
   const SR = shadowRGB || [18, 28, 14];
+  const thick = (opt && opt.thick) || THICK, cerneOf = (opt && opt.cerne) || CERNE;
   const layer = new Uint8ClampedArray(W * H * 4);
   const kind = new Uint8Array(W * H);             // la matière peinte à chaque pixel (le cerne s'en sert)
   const put = (x, y, c, m) => {
@@ -128,6 +133,22 @@ function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shad
     layer[o] = c[0]; layer[o + 1] = c[1]; layer[o + 2] = c[2]; layer[o + 3] = 255;
     kind[y * W + x] = m;
   };
+  /* ⚠️⚠️ LES VOXELS DE LA CASE DU NORD, QUAND L'OUVRAGE Y CONTINUE, MARQUENT
+     LEURS PIXELS SANS LES PEINDRE (2026-09-28). La case du nord peint les siens
+     dans SA cellule, dessinée avant ; sans ce marquage, celle-ci posait son
+     cerne juste au-dessus du faîte de sa première rangée — c'est-à-dire SUR le
+     faîte de la dernière rangée de la case du nord : un trait sombre en travers
+     de chaque haie (et de chaque muret) nord-sud, à chaque case. Vu à la loupe
+     sur la planche de `render-haies`, que sa mesure de continuité (« aucune
+     rangée vide ») laissait passer. */
+  const GHOST = 255;
+  for (let v = v0 - 3; v < v0; v++) for (let z = 0; z <= zMax; z++) for (let u = u0; u <= u1; u++) {
+    if (!model(u, v, z)) continue;
+    for (const y of [oy + v - z - 1, oy + v - z]) {
+      const x = ox + u;
+      if (x >= 0 && y >= 0 && x < W && y < H && !kind[y * W + x]) kind[y * W + x] = GHOST;
+    }
+  }
   for (let v = v0; v <= v1; v++) for (let z = 0; z <= zMax; z++) for (let u = u0; u <= u1; u++) {
     const m = model(u, v, z);
     if (!m) continue;
@@ -148,10 +169,10 @@ function paintVoxels(d, W, H, ox, oy, model, zMax, u0, u1, v0, v1, colorOf, shad
       const xx = x + dx, yy = y + dy;
       if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
       const k = kind[yy * W + xx];
-      if (THICK.has(k)) { m = k; break; }
+      if (thick.has(k)) { m = k; break; }
     }
     if (!m) continue;
-    const o = (y * W + x) * 4, c = CERNE[m];
+    const o = (y * W + x) * 4, c = cerneOf[m];
     out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2]; out[o + 3] = 255;
   }
   /* L'ombre de contact au sol, SOUS le dessin (elle ne recouvre jamais rien). */
@@ -188,32 +209,60 @@ function hardLevel(face, u, v, z, nb) {
   if (face === "top" && nb.n) l += 0.08;
   return l;
 }
-/* Les TOUFFES du buis : un semis de centres sur une grille de 4 px (monde),
-   décalés au hachage ; chaque pixel prend la normale de la touffe la plus
-   proche, mêlée à celle de sa face — les touffes s'éclairent une à une, le
-   contour reste net (« un ouvrage taillé dans une matière vivante garde sa
-   matière ; ce qui change est le contour », DESSIN.md). Le creux entre deux
-   touffes (deux centres presque à égale distance) s'assombrit. */
-function leafLevel(face, wx, wy, z) {
-  let d1 = 1e9, d2 = 1e9, c1 = null;
-  const gx = Math.floor(wx / 4), gy = Math.floor(wy / 4), gz = Math.floor(z / 4);
-  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
-    const i = gx + a, j = gy + b, k = gz + c, h = hash3(i & 15, j & 15, k);
-    const cx = i * 4 + 0.5 + (h % 3), cy = j * 4 + 0.5 + ((h >>> 3) % 3), cz = k * 4 + 1 + ((h >>> 6) % 3);
-    const dd = (wx + 0.5 - cx) ** 2 + (wy + 0.5 - cy) ** 2 + (z + 0.5 - cz) ** 2;
-    if (dd < d1) { d2 = d1; d1 = dd; c1 = [cx, cy, cz]; } else if (dd < d2) d2 = dd;
-  }
-  let nx = wx + 0.5 - c1[0], ny = wy + 0.5 - c1[1], nz = z + 0.5 - c1[2];
+/* ── 4 ter. LA MATIÈRE DU BUIS (2026-09-28) ─────────────────────────────────
+   Guillaume : les haies étaient des « bandes vertes » simplistes. Le premier
+   jet (7b) semait des centres de touffes sur une grille de 4 px dans TOUT le
+   volume, et chaque pixel prenait la normale du plus proche, pondérée plus
+   fort que sa face : un marbrage, pas des touffes — de loin, un rectangle
+   vert tacheté. La matière est désormais celle de tous les buis de la ville
+   (`buis.js` : boules, massifs, buis taillés), écrite ICI une fois :
+   · des TOUFFES posées sur la SURFACE de la forme (pas dans son volume), qui
+     débordent d'un voxel au faîte — le contour reste net, il n'est plus droit ;
+   · la lumière d'un voxel mêle la normale de la FORME (la haie se lit en
+     volume : faîte clair, face avant plus sombre, arête arrondie) et celle de
+     SA touffe (chaque touffe a son éclat) ; le creux entre deux touffes et le
+     cœur vu entre elles s'assombrissent ;
+   · sept paliers, du creux bleu-vert à l'éclat vert-jaune (à dix, la lumière
+     continue d'une touffe traversait trop de paliers : de la mousse) ;
+   · les saisons d'un persistant : au printemps, les jeunes pousses vert tendre
+     au sommet de deux touffes sur cinq ; l'hiver, la palette ternit vers
+     l'olive (au premier jet, un « bronze » posé sur quelques touffes faisait
+     des points de rouille — une maladie, pas une saison). */
+const BOX_LEAF = pal(["#0d1d15", "#15301d", "#1f4529", "#2b5a31", "#38703a", "#4a8845", "#66a352"]);
+const BOX_SHINE = hex("#8dbf66");
+const BOX_SHOOT = pal(["#77ad4c", "#93c65c", "#afd876"]);
+const BOX_WINTER = pal(["#101d17", "#19301f", "#243f27", "#324f2e", "#415f35", "#55713e", "#6c8249"]);
+/* La lumière d'un voxel de feuillage. `n0` : la normale de la FORME ; `q` : la
+   touffe qui le porte (null : le cœur, vu entre les touffes) ; `c1`, `c2` : sa
+   couverture par la meilleure et la seconde touffe (le creux quand elles se
+   valent) ; `wM` : le poids de la forme (0,42 taillé ; 0,28 libre — à parts
+   égales, chaque touffe n'avait plus assez d'écart entre son éclat et son
+   ombre pour se voir). Rend { l, cap, ph } : la valeur, « sommet éclairé d'une
+   touffe » (les pousses du printemps y poussent), le hachage de la touffe. */
+function boxLight(x, y, z, n0, q, c1, c2, wM) {
+  if (!q || c1 < 0) return { l: 0.05 + 0.12 * Math.max(0, n0[0] * L[0] + n0[1] * L[1] + n0[2] * L[2]), cap: 0, ph: 0 };
+  const dx = x - q.c[0], dy = y - q.c[1], dz = z - q.c[2], dd = Math.hypot(dx, dy, dz);
+  const n1 = dd > 0.3 ? [dx / dd, dy / dd, dz / dd] : n0, wP = 1 - wM;
+  let nx = wM * n0[0] + wP * n1[0], ny = wM * n0[1] + wP * n1[1], nz = wM * n0[2] + wP * n1[2];
   const nn = Math.hypot(nx, ny, nz) || 1;
-  const fx = 0, fy = face === "top" ? 0 : 1, fz = face === "top" ? 1 : 0;
-  nx = 0.6 * fx + 0.8 * nx / nn; ny = 0.6 * fy + 0.8 * ny / nn; nz = 0.6 * fz + 0.8 * nz / nn;
-  const m = Math.hypot(nx, ny, nz) || 1;
-  const lam = (nx * L[0] + ny * L[1] + nz * L[2]) / m;
-  let l = 0.18 + 0.72 * Math.max(0, lam) + (face === "top" ? 0.1 : 0);
-  if (Math.sqrt(d2) - Math.sqrt(d1) < 0.7) l -= 0.2;
-  if (face === "front" && z <= 1) l -= 0.12;
-  return l;
+  nx /= nn; ny /= nn; nz /= nn;
+  const lam = nx * L[0] + ny * L[1] + nz * L[2];
+  let l = 0.1 + 0.8 * Math.max(0, lam) + 0.1 * Math.max(0, nz);
+  if (c2 > -0.25 && c1 - c2 < 0.7) l -= 0.2;       // le creux entre deux touffes
+  if (nz < -0.25) l -= 0.12 * (-nz);               // le dessous, qui ne voit pas le ciel
+  if (z < 2.5) l -= 0.1;                           // le pied, dans l'herbe
+  return { l, cap: n1[2] > 0.55 && lam > 0.35 ? 1 : 0, ph: q.h & 255 };
 }
+/* La couleur d'un voxel de feuillage éclairé, selon la saison (`se` : "sp"
+   printemps, "su" été et automne, "wi" hiver). */
+function boxColor(l, cap, ph, face, se) {
+  const v = l + (face === "top" ? 0.04 : -0.02);
+  if (se === "wi") return pick(BOX_WINTER, v - 0.04);
+  if (se === "sp" && cap && ph % 5 < 2 && v > 0.6) return pick(BOX_SHOOT, (v - 0.6) / 0.36);
+  if (cap && v > 0.98) return BOX_SHINE;
+  return pick(BOX_LEAF, v);
+}
+const boxSeason = (s) => (s === "spring" || s === "sp" ? "sp" : s === "winter" || s === "wi" ? "wi" : "su");
 
 /* ── 4 bis. LA NEIGE (phase 12a, 2026-09-28) ───────────────────────────────
    « La neige n'aura qu'à blanchir les faces du dessus » (en-tête) : elle fait
@@ -233,16 +282,26 @@ function leafLevel(face, wx, wy, z) {
    3) plus son épaisseur, un voxel de moins au bord de l'ouvrage (le coussin
    s'arrondit), jamais moins d'un voxel sur une colonne. Le fil n'en porte
    qu'un. `u0..v1` : la fenêtre du dessin (la carte des dessus s'y calcule). */
-function withSnow(model, lvl, u0, u1, v0, v1) {
+/* `zTop` (2026-09-28, les buis) : la plus haute rangée de voxels à sonder — un
+   buis sur tige monte plus haut que le pilier de la grille (31 par défaut).
+   `accept(u, v, t)` : l'épaisseur de neige que tient cette colonne (0 : elle
+   glisse). Un ouvrage a des dessus plats ; une boule a des FLANCS — sans ce
+   filtre, chaque colonne d'une sphère recevait son chapeau et la boule entière
+   sortait blanche (vu au banc, `render-buis`). ⚠️ Avec lui, le comblement ne
+   monte qu'au voisin d'UN voxel plus haut : à trois (le réglage des haies, qui
+   comble les marches d'un dessus plat), la neige d'une boule faisait un
+   couvercle à flancs droits. */
+function withSnow(model, lvl, u0, u1, v0, v1, zTop, accept) {
   if (!lvl) return model;
-  const k = lvl >= 2 ? 3 : 1, P = 2;
+  const k = lvl >= 2 ? 3 : 1, P = 2, Z = zTop || 31;
   const W = u1 - u0 + 1 + 2 * P, H = v1 - v0 + 1 + 2 * P;
   const top = new Int16Array(W * H).fill(-1), mat = new Uint8Array(W * H);
   for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
-    for (let z = 31; z >= 0; z--) { const m = model(u + u0 - P, v + v0 - P, z); if (m && m !== M.GRASS) { top[v * W + u] = z; mat[v * W + u] = m; break; } }
+    for (let z = Z; z >= 0; z--) { const m = model(u + u0 - P, v + v0 - P, z); if (m && m !== M.GRASS) { top[v * W + u] = z; mat[v * W + u] = m; break; } }
   }
   const sTop = new Int16Array(W * H).fill(-1);
   const uu0 = (u) => u + u0 - P, vv0 = (v) => v + v0 - P;
+  const reach = accept ? 1 : k;
   for (let v = 1; v < H - 1; v++) for (let u = 1; u < W - 1; u++) {
     const i = v * W + u, t = top[i];
     if (t < 0) continue;
@@ -254,11 +313,13 @@ function withSnow(model, lvl, u0, u1, v0, v1) {
       /* Seuls les dessus VOISINS (à `k` près) se rejoignent : la neige comble les
          marches d'une haie, pas l'écart entre un barreau et le chaperon du muret
          (premier jet : la grille entière noyée dans un panneau de neige). */
-      if (mat[i + dv * W + du] !== M.WIRE && tt > mx && tt <= t + k) mx = tt;
+      if (mat[i + dv * W + du] !== M.WIRE && tt > mx && tt <= t + reach) mx = tt;
     }
     // Une neige légère ne couvre pas tout : trois colonnes sur dix restent nues (les feuilles, la pierre percent).
     if (k === 1 && (hash2(uu0(u) >> 1, vv0(v) >> 1) % 10) < 3) continue;
-    sTop[i] = Math.max(t + 1, mx + k - edge);
+    const kk = accept ? Math.min(k, accept(uu0(u), vv0(v), t) | 0) : k;
+    if (kk <= 0) continue;
+    sTop[i] = Math.max(t + 1, mx + kk - edge);
   }
   return (u, v, z) => {
     const m = model(u, v, z);
@@ -302,20 +363,128 @@ function onAxisNS(u, v, cf, w3) { return (u === 8 || (w3 && (u === 7 || u === 9)
 /* Le poteau de portail, du côté de l'ouverture : colonnes [a, b[. */
 function gatePostCols(cf, w) { return cf.ge ? [T - w, T] : cf.gw ? [0, w] : null; }
 
-function hedgeModel(cf) {
+/* LA HAIE DE BUIS (refaite le 2026-09-28, voir « la matière du buis »).
+   ⚠️ L'EMPRISE N'A PAS BOUGÉ : la même bande de 8 px (`band`, demi-largeur 4),
+   la même coupure de 3 px avant un portillon, le même poteau de bois, un faîte
+   à 12 voxels comme avant (10 au bord, 12 au milieu) — seules des touffes
+   dépassent d'un voxel au faîte. La collision, le portail, la neige au sol
+   (`townFenceHeights`) lisent la même haie.
+   LE VOLUME : une boîte aux arêtes arrondies (rayon 2,6) par bras — est-ouest,
+   nord-sud —, prolongée loin dans la case voisine quand la haie continue (la
+   forme est donc la même des deux côtés d'une couture), arrondie en bout quand
+   elle s'arrête.
+   ⚠️⚠️ LES TOUFFES SUIVENT UN RÉSEAU QUI BOUCLE SUR QUATRE CASES (64 px, la
+   période du fichier) : le long de chaque bras, une touffe tous les 4 px, dans
+   neuf places de la coupe (deux au faîte, deux aux arêtes, trois devant, deux
+   derrière), décalées d'une place sur deux et au hachage de leur rang MODULO
+   16. Une touffe à cheval sur deux cases est donc la même, vue de chaque côté
+   — une touffe par case, tirée à part, aurait redessiné la grille de 16 px. */
+const HEDGE_MEMO = new Map();
+const HEDGE_TOP = 12, HEDGE_HW = 4, HEDGE_R = 2.6, HEDGE_PUFF = 2.6;
+const HG0 = -3, HG1 = 18, HGZ = 14;   // la grille : la case, et trois voxels chez chaque voisin (la neige y lit ses bords)
+/* Les places des touffes dans la coupe d'un bras (décalage perpendiculaire,
+   hauteur) : on MARCHE le long du bord arrondi de la coupe, enfoncé de 0,56
+   rayon, à pas constant (2,7 px) — du pied de la face avant, par-dessus le
+   faîte, jusqu'à mi-hauteur de la face arrière (le reste est caché). Premier
+   jet : des places écrites à la main, dont deux (le faîte et l'arête) presque
+   confondues — deux touffes l'une dans l'autre ne font pas de creux. */
+const HEDGE_SLOTS = (() => {
+  const d = HEDGE_PUFF * 0.56, hw = HEDGE_HW - d, top = HEDGE_TOP - d, rr = Math.max(0.01, HEDGE_R - d);
+  const cx = hw - rr, cz = top - rr;
+  const segs = [
+    { len: cz - 1, at: (t) => [hw, 1 + t] },                                                         // la face avant, en montant
+    { len: rr * Math.PI / 2, at: (t) => [cx + rr * Math.cos(t / rr), cz + rr * Math.sin(t / rr)] },    // l'arête avant
+    { len: 2 * cx, at: (t) => [cx - t, top] },                                                        // le faîte
+    { len: rr * Math.PI / 2, at: (t) => [-cx + rr * Math.cos(Math.PI / 2 + t / rr), cz + rr * Math.sin(Math.PI / 2 + t / rr)] },   // l'arête arrière
+    { len: cz - 4, at: (t) => [-hw, cz - t] },                                                        // la face arrière, en descendant
+  ];
+  const out = [];
+  for (let s = 0.4; ; s += 2.7) {
+    let t = s, seg = null;
+    for (const g of segs) { if (t <= g.len) { seg = g; break; } t -= g.len; }
+    if (!seg) break;
+    out.push(seg.at(t));
+  }
+  return out;
+})();
+function roundBox(x, y, z, b, r) {
+  const qx = Math.abs(x - (b[0] + b[1]) / 2) - (b[1] - b[0]) / 2 + r;
+  const qy = Math.abs(y - (b[2] + b[3]) / 2) - (b[3] - b[2]) / 2 + r;
+  const qz = Math.abs(z - (b[4] + b[5]) / 2) - (b[5] - b[4]) / 2 + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - r;
+}
+function hedgeGrid(cf, px, py) {
+  const key = `${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${px}${py}`;
+  let G = HEDGE_MEMO.get(key);
+  if (G) return G;
+  const ew = cf.w || cf.e || cf.gw || cf.ge, ns = cf.n || cf.s, lo = 8 - HEDGE_HW, hi = 8 + HEDGE_HW;
+  /* Les bras : [x0, x1, y0, y1, z0, z1] ; le bas descend sous le sol (il ne
+     s'arrondit pas), le bout d'un bras qui continue est loin chez le voisin. */
+  const arms = [];
+  if (ew) arms.push({ ax: 0, b: [cf.w ? -48 : lo, cf.e ? 64 : hi, lo, hi, -12, HEDGE_TOP] });
+  if (ns) arms.push({ ax: 1, b: [lo, hi, cf.n ? -48 : lo, cf.s ? 64 : hi, -12, HEDGE_TOP] });
+  if (!ew && !ns) { arms.push({ ax: 0, b: [lo, hi, lo, hi, -12, HEDGE_TOP] }); arms.push({ ax: 1, b: [lo, hi, lo, hi, -12, HEDGE_TOP] }); }
+  const f = (x, y, z) => { let v = 1e9; for (const a of arms) v = Math.min(v, roundBox(x, y, z, a.b, HEDGE_R)); return v; };
+  const puffs = [];
+  for (const a of arms) {
+    const base = a.ax === 0 ? px * T : py * T;   // l'origine de la case sur l'axe du bras, dans la période
+    const lo2 = a.ax === 0 ? a.b[0] : a.b[2], hi2 = a.ax === 0 ? a.b[1] : a.b[3];
+    for (let kw = Math.floor((base + HG0 - 6) / 4); kw <= Math.ceil((base + HG1 + 6) / 4); kw++) {
+      HEDGE_SLOTS.forEach(([perp, z], j) => {
+        const h = hash2(((kw % 16) + 16) % 16 + 16 * j, 0x4b1 + a.ax);
+        const s = 4 * kw + (j % 2) * 2 + (((h & 7) - 3.5) * 0.17) - base;
+        if (s < lo2 + 1.6 || s > hi2 - 1.6) return;
+        const pp = perp + ((((h >>> 3) & 7) - 3.5) * 0.08), zz = z + ((((h >>> 6) & 7) - 3.5) * 0.08);
+        const c = a.ax === 0 ? [s, 8 + pp, zz] : [8 + pp, s, zz];
+        puffs.push({ c, r: HEDGE_PUFF * (0.88 + 0.24 * ((h >>> 9) & 255) / 255), h: hash2(h, 0x2d) });
+      });
+    }
+  }
+  /* Un seau par colonne de 4 px, pour ne chercher que les touffes voisines. */
+  const bucket = new Map(), bk = (x, y) => (Math.floor(x / 4) + 8) * 64 + Math.floor(y / 4) + 8;
+  for (const q of puffs) {
+    // Le rayon plus un demi-voxel : le creux se lit aussi contre une touffe voisine qu'on n'effleure pas.
+    for (let bx = Math.floor((q.c[0] - q.r - 0.5) / 4); bx <= Math.floor((q.c[0] + q.r + 0.5) / 4); bx++)
+      for (let by = Math.floor((q.c[1] - q.r - 0.5) / 4); by <= Math.floor((q.c[1] + q.r + 0.5) / 4); by++) {
+        const k = (bx + 8) * 64 + by + 8;
+        if (!bucket.has(k)) bucket.set(k, []);
+        bucket.get(k).push(q);
+      }
+  }
+  const inHedge = (u, v) => band(u, v, cf, HEDGE_HW, true) && !(cf.ge && u >= 12) && !(cf.gw && u <= 3);
+  const N = HG1 - HG0 + 1, idx = (u, v, z) => (z * N + (v - HG0)) * N + (u - HG0);
+  const mat = new Uint8Array(N * N * HGZ), lvl = new Float32Array(N * N * HGZ), cap = new Uint8Array(N * N * HGZ), phs = new Uint8Array(N * N * HGZ);
+  for (let z = 0; z < HGZ; z++) for (let v = HG0; v <= HG1; v++) for (let u = HG0; u <= HG1; u++) {
+    if (!inHedge(u, v) || z > HEDGE_TOP) continue;
+    const x = u + 0.5, y = v + 0.5, zz = z + 0.5, fq = f(x, y, zz);
+    let best = null, c1 = -1e9, c2 = -1e9;
+    if (fq > -2.2) for (const q of bucket.get(bk(x, y)) || []) {
+      const cov = q.r - Math.hypot(x - q.c[0], y - q.c[1], zz - q.c[2]);
+      if (cov > c1) { c2 = c1; c1 = cov; best = q; } else if (cov > c2) c2 = cov;
+    }
+    if (!(fq < -1.1 || (fq < 0.6 && c1 >= 0))) continue;
+    const i = idx(u, v, z);
+    mat[i] = M.LEAF;
+    const g = [f(x + 0.35, y, zz) - f(x - 0.35, y, zz), f(x, y + 0.35, zz) - f(x, y - 0.35, zz), f(x, y, zz + 0.35) - f(x, y, zz - 0.35)];
+    const gn = Math.hypot(g[0], g[1], g[2]) || 1;
+    const bl = boxLight(x, y, zz, [g[0] / gn, g[1] / gn, g[2] / gn], best, c1, c2, 0.42);
+    lvl[i] = bl.l; cap[i] = bl.cap; phs[i] = bl.ph;
+  }
+  const inG = (u, v, z) => u >= HG0 && u <= HG1 && v >= HG0 && v <= HG1 && z >= 0 && z < HGZ;
+  G = { leaf: (u, v, z) => (inG(u, v, z) ? mat[idx(u, v, z)] : 0),
+        light: (u, v, z) => { if (!inG(u, v, z)) return null; const i = idx(u, v, z); return { l: lvl[i], cap: cap[i], ph: phs[i] }; } };
+  HEDGE_MEMO.set(key, G);
+  return G;
+}
+function hedgeModel(cf, px, py) {
   /* La haie s'arrête 3 px avant l'ouverture : un poteau de bois porte le portillon. */
-  const inHedge = (u, v) => band(u, v, cf, 4, true) && !(cf.ge && u >= 12) && !(cf.gw && u <= 3);
-  const edge = (u, v) => {
-    for (let k = 1; k <= 2; k++) if (!inHedge(u - k, v) || !inHedge(u + k, v) || !inHedge(u, v - k) || !inHedge(u, v + k)) return k - 1;
-    return 2;
-  };
-  const post = gatePostCols(cf, 3);
-  return (u, v, z) => {
+  const G = hedgeGrid(cf, px | 0, py | 0), post = gatePostCols(cf, 3);
+  const model = (u, v, z) => {
     if (post && u >= post[0] && u < post[1] && v >= 7 && v <= 9) return z < 14 ? M.WOOD : 0;
-    if (!inHedge(u, v)) return 0;
-    const e = edge(u, v);
-    return z < 10 + e ? M.LEAF : 0;
+    return G.leaf(u, v, z);
   };
+  model.light = G.light;
+  return model;
 }
 function ironModel(cf, px, py) {
   /* Le pilier : au centre (bout, angle, té, et un tous les quatre sur un
@@ -426,10 +595,15 @@ const MODELS = { [C.TOWN_FENCE.HEDGE]: hedgeModel, [C.TOWN_FENCE.IRON]: ironMode
 const POST_EVERY = { [C.TOWN_FENCE.HEDGE]: 0, [C.TOWN_FENCE.IRON]: 4, [C.TOWN_FENCE.PICKET]: 2, [C.TOWN_FENCE.BOARD]: 2, [C.TOWN_FENCE.WIRE]: 2 };
 
 /* La couleur d'un pixel, par matière. `wx, wy` : la position dans la période. */
-function fenceColor(px, py) {
+/* `model` : le modèle de la case (une haie y porte sa lumière, `model.light`) ;
+   `se` : la saison (`boxSeason`) — elle ne change que le buis. */
+function fenceColor(px, py, model, se) {
   return (m, face, u, v, z, nb) => {
     const wx = px * T + u, wy = py * T + v;
-    if (m === M.LEAF) return pick(PAL[M.LEAF], leafLevel(face, wx, wy, z));
+    if (m === M.LEAF) {
+      const lt = model && model.light ? model.light(u, v, z) : null;
+      return lt ? boxColor(lt.l, lt.cap, lt.ph, face, se) : pick(BOX_LEAF, 0.4);
+    }
     let l = hardLevel(face, u, v, z, nb);
     if (m === M.STONE && face === "front") {
       /* Les moellons : assises de 3 px, blocs de 5 à 8 px décalés d'une assise
@@ -536,23 +710,25 @@ export function townFenceConf(tw, x, y) {
 }
 
 /* ── 8. CE QUE LE JEU APPELLE ──────────────────────────────────────────── */
-function paintFenceCell(d, W, H, style, cf, px, py, snow) {
+function paintFenceCell(d, W, H, style, cf, px, py, snow, season) {
   const base = MODELS[style](cf, px, py);
   const model = withSnow(base, snow | 0, 0, T - 1, 0, T - 1);
   // Sur la neige, l'ombre de contact est bleue (DESSIN.md, neige.js).
-  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, snowColor(fenceColor(px, py)), contactShadow(base), snow ? SNOW_SHADOW : null);
+  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, snowColor(fenceColor(px, py, base, boxSeason(season))), contactShadow(base), snow ? SNOW_SHADOW : null);
 }
 /* Une case de clôture, dessinée à (px, py) = son coin haut-gauche au sol.
    Rend faux si la case n'en porte pas (l'appelant a son repli). `snow` : 0, 1
-   (légère) ou 2 (épaisse) — trois cellules en cache au plus par voisinage. */
-export function drawTownFenceTile(ctx, S, tw, x, y, px, py, snow) {
+   (légère) ou 2 (épaisse) — trois cellules en cache au plus par voisinage.
+   `season` (2026-09-28) : la saison du buis — seule la HAIE en dépend (pousses,
+   hiver terni) ; les autres matières gardent une cellule pour toute l'année. */
+export function drawTownFenceTile(ctx, S, tw, x, y, px, py, snow, season) {
   const cache = S && S.townEnclos;
   if (!cache || !tw.hedge) return false;
   const { style, cf } = townFenceConf(tw, x, y);
   if (!MODELS[style]) return false;
-  const bx = x & 3, by = y & 3, sn = snow | 0;
-  const key = `f${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}${sn ? "s" + sn : ""}`;
-  const cell = cacheCell(cache, key, T, CH, (d, W, H) => paintFenceCell(d, W, H, style, cf, bx, by, sn));
+  const bx = x & 3, by = y & 3, sn = snow | 0, se = style === C.TOWN_FENCE.HEDGE ? boxSeason(season) : "su";
+  const key = `f${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}${sn ? "s" + sn : ""}${se === "su" ? "" : se}`;
+  const cell = cacheCell(cache, key, T, CH, (d, W, H) => paintFenceCell(d, W, H, style, cf, bx, by, sn, se));
   blit(ctx, cell, px, py - FENCE_OV);
   return true;
 }
@@ -735,25 +911,14 @@ export function drawTownPlot(ctx, S, p, season, snow) {
 }
 
 /* ── 11. LA HAIE-DÉCOR DU QUAI ─────────────────────────────────────────────
-   `hedgeRow` est un DÉCOR de la planche (62 × 30), posé par le générateur au
-   fond de la scène du quai, avec son emprise (`townPropBox`) : on garde sa
-   taille au pixel près — l'emprise n'en bouge pas — et on le repeint dans la
-   matière des haies de la ville, pour que la même haie ne soit pas de deux
-   dessins. Un tronçon droit, bouts arrondis, posé au bas du cadre. */
-export function hedgeRowSprite(W, H) {
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const g = c.getContext("2d");
-  g.imageSmoothingEnabled = false;
-  const v0 = H - 12, v1 = H - 4;                     // l'emprise au sol : 8 px, 4 px au-dessus du bas (l'ombre)
-  const inH = (u, v) => u >= 1 && u <= W - 2 && v >= v0 && v < v1;
-  const edge = (u, v) => { for (let k = 1; k <= 2; k++) if (!inH(u - k, v) || !inH(u + k, v) || !inH(u, v - k) || !inH(u, v + k)) return k - 1; return 2; };
-  const model = (u, v, z) => (inH(u, v) && z < 10 + edge(u, v) ? M.LEAF : 0);
-  const im = g.getImageData(0, 0, W, H);
-  paintVoxels(im.data, W, H, 0, 0, model, 14, 0, W - 1, 0, H - 1, fenceColor(0, 0), contactShadow(model));
-  g.putImageData(im, 0, 0);
-  return c;
-}
+   2026-09-28 : `hedgeRow` est devenu une forme de `buis.js` (`hedge`), dans la
+   matière des buis — `hedgeRowSprite` n'existe plus. */
 
 /* Pour les bancs : ce qui se dessine hors du jeu. */
 export const FENCE_TEST = { CH, GATE_PAD, PLOT_OV, paintFenceCell, paintGate, MODELS, PAL, M, withSnow };
+/* 2026-09-28 — LA BOÎTE À OUTILS DES VOLUMES, pour les buis (`buis.js`) : le
+   MÊME peintre, la même neige, le même atlas, la même lumière. ⚠️ Un second
+   peintre écrit à côté aurait été une divergence en attente (§8 de CLAUDE.md) :
+   le jour où la projection ou la lumière change, elle change pour les deux. */
+export const VOXEL = { paintVoxels, withSnow, snowColor, cacheCell, blit, pick, PAL, M, L, CERNE, THICK, SNOW_SHADOW,
+  boxLight, boxColor, boxSeason, BOX_LEAF, BOX_SHINE, BOX_SHOOT, BOX_WINTER };

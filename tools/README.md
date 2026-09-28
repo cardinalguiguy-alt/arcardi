@@ -271,6 +271,20 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   échecs). Planches `haies-styles.png`, `haies-parcelle.png`. ⚠️ Deux contrôles mal écrits au premier jet
   (un pied mesuré sur une case de fil SANS piquet, un portail peint hors du cadre de mesure) : un banc neuf se
   relit contre ce qu'il prétend mesurer avant de corriger le dessin.
+  ⚠️ 2026-09-28 (les buis) : **49** — la COUTURE d'un tronçon nord-sud (trois pixels de cerne d'affilée à
+  l'intérieur de la haie = le cerne de la case du sud posé sur la case du nord ; corrigé dans `paintVoxels`).
+  ⚠️ Premier jet (« une rangée plus sombre que ses voisines ») : ROUGE sur sa falsification fabriquée, VERT sur
+  le vrai défaut — rejoué avec le peintre d'avant, le vrai trait était partiel. Seuil posé entre les deux
+  mesures (fautif : 14 rangées à 3 ; juste : jamais plus de 2). `FALSIFY=couture`.
+- **`render-buis.mjs` (2026-09-28) — les buis de `buis.js`**, 26 contrôles : chaque forme (boule, buis
+  libre, massif en nuage, massif libre, buis taillé, buis laissé libre, haie du quai) dans chaque saison et
+  sous chaque neige (180 cellules) — peinte, rien sur le bord, pied au milieu de la case, même silhouette aux
+  trois saisons, ≥ 5 tons, lumière en haut à gauche ; aucune baie ; pousses au printemps, hiver terni ;
+  chapeau de neige et flancs verts ; le faîte d'un massif ondule, celui de la haie du quai n'est pas un
+  trait ; la vraie carte (pelouse municipale taillée, rive sauvage et pré modeste libres, collier et buis sur
+  tige de la place) ; l'espèce « shrub » de la ferme est le buis libre ; tout tient dans l'atlas des clôtures.
+  Falsifié six fois (`FALSIFY=baies|bande|neige|ancre|sauvage|saison`). Planches `buis-planche.png`,
+  `buis-carte.png` (jaune taillé, rouge libre).
 - **`build-maison-sprites.mjs` (phase 6a, 2026-09-26) — pas un banc, un script de fabrication**, comme
   `build-monument-glow` : les maisons peintes (Gemini) détourées de leur fond magenta, une image par cran,
   jour et calque de nuit, depuis `TOWN_HOUSE_MODELS`. Sa planche `tools/out/maisons.png` (chaque version de

@@ -64,7 +64,7 @@ installFakeDOM();
    qui se mesure dans `verify-quete`. Sa règle vit dans `quete.js` ; ce banc
    l'APPELLE au lieu de recopier son seuil — sinon il jugerait sa propre maquette
    (troisième forme du défaut de banc, CLAUDE.md). */
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "quete"]);
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "quete", "buis"]);
 const C = mods.fermeConstants, A = mods.fermeArt, Q = mods.quete;
 const S = A.buildSprites();
 
@@ -2676,10 +2676,15 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
        contenter d'un seul aurait validé un dessin qui disparaît dans les six autres —
        et le premier jet de ce contrôle prenait justement le buisson d'or, dont les
        fleurs JAUNES font tout le travail à la place de l'étoile. */
-    const BUSHES = ["townShrub", "townFlowerClump", "townGoldBush", "townLavender", "townGrassTuft", "townReedTuft"];
+    /* ⚠️ 2026-09-28 — l'arbuste, la touffe d'herbe et le buis taillé sont devenus
+       des BUIS en volumes (`buis.js`) : on mesure contre leurs vraies cellules, au
+       printemps (les pousses vert tendre sont le plus clair qu'ils portent). */
+    const buisIm = (form) => mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, form, 0, "spring", 0);
+    const BUSHES = [["buis (boule)", buisIm("ball")], ["buis (massif)", buisIm("cloud")], ["buis (sur tige)", buisIm("topiary")],
+      ["buis (libre)", buisIm("wild")], ["townFlowerClump", S.townFlowerClump], ["townGoldBush", S.townGoldBush],
+      ["townLavender", S.townLavender], ["townReedTuft", S.townReedTuft]];
     let bush = null, bushName = "";
-    for (const k of BUSHES) {
-      const fam = S[k];
+    for (const [k, fam] of BUSHES) {
       const im = Array.isArray(fam) ? fam[0] : fam;
       if (!im) continue;
       const m = leafOf(im);
@@ -2769,7 +2774,7 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
       /* ⚠️ LA PLANCHE MONTRE L'ARBUSTE VERT, PAS LE BUISSON D'OR : c'est le cas le
          plus dur à l'œil (un vert sur un vert, sans fleurs jaunes pour trancher), et
          une planche qui montre le cas facile ne sert à rien. */
-      const bushIm = S.townShrub && S.townShrub[0];
+      const bushIm = mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, "ball", 0, "summer", 0);   // 2026-09-28 : la boule de buis
       const line = [green[0][0], green[0][1], green[0][2], green[0][3], green[2][0],
                     S.starWispColors.yellow[0][0], S.starWispColors.orange[0][0], S.starWispColors.blue[0][0]];
       line.forEach((im, i) => {

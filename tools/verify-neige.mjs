@@ -159,7 +159,8 @@ console.log("§6 — Les empreintes creusent, la neige les comble");
 console.log("§7 — L'hiver du mobilier : plus une fleur");
 {
   let flowers = 0, read = 0;
-  for (const im of [...(S.townGoldBush || []), ...(S.townFlowerClump || []), ...(S.townShrub || [])]) {
+  // 2026-09-28 : l'arbuste (`townShrub`) est devenu un buis, un persistant — son hiver est dans `buis.js` (render-buis).
+  for (const im of [...(S.townGoldBush || []), ...(S.townFlowerClump || [])]) {
     const d = im.getContext("2d").getImageData(0, 0, im.width, im.height).data;
     const w = FALSIFY === "fleurs" ? d : NG.winterizePixels(d, im.width, im.height, "bare", 3);
     for (let i = 0; i < w.length; i += 4) {

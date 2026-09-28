@@ -41,8 +41,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine"]);
-const A = mods.fermeArt, C = mods.fermeConstants, E = mods.fermeEngine;
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine", "buis"]);
+const A = mods.fermeArt, C = mods.fermeConstants, E = mods.fermeEngine, BU = mods.buis;
 const S = A.buildSprites();
 const T = 16;
 const tw = E.generateTownWorld();
@@ -64,10 +64,9 @@ const PROP_IMG = (p) => (
   // 2026-09-25 (phase 2) : la planche est de JOUR, donc les lanternes ÉTEINTES —
   // comme le jeu (`townLampLit`, FermeGame.js).
   p.kind === "lamp" ? S.plazaLampOff :
-  p.kind === "topiary" ? S.plazaTopiary :
+  // 2026-09-28 — les buis (`topiary`, `shrub`, `grassTuft`) ne sont plus des images : voir `paint`.
   p.kind === "planter" ? S.townPlanter :
   p.kind === "kiosk" ? S.townKiosk :
-  p.kind === "shrub" ? S.townShrub[((p.x * 7 + p.y * 13) >>> 0) % S.townShrub.length] :
   p.kind === "boulder" ? S.townBoulder[((p.x * 11 + p.y * 5) >>> 0) % S.townBoulder.length] :
   /* ZIP 439 — le mobilier de rive, sprites de la planche. ⚠️ CETTE TABLE DOIT
      RESTER IDENTIQUE À CELLE DE `drawTownFrame`, variantes comprises : c'est
@@ -82,8 +81,8 @@ const PROP_IMG = (p) => (
       chest: S.townChest, bucket: S.townBucket, rod: S.townRod, potReeds: S.townPotReeds,
       flowerTrough: S.townFlowerTrough, bonsai: S.townBonsai, roseBox: S.townRoseBox,
       potPink: S.townPotPink, oilLamp: S.townOilLampOff, table: S.townTable,
-      reedTuft: S.townReedTuft, reedsWater: S.townReedsWater, hedgeRow: S.townHedgeRow,
-      grassTuft: S.townGrassTuft, flatStone: S.townFlatStone }[p.kind]
+      reedTuft: S.townReedTuft, reedsWater: S.townReedsWater,
+      flatStone: S.townFlatStone }[p.kind]
     || ({ goldBush: S.townGoldBush, lavender: S.townLavender,
           clump: S.townFlowerClump, lily: S.townLilyPads }[p.kind] || [])[((p.x * 11 + p.y * 17) >>> 0) % 4]
   ));
@@ -135,6 +134,14 @@ function paint(v, now) {
   }
   for (const p of tw.props) {
     if (p.x < v.x - 2 || p.x > v.x + v.w + 2 || p.y < v.y - 3 || p.y > v.y + v.h + 3) continue;
+    /* 2026-09-28 — LES BUIS, PAR LEUR VRAI DESSIN (`buis.js`, la cellule que le
+       jeu pose), taillés ou libres selon le quartier, en été. */
+    if (BU.BUIS_KINDS.has(p.kind)) {
+      const bp = BU.townBuisPick(tw, p);
+      const cell = BU.buisCell(S.townEnclos, bp.form, bp.variant, "summer", 0);
+      queue.push({ by: (p.y + 1) * T, fn: (c2) => BU.drawBuisCell(c2, cell, (p.x - v.x) * T + T / 2, (p.y + 1 - v.y) * T, 0) });
+      continue;
+    }
     const img = PROP_IMG(p); if (!img) continue;
     /* ⚠️⚠️ ZIP 439 — LE PONT EN DEUX MOITIÉS, COMME DANS LE JEU. C'est LE
        contrôle de ce chantier : le garde-corps du fond derrière le passant, le
