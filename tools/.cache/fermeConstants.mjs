@@ -5698,6 +5698,23 @@ export const townHouseBitmapKey = (model, variant) => `house_${model}_${variant}
    FINALE, sans un tirage (§4 : `generateTownWorld`, « LES CLÔTURES »). */
 export const TOWN_FENCE = { HEDGE: 1, IRON: 2, PICKET: 3, BOARD: 4, WIRE: 5 };
 export const TOWN_FENCE_KEYS = [null, "hedge", "iron", "picket", "board", "wire"];
+/* ⚠️ 2026-09-28 (soir) — L'INTERRUPTEUR DES BUIS. Guillaume juge mauvais le rendu
+   du commit « buis » (0d6bcc2) et veut l'affichage d'AVANT par défaut, sans perdre
+   le nouveau code. `true` : les dessins d'avant « buis » (5969306), restaurés tels
+   quels depuis git — l'arbuste à fleurs (`townShrub`), le buis sur tige de la place
+   (`plazaTopiary`), la bande verte de la planche (`townGrassTuft`), la haie du quai
+   et la haie des clôtures en touffes marbrées (`hedgeRowSpriteLegacy`,
+   `hedgeModelLegacy`, clotures.js), leur hiver « hiverné » (`WINTER_PROP_MODE`,
+   neige.js) et le massif couché sans reflet (`WATER_FLAT_PROPS`, eau.js).
+   `false` : les buis en volumes de `buis.js`, inchangés.
+   ⚠️ Ce qui ne revient PAS avec `true` : le trait sombre à chaque couture nord-sud
+   des haies et des murets (le correctif de `paintVoxels`, commun à toutes les
+   clôtures, reste en place), et les champs `v`/`wild` que le générateur pose sur
+   les décors (lus par `buis.js` seul ; la carte ne bouge pas).
+   Lu à : clotures.js (MODELS, drawTownFenceTile), fermeArt.js (buildSprites,
+   drawFarmBush), FermeGame.js (la file des décors), neige.js, eau.js, et les
+   bancs render-buis, render-parc, render-rive, render-etoile. */
+export const TOWN_BUIS_LEGACY = true;
 /* Quand deux parcelles partagent un flanc, l'ouvrage le plus lourd l'emporte :
    on ne coupe pas une grille de fer pour y raccorder trois piquets. */
 const TOWN_FENCE_WEIGHT = [0, 3, 5, 2, 1, 0];

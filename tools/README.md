@@ -592,6 +592,14 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   saut direct repos→extrême d'avant — doit baisser d'un quart (mesuré 3 525 → 2 246 ; falsifié : demi-poses
   égales au repos → 3 602, rouge). Les arbres de ville sont des CELLULES d'atlas : `drawTree`/`cellPx` ici,
   un recopiage dans `render-parc` (contrôle des lanternes).
+  ⚠️ **2026-09-29 — §9 bis, LE SAULE, 8 contrôles (33 en tout)** : « les saules ont rétréci » (Guillaume), alors
+  que leur dessin n'avait pas bougé — c'étaient les grands arbres de la phase 11 devant et derrière eux, et
+  l'hiver procédural en vase. Le banc tient : le grand saule sans aucune couleur que l'adulte n'a pas (la
+  même grille allongée), ×1,1 à ×1,3, rien sur le bord de son canevas en cinq poses ; l'hiver de l'adulte et
+  du grand garde 90 % de la silhouette d'été ; aucun saule sous la couronne d'un grand ou d'un trapu, ni un
+  grand juste derrière lui ; au plus un grand saule sur quatre. Falsifié sur le VRAI code d'avant : l'hiver
+  procédural (32 × 48 contre 44 × 53), sans la règle de voisinage (13 saules touchés sur 16), le grand dans la
+  palette d'automne (10 couleurs étrangères) — les trois rougissent.
 
 - **`tools/render-parc.mjs` — le parc, les deux rives du lac du sud, LE PONT et LE SENTIER DE
   L'EST, 31 contrôles, 31/31 (437, + le pont au 439, + le bois au 440).**
@@ -628,6 +636,11 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
 - **`tools/verify-vallee.mjs` — 214 contrôles, 214/214 (2026-08-31 : +6 pour le fleuve ; 208 au hors-zip 2026-08-26, 205 au 465, 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).**
+  (Son compte du jour vit dans le bloc ⏭️ REPRISE de `CLAUDE.md`.) ⚠️ **2026-09-29 — une exception NOMMÉE au
+  contrôle « aucun décor n'est traversable »** : les dalles de l'allée de la maison hantée (`flatStone`
+  marquées `ruin`) sont le sol de l'allée. Seulement elles : une `flatStone` posée ailleurs reste un décor.
+  Et il a attrapé, au premier lancement, des lampadaires neufs plantés sur l'angle sud-est des carrefours —
+  l'endroit où l'on flâne (`townSpots`) : deux quartiers avaient perdu leur seul endroit de vie.
   ⚠️⚠️ **SON §FLEUVE NE MESURE PAS UNE LARGEUR, IL MESURE UNE ARRIVÉE.** Le lac est devenu un
   fleuve qui sort de la carte par l'est (2026-08-31, §32 de `components/ferme/README.md`), et la
   question qui compte n'est pas « y a-t-il de l'eau » mais **« le navire peut-il sortir »** :

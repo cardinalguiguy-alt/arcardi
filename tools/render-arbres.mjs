@@ -430,7 +430,7 @@ console.log("\n=== 8. le magnolia : des fleurs à leur taille ===\n");
 }
 console.log("\n=== 9. les tailles sur la carte ===\n");
 {
-  const n = { adult: 0, young: 0, planted: 0, short: 0, tall: 0 };
+  const n = { adult: 0, young: 0, planted: 0, short: 0, tall: 0, grand: 0 };
   const lamps = tw.props.filter(p => p.kind === "lamp" || p.kind === "hangLamp" || p.kind === "oilLamp");
   let covered = [], big = 0;
   for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
@@ -449,6 +449,52 @@ console.log("\n=== 9. les tailles sur la carte ===\n");
   ok(n.tall > 40 && n.young + n.planted > 40 && n.short > 30, "les trois nouvelles tailles sont plantées en nombre", `grand ${n.tall} · jeune ${n.young + n.planted} · trapu ${n.short}`);
   ok(n.planted > 0 && n.young > 0, "des jeunes tuteurés en ville ET des jeunes libres dans les bois");
   ok(covered.length === 0, "aucun grand arbre ni trapu devant une lanterne", `${big} lus · ` + (covered.length ? covered.slice(0, 5).join(" · ") : "0"));
+}
+
+console.log("\n=== 9 bis. le saule : sa stature, son grand, son hiver (2026-09-29) ===\n");
+{
+  /* Guillaume : « les saules pleureurs semblent avoir rétréci », « c'est le même
+     saule mais plus court ». Son dessin n'avait pas bougé : ce sont les grands
+     arbres de la phase 11 plantés devant ou derrière lui qui l'écrasaient, et
+     l'hiver de la phase 12a qui le remplaçait par un vase de 31 px. Quatre
+     choses se tiennent ici, chacune sur ce qui se voit. */
+  const t = S.townTrees[A.TT.REF_WILLOW], G = t.grand;
+  ok(!!G, "le saule a son grand (rare)");
+  const hex = (c) => c.toLowerCase();
+  const colors = (cell, w, h) => { const px = cellPx(cell, w, h), s = new Set(); for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) s.add((px[i] << 16 | px[i + 1] << 8 | px[i + 2]).toString(16)); return s; };
+  // 1. Le grand est le même saule : aucune couleur que l'adulte n'a pas, dans chaque saison.
+  let alien = 0, readC = 0;
+  for (const se of SEASONS) { const a = colors(t[se][1], t.w, t.h), g = colors(G[se][1], G.w, G.h); readC += g.size; for (const c of g) if (!a.has(c)) alien++; }
+  ok(readC > 0 && alien === 0, "le grand saule n'a aucune couleur que l'adulte n'a pas (le même dessin, allongé)", `${readC} couleurs lues · ${alien} étrangère(s)`);
+  // 2. « Un peu plus grand, pas trop » : entre ×1,1 et ×1,3 dans les deux sens, et rien sur le bord du canevas.
+  const ba = bodyBox(cellPx(t.summer[1], t.w, t.h), t.w, t.h), bg = bodyBox(cellPx(G.summer[1], G.w, G.h), G.w, G.h);
+  const rw = bg.w / ba.w, rh = bg.h / ba.h;
+  ok(rw >= 1.1 && rw <= 1.3 && rh >= 1.1 && rh <= 1.3, "le grand saule fait ×1,1 à ×1,3 de l'adulte", `×${rw.toFixed(2)} en largeur, ×${rh.toFixed(2)} en hauteur`);
+  let edgeG = 0;
+  for (const se of SEASONS) for (const cell of G[se]) {
+    const px = cellPx(cell, G.w, G.h);
+    for (let x = 0; x < G.w; x++) { if (px[x * 4 + 3] > 8) edgeG++; if (px[((G.h - 1) * G.w + x) * 4 + 3] > 8) edgeG++; }
+    for (let y = 0; y < G.h; y++) { if (px[(y * G.w) * 4 + 3] > 8) edgeG++; if (px[(y * G.w + G.w - 1) * 4 + 3] > 8) edgeG++; }
+  }
+  ok(edgeG === 0, "aucun pixel du grand saule sur le bord de son canevas (§4), vent compris", edgeG + " pixel(s)");
+  // 3. L'hiver garde la silhouette : au moins 90 % de la largeur et de la hauteur de l'été.
+  for (const [nm, size, m] of [["adulte", "adult", t], ["grand", "grand", G]]) {
+    const cell = S.townTreesWinter.get(A.TT.REF_WILLOW, size, 0, 1, false);
+    const bw = cell ? bodyBox(cellPx(cell, cell.w, cell.h), cell.w, cell.h) : { w: 0, h: 0 };
+    const bs = bodyBox(cellPx(m.summer[1], m.w, m.h), m.w, m.h);
+    ok(bw.w >= bs.w * 0.9 && bw.h >= bs.h * 0.9, `le saule ${nm} d'hiver garde sa silhouette d'été`, `hiver ${bw.w}×${bw.h} · été ${bs.w}×${bs.h}`);
+  }
+  // 4. Sur la carte : aucun saule sous la couronne d'un grand ou d'un trapu, ni écrasé par un grand juste derrière.
+  const trees = [];
+  for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
+    const o = tw.objects[y * tw.w + x];
+    if (o === C.O_TREE || o === C.O_TREE2) trees.push({ x, y, k: A.townTreeKind(tw, x, y, o), z: A.townTreeSize(tw, x, y, o) });
+  }
+  const willows = trees.filter(q => q.k === A.TT.REF_WILLOW), ROOM = { tall: [2, 5], short: [2, 3] };
+  const hidden = willows.filter(w => trees.some(q => q !== w && ROOM[q.z] && Math.abs(q.x - w.x) <= ROOM[q.z][0] + 1 && w.y >= q.y - ROOM[q.z][1] && w.y <= q.y + 3));
+  ok(willows.length > 0 && hidden.length === 0, "aucun saule caché ou écrasé par un grand arbre ou un trapu", `${willows.length} saules lus · ${hidden.length} touché(s)` + (hidden.length ? " : " + hidden.slice(0, 4).map(w => w.x + "," + w.y).join(" ") : ""));
+  const grands = willows.filter(w => w.z === "grand").length;
+  ok(grands >= 1 && grands <= Math.ceil(willows.length / 4), "quelques rares grands saules (au plus un sur quatre)", `${grands} sur ${willows.length}`);
 }
 
 console.log("\n=== 10. le vent : cinq poses, pas de bascule d'un bloc ===\n");

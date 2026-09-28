@@ -4658,7 +4658,11 @@ export function generateTownWorld() {
     const row = (lampK & 1) ? lampRowS : lampRowN;
     const li = id(x, row);
     if (ground[li] === C.G_PATH || ground[li] === C.G_PATH_STONE || solid[li]) continue;
-    addProp(x, row, "lamp", true);
+    /* 2026-09-29 (phase 7b) — `grid` : ces lampadaires RÉSERVENT leur case pendant
+       la génération (tout ce qui se pose ensuite tombe au même endroit), puis
+       quittent la carte à la passe « LES LAMPADAIRES AUX CARREFOURS ET AUX
+       PORTES », en fin de fonction. */
+    addProp(x, row, "lamp", true, { grid: 1 });
   }
 
   /* ------------------------------------------------- PARVIS DES MONUMENTS
@@ -7787,8 +7791,10 @@ export function generateTownWorld() {
      l'arbre après coup, exactement comme la vague de suppression du navire
      retire des décors déjà posés.
      ⚠️ La règle se tient ici, chez l'arbre, parce que c'est lui qui arrive en
-     dernier : une lanterne posée après un arbre n'existe pas dans ce
-     générateur (les lanternes sont posées avec leurs rues et leurs allées). */
+     dernier : les lanternes sont posées avec leurs rues et leurs allées.
+     ⚠️ 2026-09-29 — SAUF CELLES DES CARREFOURS ET DES PORTES (passe finale,
+     plus bas) : elles arrivent APRÈS les arbres, et c'est donc elles qui tiennent
+     la règle, en choisissant une case qu'aucun feuillu ne cache. */
   {
     for (const p of props) {
       if (p.kind !== "lamp" && p.kind !== "hangLamp" && p.kind !== "oilLamp") continue;
@@ -8177,6 +8183,170 @@ export function generateTownWorld() {
       if (!solid[i] && ground[i] !== C.G_PATH) addProp(lx, ly, "lamp", true);
     }
     rect(CL, (x, y, i) => { if (isTree(objects[i])) { objects[i] = C.O_NONE; objHp.delete(i); } });
+  }
+
+  /* ⚠️ 2026-09-29 — LES BANCS DE DROITE DE LA GRAND-PLACE, DANS L'AXE DE LA
+     PORTE DE L'HÔTEL DE VILLE. Guillaume (séance du 2026-09-28) : « les bancs de
+     droite ne sont pas alignés sur les lampadaires ; pour la symétrie axiale avec
+     ceux de gauche, l'axe de référence doit être la porte de l'hôtel de ville ».
+     La fontaine et le monument font deux cases (x, x+1) : leur axe — celui de la
+     porte — passe ENTRE x et x+1, et leurs lampadaires (x−3, x+4) le respectent.
+     Les bancs (dessinés au milieu de leur case) étaient posés à x−2 et x+2 : l'axe
+     de la paire tombait une demi-case à gauche. Le banc de droite passe à x+3.
+     ⚠️ EN PASSE FINALE, ET C'EST TOUT LE SUJET : la case x+2 est restée solide
+     pendant toute la génération (§4 de CLAUDE.md : changer `solid` en cours de
+     route déplace autant qu'un tirage) ; elle n'est rendue au dallage qu'ici, et
+     rien d'autre de la carte ne bouge. */
+  for (const [cx, by] of [[C.TOWN_FOUNTAIN.x, C.TOWN_FOUNTAIN.y + 3], [C.TOWN_MONUMENT.x, C.TOWN_MONUMENT.y - 2]]) {
+    if (!inMap(cx + 3, by)) continue;
+    const from = id(cx + 2, by), to = id(cx + 3, by);
+    const k = props.findIndex(p => p.kind === "bench" && p.x === cx + 2 && p.y === by);
+    if (k < 0 || solid[to] || objects[to] !== C.O_NONE || props.some(p => p.x === cx + 3 && p.y === by)) continue;
+    props[k] = { ...props[k], x: cx + 3 };
+    solid[from] = 0; solid[to] = 1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-29 (phase 7b) — LES LAMPADAIRES AUX CARREFOURS ET AUX PORTES.
+     ───────────────────────────────────────────────────────────────────────
+     Constat de l'audit de la phase 7 : la rue de la Gare était éclairée par une
+     GRILLE — un lampadaire tous les huit pas, d'un trottoir à l'autre, sans
+     rapport avec ce qui l'entoure. Une ville pose ses lampes là où l'on en a
+     besoin : aux CARREFOURS (où l'on choisit sa route) et aux PORTES (où l'on
+     cherche sa clé). Et la cohérence sociale par quartier vaut pour la lumière :
+     chez les riches, une lanterne à chaque portail ; en classe moyenne, un
+     portail sur deux ; dans les quartiers modestes, la lumière des carrefours
+     seulement — la rue y est plus sombre, et c'est vrai. La rue de la Gare, elle,
+     garde une lumière de boulevard, calée sur ses arbres d'alignement (plus bas).
+     ⚠️ EN PASSE FINALE (§4 de CLAUDE.md) : la grille a RÉSERVÉ ses cases pendant
+     toute la génération ; elle les rend ici, et les lampadaires neufs ne se
+     posent que sur des cases restées libres. Rien d'autre de la carte ne bouge.
+     ⚠️ Une clôture posée après un lampadaire de la grille avait gardé un trou à
+     sa place (« un décor dur garde sa case ») : il est refermé quand la clôture
+     passe des deux côtés.
+     ⚠️ Deux lampes à moins de cinq cases l'une de l'autre, jamais : c'est le
+     pas des vraies rues, et c'est ce qui empêche un carrefour et une porte
+     voisins de planter deux poteaux côte à côte. Le modèle reste le lampadaire
+     d'aujourd'hui ; ceux de chaque rang viendront de la planche 3
+     (`refs/prompts-planche3.md`). */
+  {
+    const LAMPS = new Set(["lamp", "hangLamp", "oilLamp"]);
+    for (let k = props.length - 1; k >= 0; k--) {
+      const p = props[k];
+      if (p.kind !== "lamp" || !p.grid) continue;
+      props.splice(k, 1);
+      if (props.some((q) => q.x === p.x && q.y === p.y)) continue;
+      const i = id(p.x, p.y);
+      const hl = p.x > 0 ? hedge[i - 1] : 0, hr = p.x < W - 1 ? hedge[i + 1] : 0;
+      const hu = p.y > 0 ? hedge[i - W] : 0, hd = p.y < H - 1 ? hedge[i + W] : 0;
+      if (hl && hl === hr) { hedge[i] = hl; solid[i] = 1; }
+      else if (hu && hu === hd) { hedge[i] = hu; solid[i] = 1; }
+      else solid[i] = 0;
+    }
+    const lamps = props.filter((p) => LAMPS.has(p.kind)).map((p) => ({ x: p.x, y: p.y }));
+    const near = (x, y) => lamps.some((l) => Math.abs(l.x - x) <= 4 && Math.abs(l.y - y) <= 4);
+    const gateAt = new Set();
+    for (const g of gates) for (let dx = 0; dx < (g.w || 2); dx++) if (inMap(g.x + dx, g.y)) gateAt.add(id(g.x + dx, g.y));
+    const taken = new Set(props.map((p) => (inMap(p.x, p.y) ? id(p.x, p.y) : -1)));
+    /* Ni collé à un meuble où l'on s'arrête (banc, jardinière, panneau…) : ses
+       places (`townSpots`) sont sur les cases voisines. */
+    const STOPS = new Set(["bench", "stoneBench", "planter", "flowerTrough", "roseBox", "bonsai", "potPink", "kiosk", "stall", "townWell", "statue", "newsBoard", "grave"]);
+    for (const p of props) if (STOPS.has(p.kind)) for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 1; dx++) if (inMap(p.x + dx, p.y + dy)) taken.add(id(p.x + dx, p.y + dy));
+    // Une case pour un poteau : de l'herbe ou un dallage, hors de toute rue, allée, portail, clôture, décor ou arbre, au niveau voulu.
+    /* ⚠️ Et aucun arbre devant lui (la règle « AUCUN FEUILLU DEVANT UNE
+       LANTERNE », plus haut) : là-bas l'arbre était retiré parce qu'une lanterne
+       n'arrivait jamais après lui ; ici c'est la lanterne qui arrive en dernier,
+       elle choisit donc une case que rien ne cachera. La zone est celle que
+       MESURE `render-parc` (quatre rangées au sud, deux colonnes de chaque côté,
+       conifères compris), pas celle de la règle d'origine : un poteau neuf en
+       (194,110) y était caché à 64 % par un arbre trois rangées plus bas. */
+    const treeInFront = (x, y) => {
+      for (let dy = 0; dy <= 4; dy++) for (let dx = -2; dx <= 2; dx++) {
+        if (!inMap(x + dx, y + dy)) continue;
+        const o = objects[id(x + dx, y + dy)];
+        if (o === C.O_TREE || o === C.O_TREE2) return true;
+      }
+      return false;
+    };
+    const free = (x, y, e) => {
+      if (!inMap(x, y)) return false;
+      const i = id(x, y), g = ground[i];
+      if (solid[i] || hedge[i] || objects[i] !== C.O_NONE || street[i] > 0 || gateAt.has(i) || taken.has(i) || elev[i] !== e || treeInFront(x, y)) return false;
+      return g === C.G_GRASS || g === C.G_TOWN_LAWN || g === C.G_PATH_STONE;
+    };
+    const put = (x, y) => { props.push({ x, y, kind: "lamp" }); solid[id(x, y)] = 1; lamps.push({ x, y }); taken.add(id(x, y)); };
+    const hashXY = (x, y) => { let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul((y | 0) + 0x165667b1, 0x9e3779b1); h ^= h >>> 15; h = Math.imul(h, 0x85ebca77); h ^= h >>> 13; return h >>> 0; };
+    /* LA RUE DE LA GARE, AU RYTHME DE SES ARBRES (Guillaume, 2026-09-29 : « au
+       rythme de ses arbres » plutôt que seulement aux carrefours). Ses arbres
+       d'alignement alternent (voir « LES ALIGNEMENTS D'ARBRES ») : au nord tous les
+       six pas depuis x = 12, au sud décalés de trois. Les lampadaires s'y font
+       FACE, des deux côtés, un arbre sur trois (dix-huit pas) — le boulevard. Seule
+       la colonne des arbres du nord laisse le côté sud sans arbre DEVANT la lampe
+       (un arbre au sud se dessine par-dessus elle, `treeInFront`) : c'est donc
+       elle. Posés AVANT les carrefours et les portes, qui s'écartent d'eux. */
+    {
+      const yN = C.TOWN_MAIN_ST_Y0 - 1, yS = C.TOWN_MAIN_ST_Y0 + C.TOWN_MAIN_ST_W;
+      const pl = C.TOWN_PLAZA;   // la place a sa propre composition de lanternes : le boulevard s'y interrompt (comme l'ancienne grille)
+      for (let x = 12; x < W - 8; x += 18) {
+        if (x >= pl.x - 1 && x < pl.x + pl.w + 1) continue;
+        for (const y of [yN, yS]) if (!near(x, y) && free(x, y, 0)) put(x, y);
+      }
+    }
+    const cl = C.TOWN_STAIR_SEED.clear;
+    const inClear = (x, y) => cl && x >= cl.x && x < cl.x + cl.w && y >= cl.y && y < cl.y + cl.h;
+    /* Les carrefours : un angle, le nord-est d'abord. ⚠️ JAMAIS LE SUD-EST : c'est
+       l'endroit où l'on flâne (`townSpots`, « stroll ») — un poteau dessus le
+       bouchait, et deux quartiers perdaient leur seul endroit de vie
+       (`verify-vallee` l'a dit au premier lancement). Le nord-ouest porte déjà
+       le panneau indicateur, il vient en dernier. */
+    for (const cr of C.townRoadCrossings(C.TOWN_ROADS)) {
+      const ci = id(Math.floor(cr.cx), Math.floor(cr.cy));
+      const e = elev[ci];
+      for (const [x, y] of [[cr.x1 + 1, cr.y0 - 1], [cr.x0 - 1, cr.y1 + 1], [cr.x0 - 1, cr.y0 - 1]]) {
+        if (inClear(x, y) || near(x, y) || !free(x, y, e)) continue;
+        put(x, y); break;
+      }
+    }
+    // Les portes : à l'entrée de l'allée, là où elle touche la rue, selon le rang de l'adresse.
+    for (const hsn of C.townAllHouses()) {
+      if (hsn.dense || hsn.variant === "ruine") continue;
+      const rank = C.townHouseDistrict(hsn);
+      if (rank === "simple") continue;
+      const hh = hashXY(hsn.x, hsn.y);
+      if (rank === "enrichie" && (hh & 1)) continue;
+      const doorX = hsn.x + 2, doorY = hsn.y + C.TOWN_HOUSE_H;
+      if (!inMap(doorX, doorY)) continue;
+      const st = streetBelow(doorX, doorY, 8);
+      if (st === undefined) continue;
+      const e0 = elev[id(doorX, doorY)];
+      for (const x of (hh & 2) ? [doorX + 2, doorX - 1] : [doorX - 1, doorX + 2]) {
+        const y = st - 1;
+        if (near(x, y) || !free(x, y, e0)) continue;
+        put(x, y); break;
+      }
+    }
+
+    /* 2026-09-29 (phase 7b) — L'ALLÉE ENVAHIE DE LA MAISON HANTÉE. Elle était
+       dégagée de ses arbres et laissée en herbe (« LA MAISON HANTÉE », plus haut) :
+       vue en jeu, c'était une pelouse, pas une allée. On y pose ce qui reste de
+       son dallage — les dalles plates de la planche (`flatStone`), couchées au sol
+       et traversables, sur ses deux colonnes — et l'herbe a d'autant plus gagné
+       qu'on s'éloigne de la porte : huit dalles sur dix au seuil, quatre au bout.
+       Aucune case solide : la carte ne bouge pas. Les ronces de ses bords et le
+       portail rouillé viendront de la planche 3 (`refs/prompts-planche3.md`). */
+    {
+      const R = C.TOWN_RUIN, doorX = R.x + 2, doorY = R.y + C.TOWN_HOUSE_H;
+      const st = inMap(doorX, doorY) ? streetBelow(doorX, doorY, 8) : undefined;
+      const last = st === undefined ? doorY + 2 : st - 1;
+      for (let y = doorY; y <= last; y++) for (const dx of [0, 1]) {
+        const x = doorX + dx;
+        if (!inMap(x, y) || solid[id(x, y)] || taken.has(id(x, y))) continue;
+        const keep = y - doorY < 2 ? 8 : y - doorY < 5 ? 6 : 4;
+        if (hashXY(x * 7 + 3, y * 5 + 1) % 10 >= keep) continue;
+        props.push({ x, y, kind: "flatStone", ruin: 1 });
+        taken.add(id(x, y));
+      }
+    }
   }
 
   const soft = new Uint8Array(W * H);

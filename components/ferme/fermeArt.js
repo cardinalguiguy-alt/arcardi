@@ -2344,7 +2344,43 @@ const TREE_SWAY = [1, 4, 2, 4, 1, 3, 0, 3];
    trente cases. */
 export const TOWN_TREE_MAX_H = 96;   // le plus haut gabarit (`tall`) : les marges de la vue en dépendent
 const TREE_SIZE_MEMO = new WeakMap();
-const TREE_ROOM = { tall: [2, 5], short: [2, 3] };   // [demi-largeur, rangées au nord] que la couronne couvre
+/* [demi-largeur, rangées au nord] que la couronne couvre. `grand` : le grand
+   saule (58 px de large, 64 de haut au-dessus du sol : ±2 cases, 4 rangées). */
+const TREE_ROOM = { tall: [2, 5], short: [2, 3], grand: [2, 4] };
+// La couronne tient-elle à sa place : ni lanterne, ni mur, ni maison, ni décor dur dessous ?
+function treeRoomFree(tw, x, y, room, lampAt) {
+  const [hw, up] = room;
+  for (let yy = y - up; yy <= y; yy++) for (let xx = x - hw; xx <= x + hw; xx++) {
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+    const j = yy * tw.w + xx;
+    if (lampAt[j]) return false;
+    if (xx === x && yy === y) continue;
+    const o = tw.objects[j];
+    if (tw.solid[j] && !tw.hedge[j] && o !== C.O_TREE && o !== C.O_TREE2 && tw.ground[j] !== C.G_WATER && !(tw.soft && tw.soft[j])) return false;
+  }
+  return true;
+}
+/* ⚠️⚠️ 2026-09-29 — AUCUN ARBRE NE GRANDIT À CÔTÉ D'UN SAULE. Guillaume : « les
+   saules pleureurs semblent avoir rétréci », puis « c'est le même saule mais plus
+   court ». Mesuré : son dessin n'avait pas bougé d'un pixel depuis la planche
+   (45 × 53). Ce qui avait changé, c'est la phase 11 AUTOUR de lui : sur les seize
+   saules de la ville, quatre avaient un grand arbre (×1,5) ou un trapu planté
+   DEVANT eux — sa couronne en mangeait la moitié, tronc compris, et il ne restait
+   qu'un feuillage posé au sol — et huit un grand arbre juste DERRIÈRE, qui les
+   écrasait. Avant la phase 11 tous les arbres avaient la taille adulte, et le
+   saule, le plus large de tous, dominait sa berge. Un grand ou un trapu dont la
+   couronne toucherait un saule (devant lui, ou jusqu'à trois rangées derrière)
+   redevient donc adulte : le saule retrouve sa stature parmi ses voisins.
+   ⚠️ On ne lit que l'essence des cases voisines (`townTreeKind`, pure) — jamais
+   leur TAILLE, sinon deux arbres voisins se demanderaient l'un l'autre. */
+function willowNear(tw, x, y, room) {
+  const [hw, up] = room;
+  for (let yy = y - up; yy <= y + 3; yy++) for (let xx = x - hw - 1; xx <= x + hw + 1; xx++) {
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h || (xx === x && yy === y)) continue;
+    if (tw.objects[yy * tw.w + xx] === C.O_TREE && townTreeKind(tw, xx, yy, C.O_TREE) === TT.REF_WILLOW) return true;
+  }
+  return false;
+}
 function treeSizeRaw(tw, x, y, k, lampAt) {
   const h = waterHash(x * 61 + 29, y * 17 + 43) % 100;
   const inCem = TT_IN(C.TOWN_CEMETERY, x, y) || TT_IN(C.TOWN_UPPER, x, y);
@@ -2359,18 +2395,16 @@ function treeSizeRaw(tw, x, y, k, lampAt) {
     return street ? "planted" : "young";
   }
   const room = TREE_ROOM[pick];
-  if (room) {
-    const [hw, up] = room;
-    for (let yy = y - up; yy <= y; yy++) for (let xx = x - hw; xx <= x + hw; xx++) {
-      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return "adult";
-      const j = yy * tw.w + xx;
-      if (lampAt[j]) return "adult";
-      if (xx === x && yy === y) continue;
-      const o = tw.objects[j];
-      if (tw.solid[j] && !tw.hedge[j] && o !== C.O_TREE && o !== C.O_TREE2 && tw.ground[j] !== C.G_WATER && !(tw.soft && tw.soft[j])) return "adult";
-    }
-  }
+  if (room && (willowNear(tw, x, y, room) || !treeRoomFree(tw, x, y, room, lampAt))) return "adult";
   return pick;
+}
+/* 2026-09-29 — LE SAULE : l'adulte de la planche, et de loin en loin (« quelques
+   rares saules […] un peu plus grands, mais pas trop ») son GRAND, tiré des mêmes
+   pixels (`willowGrandData`, ×1,2). Même règle de place que les grands arbres. */
+const WILLOW_GRAND_PCT = 20;
+function willowSizeRaw(tw, x, y, lampAt) {
+  if (waterHash(x * 61 + 29, y * 17 + 43) % 100 >= WILLOW_GRAND_PCT) return "adult";
+  return treeRoomFree(tw, x, y, TREE_ROOM.grand, lampAt) ? "grand" : "adult";
 }
 export function townTreeSize(tw, x, y, obj) {
   if (!tw || !tw.shore || !tw.road) return "adult";
@@ -2385,8 +2419,9 @@ export function townTreeSize(tw, x, y, obj) {
   let v = memo.cache.get(i);
   if (v === undefined) {
     const k = townTreeKind(tw, x, y, obj);
-    // Les essences de la planche (sapin, pommier, saule) n'ont que leur adulte : voir `townTrees`.
-    v = k === null || (k > TT.CYPRESS && k !== TT.REF_MAGNOLIA) ? "adult" : treeSizeRaw(tw, x, y, k, memo.lampAt);
+    // Les essences de la planche (sapin, pommier) n'ont que leur adulte : voir `townTrees`. Le saule a aussi son grand.
+    v = k === TT.REF_WILLOW ? willowSizeRaw(tw, x, y, memo.lampAt)
+      : k === null || (k > TT.CYPRESS && k !== TT.REF_MAGNOLIA) ? "adult" : treeSizeRaw(tw, x, y, k, memo.lampAt);
     memo.cache.set(i, v);
   }
   return v;
@@ -2402,7 +2437,7 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
   if (!set) return null;
   const k = townTreeKind(tw, x, y, obj);
   if (k === null || !set[k]) return null;
-  const size = set[k].sizes ? townTreeSize(tw, x, y, obj) : "adult";
+  const size = set[k].sizes || set[k].grand ? townTreeSize(tw, x, y, obj) : "adult";
   /* L'HIVER (phase 12a) : l'image vient de l'atlas paresseux des arbres
      d'hiver — même pose de vent, même phase par case. */
   if (seasonKey === "winter" && S.townTreesWinter) {
@@ -2410,17 +2445,21 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
     const cell = S.townTreesWinter.get(k, size, snowLvl | 0, fi, onSnow);
     if (cell) return { img: cell, m: cell.m, k };
   }
-  const m = size === "adult" ? set[k] : set[k].sizes[size];
+  const m = size === "grand" && set[k].grand ? set[k].grand
+          : size === "adult" || !set[k].sizes || !set[k].sizes[size] ? set[k] : set[k].sizes[size];
   const seasonName = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
   let frames = m[seasonName];
   /* ⚠️ hors-zip 2026-08-31 (session saule) — LE JITTER DE TEINTE DU SAULE
      IMPORTÉ, CHOISI PAR CASE ET NON PAR IMAGE : le même hachage que la phase de
      vent juste en dessous, sur un couple de coordonnées différent pour ne pas
-     corréler les deux. `set[k].autumnAlt` n'existe que pour `treeWillow`
-     (construit plus haut) : pour les autres essences, `alts` est
-     `undefined` et cette branche ne fait rien. */
-  if (seasonName === "autumn" && set[k].autumnAlt) {
-    const alts = set[k].autumnAlt;
+     corréler les deux. `autumnAlt` n'existe que pour le saule (son adulte et
+     son grand, construits plus haut) : pour les autres essences, `alts` est
+     `undefined` et cette branche ne fait rien.
+     ⚠️ 2026-09-29 — LU SUR LE GABARIT (`m`), PLUS SUR L'ESSENCE : le grand saule
+     a ses propres images d'automne ; celles de l'adulte, posées avec l'ancrage
+     du grand, l'auraient planté de travers. */
+  if (seasonName === "autumn" && m.autumnAlt) {
+    const alts = m.autumnAlt;
     const vi = waterHash(x * 19 + 31, y * 37 + 17) % (alts.length + 1);
     if (vi > 0) frames = alts[vi - 1];
   }
@@ -4962,7 +5001,11 @@ export function buildSprites() {
      a pris soin de ne pas détourer, voir `backgroundMask`), et c'est elle qui
      donne la ligne de sol. */
   function plancheTree(name, season, frame, evergreen, hueJit, lJit) {
-    const d = PLANCHE[name];
+    return plancheTreeData(PLANCHE[name], season, frame, evergreen, hueJit, lJit);
+  }
+  /* 2026-09-29 — le même rendu, depuis une grille donnée (le grand saule,
+     `willowGrandData`, est une grille de la planche allongée). */
+  function plancheTreeData(d, season, frame, evergreen, hueJit, lJit) {
     const pal = seasonPalette(d.pal, season, evergreen, hueJit, lJit);
     const [c, g] = cv(TW_, TH_);
     // La largeur peinte de chaque rangée : elle sépare la couronne du tronc.
@@ -5002,6 +5045,58 @@ export function buildSprites() {
       }
     }
     return c;
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-29 — LE GRAND SAULE, TIRÉ DES PIXELS DU SAULE DE LA PLANCHE.
+     Guillaume : « quelques rares saules doivent être un peu plus grands que les
+     autres mais pas trop », et le saule de sa planche est « simplement
+     parfait ». Agrandi, un bitmap a des pixels doublés ; redessiné, ce n'est
+     plus son saule. On AJOUTE donc des colonnes et des rangées à sa grille, là
+     où la copie ne se voit pas : un saule pleureur est fait de MÈCHES
+     VERTICALES — une colonne dédoublée élargit une mèche d'un pixel, une rangée
+     dédoublée l'allonge d'un pixel. On prend les colonnes (rangées) les plus
+     semblables à leur voisine (le coût d'une couture), jamais deux voisines,
+     autant à gauche qu'à droite du milieu (le tronc reste au centre), et
+     jamais dans le haut des lobes ni dans l'ombre au sol (`rowMin`, `rowMax`).
+     ⚠️ SUR LA GRILLE D'INDICES DE LA PALETTE, PAS SUR L'IMAGE : le vent, les
+     saisons et le jitter d'automne (`plancheTreeData`) s'appliquent ensuite au
+     grand exactement comme au saule d'origine — un étirement de l'image rendue
+     aurait dû être refait pour chaque pose, et les coutures auraient glissé
+     d'une pose à l'autre avec le cisaillement du vent. */
+  function stretchPlanche(d, addCols, addRows, rowMin, rowMax) {
+    const lum = d.pal.map((c) => 0.3 * parseInt(c.slice(1, 3), 16) + 0.59 * parseInt(c.slice(3, 5), 16) + 0.11 * parseInt(c.slice(5, 7), 16));
+    const dist = (a, b) => (a === b ? 0 : a === "." || b === "." ? 4 : Math.abs(lum[a.charCodeAt(0) - 48] - lum[b.charCodeAt(0) - 48]) / 40 + 0.35);
+    // Les n coutures les moins visibles, jamais deux voisines, réparties de part et d'autre de `mid`.
+    const pick = (n, lo, hi, cost, mid) => {
+      const cand = [];
+      for (let i = lo; i < hi; i++) cand.push({ i, c: cost(i) });
+      cand.sort((p, q) => p.c - q.c || p.i - q.i);
+      const cap = [Math.ceil(n / 2), Math.ceil(n / 2)], got = [0, 0], out = [];
+      for (const { i } of cand) {
+        if (out.length >= n) break;
+        const side = i < mid ? 0 : 1;
+        if (got[side] >= cap[side] || out.some((j) => Math.abs(j - i) < 2)) continue;
+        got[side]++; out.push(i);
+      }
+      return new Set(out);
+    };
+    const cols = pick(addCols, 2, d.w - 3, (x) => { let s = 0; for (let y = 0; y < d.h; y++) s += dist(d.rows[y][x], d.rows[y][x + 1]); return s; }, d.w >> 1);
+    const wide = d.rows.map((r) => { let o = ""; for (let x = 0; x < d.w; x++) { o += r[x]; if (cols.has(x)) o += r[x]; } return o; });
+    const W2 = d.w + cols.size;
+    const rows = pick(addRows, rowMin, rowMax, (y) => { let s = 0; for (let x = 0; x < W2; x++) s += dist(wide[y][x], wide[y + 1][x]); return s; }, (rowMin + rowMax) >> 1);
+    const tall = [];
+    for (let y = 0; y < d.h; y++) { tall.push(wide[y]); if (rows.has(y)) tall.push(wide[y]); }
+    return { w: W2, h: tall.length, pal: d.pal, rows: tall };
+  }
+  /* Le gabarit du grand saule : [largeur, hauteur, ligne de sol, centre du fût].
+     La grille passe de 44 × 53 à 53 × 64 (×1,2 : « un peu plus grands, pas
+     trop ») ; deux colonnes de marge de chaque côté pour le vent (le
+     cisaillement de `plancheTreeData` est borné par la marge réelle), et le sol
+     au même écart du bas du canevas que chez l'adulte (58 sur 64). */
+  const WILLOW_GRAND = { geom: [58, 76, 70, 29] };
+  let willowGrandMemo = null;
+  function willowGrandData() {
+    return willowGrandMemo || (willowGrandMemo = stretchPlanche(PLANCHE.treeWillow, 9, 11, 12, 42));
   }
 
   /* `swap` (2026-09-25, phase 2) : une couleur de la palette → une autre. Sert
@@ -15050,6 +15145,146 @@ export function buildSprites() {
     g.putImageData(im, 0, 0);
     contactOnSnow(g, sp);
   }
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-29 — LE SAULE D'HIVER, TIRÉ DU SAULE DE LA PLANCHE.
+     Le saule nu de la phase 12a (`bareTree` sur le saule procédural) tenait dans
+     31 × 48 px : un vase étroit à la place du dôme de 45 × 53 de la planche —
+     « les saules pleureurs semblent aussi avoir rétréci » (Guillaume). L'hiver
+     garde maintenant la silhouette du saule de la planche, pixel pour pixel :
+     · le tronc reste tel quel ;
+     · les mèches CLAIRES deviennent des rameaux dorés (l'or des jeunes pousses
+       du saule pleureur, tout l'hiver), les moyennes un or bruni, le cerne un
+       brun olive — un contour qu'on lit encore, mais qui n'est plus une masse ;
+     · les mèches SOMBRES s'ouvrent en jours : on voit à travers le rideau, et
+       derrière lui les charpentières qui montent du tronc vers chaque lobe ;
+     · la neige ne tient que sur le DESSUS du dôme et sur les branches (un rameau
+       qui pend n'en garde pas), avec un peu de neige prise dans le rideau sous
+       une neige lourde.
+     Rend { c, mask } comme `bareTree` : 1 brume (un peu de neige prise), 2 rameau
+     qui porte la neige, 3 branche, 4 fût, 0 pour un rameau qui pend. */
+  const WILLOW_TWIG = [[84, 69, 42], [125, 102, 52], [163, 134, 63], [194, 162, 78], [214, 185, 100]];
+  function willowWinter(d, frame, seed, onSnow) {
+    const W = TW_, H = TH_;
+    const src = plancheTreeData(d, "summer", frame, 0);
+    const sd = src.getContext("2d").getImageData(0, 0, W, H).data;
+    const [c, g] = cv(W, H);
+    const im = g.getImageData(0, 0, W, H), od = im.data;
+    const mask = new Uint8Array(W * H);
+    const hh = (x, y) => (((x * 73856093) ^ (y * 19349663) ^ (seed * 83492791)) >>> 0) % 97;
+    /* 0 vide · 1 ombre au sol · 2 fût · 3 feuillage · 4 bord gris (le détourage
+       de la planche a laissé le gris de son fond sur le pourtour). L'ombre est le
+       gris sombre de la planche SOUS la couronne ; le même gris plus haut est un
+       bord. */
+    const kind = new Uint8Array(W * H), Lum = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4;
+      if (sd[o + 3] < 8) continue;
+      const r = sd[o], gg = sd[o + 1], b = sd[o + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+      Lum[y * W + x] = 0.3 * r + 0.59 * gg + 0.11 * b;
+      if (r > gg + 6 && r > b + 6) kind[y * W + x] = 2;
+      else if (mx - mn < 14) kind[y * W + x] = (y >= TBASE_ - 6 && Lum[y * W + x] < 92) ? 1 : 4;
+      else kind[y * W + x] = 3;
+    }
+    const K = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : kind[y * W + x]);
+    const put = (x, y, rgb, a, m) => {
+      if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
+      const o = (y * W + x) * 4;
+      od[o] = rgb[0]; od[o + 1] = rgb[1]; od[o + 2] = rgb[2]; od[o + 3] = a;
+      mask[y * W + x] = m;
+    };
+    // L'ombre : légère et froide, comme celle des autres arbres nus (la lumière passe entre les rameaux).
+    if (!onSnow) for (let i = 0; i < W * H; i++) if (kind[i] === 1) put(i % W, (i / W) | 0, [34, 46, 76], 46, 0);
+    // Le fût, et le haut du fût : sa rangée la plus haute et son milieu.
+    let tTop = H, tSum = 0, tN = 0, bSum = 0, bN = 0;
+    for (let i = 0; i < W * H; i++) if (kind[i] === 2) {
+      const x = i % W, y = (i / W) | 0;
+      put(x, y, [sd[i * 4], sd[i * 4 + 1], sd[i * 4 + 2]], 255, 4);
+      if (y < tTop) { tTop = y; tSum = 0; tN = 0; }
+      if (y === tTop) { tSum += x; tN++; }
+      if (y >= TBASE_ - 4) { bSum += x; bN++; }
+    }
+    const tx = tN ? tSum / tN : TCX_, ty = tTop < H ? tTop : TBASE_ - 20;
+    const baseX = bN ? bSum / bN : TCX_;
+    /* LES CHARPENTIÈRES : du haut du fût vers le sommet de chaque lobe (les
+       creux du bord supérieur de la couronne), en montant d'abord puis en
+       s'ouvrant — dessinées AVANT les rameaux, qui passent devant. */
+    const topY = [];
+    for (let x = 0; x < W; x++) { let y = 0; while (y < H && K(x, y) !== 3 && K(x, y) !== 4) y++; topY.push(y); }
+    const peaks = [];
+    for (let x = 2; x < W - 2; x++) {
+      if (topY[x] >= H || topY[x] > ty - 6) continue;
+      let low = true;
+      for (let k = -3; k <= 3 && low; k++) if (k && x + k >= 0 && x + k < W && topY[x + k] < topY[x]) low = false;
+      if (low && !peaks.some((p) => Math.abs(p.x - x) < 5)) peaks.push({ x, y: topY[x] });
+    }
+    const bark = [[47, 32, 25], [67, 46, 37], [92, 61, 51]];
+    for (const p of peaks.slice(0, 6)) {
+      const ex = p.x, ey = p.y + 4 + (hh(p.x, p.y) % 3);
+      const cx1 = tx + (ex - tx) * 0.15, cy1 = ey + (ty - ey) * 0.3;
+      const len = Math.hypot(ex - tx, ey - ty), n = Math.max(4, Math.ceil(len * 2));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, u = 1 - t;
+        const x = u * u * tx + 2 * u * t * cx1 + t * t * ex, y = u * u * (ty + 2) + 2 * u * t * cy1 + t * t * ey;
+        const xx = Math.round(x), yy = Math.round(y);
+        if (t < 0.45) { put(xx, yy, bark[1], 255, 3); put(xx + 1, yy, bark[0], 255, 3); }
+        else put(xx, yy, t > 0.8 ? bark[2] : bark[1], 255, 3);
+      }
+    }
+    /* LES RAMEAUX : les CRÊTES des mèches, pas leurs masses. Un pixel de
+       feuillage devient un rameau s'il est au moins aussi clair que ses deux
+       voisins de rangée (le fil lumineux d'une mèche) ; dans un aplat clair, une
+       colonne sur deux (la parité de x, la même à chaque rangée : les rameaux
+       restent des lignes verticales). Le reste s'ouvre en jours.
+       ⚠️ Premier jet (vu à la planche) : toutes les mèches claires gardées d'un
+       bloc se lisaient comme un feuillage d'automne doré, et le cerne gardé seul
+       autour de jours dessinait un fil de fer. Le cerne ne reste donc que là où il
+       PROLONGE un rameau (au-dessus ou au-dessous de lui), comme un bout de mèche. */
+    const Lof = (x, y) => (K(x, y) === 3 || K(x, y) === 4 ? Lum[y * W + x] : -1);
+    const keep = new Int8Array(W * H).fill(-1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = kind[y * W + x];
+      if (k !== 3 && k !== 4) continue;
+      const L = Lum[y * W + x];
+      if (L < 90) continue;
+      const lL = Lof(x - 1, y), lR = Lof(x + 1, y);
+      const ridge = L > lL && L >= lR || L >= lL && L > lR;
+      const flat = !ridge && L >= lL && L >= lR && (x & 1) === 0;
+      if (!ridge && !flat) continue;
+      const hv = hh(x, y) % 4;
+      keep[y * W + x] = L >= 128 ? (hv ? 3 : 4) : L >= 115 ? (hv ? 2 : 3) : L >= 104 ? 2 : 1;
+    }
+    const kept = (x, y) => x >= 0 && y >= 0 && x < W && y < H && keep[y * W + x] >= 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = kind[y * W + x];
+      if ((k !== 3 && k !== 4) || kept(x, y)) continue;
+      const edge = K(x - 1, y) === 0 || K(x + 1, y) === 0 || K(x, y - 1) === 0 || K(x, y + 1) === 0;
+      if (edge && (kept(x, y - 1) || kept(x, y + 1))) keep[y * W + x] = Lum[y * W + x] >= 96 ? 1 : 0;
+    }
+    for (let i = 0; i < W * H; i++) if (keep[i] >= 0) put(i % W, (i / W) | 0, WILLOW_TWIG[keep[i]], 255, 0);
+    /* LA NEIGE : le DESSUS du dôme (le premier rameau de chaque colonne sous le
+       ciel) la porte — `winterSnowPass` pose le chapeau au-dessus de lui ; un
+       rameau sur six du reste du rideau, au-dessus du haut du fût, en garde un
+       peu sous une neige lourde (brume). */
+    for (let x = 1; x < W - 1; x++) {
+      let first = true;
+      for (let y = 1; y < TBASE_ - 4; y++) {
+        const i = y * W + x;
+        if (od[i * 4 + 3] !== 255 || mask[i] >= 3) continue;   // vide, ombre, branche, fût
+        if (first) { mask[i] = 2; first = false; }
+        else if (y < ty && hh(x, y) % 6 === 0) mask[i] = 1;
+      }
+    }
+    g.putImageData(im, 0, 0);
+    // Dans la neige : l'ombre de contact bleue au pied du fût (le reste est projeté par `neige.js`).
+    if (onSnow) {
+      const rx = 3 + 3.5;
+      for (let y = TBASE_ - 2; y <= TBASE_ + 2; y++) for (let x = 2; x < W - 2; x++) {
+        const u = (x + 0.5 - (baseX + 1)) / rx, v = (y + 0.5 - (TBASE_ + 0.6)) / 1.9, dd = u * u + v * v;
+        if (dd <= 1) P(g, x, y, 1, 1, dd > 0.4 ? "rgba(46,62,104,0.16)" : "rgba(40,56,98,0.34)");
+      }
+    }
+    return { c, mask };
+  }
   /* L'atlas paresseux des arbres d'hiver : des pages de 1024², rangées en étagères. */
   function makeWinterTrees() {
     const pages = [];
@@ -15070,7 +15305,9 @@ export function buildSprites() {
     };
     const ADULT = { geom: [48, 64, 58, 24], sx: 1, sy: 1, twS: 1, rs: 1 };
     const build = (k, size, lvl, fi, onSnow) => {
-      const z = size === "adult" ? ADULT : TREE_SIZES[size];
+      /* 2026-09-29 — le saule de la planche n'a que deux gabarits, l'adulte et
+         son grand (`WILLOW_GRAND`) : toute autre taille demandée est l'adulte. */
+      const z = k === TT.REF_WILLOW ? (size === "grand" ? WILLOW_GRAND : ADULT) : size === "adult" ? ADULT : TREE_SIZES[size];
       const frame = TREE_FRAMES[fi];
       const seed = 7919 + k * 131 + (TREE_SIZE_KEYS.indexOf(size) + 1) * 17;
       return withTreeGeom(z, () => {
@@ -15078,8 +15315,10 @@ export function buildSprites() {
         let c, mask = null, native = false;
         if (k === TT.REF_FIR) { c = plancheTree("treeFir", "autumn", frame, 1); if (onSnow) stripBakedShadow(c, { tw: 4 }); }
         else if (k === TT.REF_MAGNOLIA) { c = magnoliaTree("winter", frame, size === "adult" ? undefined : z); if (onSnow) stripBakedShadow(c, { tw: 5 }); }
-        else if (k === TT.REF_APPLE || k === TT.REF_WILLOW) {
-          const sp = TREE_SPECS[k === TT.REF_APPLE ? TT.APPLE : TT.WILLOW];
+        // Le saule : sa propre silhouette, dénudée (`willowWinter`) — plus le saule procédural en vase.
+        else if (k === TT.REF_WILLOW) { const r = willowWinter(z === WILLOW_GRAND ? willowGrandData() : PLANCHE.treeWillow, frame, seed, onSnow); c = r.c; mask = r.mask; }
+        else if (k === TT.REF_APPLE) {
+          const sp = TREE_SPECS[TT.APPLE];
           const r = bareTree(sp, frame, BARE[sp.id], seed, onSnow); c = r.c; mask = r.mask;
         } else {
           const sp = TREE_SPECS[k];
@@ -18811,6 +19050,21 @@ export function buildSprites() {
         autumnAlt: nm === "treeWillow"
           ? [[-5, 0.95], [5, 1.05]].map(([hj, lj]) => TREE_FRAMES.map(f => TREE_ADULT_PUT(plancheTree(nm, "autumn", f, ev, hj, lj))))
           : undefined,
+        /* 2026-09-29 — LE GRAND SAULE (`willowGrandData`), rare, choisi par
+           `townTreeSize` (« grand »). Pas dans `sizes` : ce n'est pas une taille
+           redessinée comme celles des essences en code, c'est la même grille
+           allongée — ses vingt-cinq images vivent dans leur propre feuille. */
+        grand: nm === "treeWillow" ? (() => {
+          const d = willowGrandData(), put = makeAtlas(WILLOW_GRAND.geom[0], WILLOW_GRAND.geom[1], 5 * TREE_FRAMES.length, TREE_FRAMES.length);
+          const one = (se, f, hj, lj) => put(withTreeGeom(WILLOW_GRAND, () => plancheTreeData(d, se, f, ev, hj, lj)));
+          return {
+            w: WILLOW_GRAND.geom[0], h: WILLOW_GRAND.geom[1], base: WILLOW_GRAND.geom[2],
+            summer: TREE_FRAMES.map(f => one("summer", f)),
+            spring: TREE_FRAMES.map(f => one("spring", f)),
+            autumn: TREE_FRAMES.map(f => one("autumn", f)),
+            autumnAlt: [[-5, 0.95], [5, 1.05]].map(([hj, lj]) => TREE_FRAMES.map(f => one("autumn", f, hj, lj))),
+          };
+        })() : undefined,
       })),
       /* 2026-09-27 (phase 11) — `TT.REF_MAGNOLIA` n'est plus lu dans la planche :
          redessiné en code, fleurs à leur taille (note de `magnoliaTree`). Même

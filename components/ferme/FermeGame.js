@@ -12554,13 +12554,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // historique stormRosalieRid reste inchangé pour Chloé/Rosalie.
       const isTj = res.stormKind === "tj";
       const mate = peers && peers.find(p => p && p.rid === (isTj ? res.stormTargetRid : res.stormRosalieRid));
-      if (!mate || typeof mate.x !== "number") { res.storming = false; res.stormKind = null; res.roamTarget = null; res.moving = false; res.stormPath = null; return; }
+      /* 2026-09-29 — et si la cible n'est plus À LA FERME (descendue en ville, ou
+         partie en voyage), l'élan retombe : ses x/y sont ceux d'une autre carte
+         (voir `residentTownEligible`, qui ne la laisse plus partir en pleine
+         course — ceci couvre une sauvegarde prise au mauvais moment). */
+      if (!mate || typeof mate.x !== "number" || resZone(mate) === "town" || (mate.trip && mate.trip.phase === "away")) { res.storming = false; res.stormKind = null; res.roamTarget = null; res.moving = false; res.stormPath = null; return; }
+      /* 2026-09-29 — la cible bouge : la destination annoncée aux invités la suit
+         (au-delà d'une case et demie), sinon leur instigateur finissait sa course
+         là où elle ÉTAIT au départ, loin de la scène. */
+      if (!res.roamTarget || Math.hypot(res.roamTarget.x - mate.x, res.roamTarget.y - mate.y) > 1.5) res.roamTarget = { x: mate.x, y: mate.y };
       const dx = mate.x - res.x, dy = mate.y - res.y, d = Math.hypot(dx, dy);
       const convoDist = isTj ? C.TJ_CONVO_DIST : C.CHLOE_ROSALIE_CONVO_DIST;
       if (d <= convoDist) {
         res.storming = false; res.roamTarget = null; res.moving = false; res.stormPath = null;
         mate.roamTarget = null; mate.roamMeet = null; mate.moving = false;
         faceResidentToward(mate, res.x, res.y); faceResidentToward(res, mate.x, mate.y);
+        /* 2026-09-29 — L'ARRÊT DES DEUX PART TOUT DE SUITE, ET POUR LES DEUX. La
+           boucle d'arrêts de `updateResidents` n'en envoie qu'à qui avait un trajet
+           annoncé (`_pathSentFor`) : une cible restée immobile n'en avait pas, et
+           chez l'invité chacun pouvait finir la scène là où son dernier trajet le
+           laissait. Deux entrées du message groupé qui part déjà (zip 364). */
+        queueResidentStop(res); queueResidentStop(mate);
+        res._pathSentFor = null; mate._pathSentFor = null;
         if (isTj) {
           // La scène (dialogue + jet de bagarre) est pilotée côté hôte par
           // updateTristanJeromeFeud, sur l'état PARTAGÉ station.tjBrawl (pas
@@ -13103,6 +13118,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const cr = s.station && s.station.crScene, tj = s.station && s.station.tjBrawl;
     if (cr && (cr.rosalieRid === res.rid || cr.chloeRid === res.rid)) return false;
     if (tj && (tj.aRid === res.rid || tj.bRid === res.rid)) return false;
+    /* ⚠️⚠️ 2026-09-29 — NI CELUI VERS QUI L'ON FONCE. Bug remonté par Guillaume
+       (session du 2026-09-28) : « la scène Tristan/Jérôme n'est plus
+       synchronisée, l'un ou l'autre reste figé et déroule son texte seul ».
+       L'instigateur en trombe était exclu (ci-dessus, `storming`), sa CIBLE non :
+       à 30 % toutes les 18 s, elle descendait souvent en ville pendant les vingt
+       à quarante secondes de la course. L'instigateur courait alors vers des
+       coordonnées de VALLEY TOWN lues sur la carte de la FERME (le mélange de
+       cartes du §4 de CLAUDE.md), la scène démarrait sur place quand il y
+       arrivait — seul — et restait figée jusqu'au retour de l'autre, qui
+       reprenait sa réplique à la gare. Même garde pour Rosalie, cible de Chloé. */
+    const all = (s.station && s.station.residents) || [];
+    if (all.some(o => o && o.storming && (o.stormTargetRid === res.rid || o.stormRosalieRid === res.rid))) return false;
     return true;
   }
   function residentFamilyOf(rid) { return C.RESIDENT_FAMILY[rid] || null; }
@@ -13748,7 +13775,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (same) continue;
         res._pathSentFor = { x: tgt.x, y: tgt.y };
         const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
-        const speed = C.VISITOR_SPEED * 0.7 * gait;
+        /* 2026-09-29 — un résident EN TROMBE court (le pas de `residentRoam`,
+           branche `storming`) : annoncé au pas de promenade, il arrivait chez
+           l'invité deux à trois fois plus tard que chez l'hôte. */
+        const speed = res.storming ? C.VISITOR_SPEED * (res.stormKind === "tj" ? C.TJ_STORM_SPEED_MUL : 1.9) : C.VISITOR_SPEED * 0.7 * gait;
         const mid = (res.stormPath && res.stormPath.length) ? res.stormPath.map(p => ({ x: +(+p.x).toFixed(2), y: +(+p.y).toFixed(2) })) : [];
         const path = [{ x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) }, ...mid, { x: +(+tgt.x).toFixed(2), y: +(+tgt.y).toFixed(2) }];
         queueResidentPath(res.rid, path, speed);
@@ -13890,7 +13920,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // coordonnées seraient celles de deux cartes différentes — la distance qui
     // déclenche la scène n'aurait aucun sens, et elle pourrait très bien être
     // PETITE par pure coïncidence numérique.
-    if (resZone(tristan) === "town" || resZone(jerome) === "town") return;
+    /* ⚠️ 2026-09-29 — UNE SCÈNE DONT L'UN DES DEUX N'EST PLUS LÀ S'ANNULE, ELLE
+       NE SE FIGE PAS. Le retour anticipé d'avant laissait `tjBrawl` en place : la
+       scène restait suspendue sur sa réplique, l'autre la reprenait à son retour
+       de la ville, planté à la gare — « l'un reste figé et déroule son texte seul ».
+       L'attroupement d'une bagarre imminente est renvoyé avec son mot de la fin. */
+    const gone = (r) => resZone(r) === "town" || (r.trip && r.trip.phase === "away");
+    if (gone(tristan) || gone(jerome)) {
+      if (st.tjBrawl) {
+        if (st.tjBrawl.imminent) endTjCrowdReaction(st, now);
+        st.tjBrawl = null;
+        broadcastStation();
+      }
+      return;
+    }
     const brawl = st.tjBrawl;
     if (brawl) {
       // Fenêtre "imminente" en cours (jet déjà positif, voir plus bas) : on
@@ -20489,8 +20532,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     };
     const snowFalls = [];                 // paquets en l'air
     let treeBump = null;                  // { i, at } : le dernier arbre heurté
-    const CROWN_ABOVE = { young: 22, planted: 22, adult: 35, short: 30, tall: 54 };
-    const CROWN_RX = { young: 7, planted: 7, adult: 12, short: 16, tall: 16 };
+    // `grand` (2026-09-29) : le grand saule, ×1,2 de l'adulte (`WILLOW_GRAND`, fermeArt.js).
+    const CROWN_ABOVE = { young: 22, planted: 22, adult: 35, short: 30, tall: 54, grand: 42 };
+    const CROWN_RX = { young: 7, planted: 7, adult: 12, short: 16, tall: 16, grand: 15 };
     function noteTreeBump(tw, nx, ny) {
       const fx = Math.floor(C.footX(nx)), fy = Math.floor(C.footY(ny));
       for (let yy = fy - 1; yy <= fy + 1; yy++) for (let xx = fx - 1; xx <= fx + 1; xx++) {

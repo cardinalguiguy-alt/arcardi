@@ -264,6 +264,40 @@ function boxColor(l, cap, ph, face, se) {
 }
 const boxSeason = (s) => (s === "spring" || s === "sp" ? "sp" : s === "winter" || s === "wi" ? "wi" : "su");
 
+/* ── 4 quater. L'ANCIENNE MATIÈRE DE LA HAIE (avant « buis », 5969306) ─────
+   ⚠️ 2026-09-28 (soir) — RESTAURÉE TELLE QUELLE DEPUIS GIT, derrière
+   `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : Guillaume veut l'affichage d'avant
+   par défaut. `hash3`, `leafLevelLegacy`, `hedgeModelLegacy`, `fenceColorLegacy`
+   et `hedgeRowSpriteLegacy` sont les corps du commit 5969306, au nom près
+   (suffixe « Legacy ») — rien n'y a été redessiné. Le texte d'origine :
+   Les TOUFFES du buis : un semis de centres sur une grille de 4 px (monde),
+   décalés au hachage ; chaque pixel prend la normale de la touffe la plus
+   proche, mêlée à celle de sa face — les touffes s'éclairent une à une, le
+   contour reste net (« un ouvrage taillé dans une matière vivante garde sa
+   matière ; ce qui change est le contour », DESSIN.md). Le creux entre deux
+   touffes (deux centres presque à égale distance) s'assombrit. */
+const hash3 = (x, y, z) => hash2(x + Math.imul(z | 0, 0x3c6ef372), y ^ Math.imul(z | 0, 0x1b873593));
+function leafLevelLegacy(face, wx, wy, z) {
+  let d1 = 1e9, d2 = 1e9, c1 = null;
+  const gx = Math.floor(wx / 4), gy = Math.floor(wy / 4), gz = Math.floor(z / 4);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+    const i = gx + a, j = gy + b, k = gz + c, h = hash3(i & 15, j & 15, k);
+    const cx = i * 4 + 0.5 + (h % 3), cy = j * 4 + 0.5 + ((h >>> 3) % 3), cz = k * 4 + 1 + ((h >>> 6) % 3);
+    const dd = (wx + 0.5 - cx) ** 2 + (wy + 0.5 - cy) ** 2 + (z + 0.5 - cz) ** 2;
+    if (dd < d1) { d2 = d1; d1 = dd; c1 = [cx, cy, cz]; } else if (dd < d2) d2 = dd;
+  }
+  let nx = wx + 0.5 - c1[0], ny = wy + 0.5 - c1[1], nz = z + 0.5 - c1[2];
+  const nn = Math.hypot(nx, ny, nz) || 1;
+  const fx = 0, fy = face === "top" ? 0 : 1, fz = face === "top" ? 1 : 0;
+  nx = 0.6 * fx + 0.8 * nx / nn; ny = 0.6 * fy + 0.8 * ny / nn; nz = 0.6 * fz + 0.8 * nz / nn;
+  const m = Math.hypot(nx, ny, nz) || 1;
+  const lam = (nx * L[0] + ny * L[1] + nz * L[2]) / m;
+  let l = 0.18 + 0.72 * Math.max(0, lam) + (face === "top" ? 0.1 : 0);
+  if (Math.sqrt(d2) - Math.sqrt(d1) < 0.7) l -= 0.2;
+  if (face === "front" && z <= 1) l -= 0.12;
+  return l;
+}
+
 /* ── 4 bis. LA NEIGE (phase 12a, 2026-09-28) ───────────────────────────────
    « La neige n'aura qu'à blanchir les faces du dessus » (en-tête) : elle fait
    mieux, elle AJOUTE DES VOXELS — une colonne de `k` voxels de neige sur toute
@@ -486,6 +520,25 @@ function hedgeModel(cf, px, py) {
   model.light = G.light;
   return model;
 }
+/* L'ANCIENNE HAIE (5969306), restaurée telle quelle derrière `C.TOWN_BUIS_LEGACY`
+   (voir « 4 quater ») : une bande de 8 px, un faîte à 10 voxels au bord et 12 au
+   milieu, la couleur de `leafLevelLegacy` (`fenceColorLegacy`). Même emprise, même
+   poteau de portillon que la nouvelle. */
+function hedgeModelLegacy(cf) {
+  /* La haie s'arrête 3 px avant l'ouverture : un poteau de bois porte le portillon. */
+  const inHedge = (u, v) => band(u, v, cf, 4, true) && !(cf.ge && u >= 12) && !(cf.gw && u <= 3);
+  const edge = (u, v) => {
+    for (let k = 1; k <= 2; k++) if (!inHedge(u - k, v) || !inHedge(u + k, v) || !inHedge(u, v - k) || !inHedge(u, v + k)) return k - 1;
+    return 2;
+  };
+  const post = gatePostCols(cf, 3);
+  return (u, v, z) => {
+    if (post && u >= post[0] && u < post[1] && v >= 7 && v <= 9) return z < 14 ? M.WOOD : 0;
+    if (!inHedge(u, v)) return 0;
+    const e = edge(u, v);
+    return z < 10 + e ? M.LEAF : 0;
+  };
+}
 function ironModel(cf, px, py) {
   /* Le pilier : au centre (bout, angle, té, et un tous les quatre sur un
      tronçon droit), ou au bord de l'ouverture d'un portail — colonnes 7..14
@@ -587,7 +640,11 @@ function wireModel(cf, px, py) {
     return z === 4 - sag || z === 7 - sag || z === 10 - sag ? M.WIRE : 0;
   };
 }
-const MODELS = { [C.TOWN_FENCE.HEDGE]: hedgeModel, [C.TOWN_FENCE.IRON]: ironModel, [C.TOWN_FENCE.PICKET]: picketModel,
+/* ⚠️ 2026-09-28 (soir) — la haie passe par `C.TOWN_BUIS_LEGACY` ICI, et nulle part
+   ailleurs : le dessin (`paintFenceCell`), la hauteur lue par l'ombre sur la neige
+   (`townFenceHeights`) et les bancs (`FENCE_TEST.MODELS`) lisent tous cette table,
+   donc l'ancienne haie et son ombre ne peuvent pas diverger. */
+const MODELS = { [C.TOWN_FENCE.HEDGE]: C.TOWN_BUIS_LEGACY ? hedgeModelLegacy : hedgeModel, [C.TOWN_FENCE.IRON]: ironModel, [C.TOWN_FENCE.PICKET]: picketModel,
                  [C.TOWN_FENCE.BOARD]: boardModel, [C.TOWN_FENCE.WIRE]: wireModel };
 /* Un poteau tous les combien de cases, sur un tronçon droit (un diviseur de
    la période de quatre). La haie n'en a pas ; la grille a un pilier tous les
@@ -626,6 +683,15 @@ function fenceColor(px, py, model, se) {
     if (m === M.IRON) l = face === "top" ? 0.95 : nb.w ? 0.6 : 0.3;
     return pick(PAL[m], l);
   };
+}
+/* L'ANCIENNE COULEUR DE LA HAIE (5969306, voir « 4 quater ») : le feuillage prend
+   `leafLevelLegacy` dans la palette `PAL[M.LEAF]`, comme avant « buis » ; toute
+   autre matière (le poteau du portillon) passe par `fenceColor`, dont la branche
+   non végétale n'a pas changé. Écrite À CÔTÉ de `fenceColor` plutôt que dedans :
+   le chemin du nouveau buis reste celui du commit, octet pour octet. */
+function fenceColorLegacy(px, py) {
+  const base = fenceColor(px, py);
+  return (m, face, u, v, z, nb) => (m === M.LEAF ? pick(PAL[M.LEAF], leafLevelLegacy(face, px * T + u, py * T + v, z)) : base(m, face, u, v, z, nb));
 }
 
 /* ── 6. LE CACHE D'ATLAS ─────────────────────────────────────────────────── */
@@ -713,8 +779,10 @@ export function townFenceConf(tw, x, y) {
 function paintFenceCell(d, W, H, style, cf, px, py, snow, season) {
   const base = MODELS[style](cf, px, py);
   const model = withSnow(base, snow | 0, 0, T - 1, 0, T - 1);
+  // 2026-09-28 (soir) : l'ancienne haie (`C.TOWN_BUIS_LEGACY`) garde son ancienne couleur, sans saison.
+  const color = MODELS[style] === hedgeModelLegacy ? fenceColorLegacy(px, py) : fenceColor(px, py, base, boxSeason(season));
   // Sur la neige, l'ombre de contact est bleue (DESSIN.md, neige.js).
-  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, snowColor(fenceColor(px, py, base, boxSeason(season))), contactShadow(base), snow ? SNOW_SHADOW : null);
+  paintVoxels(d, W, H, 0, FENCE_OV, model, 30, 0, T - 1, 0, T - 1, snowColor(color), contactShadow(base), snow ? SNOW_SHADOW : null);
 }
 /* Une case de clôture, dessinée à (px, py) = son coin haut-gauche au sol.
    Rend faux si la case n'en porte pas (l'appelant a son repli). `snow` : 0, 1
@@ -726,7 +794,8 @@ export function drawTownFenceTile(ctx, S, tw, x, y, px, py, snow, season) {
   if (!cache || !tw.hedge) return false;
   const { style, cf } = townFenceConf(tw, x, y);
   if (!MODELS[style]) return false;
-  const bx = x & 3, by = y & 3, sn = snow | 0, se = style === C.TOWN_FENCE.HEDGE ? boxSeason(season) : "su";
+  // 2026-09-28 (soir) : l'ancienne haie (`C.TOWN_BUIS_LEGACY`) n'a pas de saison — une cellule pour l'année, comme avant.
+  const bx = x & 3, by = y & 3, sn = snow | 0, se = MODELS[style] === hedgeModel ? boxSeason(season) : "su";
   const key = `f${style}${+cf.n}${+cf.s}${+cf.w}${+cf.e}${+cf.gw}${+cf.ge}${+cf.post}${bx}${by}${sn ? "s" + sn : ""}${se === "su" ? "" : se}`;
   const cell = cacheCell(cache, key, T, CH, (d, W, H) => paintFenceCell(d, W, H, style, cf, bx, by, sn, se));
   blit(ctx, cell, px, py - FENCE_OV);
@@ -912,7 +981,30 @@ export function drawTownPlot(ctx, S, p, season, snow) {
 
 /* ── 11. LA HAIE-DÉCOR DU QUAI ─────────────────────────────────────────────
    2026-09-28 : `hedgeRow` est devenu une forme de `buis.js` (`hedge`), dans la
-   matière des buis — `hedgeRowSprite` n'existe plus. */
+   matière des buis — `hedgeRowSprite` n'existe plus.
+   ⚠️ 2026-09-28 (soir) — il revient sous le nom `hedgeRowSpriteLegacy`, derrière
+   `C.TOWN_BUIS_LEGACY` (voir « 4 quater ») : le corps du commit 5969306, dont la
+   seule différence est `fenceColorLegacy(0, 0)` à la place de l'ancien
+   `fenceColor(0, 0)` — la même couleur. Le texte d'origine :
+   `hedgeRow` est un DÉCOR de la planche (62 × 30), posé par le générateur au
+   fond de la scène du quai, avec son emprise (`townPropBox`) : on garde sa
+   taille au pixel près — l'emprise n'en bouge pas — et on le repeint dans la
+   matière des haies de la ville, pour que la même haie ne soit pas de deux
+   dessins. Un tronçon droit, bouts arrondis, posé au bas du cadre. */
+export function hedgeRowSpriteLegacy(W, H) {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  const v0 = H - 12, v1 = H - 4;                     // l'emprise au sol : 8 px, 4 px au-dessus du bas (l'ombre)
+  const inH = (u, v) => u >= 1 && u <= W - 2 && v >= v0 && v < v1;
+  const edge = (u, v) => { for (let k = 1; k <= 2; k++) if (!inH(u - k, v) || !inH(u + k, v) || !inH(u, v - k) || !inH(u, v + k)) return k - 1; return 2; };
+  const model = (u, v, z) => (inH(u, v) && z < 10 + edge(u, v) ? M.LEAF : 0);
+  const im = g.getImageData(0, 0, W, H);
+  paintVoxels(im.data, W, H, 0, 0, model, 14, 0, W - 1, 0, H - 1, fenceColorLegacy(0, 0), contactShadow(model));
+  g.putImageData(im, 0, 0);
+  return c;
+}
 
 /* Pour les bancs : ce qui se dessine hors du jeu. */
 export const FENCE_TEST = { CH, GATE_PAD, PLOT_OV, paintFenceCell, paintGate, MODELS, PAL, M, withSnow };

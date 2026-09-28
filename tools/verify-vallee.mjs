@@ -371,7 +371,11 @@ if (tw.shipX)
      on passe DESSOUS (c'est le pont), et le dénivelé de 0,78 retient le marcheur
      de la volée — `verify-collision` §4 bis le vérifie par poussées latérales. */
   const overhead = (p) => p.kind === "stairRail" && C.townOverpassCell(p.x, p.y);
-  const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !overhead(p) && !tw.solid[idx(p.x, p.y)]);
+  /* 2026-09-29 (phase 7b) — et les dalles de l'allée de la maison hantée
+     (`flatStone` marquées `ruin`) : elles SONT le sol de l'allée, on marche
+     dessus. Seulement elles — une `flatStone` posée ailleurs reste un décor. */
+  const paving = (p) => p.kind === "flatStone" && p.ruin;
+  const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !overhead(p) && !paving(p) && !tw.solid[idx(p.x, p.y)]);
   ok("aucun décor n'est traversable", ghosts.length === 0, ghosts.slice(0, 8).map(p => `${p.kind}(${p.x},${p.y})`).join(" "));
 }
 

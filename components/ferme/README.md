@@ -1,4 +1,63 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-28
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-29
+
+## 2026-09-29 — LES SAULES, LA SCÈNE TRISTAN/JÉRÔME, ET 7b (LAMPADAIRES, BANCS, ALLÉE HANTÉE)
+
+Guillaume : les buis de la veille sont « laids et simplistes, un peu comme la texture des haies qui entourent
+cimetière et jardin botanique » (une session cloud a remis l'ancien rendu par défaut, `TOWN_BUIS_LEGACY`,
+sans effacer `buis.js` ; « nous y reviendrons ») ; « les saules pleureurs semblent avoir rétréci » ; puis
+l'ordre : le bug Tristan/Jérôme d'abord, puis 7b. Décidé avec lui : tout objet neuf de 7b vient d'une
+PLANCHE GEMINI (plus de végétation dessinée en code), les lampadaires ont un modèle par rang (planche), les
+commerces se font dans une séance à part.
+- **Les saules** : leur dessin n'avait pas bougé d'un pixel depuis la planche (45 × 53, mesuré avant la
+  phase 11, avant la neige, et le jour même). Deux choses les écrasaient. (1) **La phase 11 autour d'eux** :
+  sur les seize saules de la ville, quatre avaient un grand arbre (×1,5) ou un trapu DEVANT eux (la moitié du
+  saule mangée, tronc compris : « le même saule mais plus court ») et huit un grand juste DERRIÈRE. Un grand
+  ou un trapu dont la couronne toucherait un saule redevient adulte (`willowNear`, `townTreeSize`) : plus
+  aucun saule touché, dix arbres redevenus adultes. (2) **L'hiver de la phase 12a** : le saule nu était le
+  saule procédural en vase, 31 × 48. Il est maintenant tiré du saule de la planche (`willowWinter`) : même
+  silhouette (43 × 50), les crêtes de ses mèches en rameaux dorés, les mèches sombres en jours, les
+  charpentières vers chaque lobe, la neige sur le dessus du dôme et sur les branches seulement. Premier jet
+  refusé à la planche : mèches claires gardées en bloc (un feuillage d'automne) et cerne seul autour des
+  jours (du fil de fer).
+- **Les grands saules** (« quelques rares saules un peu plus grands, pas trop ») : deux sur seize (l'étang du
+  parc, la rive sud), ×1,2 (`willowGrandData`) — la même GRILLE de la planche, allongée par des colonnes et
+  des rangées dédoublées là où la copie ne se voit pas (les mèches sont verticales) ; aucune couleur neuve,
+  pixel de la même taille, vent, saisons et jitter d'automne compris ; son hiver aussi.
+- **Le bug Tristan/Jérôme** (« l'un ou l'autre reste figé et déroule son texte seul ») : la CIBLE d'une
+  provocation pouvait descendre en ville pendant la course (30 % toutes les 18 s) ; l'instigateur courait
+  alors vers des coordonnées de Valley Town lues sur la ferme, la scène démarrait seul sur place et restait
+  figée jusqu'au retour de l'autre, planté à la gare. Corrigé : la cible d'une course ne part plus
+  (`residentTownEligible`, Rosalie comprise), l'élan retombe si elle n'est plus à la ferme, une scène dont
+  l'un est parti s'annule (et l'attroupement est renvoyé), et l'hôte envoie l'ARRÊT des deux au démarrage
+  (chez l'invité, une cible restée immobile n'avait pas d'arrêt), la course annoncée à sa vraie vitesse.
+  Vérifié chez l'hôte (scène jouée face à face ; départ simulé en pleine scène et en pleine course).
+  **Pas vu à deux clients.**
+- **Les bancs de la place** : ils étaient à x−2 et x+2 de la fontaine et du monument, les lampadaires à x−3
+  et x+4 — l'axe de la porte de l'hôtel de ville passe ENTRE x et x+1. Le banc de droite passe à x+3 (passe
+  finale, la carte ne bouge pas ailleurs).
+- **Les lampadaires** (passe finale « LES LAMPADAIRES AUX CARREFOURS ET AUX PORTES ») : la grille de la rue de
+  la Gare (21) quitte la carte ; l'avenue est éclairée AU RYTHME DE SES ARBRES (choix de Guillaume) : des
+  paires face à face un arbre sur trois (18 pas), sur la colonne des arbres du nord, la seule où aucun arbre
+  du sud ne se dessine devant la lampe, et pas dans la place ; un lampadaire à un angle de chaque carrefour
+  (jamais le sud-est : c'est l'endroit où l'on flâne, `townSpots`) ; à l'entrée de l'allée, chez les riches à
+  chaque portail, en classe moyenne un sur deux, chez les modestes jamais. Jamais deux à moins de cinq cases,
+  jamais sur une allée, un portail, une rue, collé à un meuble où l'on s'arrête, ni avec un arbre devant
+  (la zone que mesure `render-parc`). Carte : 19 retirés, 45 neufs, 42 inchangés (83 lanternes).
+- **L'allée de la maison hantée** : ce qui reste de son dallage (`flatStone` marquées `ruin`, traversables),
+  huit dalles sur dix au seuil, quatre au bout. Les ronces et le portail rouillé attendent la planche 3.
+- **La planche 3** (`refs/prompts-planche3.md`) : A, les jardins vécus (bois empilé, linge, trois boîtes aux
+  lettres par rang, brouette, tonneau, salon de jardin, bancs rustique et en fonte, vasque, pots, balançoire,
+  clapier) ; B, la place, les lampadaires et la maison hantée (jardinières d'été et d'hiver, candélabre des
+  beaux quartiers, lanterne sur potence des rues modestes, ronces, herbes sèches, portail rouillé). Chacune
+  commence par un ÉTALON du jeu redessiné à l'identique (le banc de bois, le lampadaire) : l'échelle d'une
+  planche se dérive d'un gabarit connu.
+- Bancs : `render-arbres` 33 (+8 : le grand saule sans couleur étrangère, ×1,1 à ×1,3, rien au bord ; l'hiver
+  garde 90 % de la silhouette ; aucun saule caché ni écrasé ; au plus un grand sur quatre — falsifiés sur le
+  VRAI code d'avant : hiver procédural, pas de règle de voisinage, palette d'automne) ; `verify-vallee` 279
+  (les dalles de la ruine traversables par exception nommée) ; les 56 bancs verts ; `no-undef`, bundle,
+  `next build` verts. Vu en jeu : le saule de l'étang (automne, hiver sous 12 cm), la scène chez l'hôte, la
+  place de nuit, l'avenue de nuit, l'allée hantée, la Haute-Ville. **Pas vu** : à deux clients, les autres
+  saules en jeu, le printemps. **Supabase** : rien.
 
 ## 2026-09-28 (nuit) — PHASE 7b (SUITE) : LES BUIS
 
@@ -907,7 +966,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
 | ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). 🟨 6a EN COURS : S1, S4 (trois versions), N1 et N2 (simple, riche), S3 — PREMIÈRE LARGE, 9 cases, sur cinq parcelles `TOWN_HOUSE_WIDE_AT` — et la maison hantée sont en jeu, CHACUNE À L'ÉCHELLE DE SA PORTE (récit en tête) ; ✅ ombre de contact et touffes au pied (fin de l'effet « sticker », 2026-09-27) ; ✅ S2 simple (la chaumière, PORTE CENTRÉE gardée : sa largeur `center`, 2026-09-27, nuit) ; ✅ PRESTIGE DES ADRESSES (`townHouseStanding` : les versions suivent la distance aux lieux prisés) ; S2 reste en simple (Guillaume : pas de chaumière enrichie) ; restent W1 à W3 (4e image : S3, qui fixe l'emprise large) (images de Guillaume, prompts : `refs/prompts-maisons.md` — chaque nouveau modèle = une entrée de `TOWN_HOUSE_MODELS` + `node tools/build-maison-sprites.mjs` ; N3 mise de côté par Guillaume le 2026-09-27). ✅ (audit 2026-09-27) la lanterne de N1 riche (et celles de S1) n'allume plus que son verre. 🟨 6b EN COURS : ✅ la Maison Garfield et ✅ le salon (`TOWN_SHOP_MODELS` ; enseigne écrite, barbier qui tourne) ; ✅ l'axe de la Maison Garfield (arrêts de téléport et de taxi sur sa porte peinte) ; ✅ ses QUATRE ÉTAPES peintes (neutre, travaux, ouverte, fermée aux rideaux cadenassés), le rideau qui roule et les fondus (2026-09-27, nuit) ; reste la gare (image de Guillaume ; ⬜ la gare attend une décision : `TOWN_STATION` fait 4 cases, 2,3 H, plus étroit qu'une maison étroite — halte minuscule, ou bâtiment élargi à sa dalle de 6 cases, proposition dans `refs/prompts-maisons.md`), le quai en procédural (une bande nord-sud vue d'en haut, pas une façade), la boutique de plage le jour où elle a une place. Trois versions par maison (simple, enrichie — plus de caractère, jamais plus pauvre —, riche ; même silhouette), réparties par PRESTIGE DE L'ADRESSE.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ✅ **Les maisons de Valley Town ne sont plus « cheap »** (dette signalée par Guillaume le 2026-09-26, réglée — confirmé par lui le 2026-09-28). ⚠️ Reste ouvert : l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau | après la grille (1) et la lumière (3), avant la composition |
-| ⬜ | 7 | **Composition — 7a livrée le 2026-09-27 (soir)** (récit en tête) : ✅ réseau voie B (`TOWN_ROADS`, 18 rues, bord libre des rues pavées), ✅ palais de justice sur sa place, église ×1,5 en haut du grand escalier, mail, ✅ cœur dense (15 maisons de ville, rangées `dense`), ✅ cohérence sociale suivie par les nouveaux emplacements (le prestige se lit sur les monuments déplacés), ✅ trois placettes. ✅ **7b — HAIES ET CLÔTURES REFAITES (2026-09-28, récit en tête)** : cinq matières en volumes (`clotures.js`), enclos en U calé sur l'image, un jardin sur trois ouvert, portails animés, potagers ; façades des monuments éclairées la nuit dans la même livraison, ✅ **LES BUIS (2026-09-28, nuit, récit en tête)** : boule, massif en nuage, buis taillé, haie du quai et haie des clôtures dans une seule matière, taillés ou libres selon le quartier, ⬜ **jardins VÉCUS** (bois empilé, linge, banc, boîte aux lettres, potager, portillon), ⬜ **lampadaires aux carrefours et aux portes** (plus sur une grille), ⬜ l'allée envahie de la maison hantée, ⬜ commerces de la Grand-Rue (café, boulangerie : prompts Gemini à écrire), ⬜ la prairie à l'est du parc et au nord de la mairie reste nue (voir « terrain de foot » ci-dessous) | le réseau est posé ; le reste se fait quartier par quartier |
+| ⬜ | 7 | **Composition — 7a livrée le 2026-09-27 (soir)** (récit en tête) : ✅ réseau voie B (`TOWN_ROADS`, 18 rues, bord libre des rues pavées), ✅ palais de justice sur sa place, église ×1,5 en haut du grand escalier, mail, ✅ cœur dense (15 maisons de ville, rangées `dense`), ✅ cohérence sociale suivie par les nouveaux emplacements (le prestige se lit sur les monuments déplacés), ✅ trois placettes. ✅ **7b — HAIES ET CLÔTURES REFAITES (2026-09-28, récit en tête)** : cinq matières en volumes (`clotures.js`), enclos en U calé sur l'image, un jardin sur trois ouvert, portails animés, potagers ; façades des monuments éclairées la nuit dans la même livraison, 🟨 **LES BUIS (2026-09-28, nuit)** : faits, puis jugés « laids et simplistes » par Guillaume — l'ancien rendu est remis par défaut (`TOWN_BUIS_LEGACY`), `buis.js` est gardé, à reprendre (« nous y reviendrons »), ⬜ **jardins VÉCUS** (planche 3 A : prompts écrits le 2026-09-29, images attendues ; potagers et portails existent déjà), ✅ **lampadaires aux carrefours, aux portes et au rythme des arbres de l'avenue** (2026-09-29, récit en tête ; ⬜ un modèle par rang, planche 3 B), 🟨 l'allée envahie de la maison hantée (✅ ses dalles ; ⬜ ronces et portail rouillé, planche 3 B), ⬜ commerces de la Grand-Rue (café, boulangerie, restaurant : une séance de conception à part, décision du 2026-09-29), ⬜ la prairie à l'est du parc et au nord de la mairie reste nue (voir « terrain de foot » ci-dessous) | le réseau est posé ; le reste se fait quartier par quartier |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 | ✅ | 9 | **Défauts nets (audit du 2026-09-27) — livrée le 2026-09-27 (nuit)**. ✅ Les deux lampadaires des allées (28,68) et (60,68) passent côté jardin. ✅ Nénuphars cuits réservés à l'étang et aux roselières. ✅ Porte de la maison hantée dégagée. ✅ Reflets : l'axe est la RIVE devant l'objet, et derrière un quai la bande du parement est cachée (les bancs du quai, au bord, étaient justes ; ce qui collait à l'eau, c'étaient les arbres derrière le quai). ➡️ Parcelle (160,102), la haie nord derrière le toit : renvoyée en phase 7 (haies refaites). ✅ Le grand escalier : **REFAIT le 2026-09-27 (nuit)** — volée droite dans l'axe du portail, qui enjambe le boulevard (récit en tête) | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
 | ✅ | 10 | **Sols, seconde passe — livrée le 2026-09-27 (nuit)** (récit en tête) : goudron refait (gris, caniveaux, traces de roues, variantes par bloc) ; trois dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des terrasses) ; herbe selon le quartier (tonte, pré, semis) ; massifs de saison en rangs ; rebord est-ouest des terrasses (chaperon et ombre) ; herbes hautes en bouquets teintés. ⬜ Reste : l'usure qui suit les passages sur les dallages (« chemins de désir », avec la phase 4) | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
@@ -918,16 +977,14 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 
 ### Projets en réserve (Guillaume, 2026-09-27, après la phase 7a) — rien n'est codé
 
-**Retours de Guillaume après une session de jeu (2026-09-28) — à noter, rien de codé :**
-- ⚠️ **Bug : la scène « embrouille » Tristan/Jérôme n'est plus synchronisée.** L'un et/ou l'autre
-  personnage reste figé et déroule son texte seul, sans attendre l'autre — ce n'était pas le cas
-  avant. Scènes dans `tristanJeromeScenes` (`fermeStrings.js`) ; le mécanisme d'enchaînement des
-  répliques (qui tient les deux PNJ synchrones) n'a pas été identifié pendant cette séance, à
-  investiguer avant de toucher au chantier.
+**Retours de Guillaume après une session de jeu (2026-09-28)** :
+- ✅ **Bug : la scène « embrouille » Tristan/Jérôme n'est plus synchronisée** — corrigé le 2026-09-29
+  (récit en tête : la cible descendait en ville en pleine course). Pas encore rejoué à deux clients.
 - ⚠️ **Jardinières de la place centrale trop cheap** par rapport au reste de la végétation
-  (arbres à quatre tailles, essences dessinées, phase 11) — à revoir.
-- ⚠️ **Bancs de droite pas alignés sur les lampadaires** : pour la symétrie axiale avec les bancs
-  de gauche, l'axe de référence doit être la porte de l'hôtel de ville.
+  (arbres à quatre tailles, essences dessinées, phase 11) — ⬜ planche 3 B (jardinière de pierre et vasque
+  Médicis, été et hiver).
+- ✅ **Bancs de droite pas alignés sur les lampadaires** — corrigé le 2026-09-29 (l'axe de la porte de
+  l'hôtel de ville, à la place et au monument).
 - ⚠️ **Nuits plus longues** : remplir si possible le créneau 2h-6h (actuellement vide/accéléré),
   si c'est techniquement possible sans casser autre chose — quitte à décider plus tard d'accélérer
   quand même cette tranche. ⚠️ Il faudra aussi inventer une raison d'aller dormir (un intérêt de
@@ -936,8 +993,8 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
   ressemble le plus à un restaurant pour le convertir, plutôt qu'en dessiner un nouveau. À
   rapprocher des « commerces de la Grand-Rue » déjà en attente en phase 7b (café, boulangerie).
 
-- ✅ **7b, les clôtures — faites le 2026-09-28** (récit en tête). Restent les jardins vécus et les lampadaires
-  aux carrefours (`townRoadCrossings`) et aux portes.
+- ✅ **7b, les clôtures — faites le 2026-09-28** (récit en tête). ✅ Les lampadaires aux carrefours et aux
+  portes : faits le 2026-09-29. Restent les jardins vécus (planche 3 A).
 - **UN TERRAIN DE FOOT** (idée de Guillaume, pour une prairie vide). Taille de village (un terrain réel ferait
   ~90 cases). À TRANCHER AVEC LUI :
   - **où** — (A, recommandé) entre le jardin du nord et la route des artisans, au nord de l'avenue (x 152..195,
