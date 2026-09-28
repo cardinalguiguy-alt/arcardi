@@ -89,11 +89,15 @@ const idx = (x, y) => y * W + x;
 const nav = E.townNav(tw);
 const tileFree = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !!nav.walk[idx(x, y)];
 const elevAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? 0 : tw.elev[idx(x, y)];
+/* 2026-09-27 (nuit) — sous le grand escalier, une case porte deux sols ; le
+   marcheur est sur celui qui prolonge son pas (`E.townLevelE`, la fonction du
+   jeu et du moteur). `lvlAt` suit ce niveau d'un pas à l'autre. */
+const lvlAt = (x, y, ref) => E.townLevelE(tw, Math.floor(C.footX(x)), Math.floor(C.footY(y)), ref);
 function canStand(x, y, fromE) {
   for (const [px, py] of C.bodyPoints(x, y)) {
     const fx = Math.floor(px), fy = Math.floor(py);
     if (!tileFree(fx, fy)) return false;
-    if (fromE !== undefined && Math.abs(elevAt(fx, fy) - fromE) > C.TOWN_STEP_MAX) return false;
+    if (fromE !== undefined && Math.abs(E.townLevelE(tw, fx, fy, fromE) - fromE) > C.TOWN_STEP_MAX) return false;
   }
   return true;
 }
@@ -126,6 +130,7 @@ function gapPx(dir, x, y, ox, oy) {
 
 /* Approche : on se place à `back` cases de la case cible, du bon côté, et on
    pousse. Rend l'écart, ou `null` si le couloir d'approche n'est pas dégagé. */
+const lvAt0 = (x, y, ref) => lvlAt(x, y, ref);
 function approach(ox, oy, dir, blockedByElev) {
   const back = 4;
   let x = ox - dir.vx * back, y = oy - dir.vy * back;
@@ -136,11 +141,12 @@ function approach(ox, oy, dir, blockedByElev) {
     if (!canStand(ox - dir.vx * k, oy - dir.vy * k)) return null;
     if (blockedByElev && Math.abs(elevAt(ox - dir.vx * k, oy - dir.vy * k) - e0) > 0.001) return null;
   }
+  let lv = e0;
   for (let n = 0; n < 4000; n++) {
     const nx = x + dir.vx * SPD * DT, ny = y + dir.vy * SPD * DT;
-    const fe = elevAt(Math.floor(C.footX(x)), Math.floor(C.footY(y)));
+    const fe = lvAt0(x, y, lv);
     if (!canStand(nx, ny, fe)) break;
-    x = nx; y = ny;
+    x = nx; y = ny; lv = fe;
   }
   return gapPx(dir, x, y, ox, oy);
 }
@@ -459,11 +465,12 @@ function crossAxis(bx, by) {
       for (const [px0, py0, px1, py1] of [[ax, ay, bx, by], [bx, by, ax, ay]]) {
         let cx = px0, cy = py0, arrived = false;
         const ux = Math.sign(px1 - px0), uy = Math.sign(py1 - py0);
+        let lv = lvlAt(cx, cy);
         for (let n = 0; n < 6000; n++) {
           const nx = cx + ux * SPD * DT, ny = cy + uy * SPD * DT;
-          const fe = elevAt(Math.floor(C.footX(cx)), Math.floor(C.footY(cy)));
+          const fe = lvlAt(cx, cy, lv);
           if (!canStand(nx, ny, fe)) break;
-          cx = nx; cy = ny;
+          cx = nx; cy = ny; lv = fe;
           /* ⚠️ « ARRIVÉ » SE LIT EN CASES, PAS EN COORDONNÉES. La dernière case
              libre d'une volée est bordée d'un mur : la semelle y tient, mais un
              pas de plus est refusé, donc l'ancre s'arrête un centième avant la
@@ -479,6 +486,123 @@ function crossAxis(bx, by) {
   }
   ok(ko.length === 0, `les ${C.TOWN_STAIRS.length} volées se montent ET se descendent tout droit`,
      ko.length ? ko.slice(0, 3).join(" · ") : "aucune marche infranchissable");
+}
+
+/* ═══════════════════════════════════════════════ 4 bis. LE GRAND ESCALIER
+   2026-09-27 (nuit) — UNE VOLÉE QUI ENJAMBE UNE RUE : DESSUS, DESSOUS, ET RIEN À
+   TRAVERS. Guillaume : « ne néglige surtout pas mes exigences physique
+   collision ». Chaque marcheur est suivi avec SON niveau (`lvlAt`, la fonction
+   du jeu) ; on vérifie les deux trajets qui se croisent au pont, puis qu'aucun
+   des deux ne peut glisser dans l'autre — par les côtés du tablier, par-dessus
+   les rampes, par le mur du palier, par la tête de la volée.
+   ⚠️ Un marcheur est POUSSÉ dans une direction à la vitesse du jeu, image par
+   image, comme un joueur qui tient la touche — pas téléporté de case en case. */
+{
+  const G = C.TOWN_GRAND_STAIR, F = G.flight, L = G.landing, OV = C.TOWN_OVERPASS, BR = C.TOWN_STAIR_BRIDGE;
+  const anchorOf = (tx, ty) => C.tileAnchor(tx, ty);
+  /* Pousse depuis (x, y) au niveau `lv` dans (vx, vy) : rend la trace des
+     niveaux et des cases de pied, et la position d'arrêt. */
+  const push = (x, y, lv, vx, vy, frames, stop) => {
+    const cells = [];
+    for (let n = 0; n < frames; n++) {
+      const nx = x + vx * SPD * DT, ny = y + vy * SPD * DT;
+      const fe = lvlAt(x, y, lv);
+      if (!canStand(nx, ny, fe)) break;
+      x = nx; y = ny; lv = lvlAt(x, y, fe);
+      const c = { tx: Math.floor(C.footX(x)), ty: Math.floor(C.footY(y)), lv };
+      cells.push(c);
+      if (stop && stop(c)) break;
+    }
+    return { x, y, lv, cells };
+  };
+  // 1. DESSOUS : la chaussée se parcourt d'un bout à l'autre, dans les deux sens, au sol.
+  {
+    const ko = [];
+    for (let ry = G.road.y; ry < G.road.y + G.road.h; ry++) for (const [a, b] of [[BR.x - 3, BR.x + BR.w + 2], [BR.x + BR.w + 2, BR.x - 3]]) {
+      const s0 = anchorOf(a, ry), r = push(s0.x, s0.y, 0, Math.sign(b - a), 0, 900, (c) => c.tx === b);
+      const arrived = Math.floor(C.footX(r.x)) === b;
+      const rose = r.cells.some((c) => c.lv > 0.01);
+      if (!arrived || rose) ko.push(`rangée ${ry} ${a}→${b} : ${arrived ? "" : "arrêté en " + r.x.toFixed(1)} ${rose ? "monté sur la volée" : ""}`);
+    }
+    ok(ko.length === 0, "le boulevard passe SOUS le grand escalier, dans les deux sens, sans quitter le sol",
+       ko.length ? ko.join(" · ") : `${G.road.h} rangées × 2 sens, ${BR.w} cases de pont`);
+  }
+  // 2. DESSUS : du parvis au pied de la volée et retour, sur chaque colonne ouverte.
+  {
+    const ko = [];
+    let n = 0;
+    for (let cx = F.x + 1; cx < F.x + F.w - 1; cx++) {
+      const top = anchorOf(cx, G.edge - 1), bot = anchorOf(cx, F.y + F.len + 1);
+      for (const [s0, e0, sy, goal] of [[top, 1, 1, F.y + F.len + 1], [bot, 0, -1, G.edge - 1]]) {
+        const r = push(s0.x, s0.y, e0, 0, sy, 1200, (c) => c.ty === goal);
+        n++;
+        const arrived = Math.floor(C.footY(r.y)) === goal;
+        const onDeck = r.cells.filter((c) => c.ty >= OV.y && c.ty < OV.y + OV.h).every((c) => c.lv > 0.5);
+        if (!arrived || !onDeck) ko.push(`colonne ${cx} ${sy > 0 ? "descente" : "montée"} : ${arrived ? "" : "arrêté en y=" + r.y.toFixed(1)}${onDeck ? "" : " passé SOUS la marche"}`);
+      }
+    }
+    ok(ko.length === 0, "la volée se descend et se monte de bout en bout, sur la marche au-dessus de la chaussée",
+       ko.length ? ko.slice(0, 3).join(" · ") : `${n} trajets, colonnes ${F.x + 1}..${F.x + F.w - 2}`);
+  }
+  /* 3. DE LA VOLÉE, ON NE SORT PAS PAR LES CÔTÉS : sur chaque marche, poussé vers
+        l'ouest puis vers l'est, le pied reste dans les colonnes ouvertes, et le
+        niveau ne retombe jamais sur la chaussée. */
+  {
+    const ko = [];
+    let n = 0;
+    for (let k = 0; k < F.len; k++) {
+      const ty = F.y + k, e = C.townGrandStepElev(k), s0 = anchorOf(F.x + (F.w >> 1), ty);
+      for (const vx of [-1, 1]) {
+        const r = push(s0.x, s0.y, e, vx, 0, 300);
+        n++;
+        const out = r.cells.some((c) => c.tx <= F.x || c.tx >= F.x + F.w - 1 || c.lv < 0.05);
+        const body = C.bodyPoints(r.x, r.y).some(([px]) => Math.floor(px) <= F.x - 1 || Math.floor(px) >= F.x + F.w);
+        if (out || body) ko.push(`marche ${k} (${ty}) vers ${vx < 0 ? "l'ouest" : "l'est"} : sorti en x=${r.x.toFixed(2)}`);
+      }
+    }
+    ok(ko.length === 0, "de la volée, on ne franchit jamais une rampe (ni au-dessus de la chaussée, ni ailleurs)",
+       ko.length ? ko.slice(0, 3).join(" · ") : `${n} poussées latérales, ${F.len} marches`);
+  }
+  /* 4. DE LA CHAUSSÉE SOUS LE PONT, ON NE MONTE PAS : poussé vers le nord (le mur
+        du palier) et vers le sud (le massif de la volée), on reste au sol. */
+  {
+    const ko = [];
+    let n = 0;
+    for (let cx = BR.x; cx < BR.x + BR.w; cx++) for (let ry = G.road.y; ry < G.road.y + G.road.h; ry++) {
+      const s0 = anchorOf(cx, ry);
+      if (!canStand(s0.x, s0.y, 0)) continue;
+      for (const vy of [-1, 1]) {
+        const r = push(s0.x, s0.y, 0, 0, vy, 300);
+        n++;
+        if (r.cells.some((c) => c.lv > 0.01) || r.cells.some((c) => c.ty < G.road.y || c.ty >= G.road.y + G.road.h))
+          ko.push(`(${cx},${ry}) vers le ${vy < 0 ? "nord" : "sud"} : sorti du passage`);
+      }
+    }
+    ok(n > 0 && ko.length === 0, "sous le pont, on ne passe ni dans le palier ni dans la volée",
+       ko.length ? ko.slice(0, 3).join(" · ") : `${n} poussées`);
+  }
+  /* 5. DU PALIER ET DU PARVIS, ON NE TOMBE PAS : poussé vers le vide (flancs du
+        palier, ailes au sud, bord de la terrasse de part et d'autre), on reste à
+        l'altitude 1 — la balustrade est là, et elle arrête. */
+  {
+    const ko = [];
+    const tries = [];
+    for (let y = L.y; y < L.y + L.h - 1; y++) { tries.push([L.x + 1, y, -1, 0]); tries.push([L.x + L.w - 2, y, 1, 0]); }
+    for (let x = L.x + 1; x < F.x; x++) tries.push([x, L.y + L.h - 2, 0, 1]);
+    for (let x = F.x + F.w; x < L.x + L.w - 1; x++) tries.push([x, L.y + L.h - 2, 0, 1]);
+    for (let x = G.parvis.x; x < L.x; x++) tries.push([x, G.edge - 1, 0, 1]);
+    for (let x = L.x + L.w; x < G.parvis.x + G.parvis.w; x++) tries.push([x, G.edge - 1, 0, 1]);
+    let n = 0;
+    for (const [tx, ty, vx, vy] of tries) {
+      const s0 = anchorOf(tx, ty);
+      if (!canStand(s0.x, s0.y, 1)) continue;
+      const r = push(s0.x, s0.y, 1, vx, vy, 300);
+      n++;
+      if (r.cells.some((c) => c.lv < 0.99)) ko.push(`(${tx},${ty}) → (${vx},${vy}) : tombé en (${r.x.toFixed(1)},${r.y.toFixed(1)})`);
+    }
+    ok(n >= tries.length - 4 && ko.length === 0, "du palier et du parvis, les balustrades retiennent (on ne tombe nulle part)",
+       ko.length ? ko.slice(0, 3).join(" · ") : `${n}/${tries.length} poussées vers le vide`);
+  }
 }
 
 /* ═══════════════════════════════════════════════ 5. LE JEU ET LE MOTEUR S'ACCORDENT

@@ -780,7 +780,15 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   perdu un décor : en poussant les harmoniques du contour d'un cran, l'étang a mangé la case du
   massif taillé (122, 83). Le générateur refuse poliment de poser un décor dans l'eau — donc
   rien n'a levé, il y avait juste **trois massifs au lieu de quatre**. Il les compte.
-- **`tools/render-escaliers.mjs` — 35 contrôles, 35/35 (467 ; 38 au 466, 24 au 465).** Les marches, le parement de
+- **`tools/render-escaliers.mjs` — 43 contrôles, 43/43 (2026-09-27, nuit ; 35 au 467).** ⚠️ **Son § 5 est
+  NEUF : le grand escalier de l'église** (volée droite, pont sur le boulevard). Il tient la géométrie
+  DÉRIVÉE (axe du portail, bord de la terrasse, rangées du boulevard), le pont (chaussée pavée au sol
+  dessous, tablier à l'altitude de sa marche, aucune autre case à deux niveaux), et surtout **la marche
+  peinte = la marche franchie** : les nez sont lus dans les PIXELS de la volée d'un tenant et comparés à
+  l'altitude où marche le personnage. Collision et dessin des garde-corps coïncident case par case, dans
+  les deux sens (la rampe au-dessus de la chaussée exceptée, on passe dessous). Les contrôles du bloc 467
+  (détourage, teinte, rambarde de fer) sont partis avec lui ; sa planche `escaliers-bloc.png` aussi.
+  Les marches, le parement de
   falaise, le limon et le **dallage d'esplanade** de la Haute-Ville : les quatre matières
   assemblées sur six tuiles de côté **à côté des pavés de rue du 434**, puis les trois vraies
   volées de `generateTownWorld()` dans leur décor.
@@ -794,11 +802,8 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   **Un dessin qu'aucun banc ne peut appeler est un dessin qui vieillit tout seul.**
   ⚠️ **LA GRANDEUR NEUVE DU 436 ÉTAIT LA PARITÉ DE MATIÈRE**, c'est-à-dire la phrase de
   Guillaume traduite en nombre : mesurer l'écart-type et le nombre de teintes des matières et
-  des pavés dans la même passe, puis exiger un rapport plutôt qu'un seuil absolu. Depuis le 467,
-  les deux volées principales ont une autorité plus forte : le banc exige que le bloc 268×248
-  soit celui de `ESCALIERDETOURE`, qu'il soit dessiné une seule fois, et que ses 12 196 pixels
-  transparents laissent le vrai sol dessous. Les matériaux des volées de service gardent le
-  contrôle de parité.
+  des pavés dans la même passe, puis exiger un rapport plutôt qu'un seuil absolu. Les matériaux
+  des volées de service gardent le contrôle de parité.
   ⚠️ **LE DALLAGE EN EST EXEMPTÉ, AVEC SA RAISON ÉCRITE** (comme `render-rues` exempte le
   goudron du contrôle de continuité) : une esplanade est faite de peu de grandes pierres, sa
   matière tient dans l'écart d'une dalle à l'autre. On le mesure donc **contre ce qu'il
@@ -826,13 +831,20 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
      comptait 49 contre 24**, et il aurait donc « gagné ». Ses deux gris étaient recouverts de
      quatre voiles alpha, et chaque combinaison fabriquait une teinte de plus. **Compter les
      couleurs d'une image composée en alpha, c'est compter des accidents de mélange.**
+- **`tools/verify-collision.mjs` — 35 contrôles, 35/35 (2026-09-27, nuit).** Son § 4 bis tient le grand
+  escalier par POUSSÉES à la vitesse du jeu, chaque marcheur suivi avec son niveau (`E.townLevelE`) : la
+  chaussée se parcourt sous le pont dans les deux sens sans monter ; la volée se descend et se monte de bout
+  en bout, SUR la marche au-dessus de la chaussée ; poussé de côté sur chaque marche, on ne franchit aucune
+  rampe ; du passage, on n'entre ni dans le palier ni dans la volée ; du palier et du parvis, les
+  balustrades retiennent. Falsifié deux fois (sans tablier ; tablier étendu sous les rampes) : rouge.
 - **`tools/import-escaliers-assets.mjs` (467).** Conserve les cinq matériaux de
   service issus de `refs/ASSETS.jpg`, puis importe `refs/ESCALIERDETOURE.png`
   comme **un seul bloc 268×248**. Le masque retire treize composantes grises
   d'au moins 12 pixels et protège les gris légitimes, dont la plus grande
   composante ne fait que 9 pixels. Aucune quantification : les pixels natifs
   sont encodés tels quels en courses RLE. `tools/out/escaliers-assets-importes.png`
-  montre le bloc sur fond vert après chaque modification du masque.
+  montre le bloc sur fond vert après chaque modification du masque. ⚠️ Depuis le 2026-09-27 le bloc
+  n'est plus dessiné : seul son POT en est détouré, au chargement (`grandStairPotSprite`).
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 

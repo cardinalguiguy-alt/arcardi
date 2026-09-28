@@ -3379,22 +3379,25 @@ export function townRoadCells(r) {
 }
 /* Les carrefours : chaque paire de rues qui partagent des cases. `x0..y1` est
    l'emprise commune (inclusive), `cx/cy` son centre. Pure, en cache. */
-let TOWN_CROSSINGS_CACHE = null;
-export function townRoadCrossings() {
-  if (TOWN_CROSSINGS_CACHE) return TOWN_CROSSINGS_CACHE;
-  const sets = TOWN_ROADS.map((r) => new Set(townRoadCells(r).map(([x, y]) => y * 4096 + x)));
+/* 2026-09-27 (nuit) — `roads` : la génération les calcule sur `TOWN_ROADS_SEED`
+   (voir `TOWN_STAIR_SEED`) ; le jeu, sur le réseau définitif. Un cache par table. */
+const TOWN_CROSSINGS_CACHE = new Map();
+export function townRoadCrossings(roads) {
+  const RS = roads || TOWN_ROADS;
+  if (TOWN_CROSSINGS_CACHE.has(RS)) return TOWN_CROSSINGS_CACHE.get(RS);
+  const sets = RS.map((r) => new Set(townRoadCells(r).map(([x, y]) => y * 4096 + x)));
   const out = [];
-  for (let a = 0; a < TOWN_ROADS.length; a++) for (let b = a + 1; b < TOWN_ROADS.length; b++) {
-    if ((TOWN_ROADS[a].elev || 0) !== (TOWN_ROADS[b].elev || 0)) continue;
+  for (let a = 0; a < RS.length; a++) for (let b = a + 1; b < RS.length; b++) {
+    if ((RS[a].elev || 0) !== (RS[b].elev || 0)) continue;
     let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, n = 0;
     for (const key of sets[a]) {
       if (!sets[b].has(key)) continue;
       const x = key % 4096, y = Math.floor(key / 4096);
       n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
-    if (n) out.push({ a: TOWN_ROADS[a].id, b: TOWN_ROADS[b].id, x0, y0, x1, y1, cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2 });
+    if (n) out.push({ a: RS[a].id, b: RS[b].id, x0, y0, x1, y1, cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2 });
   }
-  TOWN_CROSSINGS_CACHE = out;
+  TOWN_CROSSINGS_CACHE.set(RS, out);
   return out;
 }
 /* Un point de la ligne médiane et sa normale, à l'abscisse curviligne `s` —
@@ -4791,50 +4794,95 @@ export const STAR_GLASS_ANCHOR_X = TOWN_ARTISANS.x + 7;
 export const STAR_GLASS_ANCHOR_Y = TOWN_ARTISANS.y + 32;
 export const STAR_NEST_DX = 3, STAR_NEST_DY = -5;
 
+/* L'ÉGLISE — voir sa longue note plus bas, à sa place historique (« PHASE 7 :
+   l'église monte sur la terrasse »). Déclarée ICI parce que le grand escalier
+   se dérive de son axe. */
+export const TOWN_CHURCH = { x: 133, y: 16, w: 18, h: 5 };
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-27 (nuit) — LE GRAND ESCALIER DE L'ÉGLISE : UNE VOLÉE DROITE, DANS
+   ║ L'AXE DU PORTAIL, QUI PASSE PAR-DESSUS LE BOULEVARD DU NORD.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décision de Guillaume, sur sa référence (`refs/référence nouvel escalier.jpg`) :
+   une volée droite unique, même largeur que l'ancienne volée basse (8 cases hors
+   œuvre, 6 ouvertes entre les rampes), le parvis agrandi jusqu'à l'escalier, et
+   « le chemin recouvert par l'escalier doit être lu comme passant en dessous,
+   comme si l'escalier était un pont ».
+   Ce qu'elle remplace : le quart tournant du zip 447, dessiné pour monter au
+   TRIBUNAL et importé d'un bloc (467) — sa volée basse visait la colonne 145, la
+   porte de l'église est en 142, et ses garde-corps, son pot et sa collision
+   étaient relevés à la main sur l'image (« laid, et la physique est cassée »).
+   ⚠️⚠️ TOUT SE DÉRIVE DE TROIS REPÈRES, RIEN N'EST UNE COORDONNÉE :
+     · l'AXE, la porte de l'église (`TOWN_CHURCH`, x + w/2) ;
+     · le BORD de la terrasse (`TOWN_UPPER`, dernière rangée) ;
+     · le BOULEVARD du Nord (`TOWN_NORD_Y`, que son tracé lit aussi).
+   Le palier va du bord de la terrasse au boulevard ; la volée part de la première
+   rangée du boulevard et descend d'une unité en huit marches (0,11 par marche,
+   sous `TOWN_STEP_MAX`), donc ses deux premières marches ENJAMBENT la chaussée.
+   ⚠️⚠️ LE PONT EST UNE CASE À DEUX NIVEAUX, ET C'EST LA SEULE NOUVEAUTÉ DU MOTEUR.
+   Sur ces cases (`TOWN_OVERPASS`), `elev` reste le SOL — la chaussée, que le
+   taxi, les rues et tout ce qui lit `elev` voient sans rien changer — et le
+   tablier est une seconde altitude (`tw.deck`). Laquelle porte un marcheur ne se
+   diffuse pas : c'est celle qui PROLONGE son pas (la plus proche de l'altitude
+   d'où il vient, `townLevelE`, fermeEngine.js). Les deux niveaux sont écartés de
+   0,78 au moins, plus que deux fois `TOWN_STEP_MAX` : il n'y a jamais d'hésitation.
+   ⚠️ Les rampes au-dessus de la chaussée ne sont PAS solides (on passe dessous) :
+   c'est le dénivelé qui retient le marcheur du tablier, comme au bord de tout
+   palier. */
+export const TOWN_NORD_Y = 35;       // médiane du boulevard du Nord, le long du mur de la terrasse
+export const TOWN_NORD_W = 2;        // sa largeur (lue par son tracé ET par le pont)
+export const TOWN_GRAND_STAIR = (() => {
+  const axis = TOWN_CHURCH.x + TOWN_CHURCH.w / 2;                 // 142 : le portail
+  const edge = TOWN_UPPER.y + TOWN_UPPER.h - 1;                   // 29 : dernière rangée de la terrasse
+  const road = { y: TOWN_NORD_Y - TOWN_NORD_W / 2, h: TOWN_NORD_W };   // 34-35 : la chaussée qui passe dessous
+  const W = 8, LW = 12, LEN = 8;
+  const flight = { x: axis - W / 2, y: road.y, w: W, len: LEN };  // 138..145 × 34..41
+  const landing = { x: axis - LW / 2, y: edge + 1, w: LW, h: road.y - edge - 1 };   // 136..147 × 30..33
+  /* Le parvis agrandi : la largeur du parvis de l'église (`forecourt`, une case
+     de débord de chaque côté), du pied de son dallage au bord de la terrasse. */
+  const parvis = { x: TOWN_CHURCH.x - 1, w: TOWN_CHURCH.w + 2 };   // 132..151
+  return { axis, edge, road, flight, landing, parvis };
+})();
+/* L'altitude de la marche `k` (0 = la plus haute) : la formule de la boucle des
+   volées (`generateTownWorld`), écrite UNE fois pour le moteur, le dessin et les
+   bancs. `len + 1` intervalles pour `len` marches (voir la note du générateur). */
+export function townGrandStepElev(k) {
+  const f = TOWN_GRAND_STAIR.flight;
+  return 1 - (k + 1) / (f.len + 1);
+}
+/* Les cases à DEUX niveaux : les colonnes ouvertes de la volée au-dessus de la
+   chaussée. Et le PONT, pour le dessin (le masque des passants dessous) : la
+   volée entière, rampes comprises, sur les mêmes rangées. */
+export const TOWN_OVERPASS = {
+  x: TOWN_GRAND_STAIR.flight.x + 1, y: TOWN_GRAND_STAIR.road.y,
+  w: TOWN_GRAND_STAIR.flight.w - 2, h: TOWN_GRAND_STAIR.road.h,
+};
+export const TOWN_STAIR_BRIDGE = {
+  x: TOWN_GRAND_STAIR.flight.x, y: TOWN_GRAND_STAIR.road.y,
+  w: TOWN_GRAND_STAIR.flight.w, h: TOWN_GRAND_STAIR.road.h,
+};
+export function townOverpassCell(x, y) {
+  const b = TOWN_STAIR_BRIDGE;
+  return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+}
+/* La volée est peinte d'UN tenant (`townGrandFlightSprite`, fermeArt.js) : ses
+   cases ne se peignent pas une par une. */
+export function townGrandFlightCell(x, y) {
+  const f = TOWN_GRAND_STAIR.flight;
+  return x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.len;
+}
+
 /* LES ESCALIERS. `dir` donne le sens de la MONTÉE : "n" = on monte vers le
    nord (la volée est parcourue du sud au nord). La longueur de la volée
    (`len`) découle du dénivelé : quatre marches pour une unité, ce qui donne
-   les 0,25 de TOWN_STEP_MAX. */
-/* ⚠️⚠️⚠️ ZIP 447 — LA VOLÉE MONUMENTALE EST DEVENUE UN QUART TOURNANT, ET ELLE
-   N'A DEMANDÉ AUCUN MÉCANISME NEUF. C'est le point de la chose : la planche de
-   Guillaume montre un escalier à palier, et le réflexe aurait été d'inventer un
-   descripteur « corner » avec un sens de virage — c'est-à-dire un second de
-   quelque chose, payé en cas particuliers dans les vingt endroits qui lisent
-   `TOWN_STAIRS` (§4 : « un second de quelque chose se paie en NIVEAUX, pas en
-   zones »).
-   Or un quart tournant EST déjà exprimable : ce sont DEUX volées droites qui ne
-   partent pas de la même altitude, séparées par un PALIER plat à mi-hauteur, et
-   décalées l'une par rapport à l'autre. Le moteur ne voit que des cases et des
-   altitudes ; il n'a jamais eu besoin de savoir qu'un escalier « tourne ».
-   ⚠️ ET C'EST CE DÉCALAGE QUI FAIT LE VIRAGE, PAS UN ANGLE : la volée basse
-   occupe x 138-143, la haute x 144-147. Depuis le palier, le nord n'est ouvert
-   qu'à l'est — un joueur qui monte tout droit bute sur le muret et doit
-   longer. La contrainte naît de la CARTE, donc `canStandTown` la fait respecter
-   sans une ligne, et `townFindPath` la contourne sans une ligne non plus.
-
-   `dir` donne le sens de la MONTÉE : "n" = on monte vers le nord (la volée est
-   parcourue du sud au nord). La longueur de la volée (`len`) découle du
-   dénivelé : quatre marches pour une unité, ce qui donne les 0,25 de
-   TOWN_STEP_MAX. */
+   les 0,25 de TOWN_STEP_MAX.
+   ⚠️ Un escalier qui tourne n'a jamais eu besoin d'un descripteur à lui : ce
+   sont des volées droites, des paliers plats et des altitudes (447). Le moteur
+   ne voit que des cases. */
 export const TOWN_STAIRS = [
-  /* ① ZIP 467 — LA VOLÉE BASSE SUIT LE BLOC FOURNI, PAS L'ANCIEN MONTAGE.
-     Huit cases entre les deux bords extérieurs, dont six réellement ouvertes
-     entre les colonnes. Ses six rangées correspondent aux six girons visibles
-     de `ESCALIERDETOURE` : le personnage gagne ou perd 0,6 unité par sept
-     petits intervalles, sans téléportation ni cas particulier. */
-  /* hors-zip — X CORRIGÉ DE 142 À 141. Guillaume a signalé, captures à
-     l'appui, qu'on pouvait chevaucher la rambarde de droite et qu'on restait
-     bloqué avant de toucher celle de gauche. Mesuré au pixel (crop du bloc
-     importé, comparé colonne par colonne à TOWN_RAILS) : les deux poteaux de
-     la volée basse sont peints UNE case plus à l'ouest que ce que review
-     laissait supposer — la volée entière suit, rambardes comprises, pour que
-     les deux continuent à border exactement ses deux bords. Largeur et compte
-     de marches inchangés, seule l'ancre bouge. */
-  { x: 141, y: 31, w: 8, len: 6, dir: "n", from: 0, to: 0.6 },
-  /* ② LA VOLÉE HAUTE : six cases hors œuvre, quatre ouvertes. Trois rangées
-     remplacent les deux rangées comprimées du 466 et calent la montée sur la
-     profondeur réellement dessinée par le bloc. */
-  { x: 136, y: 27, w: 6, len: 3, dir: "n", from: 0.6, to: 1 },
+  // ① Le grand escalier de l'église (voir TOWN_GRAND_STAIR).
+  { x: TOWN_GRAND_STAIR.flight.x, y: TOWN_GRAND_STAIR.flight.y, w: TOWN_GRAND_STAIR.flight.w,
+    len: TOWN_GRAND_STAIR.flight.len, dir: "n", from: 0, to: 1 },
   // La volée de service, à l'ouest, pour ne pas obliger à traverser toute la
   // ville quand on arrive de la gare.
   { x: 116, y: 18, w: 4, len: 4, dir: "e", from: 0, to: 1 },
@@ -4842,125 +4890,123 @@ export const TOWN_STAIRS = [
   { x: 170, y: 21, w: 3, len: 4, dir: "n", from: 1, to: 2 },
 ];
 
-/* Les deux premières volées sont peintes par le bloc 467. La fonction est
-   partagée par le jeu et le banc : elle empêche l'ancien dessus/parement/limon
-   procédural de dépasser derrière les pixels transparents du nouveau visuel. */
-export function townCourtMainStairCell(x, y) {
-  for (let i = 0; i < 2 && i < TOWN_STAIRS.length; i++) {
-    const st = TOWN_STAIRS[i];
-    const inside = st.dir === "e"
-      ? x >= st.x && x < st.x + st.len && y >= st.y && y < st.y + st.w
-      : x >= st.x && x < st.x + st.w && y >= st.y && y < st.y + st.len;
-    if (inside) return true;
+/* ⚠️⚠️⚠️ LA GRAINE : L'ANCIEN ESCALIER, GARDÉ POUR LA SEULE GÉNÉRATION.
+   Valley Town se regénère depuis une graine fixe, et `rnd()` est partagé par
+   toute la génération : poser le nouveau relief à sa place (en tête de
+   `generateTownWorld`) changeait les refus des passes de décor et déplaçait 569
+   arbres et décors à l'AUTRE BOUT de la ville (mesuré, 2026-09-27) — le défaut des
+   717 cases de la phase 6a (§4 de CLAUDE.md). La génération tourne donc sur
+   l'emprise d'AVANT — le quart tournant du 447, ses paliers, ses garde-corps, son
+   pot, son emprise de nettoyage, et le mail qui visait son pied — et le grand
+   escalier se pose en DERNIÈRE PASSE, sans un tirage (voir « LE GRAND ESCALIER,
+   EN DERNIÈRE PASSE », fermeEngine.js). Rien ici n'est dessiné ni lu en jeu.
+   ⚠️ NE PAS « NETTOYER » CES NOMBRES : les changer déplace toute la ville. */
+export const TOWN_STAIR_SEED = {
+  stairs: [
+    { x: 141, y: 31, w: 8, len: 6, dir: "n", from: 0, to: 0.6 },
+    { x: 136, y: 27, w: 6, len: 3, dir: "n", from: 0.6, to: 1 },
+  ],
+  landings: [{ x: 136, y: 30, w: 15, h: 1, elev: 0.6 }],
+  rails: [
+    { x: 142, y: 29, w: 9, h: 1 }, { x: 136, y: 31, w: 6, h: 1 },
+    { x: 141, y: 31, w: 1, h: 6 }, { x: 148, y: 31, w: 1, h: 6 },
+    { x: 136, y: 27, w: 1, h: 4 }, { x: 140, y: 27, w: 1, h: 4 },
+  ],
+  solids: [{ x: 147, y: 31, w: 1, h: 1 }],
+  clear: { x: 132, y: 23, w: 23, h: 16 },
+  mailEnd: [145, 38],
+};
+/* Les volées que la GÉNÉRATION parcourt : l'ancien quart tournant, puis les
+   deux volées qui n'ont pas changé. */
+export const TOWN_STAIRS_SEED = () => [...TOWN_STAIR_SEED.stairs, ...TOWN_STAIRS.slice(1)];
+
+/* LE PALIER. Une plate-forme PLATE, à l'altitude de la terrasse, qui avance du
+   bord de la terrasse jusqu'au boulevard : c'est la place basse de la
+   référence, entre ses deux balustrades, d'où la volée descend.
+   ⚠️ IL N'EST PAS EN MARCHES : `G_TOWN_STAIR` y dessinerait des nez de marche
+   sur une surface de niveau. Il est dallé (`G_PATH_STONE`), du dallage du
+   parvis (famille civique, `townPavingFamily`). */
+export const TOWN_STAIR_LANDINGS = [
+  { ...TOWN_GRAND_STAIR.landing, elev: 1 },
+];
+
+/* LES GARDE-CORPS DU GRAND ESCALIER — LA COLLISION, ET RIEN D'AUTRE.
+   ⚠️⚠️ ILS NE PORTENT AUCUNE ALTITUDE (le piège des ponts du 439 : une grandeur
+   de DESSIN dans `elev` fait un mur infranchissable). Ils marquent `solid`. Leur
+   dessin est une file de décors (`townGrandStairProps`), dérivée de la même
+   géométrie : collision et dessin disent la même chose, et c'est le seul cas où
+   l'on a le droit de les faire coïncider.
+   Du nord au sud : la balustrade du bord de la terrasse de part et d'autre du
+   palier (piliers d'angle compris), les deux flancs du palier, ses deux ailes au
+   sud avec les piliers de tête de volée, puis les rampes de la volée À PARTIR
+   de la première rangée qui n'enjambe plus la chaussée. */
+export const TOWN_RAILS = (() => {
+  const G = TOWN_GRAND_STAIR, L = G.landing, F = G.flight, P = G.parvis;
+  const fy0 = G.road.y + G.road.h;                                  // 36 : première rangée hors du pont
+  return [
+    { x: P.x, y: G.edge, w: L.x - P.x + 1, h: 1, axis: "x", style: "balus" },                 // 132..136
+    { x: L.x + L.w - 1, y: G.edge, w: P.x + P.w - (L.x + L.w - 1), h: 1, axis: "x", style: "balus" },   // 147..151
+    { x: L.x, y: L.y, w: 1, h: L.h, axis: "y", style: "side" },                                // 136 × 30..33
+    { x: L.x + L.w - 1, y: L.y, w: 1, h: L.h, axis: "y", style: "side" },                      // 147 × 30..33
+    { x: L.x, y: L.y + L.h - 1, w: F.x - L.x + 1, h: 1, axis: "x", style: "balus" },           // 136..138 × 33
+    { x: F.x + F.w - 1, y: L.y + L.h - 1, w: L.x + L.w - (F.x + F.w - 1), h: 1, axis: "x", style: "balus" },  // 145..147 × 33
+    { x: F.x, y: fy0, w: 1, h: F.y + F.len - fy0, axis: "y", style: "flight" },                // 138 × 36..41
+    { x: F.x + F.w - 1, y: fy0, w: 1, h: F.y + F.len - fy0, axis: "y", style: "flight" },      // 145 × 36..41
+  ];
+})();
+
+/* LE DESSIN DES GARDE-CORPS, DÉCOR PAR DÉCOR, DANS LA FILE DE TRI (un passant
+   passe DERRIÈRE un pilier ou une balustrade, jamais seulement devant). Même
+   géométrie que `TOWN_RAILS` — le banc `render-escaliers` vérifie que chaque
+   case solide y a son dessin, et l'inverse.
+   · `stairPost`  : un pilier (dé, fût, chapiteau) ; `tall` en tête de volée,
+                    `foot` au pied ;
+   · `stairBalus` : une travée de balustrade qui court d'est en ouest ;
+   · `stairSide`  : la main courante d'un flanc de palier, vue de dessus ;
+   · `stairRail`  : la rampe de la volée, qui DESCEND avec elle (`e` : l'altitude
+                    de sa marche — au-dessus de la chaussée, la case n'en a pas) ;
+   · `stairPot`   : le pot fleuri de la référence, sur le palier (il bloque). */
+export function townGrandStairProps() {
+  const G = TOWN_GRAND_STAIR, L = G.landing, F = G.flight, P = G.parvis, ey = G.edge;
+  const out = [];
+  const post = (x, y, extra) => out.push({ x, y, kind: "stairPost", ...(extra || {}) });
+  const balus = (x0, x1, y) => { for (let x = x0; x <= x1; x++) out.push({ x, y, kind: "stairBalus" }); };
+  const sy = L.y + L.h - 1;                       // 33 : le bord sud du palier
+  // Le bord de la terrasse, de part et d'autre du palier.
+  post(P.x, ey); balus(P.x + 1, L.x - 1, ey); post(L.x, ey);
+  post(L.x + L.w - 1, ey); balus(L.x + L.w, P.x + P.w - 2, ey); post(P.x + P.w - 1, ey);
+  // Les deux flancs du palier.
+  for (let y = L.y; y < sy; y++) {
+    out.push({ x: L.x, y, kind: "stairSide" });
+    out.push({ x: L.x + L.w - 1, y, kind: "stairSide" });
   }
-  return false;
+  // Ses deux ailes au sud, et les piliers de tête de volée.
+  post(L.x, sy); balus(L.x + 1, F.x - 1, sy); post(F.x, sy, { tall: 1 });
+  post(F.x + F.w - 1, sy, { tall: 1 }); balus(F.x + F.w, L.x + L.w - 2, sy); post(L.x + L.w - 1, sy);
+  // Les rampes, marche par marche, et les deux piliers du pied.
+  for (let k = 0; k < F.len - 1; k++) {
+    const e = townGrandStepElev(k);
+    out.push({ x: F.x, y: F.y + k, kind: "stairRail", e, side: -1 });
+    out.push({ x: F.x + F.w - 1, y: F.y + k, kind: "stairRail", e, side: 1 });
+  }
+  const eFoot = townGrandStepElev(F.len - 1);
+  post(F.x, F.y + F.len - 1, { e: eFoot, foot: 1 });
+  post(F.x + F.w - 1, F.y + F.len - 1, { e: eFoot, foot: 1 });
+  // Les deux pots, dans les angles des ailes.
+  out.push({ x: L.x + 1, y: sy - 1, kind: "stairPot" });
+  out.push({ x: L.x + L.w - 2, y: sy - 1, kind: "stairPot" });
+  return out;
 }
 
-/* LE PALIER. Une plate-forme PLATE à l'altitude de raccord des deux volées.
-   ⚠️ IL N'EST PAS EN MARCHES, ET C'EST TOUT SON INTÉRÊT : `G_TOWN_STAIR` y
-   dessinerait des nez de marche sur une surface de niveau, ce qui est le
-   contresens le plus visible qu'un escalier puisse commettre. On le pave en
-   `G_PATH_STONE` — la dalle — qui est déjà ce que la ville emploie pour ses
-   surfaces de pierre plates.
-   ⚠️ IL DÉBORDE À L'OUEST DE LA VOLÉE HAUTE (x 138-147 contre 144-147), et ce
-   débord EST le virage : c'est la surface sur laquelle on tourne. Sans lui, le
-   raccord serait un angle mort où l'on resterait coincé contre deux dénivelés.
-   ⚠️ Son bord sud, à x 144-147, surplombe le vide de 0,5 unité : ça dépasse
-   TOWN_STEP_MAX, donc c'est un mur — mais un mur qui se VOIT, puisque le rendu
-   lui dessine son parement de falaise tout seul. C'est exactement le muret de
-   brique sous la balustrade de la planche. */
-export const TOWN_STAIR_LANDINGS = [
-  /* ZIP 467 — une seule rangée plate entre les deux volées. Le palier est plus
-     large que le passage : le bloc y peint le muret, la ferronnerie et la
-     balustrade ; leurs collisions sont dans TOWN_RAILS, pas dans l'altitude. */
-  { x: 136, y: 30, w: 15, h: 1, elev: 0.6 },
-];
-
-/* ⚠️⚠️⚠️ ZIP 447 — LA BALUSTRADE, ET ELLE N'EST PAS QU'UN DÉCOR : ELLE EST LA
-   CORRECTION D'UN COINCEMENT QUE `verify-vallee` A TROUVÉ ET QUE RIEN D'AUTRE
-   N'AURAIT VU.
-   Le quart tournant est RECESSÉ dans la terrasse (il le faut : entre l'avenue
-   et le plateau il n'y a que six rangées, et une volée + un palier + une volée
-   en demandent six). Son creusement laisse donc, à l'est de la volée haute, un
-   bord de terrasse qui surplombe le palier de 0,4 unité. C'est un mur — sauf
-   qu'un marcheur a une BOÎTE de 0,35 de profondeur : avancé à y=28,8 sur une
-   case dont le sud est 0,4 plus bas, sa boîte enjambe les deux niveaux, les
-   deux contrôles d'altitude refusent, et il ne peut plus ni avancer ni
-   reculer. Mesuré : 108 trajets sur 21 756 finissaient « bloqué en
-   (143.0,28.8) ».
-   ⚠️ ON NE CORRIGE PAS ÇA EN ÉLARGISSANT UN SEUIL. On empêche d'y aller, et la
-   chose qui empêche d'aller au bord d'une terrasse s'appelle un garde-corps —
-   c'est-à-dire, très exactement, l'objet que la planche de Guillaume pose là.
-   *La collision et le dessin disent la même chose, ce qui est le seul cas où
-   l'on a le droit de les faire coïncider.*
-   ⚠️⚠️ ET ELLE NE PORTE AUCUNE ALTITUDE. C'est le piège du 439, celui qui a
-   failli rendre les deux ponts infranchissables : une grandeur de DESSIN
-   (elle monte de 14 px au-dessus de la case) ne doit JAMAIS entrer dans
-   `elev`, sinon `canStandTown` en fait une falaise. Elle marque `solid`, rien
-   d'autre. Trois grandeurs, trois paramètres (§4). */
-export const TOWN_RAILS = [
-  // Le garde-corps du bord est du palier haut, celui du défaut ci-dessus.
-  { x: 142, y: 29, w: 9, h: 1, axis: "x", style: "stone" },
-  /* La ferronnerie occupe tout le bord gauche donné par le bloc. `style` reste
-     descriptif pour les bancs et le diagnostic ; le rendu n'en fait plus un
-     sprite séparé depuis le 467. */
-  { x: 136, y: 31, w: 6, h: 1, axis: "x", style: "iron" },
-  /* ⚠️⚠️ ZIP 447 — ET LES RAMPES DES DEUX VOLÉES, QUI SONT L'INDICE DE
-     PROFONDEUR LE PLUS FORT DE TOUT L'ESCALIER. Elles sont posées SUR les cases
-     de marche extérieures, pas à côté : c'est ce qui les fait MONTER avec la
-     volée, puisque la file de rendu classe chaque décor à l'altitude de sa case
-     (`pushE(by, elAt(pr.x, pr.y))`). Une rampe posée sur l'herbe voisine serait
-     restée plate le long d'un escalier qui monte — le contresens exact que le
-     zip corrige.
-     ⚠️ ELLES COÛTENT DEUX CASES DE LARGEUR À CHAQUE VOLÉE, et c'est le prix
-     juste : la volée basse passe de 8 à 6 cases praticables, la haute de 6 à 4.
-     Un escalier dont la rampe ne prend pas de place est un escalier dont la
-     rampe est peinte sur le sol. `verify-vallee` confirme que les quatre volées
-     et tous les lieux de la ville restent atteignables. */
-  /* hors-zip — MÊME CORRECTION D'UNE CASE QUE TOWN_STAIRS[0] (x 142→141,
-     149→148) : ces deux rambardes bordent la même volée, elles bougent avec
-     elle pour rester exactement sur ses poteaux peints, ni chevauchement à
-     l'est ni vide avant contact à l'ouest. */
-  { x: 141, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "west" },
-  { x: 148, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "east" },   // volée basse
-  /* ⚠️⚠️⚠️ hors-zip 2026-09-02 — LA MÊME CORRECTION N'AVAIT JAMAIS ÉTÉ FAITE
-     ICI, ET C'EST CE QUE GUILLAUME A VU EN JOUANT : « on est bloqué avant
-     d'entrer en contact avec les rambardes […] vision en perspective des
-     poteaux ». Mesuré en superposant l'emprise au bitmap affiché
-     (`tools/_diag_post_zoom2.mjs`, jeté après usage) : le poteau EST de la
-     volée haute est peint centré sur x≈140, pas x=141 — un plein tile à
-     l'écart de sa propre emprise de collision, qui ne couvrait donc que du
-     pavé vide. Le poteau OUEST (x=136), lui, tombait déjà juste — seule la
-     paire de la volée basse avait reçu la correction ci-dessus au 467.
-     ⚠️ ET `h` PASSE DE 3 À 4 POUR LES DEUX POTEAUX DE CETTE VOLÉE (« on
-     marche sur le mur ») : leur socle sculpté déborde d'une rangée sous le
-     haut de la volée (rangée 30, le palier) — visible sur le même
-     recouvrement, la base du poteau continue nettement sous le bas de
-     l'ancienne emprise (h=3, rangées 27-29). Sans la rangée 30, rien
-     n'empêchait de se tenir SUR ce socle peint. Le palier reste ouvert sur
-     13 des 15 cases restantes — inchangé pour la traversée est-ouest. */
-  { x: 136, y: 27, w: 1, h: 4, axis: "y", style: "tall", side: "west" },
-  { x: 140, y: 27, w: 1, h: 4, axis: "y", style: "tall", side: "east" },   // volée haute
-];
-
-/* ZIP 467 — LE VISUEL EST UN SEUL BLOC. `x` est son origine dans le monde ;
-   `screenY` est déjà la projection verticale du bitmap, parce que le bloc
-   contient lui-même murs, paliers et dénivelés. Le repasser par une altitude
-   le déformerait une seconde fois. La position est calée par les deux volées :
-   l'escalier haut commence à l'écran en y=392 et le bas en y=469, exactement
-   aux rangées correspondantes du 268×248 natif. */
-export const TOWN_COURT_STAIR_BLOCK = { x: 134, screenY: 343 };
-/* Emprise de nettoyage dans la grille : un panneau générique ou une statue
-   ajoutés par une passe ultérieure dépasseraient du bloc sans appartenir à sa
-   composition. Elle est volontairement plus large de deux cases que le
-   contenu opaque, pour attraper les sprites hauts ancrés juste à côté. */
-export const TOWN_COURT_STAIR_CLEAR = { x: 132, y: 23, w: 23, h: 16 };
-
-/* Le pot est cuit dans le bloc mais reste un volume. Tout le reste de la
-   collision visible est déjà TOWN_RAILS ou un écart d'altitude. */
-export const TOWN_COURT_BLOCK_SOLIDS = [
-  { x: 147, y: 31, w: 1, h: 1, kind: "pot" },
-];
+/* Emprise de nettoyage : aucun arbre semé, aucun panneau de carrefour dans la
+   composition de l'escalier ni à son pied (un arbre ancré sur une marche
+   passerait par-dessus la volée). Deux cases de marge autour du palier et de la
+   volée, QUATRE sous son pied : un tilleul du mail planté juste devant la
+   dernière marche barrait la perspective du portail (vu en jeu). */
+export const TOWN_GRAND_STAIR_CLEAR = (() => {
+  const G = TOWN_GRAND_STAIR, L = G.landing, F = G.flight;
+  return { x: L.x - 2, y: G.edge - 1, w: L.w + 4, h: F.y + F.len + 4 - (G.edge - 1) };
+})();
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PHASE 7 (2026-09-27) — LA TABLE DU RÉSEAU (voir « UNE RUE EST UN TRACÉ »,
@@ -4992,11 +5038,11 @@ export const TOWN_ROADS = [
   // Le boulevard du Nord : droit le long du mur de la terrasse (un mur de
   // soutènement est droit), il s'infléchit à l'ouest vers le verger et à l'est
   // vers la route des artisans.
-  { id: "nord", w: 2, surf: TR_COBBLE, planted: true, curve: true, pts: [[10, 39], [24, 37.6], [42, 35.6], [62, 35], [92, 35], [118, 35], [186, 35], [204, 36.5], [TOWN_MAP_W - 2, 38]] },
+  { id: "nord", w: TOWN_NORD_W, surf: TR_COBBLE, planted: true, curve: true, pts: [[10, 39], [24, 37.6], [42, 35.6], [62, TOWN_NORD_Y], [92, TOWN_NORD_Y], [118, TOWN_NORD_Y], [186, TOWN_NORD_Y], [204, 36.5], [TOWN_MAP_W - 2, 38]] },
   // LE MAIL DE L'ÉGLISE : de l'angle nord-est de la grand-place au pied du grand
-  // escalier, en ligne droite — c'est la seule rue qui DOIT l'être, puisqu'elle
+  // escalier (DANS SON AXE, celui du portail, depuis le 2026-09-27), en ligne droite — c'est la seule rue qui DOIT l'être, puisqu'elle
   // n'existe que pour la perspective. Large, sablée, plantée des deux côtés.
-  { id: "mail", w: 4, surf: TR_GRAVEL, planted: { step: 3.5, both: true, conif: 0 }, pts: [[TOWN_PLAZA.x + TOWN_PLAZA.w - 2, TOWN_PLAZA.y + 1], [TOWN_STAIRS[0].x + TOWN_STAIRS[0].w / 2, TOWN_STAIRS[0].y + TOWN_STAIRS[0].len + 1]] },
+  { id: "mail", w: 4, surf: TR_GRAVEL, planted: { step: 3.5, both: true, conif: 0 }, pts: [[TOWN_PLAZA.x + TOWN_PLAZA.w - 2, TOWN_PLAZA.y + 1], [TOWN_GRAND_STAIR.axis, TOWN_GRAND_STAIR.flight.y + TOWN_GRAND_STAIR.flight.len + 1]] },
   // La rue du Port : de la grand-place au ponton, dans l'axe (inchangée au sud).
   { id: "port", w: 2, surf: TR_COBBLE, pts: [[TOWN_CROSS_ST_X + 1, TOWN_PLAZA.y + TOWN_PLAZA.h - 1], [TOWN_CROSS_ST_X + 1, 151]] },
   // La rue du Lac : elle suit la rive, quai compris.
@@ -5030,6 +5076,10 @@ export const TOWN_ROADS = [
   // La rue du Marché : du coin du champ de foire à la rue du Port.
   { id: "marche", w: 2, surf: TR_COBBLE, pts: [[62, 94], [93, 94]] },
 ];
+/* Le réseau que la GÉNÉRATION pave : le même, sauf le mail, qui y vise encore le
+   pied de l'ancien escalier (voir `TOWN_STAIR_SEED`). La dernière passe le
+   redresse vers le portail. Même ordre, donc mêmes indices de `street`. */
+export const TOWN_ROADS_SEED = TOWN_ROADS.map((r) => (r.id === "mail" ? { ...r, pts: [r.pts[0], TOWN_STAIR_SEED.mailEnd] } : r));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LES PARCELLES — ⚠️ LE RANG DÉSIGNE LE PROPRIÉTAIRE (`townHouseOwners` :
@@ -5168,7 +5218,8 @@ export const MAX_RESIDENTS = 20;
    Emprise portée à 18 cases pour une image agrandie de moitié
    (`TOWN_BITMAPS.church`) : la porte passe à ~2,8 m, et la flèche culmine à
    ~1,2 case du haut de la carte (rien ne dépasse du monde). */
-export const TOWN_CHURCH = { x: 133, y: 16, w: 18, h: 5 };
+/* (La constante elle-même est déclarée plus haut, avant `TOWN_GRAND_STAIR`,
+   qui se dérive de son axe : un `const` lu avant sa déclaration lève à l'import.) */
 
 /* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
    des autres quelque part au centre ». Brique et pierre, beffroi à horloge :

@@ -92,99 +92,9 @@ const ST = S.townStone;
   writePNG(path.join(OUT, "escaliers-surfaces.png"), up.px, up.W, up.H);
 }
 
-/* 467 — la composition n'est plus testée par morceaux : le test exige le bloc. */
-{
-  /* hors-zip 2026-09-02 — LE DÉTOURAGE SE VÉRIFIE SUR LE BRUT, PAS SUR
-     L'AFFICHÉ. `S.townCourtStairBlock` porte désormais `matchStoneToTownDallage`
-     (recolore le bloc pour rejoindre la teinte du dallage) : elle repeint
-     volontairement de grands aplats vers un gris proche de L≈132, exactement
-     la plage que le contrôle de matting ci-dessous surveille. Le vérifier sur
-     l'image affichée confondrait une pierre bien repeinte avec un fond de
-     détourage oublié — `townCourtStairBlockRaw` est le même décodage, sans le
-     réglage de teinte. */
-  const im = S.townCourtStairBlockRaw;
-  ok(im.width === 268 && im.height === 248,
-     "⚠️ le bloc garde exactement ses dimensions natives", `${im.width}×${im.height}`);
-  let opaque = 0, transparent = 0;
-  const gray = new Uint8Array(im.width * im.height);
-  for (let i = 0; i < im.width * im.height; i++) {
-    const a = im.__px[i * 4 + 3];
-    if (!a) { transparent++; continue; }
-    opaque++;
-    const r = im.__px[i * 4], g = im.__px[i * 4 + 1], b = im.__px[i * 4 + 2];
-    if (Math.abs(r - g) <= 6 && Math.abs(g - b) <= 6 && Math.abs(r - b) <= 6
-      && Math.abs(r - 132) <= 18) gray[i] = 1;
-  }
-  ok(transparent === 12196,
-     "⚠️⚠️ le détourage retire exactement les 13 aplats gris utiles", `${transparent} pixels transparents`);
-  const seen = new Uint8Array(gray.length);
-  let grayMax = 0;
-  for (let i = 0; i < gray.length; i++) {
-    if (!gray[i] || seen[i]) continue;
-    const stack = [i]; let n = 0; seen[i] = 1;
-    while (stack.length) {
-      const q = stack.pop(), x = q % im.width; n++;
-      for (const d of [-1, 1, -im.width, im.width]) {
-        const z = q + d;
-        if (z < 0 || z >= gray.length || seen[z] || !gray[z] || Math.abs((z % im.width) - x) > 1) continue;
-        seen[z] = 1; stack.push(z);
-      }
-    }
-    grayMax = Math.max(grayMax, n);
-  }
-  ok(grayMax <= 9,
-     "aucun grand aplat gris résiduel ne dépasse du bloc", `plus grand gris légitime : ${grayMax} px`);
-
-  /* hors-zip 2026-09-02 — LA PARITÉ DE TEINTE AVEC LE DALLAGE, CETTE FOIS SUR
-     L'AFFICHÉ. Même famille de contrôle que « 2. LA PARITÉ DE MATIÈRE AVEC LES
-     PAVÉS » plus bas (436) : Guillaume a vu « un gros problème de cohérence
-     colorimétrique » entre ce bloc et le parvis pavé qui l'entoure.
-     ⚠️⚠️ CE CONTRÔLE A DÛ ÊTRE REVU UNE FOIS : la première version exigeait
-     aussi une saturation basse (≤9 %, proche des 5,9 % du dallage). Elle
-     passait, et Guillaume a quand même vu « on dirait qu'il y a un filtre » —
-     le banc mesurait une désaturation UNIFORME comme une qualité, alors que
-     c'était elle, précisément, la source du filtre (voir la note de
-     `matchStoneToTownDallage`, fermeArt.js). Il ne reste donc qu'un seul
-     contrôle : la LUMINANCE ne doit plus jurer. La saturation, elle, n'est
-     plus bornée — une photo de pierre plus riche en couleur qu'une dalle
-     plate n'est pas un défaut, *un banc qui confond « différent » et
-     « faux » invente une deuxième fois le piège qu'il était censé éviter*. */
-  const disp = S.townCourtStairBlock;
-  let sumL = 0, n2 = 0;
-  for (let i = 0; i < disp.width * disp.height; i++) {
-    if (!disp.__px[i * 4 + 3]) continue;
-    sumL += lum(disp.__px[i * 4], disp.__px[i * 4 + 1], disp.__px[i * 4 + 2]); n2++;
-  }
-  const dispL = sumL / n2;
-  const flagPx = S.townRoad.flag.__px, flagN = S.townRoad.flag.width * S.townRoad.flag.height;
-  let fL = 0; for (let i = 0; i < flagN; i++) fL += lum(flagPx[i * 4], flagPx[i * 4 + 1], flagPx[i * 4 + 2]);
-  fL /= flagN;
-  ok(Math.abs(dispL - fL) / fL <= 0.12,
-     "le bloc affiché ne jure plus en luminance avec le dallage", `bloc L ${dispL.toFixed(1)} contre dallage L ${fL.toFixed(1)} (écart ${(100 * Math.abs(dispL - fL) / fL).toFixed(1)} %)`);
-
-  /* hors-zip 2026-09-02 — LA RAMBARDE DE PREMIER PLAN NE DOIT JAMAIS DEVENIR
-     INVISIBLE. `courtStairIronRailLayer` découpe sa ferronnerie par un seuil
-     de luminance lu sur le bitmap BRUT (voir sa note) — ce contrôle existe
-     parce que la version précédente de `matchStoneToTownDallage` a fait
-     passer TOUTE la bande au-dessus du seuil sans qu'aucun banc ne le voie :
-     mesuré à l'époque, `opaque=0/2304`, rambarde à 100 % transparente,
-     invisible en jeu. Un tracé d'ornement occupe une fraction franche de son
-     cadre, ni presque rien (le seuil aurait raté le motif) ni presque tout
-     (il aurait avalé le fond) : la fourchette est large exprès. */
-  {
-    const rail = S.townCourtStairIronRail;
-    let op = 0; const total = rail.width * rail.height;
-    for (let i = 0; i < total; i++) if (rail.__px[i * 4 + 3] > 0) op++;
-    ok(op / total >= 0.2 && op / total <= 0.8,
-       "la rambarde de premier plan garde un tracé visible", `${op}/${total} px opaques (${(100 * op / total).toFixed(1)} %)`);
-  }
-
-  const W = 280, H = 260, sh = makeCanvas(W, H);
-  sh.ctx.fillStyle = "#58764b"; sh.ctx.fillRect(0, 0, W, H);
-  sh.ctx.drawImage(disp, 6, 6);
-  const up = scale(sh.px, W, H, 4);
-  writePNG(path.join(OUT, "escaliers-bloc.png"), up.px, up.W, up.H);
-}
+/* (2026-09-27, nuit : les contrôles du bloc 467 — détourage, teinte, rambarde
+   de fer — sont partis avec lui. Le grand escalier qui le remplace est contrôlé
+   au § 5.) */
 
 console.log("\n=== 1. le bouclage du pavé de 4×4 ===\n");
 for (const [name, atlas] of [["marches N-S", ST.stair.v], ["marches E-O", ST.stair.h], ["dallage", S.townRoad.flag]]) {
@@ -359,11 +269,10 @@ console.log("\n=== 3. la volée reste lisible, et deux cases ne sont pas le mêm
     const girons = 16 / best;
     ok(girons === 1, "une case porte exactement UNE marche", `${girons} giron(s) par case`);
     let pire = 99, oùPire = "";
-    /* Les deux premières volées sont cuites dans `courtBlock` depuis le 467 :
-       leur période visuelle est celle du bitmap, pas celle de cet atlas de
-       service. Le contrôle reste entier sur les volées qui appellent encore
-       `drawTownStairTile`. */
-    for (const st of C.TOWN_STAIRS.slice(2)) {
+    /* La première volée (le grand escalier) est peinte d'un tenant
+       (`townGrandFlightSurface`) : sa contremarche est contrôlée au § 5. Le
+       contrôle reste entier sur les volées qui appellent `drawTownStairTile`. */
+    for (const st of C.TOWN_STAIRS.slice(1)) {
       const pas = Math.abs(st.to - st.from) / (st.len + 1);
       const h = pas * C.TOWN_ELEV_PX;
       if (h < pire) { pire = h; oùPire = `(${st.x},${st.y})`; }
@@ -462,123 +371,172 @@ console.log("\n=== 4 bis. toutes les marches d'une volée montent dans le même 
   ok(split === 0, "aucune volée n'a de marche perpendiculaire aux autres", `${flights} volée(s) examinée(s), ${split} panachée(s)`);
 }
 
-/* ═══════════════ 5. LA VRAIE VOLÉE, SUR LA VRAIE CARTE ═══════════════════
-   ⚠️ TROIS FENÊTRES PRISES SUR `generateTownWorld()`, et le décor autour est
-   celui de la ville. Un escalier ne se juge pas seul : il se juge à
-   l'articulation entre le dallage d'en bas, la volée et la terrasse d'en
-   haut — c'est là que l'ancien dessin trahissait, parce que la volée était
-   plus PAUVRE que le sol qui l'encadre. */
+/* ═══════════════ 5. LE GRAND ESCALIER DE L'ÉGLISE (2026-09-27, nuit) ═══════
+   Une volée droite dans l'axe du portail, un palier, un pont sur le boulevard.
+   Ce qu'on tient ici, et pourquoi :
+     · la GÉOMÉTRIE se dérive de l'église, du bord de la terrasse et du
+       boulevard — si l'un bouge, la volée suit, et ce banc le constate ;
+     · la MARCHE PEINTE EST LA MARCHE FRANCHIE : on lit les nez de marche dans
+       les PIXELS de la volée, et on les compare à l'altitude où marche le
+       personnage — c'est la seule mesure qui relie le dessin à la physique ;
+     · la COLLISION ET LE DESSIN DES GARDE-CORPS COÏNCIDENT, case par case,
+       dans les deux sens (une case solide sans dessin est un mur invisible ;
+       un dessin sans collision, un garde-corps qu'on traverse) — sauf la rampe
+       au-dessus de la chaussée, qu'on doit pouvoir passer DESSOUS ;
+     · le PONT : sous la volée, la chaussée est pavée, rue et revêtement, et le
+       tablier porte l'altitude de la marche. */
 const tw = E.generateTownWorld();
 const EP = C.TOWN_ELEV_PX;
-console.log("\n=== 5. la composition de référence est celle de la carte ===\n");
+const G = C.TOWN_GRAND_STAIR, F = G.flight, L = G.landing, OV = C.TOWN_OVERPASS, BR = C.TOWN_STAIR_BRIDGE;
+const id = (x, y) => y * tw.w + x;
+console.log("\n=== 5. le grand escalier de l'église ===\n");
 {
-  const legacy = (tw.props || []).filter(pr =>
-    ["rail", "railY", "courtFlowerPot", "courtSignFlowers"].includes(pr.kind));
-  ok(legacy.length === 0,
-     "⚠️ aucun morceau de l'ancien montage n'est encore émis", `${legacy.length} morceau(x)`);
-  const cl = C.TOWN_COURT_STAIR_CLEAR;
-  const contradictions = (tw.props || []).filter(pr => pr.x >= cl.x && pr.x < cl.x + cl.w && pr.y >= cl.y && pr.y < cl.y + cl.h
+  const legacy = (tw.props || []).filter(pr => ["rail", "railY", "courtFlowerPot", "courtSignFlowers"].includes(pr.kind));
+  ok(legacy.length === 0, "⚠️ aucun morceau de l'ancien montage n'est encore émis", `${legacy.length} morceau(x)`);
+  const cl = C.TOWN_GRAND_STAIR_CLEAR;
+  const intruders = (tw.props || []).filter(pr => pr.x >= cl.x && pr.x < cl.x + cl.w && pr.y >= cl.y && pr.y < cl.y + cl.h
     && ["bench", "statue", "streetSign"].includes(pr.kind));
-  ok(contradictions.length === 0,
-     "aucun ancien banc, statue ou panneau générique ne contredit la composition", `${contradictions.length} intrus`);
-  const treeIntruders = [];
+  ok(intruders.length === 0, "aucun banc, statue ou panneau générique ne contredit la composition",
+     intruders.map(p => `${p.kind}(${p.x},${p.y})`).join(" ") || "aucun intrus");
+  const trees = [];
   for (let y = cl.y; y < cl.y + cl.h; y++) for (let x = cl.x; x < cl.x + cl.w; x++) {
-    const o = tw.objects[y * tw.w + x];
-    if (o === C.O_TREE || o === C.O_TREE2) treeIntruders.push([x, y]);
+    const o = tw.objects[id(x, y)];
+    if (o === C.O_TREE || o === C.O_TREE2) trees.push(`(${x},${y})`);
   }
-  ok(treeIntruders.length === 0,
-     "aucun arbre ne repasse devant les pixels opaques du bloc", `${treeIntruders.length} arbre(s)`);
+  ok(trees.length === 0, "aucun arbre ne pousse dans la composition", trees.join(" ") || "aucun");
 
-  const [low, high] = C.TOWN_STAIRS;
-  ok(low.x === 141 && low.y === 31 && low.w === 8 && low.len === 6,
-     "la volée basse suit les 8×6 cases du bloc", `${low.w}×${low.len} en (${low.x},${low.y})`);
-  ok(high.x === 136 && high.y === 27 && high.w === 6 && high.len === 3,
-     "la volée haute suit les 6×3 cases du bloc", `${high.w}×${high.len} en (${high.x},${high.y})`);
-  ok(C.TOWN_COURT_STAIR_BLOCK.x === 134 && C.TOWN_COURT_STAIR_BLOCK.screenY === 343,
-     "le bloc est calé sur les deux volées", `x ${C.TOWN_COURT_STAIR_BLOCK.x}, écran y ${C.TOWN_COURT_STAIR_BLOCK.screenY}`);
+  // La géométrie se DÉRIVE.
+  const ax = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2;
+  ok(F.x + F.w / 2 === ax && L.x + L.w / 2 === ax, "la volée et le palier sont dans l'axe du portail",
+     `axe ${ax}, volée ${F.x}..${F.x + F.w - 1}, palier ${L.x}..${L.x + L.w - 1}`);
+  ok(L.y === C.TOWN_UPPER.y + C.TOWN_UPPER.h && L.y + L.h === F.y, "le palier va du bord de la terrasse à la tête de la volée",
+     `rangées ${L.y}..${L.y + L.h - 1}, volée à ${F.y}`);
+  const nord = C.TOWN_ROADS.find(r => r.id === "nord");
+  const nordRows = new Set(C.townRoadCells(nord).filter(([x]) => x === ax).map(([, y]) => y));
+  ok(nordRows.size === G.road.h && [...nordRows].every(y => y >= G.road.y && y < G.road.y + G.road.h),
+     "les rangées du pont sont celles du boulevard du Nord, sous l'axe", `boulevard en ${[...nordRows].sort().join(",")} · pont ${G.road.y}..${G.road.y + G.road.h - 1}`);
+  const lowest = C.townGrandStepElev(G.road.h - 1);
+  ok(lowest * EP >= 30, "la dernière marche au-dessus de la chaussée laisse passer un personnage dessous",
+     `${(lowest * EP).toFixed(1)} px de dégagement (le personnage en fait 23)`);
 
-  /* Le trajet central est joué dans les deux sens. On ne sonde pas trois cases :
-     on balaie chaque rangée visible, le virage du palier et les deux sorties. */
-  const id = (x, y) => y * tw.w + x;
-  /* ⚠️ hors-zip 2026-09-02 — LE POINT DE PASSAGE DU PALIER PASSE DE 140 À
-     141 : le poteau est de la volée haute a été recalé sur x=140 (il était
-     peint là, pas à 141 — voir la note de `TOWN_RAILS`), donc c'est
-     maintenant 141 la colonne libre à la rangée du palier, 140 celle qui
-     porte le poteau ET son socle. */
-  const up = [
-    [145, 37], [145, 36], [145, 35], [145, 34], [145, 33], [145, 32], [145, 31],
-    [145, 30], [141, 30], [138, 30], [138, 29], [138, 28], [138, 27], [138, 26],
-  ];
-  const elevs = up.map(([x, y]) => tw.elev[id(x, y)]);
-  const free = up.every(([x, y]) => !tw.solid[id(x, y)]);
-  const climb = elevs.every((e, i) => !i || e >= elevs[i - 1] - 1e-6
-    && e - elevs[i - 1] <= C.TOWN_STEP_MAX + 1e-6);
-  const down = [...elevs].reverse().every((e, i, a) => !i || e <= a[i - 1] + 1e-6
-    && a[i - 1] - e <= C.TOWN_STEP_MAX + 1e-6);
-  ok(free && climb && down,
-     "⚠️⚠️ le personnage monte ET descend chaque marche sans mur ni saut", `altitudes ${elevs.map(e => e.toFixed(2)).join(" → ")}`);
+  // Le pont.
+  let paved = 0, deckOk = 0, n = 0;
+  for (let y = BR.y; y < BR.y + BR.h; y++) for (let x = BR.x; x < BR.x + BR.w; x++) {
+    n++;
+    if (tw.ground[id(x, y)] === C.G_PATH && tw.elev[id(x, y)] === 0 && tw.road[id(x, y)]) paved++;
+    const inOv = x >= OV.x && x < OV.x + OV.w;
+    const want = inOv ? C.townGrandStepElev(y - F.y) : -1;
+    if (Math.abs(tw.deck[id(x, y)] - want) < 1e-4) deckOk++;
+  }
+  ok(paved === n, "sous le pont, la chaussée est pavée et au sol", `${paved}/${n} cases`);
+  ok(deckOk === n, "le tablier porte l'altitude de sa marche (colonnes ouvertes), aucune sous les rampes", `${deckOk}/${n} cases`);
+  let deckElsewhere = 0;
+  for (let i = 0; i < tw.deck.length; i++) if (tw.deck[i] >= 0 && !C.townOverpassCell(i % tw.w, (i / tw.w) | 0)) deckElsewhere++;
+  ok(deckElsewhere === 0, "aucune autre case de la ville n'a deux niveaux", `${deckElsewhere} case(s)`);
 
-  const lowTop = low.y * T - tw.elev[id(145, low.y)] * EP;
-  const lowBottom = (low.y + low.len) * T;
-  const highTop = high.y * T - tw.elev[id(138, high.y)] * EP;
-  ok(Math.abs(lowTop - (C.TOWN_COURT_STAIR_BLOCK.screenY + 126)) <= 4
-    && Math.abs(lowBottom - (C.TOWN_COURT_STAIR_BLOCK.screenY + 248)) <= 2
-    && Math.abs(highTop - (C.TOWN_COURT_STAIR_BLOCK.screenY + 49)) <= 4,
-     "la hauteur physique du personnage suit les marches peintes",
-     `haut ${highTop.toFixed(1)}, bas ${lowTop.toFixed(1)}…${lowBottom.toFixed(1)} px`);
+  // La marche peinte est la marche franchie : les nez, lus dans les pixels.
+  const im = S.townGrandStair.flight, W = im.width, H = im.height;
+  ok(W === F.w * T && H === F.len * T + EP, "la volée peinte couvre exactement la volée et sa hauteur", `${W}×${H} px`);
+  let holes = 0;
+  for (let i = 0; i < W * H; i++) if (im.__px[i * 4 + 3] < 255) holes++;
+  ok(holes === 0, "la volée peinte est opaque partout (rien ne transparaît du sol dessous)", `${holes} pixel(s) non opaques`);
+  const rowL = [];
+  for (let y = 0; y < H; y++) {
+    let sL = 0;
+    for (let x = T; x < W - T; x++) sL += lum(im.__px[(y * W + x) * 4], im.__px[(y * W + x) * 4 + 1], im.__px[(y * W + x) * 4 + 2]);
+    rowL.push(sL / (W - 2 * T));
+  }
+  /* Un nez = la rangée la plus claire juste au-dessus d'une chute franche de
+     luminance (le nez, puis l'ombre de la contremarche). */
+  const noses = [];
+  for (let y = 1; y < H - 1; y++) if (rowL[y] - rowL[y + 1] > 40 && rowL[y] >= rowL[y - 1]) noses.push(y);
+  const top0 = F.y * T - EP;
+  const want = [];
+  for (let k = 0; k < F.len; k++) want.push(Math.round((F.y + k) * T - C.townGrandStepElev(k) * EP) + T - 1 - top0);
+  const miss = want.filter(w => !noses.some(y => Math.abs(y - w) <= 1));
+  ok(noses.length === F.len && miss.length === 0, "⚠️⚠️ chaque nez peint est au bord de la marche où l'on marche",
+     `${noses.length} nez peints, attendus ${F.len} en ${want.join(",")}${miss.length ? " · manquent " + miss.join(",") : ""}`);
+  const risers = [];
+  for (let k = 1; k < F.len; k++) risers.push(Math.round(want[k] - want[k - 1] - T));
+  ok(risers.every(r => r >= 5), "chaque contremarche se voit", `${risers.join(",")} px`);
+
+  // Collision et dessin des garde-corps coïncident.
+  const drawn = new Set((tw.props || []).filter(p => /^stair(Post|Balus|Side|Rail)$/.test(p.kind)).map(p => p.x + "," + p.y));
+  const railCells = new Set();
+  for (const r of C.TOWN_RAILS) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) railCells.add(x + "," + y);
+  const noDraw = [...railCells].filter(k => !drawn.has(k));
+  const noColl = [...drawn].filter(k => { const [x, y] = k.split(",").map(Number); return !railCells.has(k) && !C.townOverpassCell(x, y); });
+  const notSolid = [...railCells].filter(k => { const [x, y] = k.split(",").map(Number); return !tw.solid[id(x, y)]; });
+  ok(noDraw.length === 0, "chaque case de garde-corps solide a son dessin", noDraw.join(" ") || `${railCells.size} cases`);
+  ok(noColl.length === 0, "chaque garde-corps dessiné bloque (sauf la rampe au-dessus de la chaussée)", noColl.join(" ") || `${drawn.size} décors`);
+  ok(notSolid.length === 0, "les cases de garde-corps sont solides dans le monde", notSolid.join(" ") || "toutes");
+  const overRails = (tw.props || []).filter(p => p.kind === "stairRail" && C.townOverpassCell(p.x, p.y));
+  ok(overRails.length === 2 * G.road.h && overRails.every(p => !tw.solid[id(p.x, p.y)] && Math.abs(p.e - C.townGrandStepElev(p.y - F.y)) < 1e-6),
+     "au-dessus de la chaussée, la rampe se dessine à la hauteur de sa marche et laisse passer dessous", `${overRails.length} morceaux`);
+  // Le pot.
+  const pot = S.townGrandStair.pot;
+  let red = 0, clay = 0;
+  for (let i = 0; i < pot.width * pot.height; i++) {
+    const r = pot.__px[i * 4], g = pot.__px[i * 4 + 1], b = pot.__px[i * 4 + 2], a = pot.__px[i * 4 + 3];
+    if (!a) continue;
+    if (r > 140 && r > g + 70 && r > b + 60) red++;
+    if (r > 140 && g > 70 && g < 120 && b < 90) clay++;
+  }
+  ok(pot.width >= 24 && pot.width <= 38 && pot.height >= 34 && pot.height <= 54 && red > 20 && clay > 40,
+     "le pot de géraniums est bien détouré du bloc d'origine", `${pot.width}×${pot.height} px, ${red} px de fleurs rouges, ${clay} de terre cuite`);
 }
-const stairSpots = [];
-for (const st of C.TOWN_STAIRS) stairSpots.push(st);
-const VIEWS = stairSpots.slice(0, 3).map((st, k) => ["volee" + (k + 1), {
-  x: Math.max(0, (st.x | 0) - 9), y: Math.max(0, (st.y | 0) - 8), w: 20, h: 18,
-}]);
+
+/* ═══════════════ 6. LES PLANCHES ═══════════════════════════════════════════
+   Trois fenêtres sur la vraie carte : le grand escalier, la volée de service, le
+   belvédère. Le grand escalier est peint comme le jeu le peint : le sol, la
+   volée d'un tenant, puis ses décors (piliers, balustrades, rampes, pots) triés
+   par profondeur. ⚠️ Le dallage, la rue et l'herbe sont les VRAIS dessins. */
+const VIEWS = C.TOWN_STAIRS.map((st, k) => ["volee" + (k + 1), k === 0
+  ? { x: L.x - 5, y: G.edge - 12, w: L.w + 10, h: F.y + F.len + 5 - (G.edge - 12) }
+  : { x: Math.max(0, (st.x | 0) - 9), y: Math.max(0, (st.y | 0) - 8), w: 20, h: 18 }]);
 for (const [name, v] of VIEWS) {
   const sh = makeCanvas(v.w * T, v.h * T);
   const elAt = (x, y) => (x < 0 || y < 0 || x >= tw.w || y >= tw.h ? 0 : tw.elev[y * tw.w + x]);
   sh.ctx.fillStyle = "#1d2a1a"; sh.ctx.fillRect(0, 0, v.w * T, v.h * T);
-  for (let y = v.y; y < v.y + v.h + 2; y++) for (let x = v.x; x < v.x + v.w; x++) {
+  for (let y = v.y; y < v.y + v.h + 4; y++) for (let x = v.x; x < v.x + v.w; x++) {
     if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+    if (C.townGrandFlightCell(x, y) && !C.townOverpassCell(x, y)) continue;   // peinte d'un tenant
     const i = y * tw.w + x, g = tw.ground[i], e = tw.elev[i];
-    const bakedCourtStair = C.townCourtMainStairCell(x, y);
     const px = (x - v.x) * T, py = (y - v.y) * T - e * EP;
-    /* ⚠️ MÊME AVEU QU'AU 434 : l'herbe et la rue sont les VRAIS dessins du jeu,
-       le dallage est approximé à sa teinte moyenne (ses vingt `fillRect` vivent
-       dans la closure du rendu). Ce banc juge la PIERRE DE LA HAUTE-VILLE ; il
-       lui faut un fond honnête, pas un décor complet. */
-    if (g === C.G_TOWN_STAIR && bakedCourtStair) {
-      const gt = S.townGrass;
-      sh.ctx.drawImage(gt[(x * 37 + y * 17) % gt.length], px, py);
-    }
-    else if (g === C.G_TOWN_STAIR) { if (!A.drawTownStairTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#b8b4ab"; sh.ctx.fillRect(px, py, T, T); } }
+    if (g === C.G_TOWN_STAIR) { if (!A.drawTownStairTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#b8b4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else if (g === C.G_PATH) { if (!A.drawTownRoadTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.path, px, py); }
     else if (g === C.G_PATH_STONE) { if (!A.drawTownFlagTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else { const gt = S.townGrass; sh.ctx.drawImage(gt[(x * 37 + y * 17) % gt.length], px, py); }
-
+    if (y >= BR.y && y < BR.y + BR.h && (x === BR.x - 1 || x === BR.x + BR.w)) A.drawStairBridgeMouth(sh.ctx, px, py, x === BR.x - 1 ? 1 : -1);
     const drop = e - elAt(x, y + 1);
-    if (drop > 0.01 && !bakedCourtStair) {
+    if (drop > 0.01 && !C.townGrandFlightCell(x, y + 1)) {
       const fh = drop * EP;
-      /* ⚠️ ZIP 447 — le banc suit le jeu : une marche reçoit sa CONTREMARCHE,
-         une falaise son parement. Recopier ici le seul parement aurait remesuré
-         un dessin que le jeu n'emploie plus sous les volées — le stub menteur
-         du §10, dans l'outil censé nous en protéger. */
       if (tw.ground[y * tw.w + x] === C.G_TOWN_STAIR) A.drawTownStairRiser(sh.ctx, S, tw, x, y, px, py + T, fh);
       else A.drawTownCliffFace(sh.ctx, S, tw, x, y, px, py + T, fh);
       sh.ctx.fillStyle = "#c6c1b6"; sh.ctx.fillRect(px, py + T - 2, T, 2);
       sh.ctx.fillStyle = "rgba(20,26,16,0.30)"; sh.ctx.fillRect(px, py + T + fh, T, 3);
     }
-    if (g === C.G_TOWN_STAIR && !bakedCourtStair) for (const sd of [-1, 1]) {
+    if (g === C.G_TOWN_STAIR) for (const sd of [-1, 1]) {
       const dside = e - elAt(x + sd, y);
       if (dside <= 0.01) continue;
       A.drawTownStairCheek(sh.ctx, S, tw, x, y, px, py, sd < 0 ? px : px + T - 4, 4, dside * EP);
     }
   }
-  /* 467 — même appel unique que le jeu. Le sol reste dessous et apparaît dans
-     les 12 196 pixels transparents ; aucune rambarde n'est reconstruite ici. */
-  A.drawTownCourtStairBlock(sh.ctx, S, -v.x * T, -v.y * T);
+  // La volée d'un tenant, puis les décors du grand escalier, triés comme en jeu.
+  A.drawTownGrandFlight(sh.ctx, S, -v.x * T, -v.y * T);
+  const items = (tw.props || []).filter(p => /^stair/.test(p.kind) && p.x >= v.x - 1 && p.x < v.x + v.w + 1 && p.y >= v.y && p.y < v.y + v.h + 3)
+    .map(p => ({ p, e: p.e !== undefined ? p.e : elAt(p.x, p.y) }))
+    .sort((a, b) => C.townDepthKey((a.p.y + 1) * T, a.e) - C.townDepthKey((b.p.y + 1) * T, b.e));
+  for (const { p, e } of items) {
+    /* Le faux canevas ignore `translate` (voir lib-canvas) : on décale la
+       position à la main, en pixels, comme le fait `pushE` en jeu. */
+    const q = { ...p, x: p.x - v.x, y: p.y - v.y - e * EP / T };
+    A.drawGrandStairProp(sh.ctx, S, q);
+  }
   const up = scale(sh.px, v.w * T, v.h * T, 3);
   writePNG(path.join(OUT, "escaliers-" + name + ".png"), up.px, up.W, up.H);
 }
 
-console.log("\nImages : tools/out/escaliers-surfaces.png, tools/out/escaliers-bloc.png, " + VIEWS.map(([n]) => "escaliers-" + n + ".png").join(", "));
+console.log("\nImages : tools/out/escaliers-surfaces.png, " + VIEWS.map(([n]) => "escaliers-" + n + ".png").join(", "));
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC` : "\nTout est bon.");
 process.exit(fail ? 1 : 0);

@@ -1422,6 +1422,13 @@ export function townStairVertical(tw, x, y) {
    sept au sud : de quoi couvrir tout parvis que dalle `forecourt`) ; et les
    TERRASSES pour tout le reste (Haute-Ville, belvédère, gare, quais). */
 const PAVE_CIVIC = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT].map((b) => ({ x: b.x - 2, y: b.y, w: b.w + 4, h: b.h + 7 }));
+/* 2026-09-27 (nuit) — le parvis de l'église descend jusqu'au grand escalier : son
+   palier et le parvis agrandi sont du même dallage civique que lui (sans quoi ils
+   prenaient les assises de grès des terrasses — un sol de briques couchées). */
+{
+  const L = C.TOWN_GRAND_STAIR.landing;
+  PAVE_CIVIC[0].h = Math.max(PAVE_CIVIC[0].h, L.y + L.h - C.TOWN_CHURCH.y);
+}
 const inR = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 export function townPavingFamily(x, y) {
   if (inR(C.TOWN_MARKET, x, y)) return "market";
@@ -1778,17 +1785,54 @@ export function drawTownHedgeTile(ctx, S, tw, x, y, px, py) {
   return true;
 }
 
-/* ZIP 467 — UN SEUL APPEL, UN SEUL BITMAP. Le bloc porte déjà les murs, les
-   deux volées, les quatre colonnes, les balustrades et le pot. `dx/dy` servent
-   uniquement aux bancs qui cadrent une fenêtre locale ; le jeu passe zéro.
-   Aucune altitude n'est appliquée ici : le relief est déjà dessiné dans les
-   248 rangées de la source. */
-export function drawTownCourtStairBlock(ctx, S, dx = 0, dy = 0) {
-  const im = S?.townCourtStairBlock;
+/* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER, D'UN SEUL TENANT (voir
+   `townGrandFlightSurface`). Peinte après le sol et avant la file de tri : les
+   passants, les rampes et les piliers se posent dessus. Son haut est le bord du
+   palier (une unité au-dessus de la rangée de tête), son bas le sol du pied.
+   `dx/dy` servent aux bancs qui cadrent une fenêtre locale ; le jeu passe zéro. */
+export function drawTownGrandFlight(ctx, S, dx = 0, dy = 0) {
+  const im = S?.townGrandStair?.flight;
   if (!im) return false;
-  ctx.drawImage(im,
-    C.TOWN_COURT_STAIR_BLOCK.x * C.TILE + dx,
-    C.TOWN_COURT_STAIR_BLOCK.screenY + dy);
+  const F = C.TOWN_GRAND_STAIR.flight;
+  ctx.drawImage(im, F.x * C.TILE + dx, F.y * C.TILE - C.TOWN_ELEV_PX + dy);
+  return true;
+}
+/* LA BOUCHE DU PASSAGE : la chaussée s'assombrit vers la volée qui l'enjambe
+   (`dir` : +1 si la volée est à l'est de la case, −1 à l'ouest). Un dégradé en
+   paliers, pas un fondu : c'est une ombre portée par une masse, nette au pied. */
+export function drawStairBridgeMouth(ctx, px, py, dir) {
+  const T = C.TILE;
+  ctx.fillStyle = "#1c1a16";
+  /* Seize paliers d'un pixel sur la case qui touche la volée, de 0,05 à 0,55 :
+     à 8 px (premier jet), la bouche ne se voyait pas à l'écran (mesuré). */
+  for (let k = 0; k < T; k++) {
+    ctx.globalAlpha = 0.05 + 0.5 * Math.pow(k / (T - 1), 1.6);
+    ctx.fillRect(dir > 0 ? px + k : px + T - 1 - k, py, 1, T);
+  }
+  ctx.globalAlpha = 1;
+  return true;
+}
+/* LES DÉCORS DU GRAND ESCALIER (`townGrandStairProps`), dans l'appel de la file
+   de tri — l'altitude est déjà appliquée par l'appelant. Tout est ancré au bas
+   de la case, comme les autres décors. */
+const GS_RAIL_H = 13;   // la main courante au-dessus du giron, en px
+export function drawGrandStairProp(ctx, S, pr) {
+  const GS = S?.townGrandStair;
+  if (!GS) return false;
+  const T = C.TILE, px = pr.x * T, by = (pr.y + 1) * T;
+  if (pr.kind === "stairPost") {
+    const im = pr.tall ? GS.postTall : pr.foot ? GS.postFoot : GS.post;
+    ctx.drawImage(im, px, by - im.height + 2);
+  } else if (pr.kind === "stairBalus") {
+    ctx.drawImage(GS.balus, px, by - GS.balus.height + 2);
+  } else if (pr.kind === "stairSide") {
+    ctx.drawImage(GS.side, px, pr.y * T - GS_RAIL_H);
+  } else if (pr.kind === "stairRail") {
+    // Un morceau par marche : du haut de SON giron au haut du giron suivant.
+    ctx.drawImage(GS.rail, px, pr.y * T - GS_RAIL_H);
+  } else if (pr.kind === "stairPot") {
+    ctx.drawImage(GS.pot, px + T / 2 - (GS.pot.width >> 1), by - GS.pot.height + 2);
+  } else return false;
   return true;
 }
 
@@ -4845,115 +4889,197 @@ export function buildSprites() {
     return c;
   }
 
-  /* hors-zip 2026-09-02 (deuxième passe) — `liftShadowFloor` A ÉTÉ RETIRÉE,
-     ET C'EST LA CAUSE DU « ON DIRAIT UN FILTRE » DE GUILLAUME. Elle relevait
-     déjà les joints les plus sombres (floor=55) AVANT que `matchStoneToTownDallage`
-     ne s'exécute par-dessus — deux relevés de luminance empilés, le second
-     calibré sur la sortie DÉJÀ relevée du premier. Mesuré après coup
-     (`tools/_diag_check.mjs`, jeté) : plus un seul pixel affiché sous L≈100,
-     toute la plage 0-250 du brut écrasée dans une bande 100-250 — la
-     définition même d'un voile qui aplatit tout, joints compris. *Deux
-     corrections qui touchent la même grandeur, calibrées l'une sur l'autre,
-     ne s'additionnent pas : elles se composent, et personne n'avait mesuré
-     le résultat de la composition avant de le montrer.* `matchStoneToTownDallage`
-     ci-dessous reprend maintenant SEULE tout le travail, calibrée sur le
-     bitmap BRUT — elle relève aussi bien l'ensemble du bloc que ses joints,
-     en un seul geste mesuré une seule fois. */
+  /* (2026-09-27, nuit : le bloc 467 et sa recoloration `matchStoneToTownDallage`
+     sont partis avec l'ancien escalier. Leur leçon reste : deux corrections qui
+     touchent la même grandeur, calibrées l'une sur l'autre, se COMPOSENT — on
+     mesure le résultat de la composition avant de le montrer.) */
 
-  /* hors-zip 2026-09-02 — LA TEINTE D'ENSEMBLE DU BLOC D'ESCALIER, RECALÉE SUR
-     LE DALLAGE. Guillaume, en jeu, deux fois : d'abord « un gros problème de
-     cohérence colorimétrique », puis, sur le premier correctif, « on dirait
-     qu'il y a un filtre ». Mesuré sur le bitmap BRUT (`townCourtStairBlockRaw`,
-     jamais sur un intermédiaire déjà retouché — voir la note ci-dessus) :
-     dallage L 163,1 / écart-type 33,0 / saturation 5,9 % (16 gris réglés à la
-     main, zip 436) ; bloc brut L 109,9 / écart-type 46,0 / saturation 16,3 %.
-     ⚠️ UN SEUL GESTE, PAS DEUX : une affine sur la LUMINANCE de chaque pixel
-     — `L' = (L−109,9)×(33,0/46,0)+163,1` — appliquée en ÉCHELLE sur les trois
-     canaux (donc SANS toucher la teinte ni la saturation relative : les trois
-     canaux montent ou descendent dans les mêmes proportions). Ça recale la
-     moyenne ET l'écart-type du bloc sur ceux du dallage.
-     ⚠️⚠️ AUCUNE DÉSATURATION. Le premier correctif en ajoutait une (mélange
-     vers le gris) pour rapprocher la saturation du dallage (5,9 %) — c'est
-     elle qui a produit le « filtre » : une désaturation UNIFORME sur toute
-     l'image, quel que soit son contenu, est la définition d'un filtre
-     Instagram. Comparée à l'œil, sur `tools/_diag_cal3.mjs` (jeté), la
-     version luminance-seule (saturation encore à 16,3 %) se distinguait à
-     peine des versions désaturées à 15 % ou 30 % — la richesse de couleur
-     d'une vraie photo de pierre (mousse, usure, mortier chaud) n'est pas ce
-     qui jurait avec le dallage. C'était sa LUMINOSITÉ, et seulement elle.
-     ⚠️⚠️⚠️ `courtStairIronRailLayer`, plus bas, DÉCOUPE la ferronnerie sombre
-     de ce même bloc par un seuil de luminance (L>95 = fond, disparaît). Avec
-     l'ancienne calibration (sur un intermédiaire déjà relevé, désaturé),
-     TOUS les pixels de la bande finissaient au-dessus de 95 : la rambarde de
-     premier plan était devenue 100 % transparente, invisible en jeu, sans
-     qu'aucun banc ne le voie (mesuré : `opaque=0/2304`). La fonction lit donc
-     maintenant le seuil sur le bitmap BRUT (où le partage clair/sombre existe
-     réellement, mesuré : creux net entre L 80-100 sur la bande de la
-     rambarde) et pioche la couleur affichée dans le bloc CORRIGÉ — la forme
-     de la ferronnerie est une propriété du DÉCOUPAGE, sa couleur une
-     propriété de l'AFFICHAGE, exactement la même distinction que
-     `townCourtStairBlockRaw` pour le contrôle de détourage.
-     Recalculer ces cinq constantes seulement si la référence (le dallage) ou
-     la photo source changent — pas avant, comme `L' = (L−106)×33,7/45,8 + 92`
-     au 447. */
-  function matchStoneToTownDallage(canvas) {
-    const OLD_L = 109.9, OLD_SD = 46.0, TARGET_L = 163.1, TARGET_SD = 33.0;
-    const GAIN = TARGET_SD / OLD_SD;
-    const g = canvas.getContext("2d");
-    const id = g.getImageData(0, 0, canvas.width, canvas.height);
-    const d = id.data;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;
-      const r = d[i], gr = d[i + 1], b = d[i + 2];
-      const L = 0.299 * r + 0.587 * gr + 0.114 * b;
-      const Lp = (L - OLD_L) * GAIN + TARGET_L;
-      const scale = L > 0.001 ? Lp / L : 1;
-      d[i] = Math.max(0, Math.min(255, r * scale));
-      d[i + 1] = Math.max(0, Math.min(255, gr * scale));
-      d[i + 2] = Math.max(0, Math.min(255, b * scale));
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-09-27 (nuit) — LE GRAND ESCALIER DE L'ÉGLISE : LES DESSINS.
+     ╚══════════════════════════════════════════════════════════════════════
+     Référence : `refs/référence nouvel escalier.jpg` (Guillaume) — une volée
+     droite de pierre claire entre deux rampes à piliers, un palier dallé bordé
+     de balustrades, des pots de géraniums. La matière est celle de l'ancien
+     bloc du 467 (même calcaire, même ombre sous le nez des marches), recalée sur
+     le dallage civique du parvis (`PAL_CIVIC`) : les marches descendent du
+     parvis, elles doivent en être la pierre.
+     ⚠️ TOUT SE DÉRIVE DE `TOWN_GRAND_STAIR` ET DE `townGrandStepElev` : la
+     hauteur d'une marche à l'écran est `T + EP/(len+1)` (giron + contremarche),
+     jamais un nombre écrit ici — la volée dessinée et la volée où l'on marche
+     sont la même. */
+  const GS_STONE = { body: ["#c9c5b8", "#c3bfb1", "#cfcbbe", "#bebaad", "#c6c2b5", "#cbc7ba"],
+    lit: "#e4e0d4", nose: "#d9d5c9", crease: "#8e8a80", riser: ["#a29e92", "#9c988c", "#a6a296", "#99958a"],
+    riserTop: "#6f6b63", riserBot: "#8a867b", joint: "#7c786f", moss: "#6d7a50", moss2: "#7f8c5c" };
+  /* La volée, d'un seul canevas : du bord du palier (contremarche d'arrivée) au
+     sol du pied. Largeur : la volée entière, rampes comprises (leurs joues sont
+     sous les rampes, qui se posent par-dessus dans la file de tri). */
+  function townGrandFlightSurface() {
+    const F = C.TOWN_GRAND_STAIR.flight, T = 16, EP = C.TOWN_ELEV_PX;
+    const W = F.w * T, H = F.len * T + EP;
+    const [c, g] = cv(W, H), r = makeRnd(0x51a1);
+    const tt = (k) => Math.round(k * T + EP * (1 - C.townGrandStepElev(k)));   // haut du giron k
+    for (let k = 0; k <= F.len; k++) {
+      /* LA CONTREMARCHE au-dessus du giron k (k = len : celle du pied). */
+      const r0 = k === 0 ? 0 : tt(k - 1) + T, r1 = k === F.len ? H : tt(k);
+      if (r1 > r0) {
+        let x = -((r() * 20) | 0);
+        while (x < W) {
+          const w = 14 + ((r() * 18) | 0);
+          P(g, Math.max(0, x), r0, Math.min(W, x + w) - Math.max(0, x), r1 - r0, GS_STONE.riser[(r() * 4) | 0]);
+          if (x + w < W) P(g, x + w - 1, r0 + 1, 1, r1 - r0 - 1, GS_STONE.joint);
+          x += w;
+        }
+        P(g, 0, r0, W, 1, GS_STONE.riserTop);                   // l'ombre sous le nez
+        if (r1 - r0 > 3) P(g, 0, r1 - 1, W, 1, GS_STONE.riserBot);
+        for (let q = 0; q < 10; q++) P(g, (r() * W) | 0, r0 + 1 + ((r() * Math.max(1, r1 - r0 - 2)) | 0), 1, 1, r() < 0.5 ? "#b0ac9f" : "#8d897e");
+      }
+      if (k === F.len) break;
+      /* LE GIRON k : des dalles de 18 à 34 px, joints décalés d'une marche à
+         l'autre ; le pli d'ombre au fond, le nez clair devant. */
+      const y0 = tt(k);
+      let x = -((r() * 24) | 0);
+      while (x < W) {
+        const w = 18 + ((r() * 17) | 0), x0 = Math.max(0, x), x1 = Math.min(W, x + w);
+        P(g, x0, y0, x1 - x0, T, GS_STONE.body[(r() * GS_STONE.body.length) | 0]);
+        // Marbrure et grain : la pierre n'est pas une teinte.
+        const mw = 4 + ((r() * 8) | 0), mx = x0 + ((r() * Math.max(1, x1 - x0 - mw)) | 0);
+        P(g, mx, y0 + 3 + ((r() * 7) | 0), Math.min(mw, x1 - mx), 2 + ((r() * 3) | 0), GS_STONE.body[(r() * GS_STONE.body.length) | 0]);
+        for (let q = 0; q < ((x1 - x0) / 3) | 0; q++) P(g, x0 + ((r() * (x1 - x0)) | 0), y0 + 2 + ((r() * 11) | 0), 1, 1, r() < 0.55 ? "#d7d3c7" : "#aeaa9d");
+        if (x + w < W) { P(g, x + w - 1, y0 + 1, 1, T - 3, GS_STONE.joint); P(g, x + w, y0 + 1, 1, T - 3, "#d3cfc2"); }
+        x += w;
+      }
+      P(g, 0, y0, W, 1, GS_STONE.crease);                      // le pli contre la contremarche du dessus
+      P(g, 0, y0 + 1, W, 1, "#b5b1a4");
+      P(g, 0, y0 + T - 2, W, 1, GS_STONE.nose);                 // le nez
+      P(g, 0, y0 + T - 1, W, 1, GS_STONE.lit);
+      // L'usure : le milieu de la volée, là où tout le monde passe, est plus clair.
+      g.fillStyle = "rgba(240,236,226,0.16)"; g.fillRect(W / 2 - 26, y0 + 2, 52, T - 4);
+      g.fillStyle = "rgba(240,236,226,0.10)"; g.fillRect(W / 2 - 38, y0 + 2, 76, T - 4);
+      // Écornures du nez, et la mousse aux deux bouts du pli (l'ombre des rampes).
+      for (let q = 0; q < 3; q++) P(g, T + 4 + ((r() * (W - 2 * T - 8)) | 0), y0 + T - 1, 1 + ((r() * 2) | 0), 1, "#b9b5a8");
+      for (const side of [0, 1]) for (let q = 0; q < 3; q++) {
+        const mx = side ? W - T - 1 - ((r() * 7) | 0) : T + ((r() * 7) | 0);
+        P(g, mx, y0 + 1 + ((r() * 2) | 0), 1 + ((r() * 2) | 0), 1, r() < 0.5 ? GS_STONE.moss : GS_STONE.moss2);
+      }
     }
-    g.putImageData(id, 0, 0);
-    return canvas;
-  }
-
-  /* hors-zip — LA RAMBARDE 'IRON' EN CALQUE DE PREMIER PLAN, POUR QUE LE
-     JOUEUR PASSE DERRIÈRE. Le bloc entier se peint une seule fois, avant
-     toute la file de tri (voir son appel dans FermeGame.js) : le joueur est
-     donc TOUJOURS devant lui, jamais derrière — signalé par Guillaume sur la
-     ferronnerie de la volée basse. On ne repeint pas le bloc : on en découpe
-     une copie de la SEULE bande de cette rambarde (dérivée de `TOWN_RAILS`,
-     pas recopiée en dur — si la rambarde bouge, le calque suit), et on n'y
-     garde OPAQUE que son tracé sombre. Le mur qu'on aperçoit entre ses
-     volutes, lui, s'efface : c'est ce qui laisse le joueur s'y découper
-     comme derrière une vraie grille plutôt que sous un rectangle plein.
-     ⚠️⚠️⚠️ hors-zip 2026-09-02 — LE SEUIL SE LIT SUR LE BRUT, LA COULEUR SUR
-     L'AFFICHÉ. Avant : le seuil `L>95` était mesuré sur `block` (l'image déjà
-     recolorée), donc valable UNE fois, pour UNE calibration de
-     `matchStoneToTownDallage` — la calibration a changé une fois (voir sa
-     note), et la bande entière est passée au-dessus de 95 : rambarde
-     entièrement transparente, mesuré `opaque=0/2304`, invisible en jeu, sans
-     qu'aucun banc ne le voie. Le partage clair/tracé sombre est une propriété
-     du DÉCOUPAGE de la photo (un creux net entre L 80 et 100 sur `raw`, quelle
-     que soit la teinte qu'on choisit d'afficher ensuite) — jamais du réglage
-     cosmétique qui vient après, exactement la distinction déjà posée pour
-     `townCourtStairBlockRaw` au contrôle de détourage. `raw` sert donc au
-     test, `block` fournit les pixels gardés. */
-  function courtStairIronRailLayer(block, raw) {
-    const rail = C.TOWN_RAILS.find(r => r.style === "iron");
-    const T = 16, ORG = C.TOWN_COURT_STAIR_BLOCK.x;
-    const x = (rail.x - ORG) * T, w = rail.w * T;
-    const y = 136, h = 24; // bande mesurée dans le bitmap : là où le tracé plonge vers L≈0
-    const [c, g] = cv(w, h);
-    g.drawImage(block, x, y, w, h, 0, 0, w, h);
-    const id = g.getImageData(0, 0, w, h), d = id.data;
-    const rg = raw.getContext("2d");
-    const maskD = rg.getImageData(x, y, w, h).data;
-    for (let i = 0; i < d.length; i += 4) {
-      const L = 0.299 * maskD[i] + 0.587 * maskD[i + 1] + 0.114 * maskD[i + 2];
-      if (L > 95) d[i + 3] = 0; // le fond entre les volutes disparaît, le tracé sombre reste
+    /* LES JOUES : sous chaque rampe, un limon de pierre lisse qui suit la pente.
+       La rampe (`stairRail`) se pose dessus ; ce qui en dépasse dit l'épaisseur. */
+    for (const jx of [0, W - T]) {
+      for (let k = 0; k < F.len; k++) {
+        const y0 = k === 0 ? 0 : tt(k - 1) + T, y1 = k === F.len - 1 ? H : tt(k + 1);
+        P(g, jx, y0, T, y1 - y0, "#bdb9ac");
+        P(g, jx + (jx ? 0 : T - 2), y0, 2, y1 - y0, "#8f8b81");   // l'arête côté marches
+        P(g, jx + (jx ? T - 1 : 0), y0, 1, y1 - y0, "#6f6b63");   // l'arête extérieure
+      }
+      for (let q = 0; q < 26; q++) P(g, jx + 2 + ((r() * (T - 4)) | 0), (r() * H) | 0, 1, 1, r() < 0.5 ? "#cfcbbe" : "#a9a598");
     }
-    g.putImageData(id, 0, 0);
     return c;
+  }
+  /* LE PILIER : dé mouluré, fût clair à panneau creux, chapiteau. `h` : la hauteur
+     totale au-dessus de son sol. Ancré au bas du canevas, centré. */
+  function grandStairPostSprite(h) {
+    const W = 16, [c, g] = cv(W, h + 3);
+    const o = "#5d584f", lit = "#e6e2d6", mid = "#cfcabd", sh = "#a8a396", dk = "#8a857a";
+    const base = h;                                         // rangée du sol
+    // Ombre portée au pied.
+    g.fillStyle = "rgba(30,28,22,0.28)"; g.fillRect(1, base, 14, 2); g.fillRect(3, base + 2, 10, 1);
+    // Le dé (plinthe) : 16 × 7.
+    P(g, 0, base - 7, 16, 7, o); P(g, 1, base - 6, 14, 5, mid); P(g, 1, base - 6, 14, 1, lit); P(g, 1, base - 2, 14, 1, sh); P(g, 13, base - 5, 2, 3, dk);
+    // Le fût : 12 de large, un panneau creux sculpté (la référence en porte un).
+    const fTop = 6, fBot = base - 7;
+    P(g, 2, fTop, 12, fBot - fTop, o); P(g, 3, fTop, 10, fBot - fTop, mid);
+    P(g, 3, fTop, 2, fBot - fTop, lit); P(g, 11, fTop, 2, fBot - fTop, sh);
+    if (fBot - fTop >= 12) {
+      const py0 = fTop + 3, py1 = fBot - 3;
+      P(g, 6, py0, 4, py1 - py0, dk); P(g, 7, py0 + 1, 2, py1 - py0 - 2, sh);
+      P(g, 6, py0, 4, 1, o); P(g, 7, (py0 + py1) >> 1, 2, 1, lit);
+    }
+    // Le chapiteau : 16 × 6, dessus clair (vu d'en haut), larmier sombre.
+    P(g, 0, 0, 16, 6, o); P(g, 1, 1, 14, 3, lit); P(g, 1, 4, 14, 1, mid); P(g, 2, 5, 12, 1, dk);
+    P(g, 2, 1, 1, 1, "#f2efe6"); P(g, 12, 2, 2, 1, mid);
+    return c;
+  }
+  /* LA TRAVÉE DE BALUSTRADE (est-ouest), 16 × 20 : main courante vue de dessus
+     et de face, trois balustres en poire, socle. Elle boucle sur 16 px. */
+  function grandStairBalusSprite() {
+    const W = 16, H = 22, [c, g] = cv(W, H);
+    const o = "#5d584f", lit = "#e6e2d6", mid = "#cfcabd", sh = "#a8a396", dk = "#8a857a";
+    const base = 20;
+    g.fillStyle = "rgba(30,28,22,0.24)"; g.fillRect(0, base, W, 2);
+    // Socle.
+    P(g, 0, base - 4, W, 4, o); P(g, 0, base - 3, W, 2, mid); P(g, 0, base - 3, W, 1, lit);
+    // Trois balustres (col étroit, panse, base), dans le jour sombre entre socle et main courante.
+    P(g, 0, 5, W, base - 9, "rgba(60,56,48,0.55)");
+    for (const bx of [1, 6, 11]) {
+      P(g, bx + 1, 5, 2, 2, mid);                 // col
+      P(g, bx, 7, 4, 1, o); P(g, bx, 8, 4, 4, mid); P(g, bx, 8, 1, 4, lit); P(g, bx + 3, 8, 1, 4, sh);   // panse
+      P(g, bx + 1, 12, 2, 2, sh);                 // pied
+      P(g, bx, 14, 4, 2, mid); P(g, bx, 15, 4, 1, dk);
+    }
+    // Main courante : dessus clair (3 px), face (1 px), larmier.
+    P(g, 0, 0, W, 5, o); P(g, 0, 1, W, 2, lit); P(g, 0, 3, W, 1, mid); P(g, 0, 4, W, 1, dk);
+    return c;
+  }
+  /* LA MAIN COURANTE D'UN FLANC (nord-sud), vue de dessus : un bandeau de 10 px.
+     Sa hauteur est un paramètre (`len`) : sur la volée, un morceau couvre une
+     marche entière, giron ET contremarche. */
+  function grandStairSideSprite(len) {
+    const W = 16, [c, g] = cv(W, len);
+    const o = "#5d584f", lit = "#e6e2d6", mid = "#cfcabd", sh = "#a8a396";
+    P(g, 3, 0, 10, len, o); P(g, 4, 0, 8, len, mid); P(g, 5, 0, 3, len, lit); P(g, 10, 0, 2, len, sh);
+    return c;
+  }
+  /* LE POT DE GÉRANIUMS DE L'ANCIEN BLOC (467), détouré à la couleur : le
+     calcaire est gris (écart de teinte < 38), la terre cuite, les feuilles et
+     les fleurs ne le sont pas. On rebouche les jours (les fleurs crème sont peu
+     saturées), on cerne. ⚠️ Pas de « composante connexe du pot » : les
+     géraniums rouges sont séparés des feuilles par leur cerne sombre, le filtre
+     les jetait (vu sur la planche : un pot sans ses fleurs rouges). */
+  function grandStairPotSprite() {
+    const d = ESCALIER_ASSETS.courtBlock;
+    const X0 = 198, Y0 = 82, W = 40, H = 58;
+    const full = new Array(d.w * d.h).fill(null);
+    d.rows.forEach((runs, y) => { let x = 0; for (const [n, col] of runs) { for (let j = 0; j < n; j++) full[y * d.w + x + j] = col; x += n; } });
+    const rgb = (s) => (s ? [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)] : null);
+    const keep = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const q = rgb(full[(Y0 + y) * d.w + X0 + x]);
+      if (q && Math.max(...q) - Math.min(...q) >= 38) keep[y * W + x] = 1;
+    }
+    for (let pass = 0; pass < 3; pass++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (keep[y * W + x]) continue;
+      let l = 0, rr = 0, u = 0, dd = 0;
+      for (let k = 1; k < 4; k++) {
+        if (x - k >= 0 && keep[y * W + x - k]) l = 1; if (x + k < W && keep[y * W + x + k]) rr = 1;
+        if (y - k >= 0 && keep[(y - k) * W + x]) u = 1; if (y + k < H && keep[(y + k) * W + x]) dd = 1;
+      }
+      if ((l && rr && u) || (l && rr && dd) || (u && dd && l) || (u && dd && rr)) keep[y * W + x] = 2;
+    }
+    let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (keep[y * W + x]) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+    const cw = bx1 - bx0 + 3, ch = by1 - by0 + 5, [c, g] = cv(cw, ch);
+    g.fillStyle = "rgba(30,28,22,0.28)"; g.fillRect(3, ch - 4, cw - 6, 2); g.fillRect(5, ch - 2, cw - 10, 1);
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
+      if (!keep[y * W + x]) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H || !keep[ny * W + nx]) P(g, nx - bx0 + 1, ny - by0 + 1, 1, 1, "#3a2a20");
+      }
+    }
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) if (keep[y * W + x]) P(g, x - bx0 + 1, y - by0 + 1, 1, 1, full[(Y0 + y) * d.w + X0 + x]);
+    return c;
+  }
+  function grandStairSprites() {
+    const F = C.TOWN_GRAND_STAIR.flight, T = 16, EP = C.TOWN_ELEV_PX;
+    return {
+      flight: townGrandFlightSurface(),
+      post: grandStairPostSprite(26), postTall: grandStairPostSprite(32), postFoot: grandStairPostSprite(28),
+      balus: grandStairBalusSprite(),
+      side: grandStairSideSprite(T),
+      // une marche entière de la volée : giron + contremarche, arrondi au pixel supérieur
+      rail: grandStairSideSprite(Math.ceil(T + EP / (F.len + 1)) + 1),
+      pot: grandStairPotSprite(),
+    };
   }
 
   // Zip 388 : outlineSprite et petSprite sont passés au NIVEAU DU MODULE
@@ -17983,20 +18109,8 @@ export function buildSprites() {
     townReedTuft: plancheSprite("reeds"),
     townReedsWater: plancheSprite("reedsWater"),
     townHedgeRow: plancheSprite("hedgeRow"),
-    /* ZIP 467 — composition fournie, entière. La collision reste dans les
-       constantes ; le visuel ne connaît aucune de ses tranches.
-       ⚠️ hors-zip 2026-09-02 — `townCourtStairBlockRaw` EXISTE POUR DEUX
-       CONSOMMATEURS, PAS UN SEUL : le banc de détourage (voir sa note dans
-       `render-escaliers.mjs`) ET `courtStairIronRailLayer` plus bas, qui lit
-       sur elle le partage clair/sombre de la ferronnerie — les deux ont
-       besoin du bitmap tel que la photo l'a donné, jamais d'un intermédiaire
-       déjà retouché (voir la note de `matchStoneToTownDallage`, plus haut,
-       sur ce que ça a cassé la première fois). Deux appels de décodage
-       indépendants : les fonctions qui suivent MUTENT leur canevas en place,
-       un seul appel partagé aurait fait fuir la retouche dans la référence
-       brute. */
-    townCourtStairBlockRaw: escalierAssetSprite("courtBlock"),
-    townCourtStairBlock: matchStoneToTownDallage(escalierAssetSprite("courtBlock")),
+    // 2026-09-27 (nuit) — le grand escalier de l'église (voir `grandStairSprites`).
+    townGrandStair: grandStairSprites(),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
        dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
        droite et donne une échelle. Sans elle, une falaise de 48 px rencontre
@@ -18400,9 +18514,6 @@ house: house(),
     animals: [],
     products: [],
   };
-  // hors-zip — le calque de premier plan de la rambarde 'iron' (voir la
-  // fonction), découpé dans le bloc UNE FOIS ici plutôt qu'à chaque frame.
-  S.townCourtStairIronRail = courtStairIronRailLayer(S.townCourtStairBlock, S.townCourtStairBlockRaw);
   /* 2026-09-25 (phase 3, la lumière) — OÙ BRILLE LE VERRE D'UNE LANTERNE.
      ⚠️ DÉRIVÉ DU DESSIN, JAMAIS MESURÉ À LA MAIN : c'est la différence entre
      la lanterne allumée et la même éteinte (phase 2), donc exactement les

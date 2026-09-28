@@ -97,19 +97,26 @@ function walkable(x, y) {
   return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
 }
 const seen = new Uint8Array(W * H);
+/* 2026-09-27 (nuit) — SOUS LE GRAND ESCALIER, UNE CASE A DEUX SOLS (la chaussée,
+   la marche) : le parcours visite des (case, niveau), sinon avoir longé le pont
+   par la chaussée « fermerait » les marches qui l'enjambent. `seenDeck` retient
+   le niveau du tablier ; `seen` reste la réponse par case. */
+const seenDeck = new Uint8Array(W * H);
 {
   const sx = Math.round(C.TOWN_SPAWN.x), sy = Math.round(C.TOWN_SPAWN.y);
   ok("la case d'arrivée du train est libre", walkable(sx, sy), `(${sx},${sy})`);
-  const q = [[sx, sy]]; seen[idx(sx, sy)] = 1;
+  const q = [[sx, sy, 0]]; seen[idx(sx, sy)] = 1;
   while (q.length) {
-    const [x, y] = q.pop();
-    const e0 = tw.elev[idx(x, y)];
+    const [x, y, deckLv] = q.pop();
+    const e0 = deckLv ? tw.deck[idx(x, y)] : tw.elev[idx(x, y)];
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[idx(nx, ny)]) continue;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       if (!walkable(nx, ny)) continue;
-      if (Math.abs(tw.elev[idx(nx, ny)] - e0) > C.TOWN_STEP_MAX) continue;   // falaise : on ne grimpe pas
-      seen[idx(nx, ny)] = 1; q.push([nx, ny]);
+      const j = idx(nx, ny);
+      // falaise : on ne grimpe pas (au niveau du sol, puis, s'il existe, du tablier)
+      if (!seen[j] && Math.abs(tw.elev[j] - e0) <= C.TOWN_STEP_MAX) { seen[j] = 1; q.push([nx, ny, 0]); }
+      if (tw.deck && tw.deck[j] >= 0 && !seenDeck[j] && Math.abs(tw.deck[j] - e0) <= C.TOWN_STEP_MAX) { seenDeck[j] = 1; seen[j] = 1; q.push([nx, ny, 1]); }
     }
   }
 }
@@ -314,12 +321,10 @@ for (let y = C.TOWN_COURT_WING_ROW + 1; y <= C.TOWN_COURT.y + C.TOWN_COURT.h - 1
 // 2026-09-26 (phase 6a) : l'emprise du mur PEINT (celle que pose le générateur), ruine comprise.
 for (const h of [...C.townAllHouses(), C.TOWN_RUIN]) { const f = C.townHouseFoot(h); markRect({ x: f.x, y: f.y }, f.w, f.h); }
 for (const p of tw.props) mark(p.x, p.y);
-/* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.
-   Les marquer depuis les mêmes rectangles que la collision évite de réinventer
-   une emprise d'image dans le banc. `render-escaliers` prouve séparément que le
-   bloc 268×248 est réellement produit et appelé par le jeu. */
+/* Les garde-corps du grand escalier (2026-09-27) : leur dessin est dans `props`
+   (déjà marqué juste au-dessus) ; on marque AUSSI leurs rectangles de collision,
+   et `render-escaliers` vérifie case par case que les deux coïncident. */
 for (const r of C.TOWN_RAILS || []) markRect(r);
-for (const r of C.TOWN_COURT_BLOCK_SOLIDS || []) markRect(r);
 markRect({ x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y }, 3, 3);
 markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
 /* ⚠️⚠️ ZIP 450 — LA COQUE DU CHANTIER NAVAL, ET ELLE SE LIT SUR LE MONDE, PAS SUR
@@ -359,7 +364,11 @@ if (tw.shipX)
      a écarté, ce n'est pas la mesure, c'est deux objets dont on peut nommer la
      raison — le contraire de ce qui s'est passé au 434 avec le seuil du taxi. */
   const WALKABLE = new Set(["kiosk", "archBridge", "stepStones", "lily", "reedsWater"]);
-  const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !tw.solid[idx(p.x, p.y)]);
+  /* 2026-09-27 (nuit) — et la rampe du grand escalier AU-DESSUS DE LA CHAUSSÉE :
+     on passe DESSOUS (c'est le pont), et le dénivelé de 0,78 retient le marcheur
+     de la volée — `verify-collision` §4 bis le vérifie par poussées latérales. */
+  const overhead = (p) => p.kind === "stairRail" && C.townOverpassCell(p.x, p.y);
+  const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !overhead(p) && !tw.solid[idx(p.x, p.y)]);
   ok("aucun décor n'est traversable", ghosts.length === 0, ghosts.slice(0, 8).map(p => `${p.kind}(${p.x},${p.y})`).join(" "));
 }
 
@@ -1053,12 +1062,18 @@ function canStandSim(x, y, fromE) {
     const fx = Math.floor(px), fy = Math.floor(py);
     if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
     if (!walkable(fx, fy)) return false;
-    if (fromE !== undefined && Math.abs(tw.elev[idx(fx, fy)] - fromE) > C.TOWN_STEP_MAX) return false;
+    if (fromE !== undefined && Math.abs(E.townLevelE(tw, fx, fy, fromE) - fromE) > C.TOWN_STEP_MAX) return false;
   }
   return true;
 }
+/* 2026-09-27 (nuit) — le NIVEAU du marcheur (grand escalier), suivi pas à pas
+   comme dans le jeu (`townLvl`, FermeGame.js). */
+const lvlOf = (x, y, ref) => E.townLevelE(tw, Math.floor(C.footX(x)), Math.floor(C.footY(y)), ref);
+// Combien d'images passées SUR la marche du pont, et SOUS elle (sur la chaussée).
+const bridgeUse = { over: 0, under: 0 };
 function walkTo(from, sp) {
-  let legs = E.townFindPath(tw, from.x, from.y, sp.x, sp.y);
+  let lv = lvlOf(from.x, from.y, from.e);
+  let legs = E.townFindPath(tw, from.x, from.y, sp.x, sp.y, undefined, lv);
   if (!legs || !legs.length) return { ok: false, why: "aucun chemin" };
   let x = from.x, y = from.y, li = 0, stuck = 0, t = 0, tries = 0;
   const DT = 1 / 60, speed = C.VISITOR_SPEED * 0.7 * 0.9;
@@ -1073,7 +1088,8 @@ function walkTo(from, sp) {
     const s = speed * DT, ux = dx / d, uy = dy / d;
     // Les deux conditions de townResidentRoam (428) : la boîte est valide vue
     // de la position PRÉCÉDENTE, et valide vue D'ELLE-MÊME.
-    const canGo = (px, py) => canStandSim(px, py, elevBox(C.footX(x), C.footY(y))) && canStandSim(px, py, elevBox(C.footX(px), C.footY(py)));
+    const e0 = lvlOf(x, y, lv);
+    const canGo = (px, py) => canStandSim(px, py, e0) && canStandSim(px, py, lvlOf(px, py, e0));
     const wasX = x, wasY = y;
     const nx = x + ux * s;
     if (canGo(nx, y)) x = nx;
@@ -1081,6 +1097,8 @@ function walkTo(from, sp) {
     if (canGo(x, ny)) y = ny;
     // Le rattrapage en diagonale : voir la note de townResidentRoam (428).
     if (x === wasX && y === wasY && canGo(nx, ny)) { x = nx; y = ny; }
+    lv = lvlOf(x, y, e0);
+    if (C.townOverpassCell(Math.floor(C.footX(x)), Math.floor(C.footY(y)))) { if (lv > 0.5) bridgeUse.over++; else bridgeUse.under++; }
     /* ⚠️ « AVANCER » SE MESURE (2026-09-01) : voir la note du même nom dans
        townResidentRoam. Un pas nul sur un axe rendait `moved` vrai et le garde
        anti-blocage ne se déclenchait jamais — le banc rendait « jamais arrivé »
@@ -1091,7 +1109,7 @@ function walkTo(from, sp) {
       // Le recalcul du garde anti-blocage, borné comme dans le jeu.
       if (stuck > 1.2 && tries < C.TOWN_REPATH_TRIES) {
         tries++; stuck = 0;
-        const again = E.townFindPath(tw, x, y, sp.x, sp.y);
+        const again = E.townFindPath(tw, x, y, sp.x, sp.y, undefined, lv);
         if (again && again.length) { legs = again; li = 0; continue; }
       }
       if (stuck > 2.4) return { ok: false, why: `bloqué en (${x.toFixed(1)},${y.toFixed(1)}) vers ${sp.act}(${sp.x},${sp.y})` };
@@ -1136,6 +1154,15 @@ function walkTo(from, sp) {
      quelle. Si ce chiffre explose, c'est que la réduction ne réduit plus. */
   ok("les chemins sont réduits à quelques points de passage", wps[wps.length - 1] <= 30,
      `médiane ${wps[wps.length >> 1]}, max ${wps[wps.length - 1]}`);
+}
+{
+  /* 2026-09-27 (nuit) — LE PONT DU GRAND ESCALIER SERT DANS LES DEUX SENS : sur
+     tous les trajets rejoués ci-dessus, des habitants passent SUR la marche qui
+     enjambe le boulevard (on monte à l'église) et d'autres DESSOUS (on longe le
+     boulevard). Si l'un des deux comptes tombait à zéro, le pont serait devenu,
+     pour la navigation, un mur ou un trou — sans une erreur. */
+  ok("les habitants passent sur le pont du grand escalier ET dessous", bridgeUse.over > 0 && bridgeUse.under > 0,
+     `${bridgeUse.over} images sur la marche, ${bridgeUse.under} sur la chaussée dessous`);
 }
 {
   // Les endroits EN HAUTEUR gardent leur contrôle propre : c'est le seul dont

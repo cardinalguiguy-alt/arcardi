@@ -4389,6 +4389,10 @@ export function generateTownWorld() {
   const objHp = new Map();
   const elev = new Float32Array(W * H);      // 425 : altitude, voir TOWN_ELEV_PX
   const solid = new Uint8Array(W * H);       // 425 : cases bloquées, pré-calculées
+  /* 2026-09-27 (nuit) — LE TABLIER DU GRAND ESCALIER, SECONDE ALTITUDE D'UNE
+     CASE À DEUX NIVEAUX (voir `TOWN_OVERPASS`). -1 partout ailleurs. `elev` y
+     reste le SOL : la chaussée qui passe dessous. */
+  const deck = new Float32Array(W * H).fill(-1);
   const props = [];                          // 425 : mobilier urbain (dessiné client-side)
   /* ⚠️ 425 — LES HAIES SONT UNE COUCHE, PAS UNE LISTE D'OBJETS. Il y en a
      plusieurs centaines (le pourtour de vingt jardins, les bordures du parc et
@@ -4436,7 +4440,11 @@ export function generateTownWorld() {
      un pavé orphelin au bord d'un à-pic. */
   rect(C.TOWN_UPPER, (x, y, i) => { elev[i] = 1; });
   rect(C.TOWN_BELVEDERE, (x, y, i) => { elev[i] = 2; });
-  for (const st of C.TOWN_STAIRS) {
+  /* ⚠️ 2026-09-27 (nuit) — LA GÉNÉRATION PARCOURT LES VOLÉES DE LA GRAINE
+     (`TOWN_STAIRS_SEED`) : l'ancien quart tournant tient la place du grand
+     escalier jusqu'à la dernière passe, pour que pas un tirage ne bouge. */
+  const ROADS = C.TOWN_ROADS_SEED;
+  for (const st of C.TOWN_STAIRS_SEED()) {
     const span = st.to - st.from;
     for (let k = 0; k < st.len; k++) {
       /* La marche la plus proche du palier haut porte presque son altitude, la
@@ -4462,7 +4470,7 @@ export function generateTownWorld() {
      droite qui rétrécit. C'est la famille de défauts du §4 (« une passe qui pave
      dégage ce qu'elle pave ») prise dans le bon sens pour une fois : ici on VEUT
      que la seconde passe gagne, donc on la met en second et on le dit. */
-  for (const lg of (C.TOWN_STAIR_LANDINGS || [])) {
+  for (const lg of C.TOWN_STAIR_SEED.landings) {
     rect(lg, (x, y, i) => { elev[i] = lg.elev; ground[i] = C.G_PATH_STONE; });
   }
   /* 2026-09-22 — LE PERRON DU TRIBUNAL, AVEC LE RESTE DU RELIEF ET DANS LE MÊME
@@ -4510,11 +4518,8 @@ export function generateTownWorld() {
      une grandeur de dessin dans la collision fait un mur infranchissable), pas
      `ground` (une case de garde-corps reste la dalle ou l'herbe qu'elle était,
      et c'est ce qui fait qu'il a l'air POSÉ dessus au lieu de la remplacer). */
-  for (const rl of (C.TOWN_RAILS || [])) rect(rl, (x, y, i) => { solid[i] = 1; });
-  /* ZIP 467 — le pot est désormais cuit dans le bloc unique. Il ne peut donc
-     plus être un `prop` sans redessiner une seconde fois les mêmes pixels ; sa
-     seule donnée séparée est cette emprise physique invisible. */
-  for (const ob of (C.TOWN_COURT_BLOCK_SOLIDS || [])) rect(ob, (x, y, i) => { solid[i] = 1; });
+  for (const rl of C.TOWN_STAIR_SEED.rails) rect(rl, (x, y, i) => { solid[i] = 1; });
+  for (const ob of C.TOWN_STAIR_SEED.solids) rect(ob, (x, y, i) => { solid[i] = 1; });
 
   /* ------------------------------------------------------------------ RUES
      ⚠️ UNE RUE S'ARRÊTE AU PIED D'UNE FALAISE. `paveRun` refuse toute case
@@ -4539,7 +4544,7 @@ export function generateTownWorld() {
      verger et le revêtement. Une rue ne se pave qu'à SON altitude (`elev`,
      0 par défaut) : la règle du 426 ci-dessus, dite pour toutes à la fois. */
   const street = new Uint8Array(W * H);   // 0 = pas une rue, sinon 1 + rang dans TOWN_ROADS
-  C.TOWN_ROADS.forEach((r, k) => {
+  ROADS.forEach((r, k) => {
     for (const [x, y] of C.townRoadCells(r)) {
       if (!inMap(x, y) || elev[id(x, y)] !== (r.elev || 0)) continue;
       ground[id(x, y)] = C.G_PATH;
@@ -4553,7 +4558,7 @@ export function generateTownWorld() {
   /* ⚠️ Une rue en hauteur (la promenade de la terrasse) n'est pas « la rue sous
      la porte » d'un bâtiment du bas, ni d'un bâtiment posé sur elle — elle est
      sa propre desserte : l'allée d'une porte ne rejoint que les rues du sol. */
-  const onStreet = (x, y) => { const k = street[id(x, y)]; return k > 0 && !(C.TOWN_ROADS[k - 1].elev); };
+  const onStreet = (x, y) => { const k = street[id(x, y)]; return k > 0 && !(ROADS[k - 1].elev); };
   const streetBelow = (x, y0, maxD) => {
     for (let y = y0; y <= y0 + maxD; y++) {
       if (!inMap(x, y)) return undefined;
@@ -4590,23 +4595,12 @@ export function generateTownWorld() {
     props.push({ x, y, kind, ...(extra || {}) });
     if (blocks) solid[id(x, y)] = 1;
   };
-  /* ZIP 467 — AUCUN `prop` POUR LES GARDE-CORPS. Ils restent les rectangles de
-     collision de TOWN_RAILS, mais leurs pixels sont déjà dans `courtBlock`.
-     Les réémettre case par case recréerait exactement le montage que la source
-     détourée remplace. `verify-vallee` explique ces solides par l'emprise du
-     bloc et `render-escaliers` vérifie que le bloc est réellement dessiné. */
-
+  /* Aucun décor du grand escalier ici : il se pose en dernière passe (voir
+     `TOWN_STAIR_SEED`). */
   /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
-     Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les
-     constantes : le jour où l'escalier bouge d'une case, ils suivent. Les
-     écrire en dur aurait été le défaut payé quatre fois du §4 — deux
-     descriptions du même endroit, qui s'éloignent au premier réglage.
-     ⚠️ Ils ne bloquent PAS (`false`) : un massif de fleurs qu'on ne peut pas
-     traverser est un mur invisible déguisé en décor, et c'est le contrôle que
-     `verify-vallee` fait dans les deux sens. */
-  /* Le 467 retire aussi les deux accessoires séparés de cette passe : le pot
-     est dans le bloc et le groupe panneaux/fleurs n'existe pas dans la nouvelle
-     source. Les réintroduire ferait dépasser des éléments absents du modèle. */
+     (Retirée au 467 avec l'ancien bloc ; le principe reste : un décor posé près
+     d'un escalier se dérive de lui, et un massif qu'on ne peut pas traverser
+     est un mur invisible déguisé en décor — `verify-vallee` le vérifie.) */
   // Lampadaires : les quatre angles de la place, plus deux paires en garde
   // d'honneur de part et d'autre de la fontaine et du monument.
   for (const [lx, ly] of [
@@ -4845,10 +4839,9 @@ export function generateTownWorld() {
      Boutique. */
   {
     const eg = C.TOWN_CHURCH;
-    /* PHASE 7 : l'église est montée sur la terrasse, où son parvis touche le haut
-       du grand escalier. Les bancs remontent d'une case pour rester hors de la
-       composition peinte de l'escalier (`TOWN_COURT_STAIR_CLEAR`, que
-       `render-escaliers` tient). */
+    /* PHASE 7 : l'église est montée sur la terrasse. Les bancs restent au pied
+       de sa façade, de part et d'autre du portail — c'est la place de la
+       référence (2026-09-27), et c'est là que `townFlocks` pose les pigeons. */
     addProp(eg.x + 2, eg.y + eg.h + 1, "bench", true);
     addProp(eg.x + eg.w - 3, eg.y + eg.h + 1, "bench", true);
   }
@@ -6639,13 +6632,12 @@ export function generateTownWorld() {
     /* PHASE 7 : les carrefours se DÉDUISENT du réseau (`townRoadCrossings`) —
        il n'y a plus de produit rangées × colonnes. Le panneau garde sa place :
        l'angle nord-ouest, hors chaussée. */
-    for (const cr of C.townRoadCrossings()) {
+    for (const cr of C.townRoadCrossings(ROADS)) {
       const sx = cr.x0 - 2, sy = cr.y0 - 1;
       if (!inMap(sx, sy)) continue;
-      const cl = C.TOWN_COURT_STAIR_CLEAR;
-      /* ZIP 467 — le croisement (148,33) tombe dans le bloc détouré. L'ancien
-         panneau y dépassait de la volée basse alors qu'il n'existe ni dans la
-         source ni dans la composition modèle. */
+      const cl = C.TOWN_STAIR_SEED.clear;
+      /* Pas de panneau dans la composition du grand escalier (le croisement du
+         mail tombe à son pied). */
       if (cl && sx >= cl.x && sx < cl.x + cl.w && sy >= cl.y && sy < cl.y + cl.h) continue;
       if (solid[id(sx, sy)] || ground[id(sx, sy)] === C.G_PATH) continue;
       addProp(sx, sy, "streetSign", true);
@@ -6717,7 +6709,7 @@ export function generateTownWorld() {
      place se déduit de SA rue (un bout, un point du tracé) ; `addGarden` refuse
      ce qui n'est pas de l'herbe libre, on essaie donc quelques cases voisines. */
   {
-    const road = (rid) => C.TOWN_ROADS.find((r) => r.id === rid);
+    const road = (rid) => ROADS.find((r) => r.id === rid);
     const tryPut = (x0, y0, kind) => {
       for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [2, 0], [-2, 0], [0, -1], [1, 1]]) {
         if (addGarden(Math.round(x0) + dx, Math.round(y0) + dy, kind)) return true;
@@ -6747,7 +6739,7 @@ export function generateTownWorld() {
      l'ancienne écriture (434), quelle que soit la largeur. Le premier point tombe
      sur x = 12 d'une rue horizontale comme avant, et rien ne se plante à moins de
      douze cases du bord ouest ni de huit du bord est. */
-  for (const r of C.TOWN_ROADS) {
+  for (const r of ROADS) {
     if (!r.planted) continue;
     const off = r.w / 2 + 1.5, s0 = ((12 - r.pts[0][0]) % 6 + 6) % 6;
     const walk = C.townRoadWalk(r, 3, s0);
@@ -6871,14 +6863,12 @@ export function generateTownWorld() {
   // Le semis suit la surface : 70 arbres sur 3 072 cases faisaient un parc,
   // les mêmes 70 sur 27 648 auraient fait un désert.
   for (let i = 0; i < 620; i++) put(rnd() * W, rnd() * H);
-  /* ZIP 467 — le bloc du tribunal est dessiné avant les objets du monde. Un
-     arbre ancré dans son emprise passerait donc PAR-DESSUS ses murs et ses
-     ferronneries, même lorsque le pixel source est opaque. Cinq arbres le
-     faisaient dans la vraie fenêtre du jeu. On retire uniquement les arbres
-     de cette emprise, après le dernier semis ; routes, gazon et haies restent
-     sous le bitmap et apparaissent dans ses pixels réellement transparents. */
+  /* Le grand escalier est peint avec le sol, avant les objets du monde : un
+     arbre ancré dans sa composition passerait PAR-DESSUS ses marches et ses
+     balustrades (cinq le faisaient sur l'ancien bloc du 467). On retire les
+     arbres de son emprise, après le dernier semis. */
   {
-    const cl = C.TOWN_COURT_STAIR_CLEAR;
+    const cl = C.TOWN_STAIR_SEED.clear;
     for (let y = cl.y; y < cl.y + cl.h; y++) for (let x = cl.x; x < cl.x + cl.w; x++) {
       if (!inMap(x, y)) continue;
       const i = id(x, y), o = objects[i];
@@ -6964,8 +6954,8 @@ export function generateTownWorld() {
   //    (PHASE 7 : les rues déclarées `surf: TR_ASPHALT` — une seule aujourd'hui.
   //    Juste avant, celles qui sont SABLÉES — le mail de l'église : une allée
   //    plantée qu'on remonte à pied, pas une chaussée.)
-  for (const r of C.TOWN_ROADS) if (r.surf === C.TR_GRAVEL) for (const [x, y] of C.townRoadCells(r)) surface(x, y, C.TR_GRAVEL);
-  for (const r of C.TOWN_ROADS) if (r.surf === C.TR_ASPHALT) for (const [x, y] of C.townRoadCells(r)) surface(x, y, C.TR_ASPHALT);
+  for (const r of ROADS) if (r.surf === C.TR_GRAVEL) for (const [x, y] of C.townRoadCells(r)) surface(x, y, C.TR_GRAVEL);
+  for (const r of ROADS) if (r.surf === C.TR_ASPHALT) for (const [x, y] of C.townRoadCells(r)) surface(x, y, C.TR_ASPHALT);
   // 4. LES BRIQUES DE L'ALLÉE DU CIMETIÈRE. Même dérivation que le générateur
   //    de l'allée ci-dessus (centre de l'enclos, largeur 2) : deux descriptions
   //    du même axe finiraient par se contredire, et le décalage se verrait
@@ -7891,6 +7881,172 @@ export function generateTownWorld() {
     for (let y = doorY; y < doorY + 4; y++) for (let dx = -2; dx <= 3; dx++) clearTree(doorX + dx, y);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-27 (nuit) — LE GRAND ESCALIER DE L'ÉGLISE, EN DERNIÈRE PASSE.
+     ───────────────────────────────────────────────────────────────────────
+     Voir `TOWN_GRAND_STAIR` (la géométrie) et `TOWN_STAIR_SEED` (pourquoi ici) :
+     tout ce qui précède a tourné sur l'emprise de l'ancien quart tournant, pour
+     que pas un tirage ne bouge. On la rend au terrain, puis on pose la volée
+     droite, son palier, le pont sur le boulevard, le parvis agrandi, les
+     garde-corps, et le mail redressé vers le portail. ⚠️ SANS UN TIRAGE : ce
+     qui pousse ici (les tilleuls du mail) a son essence fixée. */
+  {
+    const G = C.TOWN_GRAND_STAIR, SEED = C.TOWN_STAIR_SEED, U = C.TOWN_UPPER;
+    const L = G.landing, F = G.flight, B = C.TOWN_STAIR_BRIDGE, OV = C.TOWN_OVERPASS;
+    const baseE = (x, y) => (x >= U.x && x < U.x + U.w && y >= U.y && y < U.y + U.h ? 1 : 0);
+    const isTree = (o) => o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
+    const bare = (i) => { if (objects[i] !== C.O_NONE) { objects[i] = C.O_NONE; objHp.delete(i); } hedge[i] = 0; bloom[i] = 0; };
+    const dropProps = (test) => {
+      for (let k = props.length - 1; k >= 0; k--) {
+        const p = props[k];
+        if (!test(p.x, p.y, p)) continue;
+        props.splice(k, 1);
+        if (inMap(p.x, p.y) && !hedge[id(p.x, p.y)]) solid[id(p.x, p.y)] = 0;
+      }
+    };
+    const inRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+    /* 1. L'ANCIEN ESCALIER RENDU AU TERRAIN : ses volées et son palier retrouvent
+          l'altitude de ce qu'ils creusaient (la terrasse, ou le pied du mur), ses
+          garde-corps et son pot cessent de bloquer. */
+    const seedRects = [
+      ...SEED.stairs.map((st) => ({ x: st.x, y: st.y, w: st.dir === "e" ? st.len : st.w, h: st.dir === "e" ? st.w : st.len })),
+      ...SEED.landings,
+    ];
+    for (const r of seedRects) rect(r, (x, y, i) => { elev[i] = baseE(x, y); ground[i] = C.G_GRASS; road[i] = 0; street[i] = 0; bare(i); });
+    for (const r of [...SEED.rails, ...SEED.solids]) rect(r, (x, y, i) => { solid[i] = 0; });
+    /* 2. LE NOUVEAU RELIEF. Le palier, dallé ; la volée, marche par marche ; et
+          sur les rangées de la chaussée, le PONT : la case garde le sol, la
+          marche passe dans `deck` (colonnes ouvertes seulement — sous les rampes,
+          on passe, et c'est le dénivelé qui retient le marcheur du tablier). */
+    rect(L, (x, y, i) => { elev[i] = 1; ground[i] = C.G_PATH_STONE; road[i] = 0; street[i] = 0; bare(i); });
+    for (let k = 0; k < F.len; k++) {
+      const y = F.y + k, e = C.townGrandStepElev(k);
+      for (let x = F.x; x < F.x + F.w; x++) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        bare(i);
+        if (inRect(B, x, y)) {
+          elev[i] = 0; ground[i] = C.G_GRASS;       // la chaussée, repavée au point 3
+          if (inRect(OV, x, y)) deck[i] = e;
+        } else {
+          elev[i] = e; ground[i] = C.G_TOWN_STAIR; road[i] = 0; street[i] = 0;
+        }
+      }
+    }
+    /* 3. LES RUES QUI TRAVERSENT LA ZONE, REPAVÉES À LEUR ALTITUDE : le boulevard
+          sous le pont (l'ancienne volée le coupait), la promenade de la terrasse
+          (l'ancienne volée haute la mordait). Le mail est traité à part (5). */
+    const Z = { x: G.parvis.x - 2, y: G.edge - 6, w: G.parvis.w + 4, h: F.y + F.len + 4 - (G.edge - 6) };
+    C.TOWN_ROADS.forEach((r, k) => {
+      if (r.id === "mail") return;
+      for (const [x, y] of C.townRoadCells(r)) {
+        if (!inRect(Z, x, y) || !inMap(x, y)) continue;
+        const i = id(x, y);
+        if (elev[i] !== (r.elev || 0) || solid[i] || ground[i] === C.G_PATH_STONE || ground[i] === C.G_TOWN_STAIR) continue;
+        ground[i] = C.G_PATH; bare(i);
+        if (!street[i]) street[i] = k + 1;
+        road[i] = r.surf || C.TR_COBBLE;
+      }
+    });
+    /* 4. LE PARVIS AGRANDI JUSQU'À L'ESCALIER (Guillaume). Toute la largeur du
+          parvis, du pied de son dallage au bord de la terrasse. ⚠️ La promenade
+          le TRAVERSE et reste pavée : c'est la bande de pavés entre le parvis et
+          la place basse de la référence — une rue qu'un dallage efface cesse de
+          mener quelque part. */
+    {
+      const ch = C.TOWN_CHURCH, y0 = ch.y + ch.h + 5;
+      rect({ x: G.parvis.x, y: y0, w: G.parvis.w, h: G.edge + 1 - y0 }, (x, y, i) => {
+        if (elev[i] !== 1 || street[i]) return;
+        ground[i] = C.G_PATH_STONE; road[i] = 0; bare(i); solid[i] = 0;
+      });
+      dropProps((x, y) => x >= G.parvis.x && x < G.parvis.x + G.parvis.w && y >= y0 && y <= G.edge);
+    }
+    /* 5. LE MAIL REDRESSÉ VERS LE PORTAIL. Ce que l'ancien tracé pavait et que le
+          nouveau ne couvre pas redevient de l'herbe ; ce que le nouveau couvre est
+          pavé de sable (ce qui y avait poussé ou été posé s'en va). Les tilleuls de
+          l'ancien alignement sont arrachés, ceux du nouveau plantés — essence
+          fixée, aucun tirage. Un pied de sable de la largeur de la volée l'élargit
+          au bas des marches : un mail en biais coupé net n'arrivait que sous la
+          moitié gauche de l'escalier. */
+    {
+      const km = C.TOWN_ROADS.findIndex((r) => r.id === "mail");
+      const newMail = C.TOWN_ROADS[km], oldMail = ROADS[km];
+      const key = (x, y) => y * 4096 + x;
+      const others = new Set();
+      C.TOWN_ROADS.forEach((r, k) => { if (k !== km) for (const [x, y] of C.townRoadCells(r)) others.add(key(x, y)); });
+      const newCells = C.townRoadCells(newMail).map(([x, y]) => [x, y]);
+      for (let y = F.y + F.len; y < F.y + F.len + 2; y++) for (let x = F.x; x < F.x + F.w; x++) newCells.push([x, y]);
+      const newSet = new Set(newCells.map(([x, y]) => key(x, y)));
+      for (const [x, y] of C.townRoadCells(oldMail)) {
+        if (!inMap(x, y) || newSet.has(key(x, y)) || others.has(key(x, y))) continue;
+        const i = id(x, y);
+        if (ground[i] !== C.G_PATH || street[i] !== km + 1) continue;
+        ground[i] = C.G_GRASS; street[i] = 0; road[i] = 0;
+      }
+      const asphalt = new Set();
+      for (const r of C.TOWN_ROADS) if (r.surf === C.TR_ASPHALT) for (const [x, y] of C.townRoadCells(r)) asphalt.add(key(x, y));
+      const oldSet = new Set(C.townRoadCells(oldMail).map(([x, y]) => key(x, y)));
+      dropProps((x, y) => newSet.has(key(x, y)) && !oldSet.has(key(x, y)) && inMap(x, y)
+        && elev[id(x, y)] === 0 && ground[id(x, y)] !== C.G_PATH_STONE && ground[id(x, y)] !== C.G_WATER);
+      for (const [x, y] of newCells) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        if (elev[i] !== 0 || ground[i] === C.G_WATER || ground[i] === C.G_PATH_STONE) continue;
+        if (isTree(objects[i])) { objects[i] = C.O_NONE; objHp.delete(i); }
+        if (solid[i]) continue;                    // un mur (maison, bâtiment) reste un mur
+        ground[i] = C.G_PATH; hedge[i] = 0; bloom[i] = 0;
+        if (!street[i]) street[i] = km + 1;
+        road[i] = asphalt.has(key(x, y)) ? C.TR_ASPHALT : C.TR_GRAVEL;
+      }
+      // Les alignements : même marche que la passe des avenues (`planted` objet).
+      const P = newMail.planted, off = newMail.w / 2 + 1.5;
+      const nearHouseFront = (tx, ry) => C.townAllHouses().some((hsn) =>
+        tx >= hsn.x - 3 && tx < hsn.x + C.TOWN_HOUSE_W + 3 && Math.abs(ry - hsn.y) <= 10);
+      const rowOf = (r) => {
+        const out = [];
+        for (const pt of C.townRoadWalk(r, P.step, P.step / 2)) for (const sg of (P.both ? [-1, 1] : [-1])) {
+          const tx = Math.floor(pt.x + sg * pt.nx * off + 1e-6), ty = Math.floor(pt.y + sg * pt.ny * off + 1e-6);
+          if (tx < 12 || tx >= W - 8 || nearHouseFront(tx, ty + 1)) continue;
+          out.push([tx, ty]);
+        }
+        return out;
+      };
+      for (const [tx, ty] of rowOf(oldMail)) {
+        if (!inMap(tx, ty)) continue;
+        const i = id(tx, ty);
+        if (objects[i] === C.O_TREE) { objects[i] = C.O_NONE; objHp.delete(i); }
+      }
+      for (const [tx, ty] of rowOf(newMail)) {
+        if (!inMap(tx, ty)) continue;
+        const i = id(tx, ty);
+        if (solid[i] || hedge[i] || objects[i] !== C.O_NONE || elev[i] !== 0) continue;
+        if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+        if (propCover(tx, ty)) continue;
+        objects[i] = C.O_TREE; objHp.set(i, C.TREE_HP);
+      }
+    }
+    /* 6. LES GARDE-CORPS : la collision (`TOWN_RAILS`), puis leur dessin et les
+          pots (`townGrandStairProps`), et deux lanternes au pied. Aucun autre
+          décor dans la composition, et aucun arbre dans son emprise. */
+    const CL = C.TOWN_GRAND_STAIR_CLEAR;
+    dropProps((x, y) => inRect(L, x, y) || (x >= F.x && x < F.x + F.w && y >= F.y && y < F.y + F.len + 2)
+      || (y === G.edge && x >= G.parvis.x && x < G.parvis.x + G.parvis.w));
+    for (const rl of C.TOWN_RAILS) rect(rl, (x, y, i) => { solid[i] = 1; bare(i); });
+    for (const pr of C.townGrandStairProps()) {
+      const { x, y, kind, ...extra } = pr;
+      addProp(x, y, kind, kind === "stairPot", extra);
+    }
+    for (const lx of [F.x - 1, F.x + F.w]) {
+      const ly = F.y + F.len;
+      if (!inMap(lx, ly)) continue;
+      const i = id(lx, ly);
+      if (isTree(objects[i])) { objects[i] = C.O_NONE; objHp.delete(i); }
+      dropProps((x, y) => x === lx && y === ly);
+      if (!solid[i] && ground[i] !== C.G_PATH) addProp(lx, ly, "lamp", true);
+    }
+    rect(CL, (x, y, i) => { if (isTree(objects[i])) { objects[i] = C.O_NONE; objHp.delete(i); } });
+  }
+
   const soft = new Uint8Array(W * H);
   {
     const hard = new Uint8Array(W * H);
@@ -7902,7 +8058,7 @@ export function generateTownWorld() {
     for (let i = 0; i < soft.length; i++) if (hard[i] || !solid[i]) soft[i] = 0;
   }
 
-  return { w: W, h: H, ground, objects, objHp, elev, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY };
+  return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -8046,6 +8202,14 @@ export function townSpots(tw) {
   add(C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w - 5, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 2, "view");
   // Le parvis de l'église.
   add(C.TOWN_CHURCH.x + 3, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2, "pray");
+  /* 2026-09-27 (nuit) — le palier du grand escalier : de part et d'autre de la
+     tête de volée, à côté des piliers, on regarde la ville dans l'axe du mail.
+     C'est le belvédère de la place basse de la référence. */
+  {
+    const L = C.TOWN_GRAND_STAIR.landing;
+    add(L.x + 2, L.y + L.h - 2, "view");
+    add(L.x + L.w - 3, L.y + L.h - 2, "view");
+  }
   // La vitrine de la Maison Garfield : on s'y colle le nez, on n'entre pas.
   // ⚠️ 2026-09-27 : les deux devant l'ORIEL peint (x+1..x+3 du rectangle, la
   // porte à sa droite). La seconde était en x+w-2, devant l'ancienne façade de
@@ -8222,25 +8386,38 @@ export function townNav(tw) {
      est dans une autre poche, c'est transformer le pire cas (37 632 cases
      visitées) en une comparaison de deux entiers. Le calcul est fait une fois,
      ici, en un parcours en largeur. */
-  const comp = new Int32Array(N).fill(-1);
-  const stack = new Int32Array(N);
+  /* ⚠️⚠️ 2026-09-27 (nuit) — LES NŒUDS SONT DES (CASE, NIVEAU), PAS DES CASES.
+     Sous le grand escalier, une case porte DEUX sols : la chaussée (`elev`) et
+     la marche qui l'enjambe (`tw.deck`). Le nœud `i` est le sol de la case `i`,
+     le nœud `N + i` son tablier (il n'existe que là où `deck[i] >= 0`). Sans ce
+     dédoublement, un A* qui a déjà « fermé » la case par la chaussée ne peut
+     plus la franchir par la volée : l'escalier deviendrait infranchissable pour
+     les habitants dès qu'un trajet l'aurait longé par dessous. */
+  const deck = tw.deck;
+  const hasDeck = (i) => !!deck && deck[i] >= 0;
+  const nodeE = (n) => (n < N ? tw.elev[n] : deck[n - N]);
+  const comp = new Int32Array(2 * N).fill(-1);
+  const stack = new Int32Array(2 * N);
   let nComp = 0;
-  for (let s = 0; s < N; s++) {
-    if (!walk[s] || comp[s] >= 0) continue;
+  for (let s = 0; s < 2 * N; s++) {
+    if (comp[s] >= 0) continue;
+    if (s < N ? !walk[s] : !(walk[s - N] && hasDeck(s - N))) continue;
     const id = nComp++;
     let sp = 0; stack[sp++] = s; comp[s] = id;
     while (sp > 0) {
-      const i = stack[--sp], x = i % W, y = (i / W) | 0, e = tw.elev[i];
+      const n = stack[--sp], i = n % N, x = i % W, y = (i / W) | 0, e = nodeE(n);
       for (let k = 0; k < 4; k++) {
         const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
         if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
         const j = ny * W + nx;
-        if (!walk[j] || comp[j] >= 0) continue;
+        if (!walk[j]) continue;
         // La règle unique du relief (§6) : pas plus de TOWN_STEP_MAX d'un pas.
         // Écrite ICI, elle fait que l'escalier est le seul chemin vers le haut
         // sans qu'aucun code ne connaisse l'existence d'un escalier.
-        if (Math.abs(tw.elev[j] - e) > C.TOWN_STEP_MAX) continue;
-        comp[j] = id; stack[sp++] = j;
+        for (const m of (hasDeck(j) ? [j, N + j] : [j])) {
+          if (comp[m] >= 0 || Math.abs(nodeE(m) - e) > C.TOWN_STEP_MAX) continue;
+          comp[m] = id; stack[sp++] = m;
+        }
       }
     }
   }
@@ -8249,8 +8426,8 @@ export function townNav(tw) {
      cher que la recherche elle-même sur un trajet court. */
   const nav = {
     w: W, h: H, walk, comp, nComp,
-    g: new Float32Array(N), f: new Float32Array(N),
-    from: new Int32Array(N), stamp: new Int32Array(N), closed: new Uint8Array(N),
+    g: new Float32Array(2 * N), f: new Float32Array(2 * N),
+    from: new Int32Array(2 * N), stamp: new Int32Array(2 * N), closed: new Uint8Array(2 * N),
     /* ⚠️⚠️ LE TAS EST UN TABLEAU ORDINAIRE, ET C'EST UN BOGUE PAYÉ AU 428.
        Premier jet : `new Int32Array(N + 1)`, en raisonnant « il y a N cases,
        donc au plus N entrées ». FAUX. Cet A* n'a pas de décrémentation de clé
@@ -8303,9 +8480,15 @@ function townCompAt(nav, x, y) {
    C'est `C.tileAnchor`, l'inverse exact de `C.bodyFootTile` — et les deux vont
    ensemble, sans quoi un chemin rendu par ce fichier ne peut pas être suivi. */
 const TOWN_LOS_MAX = 48;   // portée de visée de la réduction, en cases (voir townSimplifyPath)
-export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
+export function townFindPath(tw, x0, y0, x1, y1, maxNodes, e0) {
   const nav = townNav(tw); if (!nav) return null;
-  const W = nav.w, H = nav.h;
+  const W = nav.w, H = nav.h, N = W * H;
+  /* 2026-09-27 (nuit) — `e0`, l'altitude d'où part le marcheur : sur une case à
+     deux niveaux (sous le grand escalier), elle dit s'il est sur la chaussée ou
+     sur la marche. Omise : le sol. Le but, lui, est atteint à n'importe lequel
+     de ses niveaux. */
+  const deck = tw.deck;
+  const hasDeck = (i) => !!deck && deck[i] >= 0;
   /* ⚠️ ANCRE → CASE PASSE PAR LES PIEDS, jamais par un `floor` de l'ancre : le
      sprite fait une case et demie de haut, son ancre est donc AU-DESSUS de la
      case où il se tient dès que `y` n'est pas entier. `townRoadPath`, plus bas,
@@ -8313,11 +8496,12 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
   const s0 = C.bodyFootTile(x0, y0), g0 = C.bodyFootTile(x1, y1);
   const sx = s0.x, sy = s0.y, gx = g0.x, gy = g0.y;
   if (sx < 0 || sy < 0 || sx >= W || sy >= H || gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
-  const start = sy * W + sx, goal = gy * W + gx;
-  if (!nav.walk[start] || !nav.walk[goal]) return null;
-  if (start === goal) return [C.tileAnchor(gx, gy)];
+  const sCell = sy * W + sx, goal = gy * W + gx;
+  if (!nav.walk[sCell] || !nav.walk[goal]) return null;
+  if (sCell === goal) return [C.tileAnchor(gx, gy)];
+  const start = (e0 !== undefined && hasDeck(sCell) && townLevelE(tw, sx, sy, e0) === deck[sCell]) ? N + sCell : sCell;
   // Le garde-fou : deux poches différentes, on ne cherche même pas.
-  if (nav.comp[start] !== nav.comp[goal]) return null;
+  if (nav.comp[start] !== nav.comp[goal] && !(hasDeck(goal) && nav.comp[start] === nav.comp[N + goal])) return null;
   const run = ++nav.run;
   const { g, f, from, stamp, closed, heap, heapKey, walk, comp } = nav;
   const elev = tw.elev;
@@ -8347,7 +8531,8 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
      La forme octile est le coût EXACT en terrain libre : elle ne surestime
      jamais, donc aucun nœud n'est rouvert. */
   const D2 = 1.41421356;
-  const h = (i) => {
+  const h = (n) => {
+    const i = n % N;
     const dxh = Math.abs((i % W) - gx), dyh = Math.abs(((i / W) | 0) - gy);
     return (dxh + dyh) + (D2 - 2) * Math.min(dxh, dyh);
   };
@@ -8371,21 +8556,31 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
   stamp[start] = run; g[start] = 0; f[start] = h(start); from[start] = -1; closed[start] = 0;
   push(start, f[start]);
   let expanded = 0, found = false;
+  // L'altitude d'un nœud, et le niveau d'une case voisine qui prolonge le pas.
+  const nodeE = (n) => (n < N ? elev[n] : deck[n - N]);
+  const levelNode = (j, e) => {
+    if (Math.abs(elev[j] - e) <= C.TOWN_STEP_MAX) return j;
+    if (hasDeck(j) && Math.abs(deck[j] - e) <= C.TOWN_STEP_MAX) return N + j;
+    return -1;
+  };
+  let goalNode = -1;
   while (hn > 0) {
-    const i = pop();
-    if (closed[i] === 1 && stamp[i] === run) continue;
-    closed[i] = 1;
-    if (i === goal) { found = true; break; }
+    const n = pop();
+    if (closed[n] === 1 && stamp[n] === run) continue;
+    closed[n] = 1;
+    const i = n % N;
+    if (i === goal) { found = true; goalNode = n; break; }
     if (++expanded > CAP) break;
-    const x = i % W, y = (i / W) | 0, e = elev[i];
+    const x = i % W, y = (i / W) | 0, e = nodeE(n);
     for (let k = 0; k < 8; k++) {
       const dx = k < 4 ? (k === 0 ? 1 : k === 1 ? -1 : 0) : (k === 4 || k === 6 ? 1 : -1);
       const dy = k < 4 ? (k === 2 ? 1 : k === 3 ? -1 : 0) : (k === 4 || k === 5 ? 1 : -1);
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-      const j = ny * W + nx;
-      if (!walk[j] || comp[j] !== comp[i]) continue;
-      if (Math.abs(elev[j] - e) > C.TOWN_STEP_MAX) continue;
+      const jc = ny * W + nx;
+      if (!walk[jc]) continue;
+      const j = levelNode(jc, e);
+      if (j < 0 || comp[j] !== comp[n]) continue;
       /* ⚠️ PAS DE COIN COUPÉ. Une diagonale ne passe que si les DEUX cases
          orthogonales sont libres : sinon le chemin frôle l'angle d'une haie,
          et la boîte du personnage — 0,6 case, pas un point — s'y accroche. Le
@@ -8393,19 +8588,19 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
       if (dx && dy) {
         const a = y * W + (x + dx), b = (y + dy) * W + x;
         if (!walk[a] || !walk[b]) continue;
-        if (Math.abs(elev[a] - e) > C.TOWN_STEP_MAX || Math.abs(elev[b] - e) > C.TOWN_STEP_MAX) continue;
+        if (levelNode(a, e) < 0 || levelNode(b, e) < 0) continue;
       }
       const step = (dx && dy) ? D2 : 1;
-      const ng = g[i] + step;
+      const ng = g[n] + step;
       if (stamp[j] === run && ng >= g[j]) continue;
-      stamp[j] = run; g[j] = ng; from[j] = i; closed[j] = 0;
+      stamp[j] = run; g[j] = ng; from[j] = n; closed[j] = 0;
       f[j] = ng + h(j);
       push(j, f[j]);
     }
   }
   if (!found) return null;
   const raw = [];
-  for (let i = goal; i !== -1; i = from[i]) { raw.push(i); if (i === start) break; }
+  for (let n = goalNode; n !== -1; n = from[n]) { raw.push(n); if (n === start) break; }
   raw.reverse();
   /* ⚠️ LA RÉDUCTION PART DE LA POSITION RÉELLE, PAS DU CENTRE DE LA CASE DE
      DÉPART. Le résident n'est presque jamais au centre d'une case : valider le
@@ -8413,7 +8608,8 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
      personne ne parcourra. Repli sur le centre si la position réelle ne tient
      pas la boîte — ce qui n'arrive que si le résident a été poussé dans un
      coin, et le centre de sa case est alors le meilleur point de rattrapage. */
-  const from0 = townBoxFree(tw, x0, y0) ? { x: x0, y: y0 } : null;
+  const eStart = nodeE(start);
+  const from0 = townBoxFree(tw, x0, y0, eStart) ? { x: x0, y: y0, e: eStart } : null;
   return townSimplifyPath(tw, raw, W, x1, y1, from0);
 }
 
@@ -8430,7 +8626,13 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
    ⚠️ Effet de bord voulu : le chemin cesse de raser les murs. Deux virages en
    diagonale valent mieux que douze petits pas contre une haie. */
 function townSimplifyPath(tw, raw, W, tx, ty, from0) {
-  const pt = (i) => C.tileAnchor(i % W, (i / W) | 0);
+  /* 2026-09-27 (nuit) — chaque point porte son altitude (`e`), celle de son
+     nœud : un segment n'est retenu que s'il ARRIVE à ce niveau (sous le grand
+     escalier, la ligne droite par la chaussée et celle par la volée passent par
+     les mêmes cases). `e` ne sort pas d'ici : le chemin rendu reste des {x, y}. */
+  const N = W * tw.h;
+  const pt = (n) => { const i = n % N, a = C.tileAnchor(i % W, (i / W) | 0); return { x: a.x, y: a.y, e: n < N ? tw.elev[i] : tw.deck[i] }; };
+  const reach = (a, b) => { const e = townSegmentEnd(tw, a.x, a.y, b.x, b.y, a.e); return !Number.isNaN(e) && Math.abs(e - b.e) < 0.01; };
   const out = [];
   let anchor = from0 || pt(raw[0]);
   /* ⚠️⚠️ `base` NE RECULE JAMAIS, ET C'EST UNE GARANTIE D'ARRÊT, PAS UN
@@ -8458,7 +8660,7 @@ function townSimplifyPath(tw, raw, W, tx, ty, from0) {
     const far = Math.min(raw.length - 1, base + TOWN_LOS_MAX);
     for (let k = base + 2; k <= far; k++) {
       const cand = pt(raw[k]);
-      if (!townSegmentClear(tw, anchor.x, anchor.y, cand.x, cand.y)) break;
+      if (!reach(anchor, cand)) break;
       last = k;
     }
     const keep = pt(raw[last]);
@@ -8472,10 +8674,10 @@ function townSimplifyPath(tw, raw, W, tx, ty, from0) {
   if (Number.isFinite(tx) && Number.isFinite(ty)) {
     const e = out[out.length - 1];
     if (Math.abs(e.x - tx) > 0.01 || Math.abs(e.y - ty) > 0.01) {
-      if (townSegmentClear(tw, e.x, e.y, tx, ty)) out.push({ x: tx, y: ty });
+      if (!Number.isNaN(townSegmentEnd(tw, e.x, e.y, tx, ty, e.e))) out.push({ x: tx, y: ty });
     }
   }
-  return out;
+  return out.map((q) => ({ x: q.x, y: q.y }));
 }
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ ZIP 432 — LE RÉSEAU ROUTIER DE VALLEY TOWN (le taxi).
@@ -9575,7 +9777,8 @@ export function townBoxFree(tw, x, y, fromE) {
     if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
     const i = fy * W + fx;
     if (!nav.walk[i]) return false;
-    if (Math.abs(tw.elev[i] - eRef) > C.TOWN_STEP_MAX) return false;
+    // 2026-09-27 (nuit) : sous le grand escalier, le niveau qui prolonge le pas.
+    if (Math.abs(townLevelE(tw, fx, fy, eRef) - eRef) > C.TOWN_STEP_MAX) return false;
   }
   return true;
 }
@@ -9595,20 +9798,52 @@ export function townBoxFree(tw, x, y, fromE) {
    n'enjambe jamais plus qu'une marche »), donc au moins aussi strict que le
    jeu à n'importe quelle vitesse. Un test de navigation doit se tromper du
    côté du refus. */
-export function townSegmentClear(tw, ax, ay, bx, by) {
+export function townSegmentClear(tw, ax, ay, bx, by, ae) {
+  return !Number.isNaN(townSegmentEnd(tw, ax, ay, bx, by, ae));
+}
+/* ⚠️ 2026-09-27 (nuit) — LE MÊME SEGMENT, EN SUIVANT LE NIVEAU. L'altitude de
+   référence avance d'échantillon en échantillon (celle qui prolonge le pas,
+   `townLevelE`) : c'est ce qui distingue, sous le grand escalier, la ligne
+   droite qui passe sur la chaussée de celle qui passe sur la marche. Rend
+   l'altitude d'ARRIVÉE, ou NaN si le segment est refusé. `ae` omis : le sol. */
+export function townSegmentEnd(tw, ax, ay, bx, by, ae) {
   const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
   const n = Math.max(1, Math.ceil(d / 0.2));
+  const f0 = C.bodyFootTile(ax, ay);
+  let ref = townLevelE(tw, f0.x, f0.y, ae);
   for (let s = 1; s <= n; s++) {
     const t = s / n, x = ax + dx * t, y = ay + dy * t;
-    if (!townBoxFree(tw, x, y)) return false;
+    const ft = C.bodyFootTile(x, y);
+    ref = townLevelE(tw, ft.x, ft.y, ref);
+    if (!townBoxFree(tw, x, y, ref)) return NaN;
   }
-  return true;
+  return ref;
 }
 export function townElevTile(tw, x, y) {
   if (!tw || !tw.elev) return 0;
   const fx = Math.floor(x), fy = Math.floor(y);
   if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
   return tw.elev[fy * tw.w + fx];
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-27 (nuit) — L'ALTITUDE D'UNE CASE, VUE D'UN MARCHEUR.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Partout, c'est `elev`. Sous le grand escalier (`TOWN_OVERPASS`), la case porte
+   aussi la marche qui enjambe la chaussée (`tw.deck`) : le marcheur est sur
+   celle des deux qui PROLONGE son pas — la plus proche de `refE`, l'altitude
+   d'où il vient. Les deux sont écartées de plus de deux `TOWN_STEP_MAX` : il
+   n'y a jamais d'ambiguïté, et rien ne circule sur le réseau (§3 : ce qui se
+   déduit ne se diffuse pas — ici, de la continuité du trajet).
+   `refE` omis : le sol. Le jeu, le moteur et les bancs appellent CETTE fonction ;
+   aucune copie. Coordonnées de CASE (entiers). */
+export function townLevelE(tw, fx, fy, refE) {
+  if (!tw || !tw.elev) return 0;
+  if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
+  const i = fy * tw.w + fx, b = tw.elev[i];
+  if (refE === undefined || refE === null || !tw.deck) return b;
+  const d = tw.deck[i];
+  if (!(d >= 0)) return b;
+  return Math.abs(d - refE) < Math.abs(b - refE) ? d : b;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -1382,6 +1382,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce fichier — voir devMenuOpenRef.
      { active, t0, fx, fy, tx, ty, e0, e1 } : le trajet est FIGÉ au décollage. */
   const townJumpRef = useRef({ active: false, t0: 0, fx: 0, fy: 0, tx: 0, ty: 0, e0: 0, e1: 0 });
+  /* 2026-09-27 (nuit) — LE NIVEAU DE CHAQUE MARCHEUR SOUS LE GRAND ESCALIER.
+     Une case du pont porte deux sols (la chaussée, la marche) ; sur lequel est
+     un marcheur se DÉDUIT de son pas précédent (`E.townLevelE`), jamais du
+     réseau (§3). Cette table retient, par marcheur (« me », « p:<id> »,
+     « r:<rid> », « g:<rid> », « cat:<robe> »), l'altitude de sa dernière
+     position. Locale, jamais diffusée, jamais sauvegardée : partout ailleurs
+     qu'au pont elle vaut l'altitude de la case, donc elle ne peut pas mentir
+     plus d'un pas. */
+  const townLvlRef = useRef(new Map());
   /* ⚠️⚠️ ZIP 431 — LE PONT VERS LES DEUX FONCTIONS DE SAUT, ET C'EST UN BOGUE
      QU'IL RÉPARE, PAS UN CONFORT. `townJumpTarget` / `tryTownJump` /
      `canTownJumpNow` sont déclarées DANS la closure de la boucle de rendu (elles
@@ -13218,7 +13227,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ ET LE COÛT RÉSEAU N'A PAS BOUGÉ D'UN MESSAGE : le chemin est réduit à
        une poignée de points de passage (médiane 7, maximum 16 mesurés sur la
        ville entière) et part dans le MÊME `residentPaths` qu'avant. */
-    const legs = E.townFindPath(tw, res.x, res.y, sp.x, sp.y);
+    const legs = E.townFindPath(tw, res.x, res.y, sp.x, sp.y, undefined, townLvl(tw, "r:" + res.rid, res.x, C.footY(res.y)));
     if (!legs || !legs.length) {
       // Aucun chemin malgré le filtre de poche : on n'insiste pas sur CETTE
       // destination, on en retire une autre au prochain tour. Silencieux mais
@@ -13324,8 +13333,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          son test historique : il a le saut de rebord (Espace) pour se sortir de
          ce genre de recoin, et durcir sa collision serait un second changement
          de comportement dans la même livraison. */
-      const canGo = (px, py) => townCanStand(tw, px, py, townElevAt(tw, res.x, C.footY(res.y)))
-                             && townCanStand(tw, px, py, townElevAt(tw, px, C.footY(py)));
+      // 2026-09-27 (nuit) : l'altitude de départ est celle du NIVEAU du résident
+      // (sous le grand escalier, chaussée ou marche — `townLvl`).
+      const e0r = townLvl(tw, "r:" + res.rid, res.x, C.footY(res.y));
+      const canGo = (px, py) => townCanStand(tw, px, py, e0r)
+                             && townCanStand(tw, px, py, townElevAt(tw, px, C.footY(py), e0r));
       const wasX = res.x, wasY = res.y;
       const nx = res.x + ux * sp;
       if (canGo(nx, res.y)) res.x = nx;
@@ -13381,7 +13393,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (res.stuckT > 1.2 && (res.repath || 0) < C.TOWN_REPATH_TRIES) {
           res.repath = (res.repath || 0) + 1;
           res.stuckT = 0;
-          const again = res.townSpot ? E.townFindPath(tw, res.x, res.y, res.townSpot.x, res.townSpot.y) : null;
+          const again = res.townSpot ? E.townFindPath(tw, res.x, res.y, res.townSpot.x, res.townSpot.y, undefined, townLvl(tw, "r:" + res.rid, res.x, C.footY(res.y))) : null;
           if (again && again.length) {
             res.townPath = again; res.roamTarget = again[0];
             queueTownResidentPath(res, again);   // l'invité doit voir le MÊME détour
@@ -13426,7 +13438,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       res.moving = false;
       return;
     }
-    const legs = E.townFindPath(tw, res.x, res.y, gx, gy);
+    const legs = E.townFindPath(tw, res.x, res.y, gx, gy, undefined, townLvl(tw, "r:" + res.rid, res.x, C.footY(res.y)));
     if (!legs || !legs.length) { res.nextRoamAt = now + 1500; return; }
     res.townPath = legs; res.roamTarget = legs[0]; res.lastSpot = { x: gx, y: gy };
     res.townAct = "watch"; res.townSpot = null; res.stuckT = 0;
@@ -13450,7 +13462,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const a = list[i], b = list[j];
       if (a.act === "talk" || b.act === "talk") continue;
       if (now < (a.meetCd || 0) || now < (b.meetCd || 0)) continue;
-      if (Math.abs(townElevAt(townWorldNow(), a.x, C.footY(a.y)) - townElevAt(townWorldNow(), b.x, C.footY(b.y))) > 0.01) continue; // pas de conversation d'un étage à l'autre
+      if (Math.abs(townLvl(townWorldNow(), "r:" + a.rid, a.x, C.footY(a.y)) - townLvl(townWorldNow(), "r:" + b.rid, b.x, C.footY(b.y))) > 0.01) continue; // pas de conversation d'un étage à l'autre
       if (Math.hypot(a.x - b.x, a.y - b.y) > C.TOWN_MEET_DIST) continue;
       // Ceinture : même hors délai de grâce, le quai reste un lieu de passage.
       // Deux résidents qui s'y croisent au moment d'un départ se rebloqueraient
@@ -19824,17 +19836,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
        rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
-    function elevTown(tw, x, y) {
-      if (!tw || !tw.elev) return 0;
-      const fx = Math.floor(x), fy = Math.floor(y);
-      if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
-      return tw.elev[fy * tw.w + fx];
+    /* ⚠️ 2026-09-27 (nuit) — `refE` (facultatif) : sous le grand escalier, le
+       niveau qui prolonge le pas (`E.townLevelE`). Sans lui : le sol. */
+    function elevTown(tw, x, y, refE) {
+      return E.townLevelE(tw, Math.floor(x), Math.floor(y), refE);
     }
     /* L'altitude d'un personnage : celle de la case sous ses PIEDS, et non
        sous son ancre. Sa boîte de collision est y..y+0.35 (voir canStandTown) ;
        +0,2 tombe au milieu, ce qui évite qu'il change de niveau un demi-pas
        avant ou après le reste de son corps. */
-    function playerElevTown(tw, p) { return elevTown(tw, C.footX(p.x), C.footY(p.y)); }
+    function playerElevTown(tw, p) {
+      // 2026-09-27 (nuit) : le NIVEAU du joueur, qui prolonge son pas (`townLvl`).
+      return townLvl(tw, p === meRef.current ? "me" : "p:" + p.id, C.footX(p.x), C.footY(p.y));
+    }
     /* ⚠️⚠️⚠️ ZIP 439 — L'ALTITUDE DE DESSIN N'EST PAS L'ALTITUDE DE COLLISION,
        ET C'EST TOUTE LA PRUDENCE DE CE CHANTIER. Le dos d'âne des ponts est une
        grandeur d'IMAGE : il doit monter le personnage sur le tablier, il ne doit
@@ -19898,7 +19912,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function canStandTown(tw, x, y, fromE) {
       for (const [px, py] of C.bodyPoints(x, y)) {
         if (blockedTown(tw, px, py)) return false;
-        if (fromE !== undefined && Math.abs(elevTown(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
+        if (fromE !== undefined && Math.abs(elevTown(tw, px, py, fromE) - fromE) > C.TOWN_STEP_MAX) return false;
       }
       return true;
     }
@@ -19955,6 +19969,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const vy = d === 0 ? 1 : d === 1 ? -1 : 0;
       if (!vx && !vy) return null;
       const e0 = playerElevTown(tw, m);
+      /* ⚠️ 2026-09-27 (nuit) — PAS DE SAUT PAR-DESSUS LE PONT DU GRAND ESCALIER :
+         sa case vue d'en haut a pour « sol » la chaussée, une unité plus bas —
+         le saut se proposait donc depuis le palier ou la volée, À TRAVERS les
+         marches et par-dessus les rampes. Ni départ, ni rebord, ni arrivée dans
+         son emprise. */
+      if (C.townOverpassCell(Math.floor(C.footX(m.x)), Math.floor(C.footY(m.y)))
+          || C.townOverpassCell(Math.floor(C.footX(m.x) + vx), Math.floor(C.footY(m.y) + vy))) return null;
       // 1. Le REBORD : la case juste devant doit être nettement plus basse.
       const ledgeE = elevTown(tw, C.footX(m.x) + vx, C.footY(m.y) + vy);
       if (e0 - ledgeE < C.TOWN_JUMP_MIN_DROP) return null;
@@ -19962,6 +19983,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       //    pendant sa cloche — déposerait le joueur DANS un mur.
       const tx = m.x + vx * C.TOWN_JUMP_TILES, ty = m.y + vy * C.TOWN_JUMP_TILES;
       if (!canStandTown(tw, tx, ty)) return null;
+      if (C.townOverpassCell(Math.floor(C.footX(tx)), Math.floor(C.footY(ty)))) return null;
       // 3. ... et au niveau du rebord : on saute d'un étage, pas de deux.
       const landE = elevTown(tw, C.footX(tx), C.footY(ty));
       if (Math.abs(landE - ledgeE) > C.TOWN_STEP_MAX) return null;
@@ -20380,9 +20402,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          miroir autour de `wy` (sa ligne de sol) : le reflet est dessiné par le
          dessin de l'objet lui-même, jamais par une seconde copie de son choix
          de sprite (§8 de CLAUDE.md). */
+      /* ⚠️⚠️ 2026-09-27 (nuit) — SOUS LE GRAND ESCALIER, ON DISPARAÎT. Ce qui se
+         tient au SOL sur les rangées de la chaussée qui passe sous la volée (un
+         passant, un résident, un taxi, un chat) est au NORD des marches qui
+         l'enjambent, donc derrière elles — mais la volée est du sol, peinte
+         avant toute la file : sans rien faire, le passant se dessinerait
+         par-dessus les marches. On le DÉCOUPE de l'emprise du pont à l'écran
+         (colonnes de la volée, du bord du palier au bas de la troisième marche),
+         qui n'est faite que de pierre de la volée : c'est exactement ce que les
+         marches cachent. Ce qui est SUR la volée (altitude de marche) n'est
+         jamais découpé. Son nom, dans la passe finale, reste visible : on sait
+         où est son ami. */
+      const BRG = C.TOWN_STAIR_BRIDGE;
+      const brX0 = BRG.x * T, brX1 = (BRG.x + BRG.w) * T;
+      const brY0 = BRG.y * T - EP, brY1 = (BRG.y + BRG.h + 1) * T;
+      const underBridge = (wy, ey) => ey < 0.4 && wy >= BRG.y * T && wy <= (BRG.y + BRG.h) * T + 8;
       const pushE = (wy, ey, fn, liftPx, rx) => draws.push({
         y: C.townDepthKey(wy, ey),
-        fn: () => { ctx.save(); ctx.translate(0, -(ey * EP + (liftPx || 0))); fn(); ctx.restore(); },
+        fn: () => {
+          ctx.save();
+          if (underBridge(wy, ey)) {
+            ctx.beginPath();
+            ctx.rect(-1e5, -1e5, 2e5, 2e5);          // tout le monde, sauf...
+            ctx.rect(brX0, brY0, brX1 - brX0, brY1 - brY0);
+            ctx.clip("evenodd");
+          }
+          ctx.translate(0, -(ey * EP + (liftPx || 0))); fn(); ctx.restore();
+        },
         rb: rx == null ? null : wy, rx, re: ey,
       });
       /* ZIP 427 — LES BULLES DE LA VILLE, EN PASSE FINALE. Même raison qu'à la
@@ -20434,7 +20480,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const xL = Math.max(0, x0 - 2), xR = Math.min(tw.w - 1, x1 + 2);
       for (let y = yR0; y <= yBot; y++) for (let x = xL; x <= xR; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
-        const bakedCourtStair = C.townCourtMainStairCell(x, y);
+        /* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER EST PEINTE D'UN TENANT
+           (`A.drawTownGrandFlight`, après cette boucle) : ses marches ne se
+           peignent pas case par case. Seules les rangées du PONT restent ici —
+           leur sol est la chaussée qui passe dessous, et la volée la recouvre. */
+        if (C.townGrandFlightCell(x, y) && !C.townOverpassCell(x, y)) continue;
         const e = tw.elev[i], oy = -e * EP;
         const px = x * T, py = y * T + oy;
         if (zmFrac) {
@@ -20528,12 +20578,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              par aucun banc (§4). Voir `A.drawTownStairTile` et
              `tools/render-escaliers.mjs`. Le repli reste ici, comme pour les
              revêtements : un atlas manquant doit rendre du gris, pas un trou. */
-          /* ZIP 467 — sous le bloc unique, aucune ancienne marche. Un dessin
-             d'herbe de repli ne peut pas dépasser comme les nez de marche et
-             les limons du 466 ; les pixels opaques de la source le couvrent. */
-          if (bakedCourtStair) {
-            if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
-          } else if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
+          if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
             const vertical = A.townStairVertical(tw, x, y);
             ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
             for (let s = 0; s < 4; s++) {
@@ -20620,7 +20665,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            seule case qui la voit. */
         {
           const upPx = (elAt(x, y - 1) - e) * EP;
-          if (upPx > 0.5 && y > 0 && !C.townCourtMainStairCell(x, y - 1)) A.drawTownWallFoot(ctx, px, py, upPx);
+          if (upPx > 0.5 && y > 0 && !C.townGrandFlightCell(x, y)) A.drawTownWallFoot(ctx, px, py, upPx);
+        }
+        /* 2026-09-27 (nuit) — LA BOUCHE DU PASSAGE SOUS LE GRAND ESCALIER : la
+           chaussée s'assombrit en s'engageant sous la volée. C'est, avec le
+           passant qui disparaît dessous, ce qui fait lire un PONT et non une
+           rue qui bute contre un escalier. */
+        {
+          const BR = C.TOWN_STAIR_BRIDGE;
+          if (y >= BR.y && y < BR.y + BR.h && (x === BR.x - 1 || x === BR.x + BR.w)) A.drawStairBridgeMouth(ctx, px, py, x === BR.x - 1 ? 1 : -1);
         }
         /* ⚠️⚠️ ZIP 435 — LA BERGE, PUIS LE TRAIT D'EAU, DANS CET ORDRE ET
            APRÈS LE SOL. Les deux vivent dans fermeArt (§ drawTownWaterTile)
@@ -20651,7 +20704,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            arête claire au sommet (le nez du rebord, qui accroche la lumière) et
            une ombre portée au pied. */
         const drop = e - elAt(x, y + 1);
-        if (drop > 0.01 && !bakedCourtStair) {
+        if (drop > 0.01 && !C.townGrandFlightCell(x, y + 1)) {
           const fh = drop * EP;
           /* ⚠️⚠️ ZIP 436 — LE PAREMENT AUSSI EST PARTI DANS `fermeArt`. Ce
              qu'il y avait : un aplat `#8f8a80`, une ligne sombre PLEINE
@@ -20691,7 +20744,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            escalier a de toute façon : un LIMON, une joue de pierre qui borde la
            volée. Le blocage devient une chose qu'on voit et qu'on comprend. */
         const isStair = g === C.G_TOWN_STAIR;
-        if (!bakedCourtStair) for (const sd of [-1, 1]) {
+        for (const sd of [-1, 1]) {
           const dside = e - elAt(x + sd, y);
           if (dside <= 0.01) continue;
           const bw = isStair ? 4 : 2;
@@ -20707,7 +20760,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         /* 2026-09-27 (phase 10) — et l'ombre au PIED d'un mur est-ouest, sur la
            case basse (un escalier voisin a son limon, pas d'ombre). */
-        if (!bakedCourtStair && !isStair) for (const sd of [-1, 1]) {
+        if (!isStair) for (const sd of [-1, 1]) {
           const up = elAt(x + sd, y) - e;
           if (up > 0.5 && tw.ground[y * tw.w + x + sd] !== C.G_TOWN_STAIR) A.drawTownWallSideFoot(ctx, px, py, sd);
         }
@@ -21297,29 +21350,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         });
       }
-      /* ZIP 467 — l'escalier monumental est déjà composé dans la source de
-         Guillaume. On le peint une seule fois, après le sol qui doit apparaître
-         dans ses transparences et avant toute la file des bâtiments, décors et
-         personnages. Les anciennes rambardes case par case ont disparu du
-         générateur : aucun doublon ne peut dépasser derrière ce bloc. */
-      A.drawTownCourtStairBlock(ctx, sprites);
-      /* hors-zip — LA RAMBARDE 'IRON', ELLE, REJOINT LA FILE DE TRI. Peinte
-         ici, dans le bloc ci-dessus, le joueur serait TOUJOURS devant elle
-         (le bloc entier se peint avant tout le reste, sans exception) — signalé
-         par Guillaume : on veut pouvoir marcher DERRIÈRE cette ferronnerie,
-         comme derrière une vraie grille. `townCourtStairIronRail` est un
-         calque découpé de ce même bloc où seul le tracé sombre est resté
-         opaque (voir sa fabrication, fermeArt.js) ; on le repousse dans
-         `draws` à la rangée du monde que sa collision (`TOWN_RAILS`, style
-         "iron") occupe déjà, pour que le tri décide seul, image par image,
-         si le joueur passe devant ou derrière — exactement le principe déjà
-         éprouvé sur le pont (`townBridgeDepthKeys`). */
-      if (sprites.townCourtStairIronRail) {
-        const railWorldY = 31; // C.TOWN_RAILS, style "iron"
-        pushE((railWorldY + 1) * T, elAt(136, railWorldY), () => {
-          const im = sprites.townCourtStairIronRail;
-          ctx.drawImage(im, C.TOWN_COURT_STAIR_BLOCK.x * T + 32, C.TOWN_COURT_STAIR_BLOCK.screenY + 136);
-        });
+      /* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER, d'un tenant, après le sol
+         (dont la chaussée qui passe dessous) et avant toute la file de tri : les
+         passants, les rampes et les piliers se posent dessus. */
+      {
+        const F = C.TOWN_GRAND_STAIR.flight;
+        if (F.x + F.w >= x0 - 1 && F.x <= x1 + 1 && F.y + F.len >= y0 - 4 && F.y - 4 <= yBot) A.drawTownGrandFlight(ctx, sprites);
       }
       /* ══════════════════════════════════════════════════════════════════════
          LES TROIS MONUMENTS (425) — église, hôtel de ville, tribunal.
@@ -22209,6 +22245,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
+        /* 2026-09-27 (nuit) — le grand escalier : piliers, balustrades, rampes,
+           pots. Une rampe au-dessus de la chaussée porte l'altitude de SA marche
+           (`pr.e`) — sa case, elle, est la chaussée. */
+        if (pr.kind === "stairPost" || pr.kind === "stairBalus" || pr.kind === "stairSide" || pr.kind === "stairRail" || pr.kind === "stairPot") {
+          pushE((pr.y + 1) * T, pr.e !== undefined ? pr.e : elAt(pr.x, pr.y), () => A.drawGrandStairProp(ctx, sprites, pr));
+          continue;
+        }
         if (pr.kind === "tallGrass") { drawTownTallGrass(pr); continue; }
         /* ⚠️⚠️⚠️ ZIP 439 — LE PONT SE DESSINE EN DEUX MOITIÉS, ET LE JOUEUR
            PASSE ENTRE ELLES. C'est la réponse à « il doit être praticable, pour
@@ -22869,7 +22912,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (rMoving) townBushPress(tw, dx2, dy2, rDir === 2 ? -1 : rDir === 3 ? 1 : 0, rDir === 1 ? -1 : rDir === 0 ? 1 : 0);
           else townBushPress(tw, dx2, dy2, 0, 0);
           const rAnim = isHost ? (res.animT || 0) : (rp.animT || 0);
-          const pe = townElevAt(tw, dx2, dy2 + 0.2);
+          const pe = sitting ? townElevAt(tw, dx2, dy2 + 0.2) : townLvl(tw, "rd:" + res.rid, dx2, dy2 + 0.2);
           const charOf = (extra) => ({
             id: "res" + res.rid, name: ro.name, gender: ro.gender, outfit: ro.outfit,
             overalls: ro.overalls, cap: ro.cap, look: ro.look,
@@ -22890,7 +22933,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (!tr) { tr = []; guestTrailsRef.current.set(res.rid, tr); }
             const gp = trailFollow(tr, rx, ry, rMoving, C.TOWN_GUEST_FOLLOW_DIST);
             const gAnim = rMoving ? (performance.now() / 110) : 0;
-            const gpe = townElevAt(tw, C.footX(gp.x), C.footY(gp.y));
+            const gpe = townLvl(tw, "g:" + res.rid, C.footX(gp.x), C.footY(gp.y));
             pushE((gp.y + 1) * T - 1, gpe, () => drawCharacter({
               id: "guest" + res.rid, name: guest.name, x: gp.x, y: gp.y, dir: gp.dir,
               moving: rMoving, animT: gAnim, gender: guest.gender, outfit: guest.outfit,
@@ -23266,7 +23309,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (c.heart) faunaFxRef.current.push({ kind: "heart", x: c.x, y: c.y, t0: nowP });
             if (!inView(c.x, c.y, 2)) continue;
             const cell = FAS.cat[c.coat] && FAS.cat[c.coat][c.pose];
-            const gx = c.x * T, gy = c.y * T, ce = elAt(Math.floor(c.x), Math.floor(c.y));
+            const gx = c.x * T, gy = c.y * T, ce = townLvl(tw, "cat:" + c.coat, c.x, c.y);
             pushE(gy, ce, () => { groundShadow(gx, gy, 9, 0.18); blitF(cell, gx, gy, c.face); }, 0, Math.floor(c.x));
           }
           // ── Les petits effets : le cœur du chat qui dit bonjour.
@@ -28453,11 +28496,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (e && e.r) return C.TOWN_STUMP_BLOCKS;
     return true;
   }
-  function townElevAt(tw, x, y) {
-    if (!tw || !tw.elev) return 0;
-    const fx = Math.floor(x), fy = Math.floor(y);
-    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
-    return tw.elev[fy * tw.w + fx];
+  /* L'altitude sous un point. `refE` (facultatif) : l'altitude d'où l'on vient,
+     qui choisit le niveau d'une case du pont (voir `E.townLevelE`). */
+  function townElevAt(tw, x, y, refE) {
+    return E.townLevelE(tw, Math.floor(x), Math.floor(y), refE);
+  }
+  /* L'altitude d'un marcheur NOMMÉ, qui prolonge la précédente (voir
+     `townLvlRef`). À appeler avec la position de ses PIEDS. */
+  function townLvl(tw, key, fx, fy) {
+    const mem = townLvlRef.current;
+    const e = E.townLevelE(tw, Math.floor(fx), Math.floor(fy), mem.get(key));
+    mem.set(key, e);
+    return e;
   }
   /* ⚠️ ZIP 428 — IL Y A DEUX TESTS DE COLLISION EN VILLE, ET C'EST DÉLIBÉRÉ.
      Celui-ci est le test D'EXÉCUTION : il lit `shared.townChop`, donc il sait
@@ -28474,7 +28524,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townCanStand(tw, x, y, fromE) {
     for (const [px, py] of C.bodyPoints(x, y)) {
       if (townBlockedAt(tw, px, py)) return false;
-      if (fromE !== undefined && Math.abs(townElevAt(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
+      if (fromE !== undefined && Math.abs(townElevAt(tw, px, py, fromE) - fromE) > C.TOWN_STEP_MAX) return false;
     }
     return true;
   }
@@ -30533,7 +30583,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (c.key === key && now - c.at < 1200) return c.path;
     let path = null;
     if (zone === "farm") { const w = worldRef.current; if (w) path = E.findPavedPath(w, px, py, gx, gy); }
-    else if (zone === "town") { const tw = townWorldNow(); if (tw) path = E.townFindPath(tw, px, py, gx, gy); }
+    else if (zone === "town") { const tw = townWorldNow(); if (tw) path = E.townFindPath(tw, px, py, gx, gy, undefined, townLvlRef.current.get("me")); }   // le niveau du joueur (grand escalier)
     /* ⚠️ AUCUN CHEMIN EST UN CAS NORMAL, PAS UN ÉCHEC : les intérieurs n'ont pas
        d'A*, et une cible peut être momentanément inatteignable. L'appelant
        retombe alors sur la formation ordinaire — la reine reste près du joueur, elle ne se

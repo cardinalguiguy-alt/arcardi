@@ -7,27 +7,32 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-27 (soir) — Valley Town : phase 7a livrée (réseau, monuments, cœur dense)
+### 2026-09-28 (nuit du 27) — le grand escalier de l'église, refait ; la phase 12 (neige) reste la suivante
 
-Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récit en tête du même fichier.
+Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
 chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre tranché par Guillaume :
 phases 9, 10, 11, 7a (faites), **12 (la neige, demandée pour la suite)**, 7b, 13, 14, 8 ; 6a/6b au fil de ses images.
 ⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` (lus sur les
 monuments : les déplacer déplace le prestige) ; tout ce qui se compose doit la lire.
-⚠️ **PRINCIPE POSÉ LE 2026-09-27 : PAS DE BÂTIMENT SANS FONCTION** (d'où le tribunal descendu en ville plutôt
-qu'une « Cité du Palais » de bâtiments vides).
-- **Livré** : une rue = un tracé (`TOWN_ROADS`, 18 rues, voie B ; `TOWN_ST_ROWS/COLS` supprimées, l'ancienne
-  grille réécrite dans le modèle vérifiée identique case pour case avant tout changement) ; rues pavées à bord
-  libre (`townRoadField`, fermeArt.js) ; palais de justice sur sa place à l'ouest de la grand-place ; église ×1,5
-  en haut du grand escalier ; mail planté ; 15 maisons de ville (`TOWN_TOWNHOUSES`, sans plaque, habitées) ;
-  parcelles déménagées par rang (rangs 0-2 inchangés, `size` sur la parcelle) ; taxi sur l'axe vrai.
-- Bancs : **53/53** (`verify-vallee` 278, `verify-taxi` 15), `no-undef`, bundle. Vu en jeu (été) : place du
-  Palais, vieille ville, terrasse et église, mail, faubourg sud, front de lac. **Pas vu** : nuit, hiver, deux
-  joueurs, le taxi roulant, les Forges et l'est. **Pas de manipulation Supabase.**
+⚠️ **PRINCIPE POSÉ LE 2026-09-27 : PAS DE BÂTIMENT SANS FONCTION.**
+- **Livré (sur sa référence `refs/référence nouvel escalier.jpg`)** : volée droite dans l'axe du portail
+  (`TOWN_GRAND_STAIR`, dérivée de l'église, du bord de terrasse et de `TOWN_NORD_Y`), 8 marches, même largeur ;
+  palier dallé et parvis agrandi jusqu'à lui ; balustrades, piliers, rampes et pots en décors triés ; ses deux
+  premières marches ENJAMBENT le boulevard du Nord — on passe dessous (case à deux niveaux, `tw.deck`,
+  `E.townLevelE`), on y disparaît (découpe dans `pushE`). Mail redressé vers le pied. Bloc 467 retiré.
+- ⚠️ **La génération tourne sur l'ANCIENNE emprise** (`TOWN_STAIR_SEED`, `TOWN_ROADS_SEED`) et l'escalier se pose
+  en dernière passe : ne JAMAIS « nettoyer » ces nombres, ils tiennent en place tous les arbres de la ville.
+- Bancs : **53/53** (`verify-vallee` 279, `verify-collision` 35, `render-escaliers` 43, `verify-taxi` 15),
+  `no-undef`, bundle, `next build`. Vu en jeu : jour, crépuscule, zooms 1-2, montée, descente, rampes, passage
+  dessous, À DEUX clients. **Pas vu** : hiver, pluie, taxi sous le pont, résidents en vrai. **Pas de Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le grand escalier (2026-09-27, nuit)** : la lecture du passage dessous (le passant découpé, la bouche
+  assombrie, son nom qui reste), les rampes en bandeau et les piliers dessinés en code (le reste du bloc 467
+  est parti, sauf son pot), le palier de 12 cases, les deux points de vue (`view`) à côté des piliers de tête,
+  le pied de sable et ses deux lanternes, le mail redressé (ses tilleuls ont bougé avec lui).
 - **La phase 7a (2026-09-27, soir)** : le tracé des rues et leur bord pavé courbe, l'église ×1,5 (au cran 5
   son image dépasse la référence de ×1,58), le palais sur sa place, le mail, les rangées de maisons de ville,
   les placettes ; les parcelles des joueurs 3+ ont déménagé.
@@ -63,8 +68,6 @@ qu'une « Cité du Palais » de bâtiments vides).
 - Le perron du tribunal, le zoom manuel, les pets ancrés sur le maître, Eduardo et le port
   (`starYardHookActive`), le belvédère enrichi ; plus anciens : pin, bois du sud-est, cœur de ville,
   « changer de ferme », chantier naval, repousse des buissons.
-- **Chantier futur, décidé par Guillaume (2026-09-27)** : le GRAND ESCALIER sous le tribunal sera
-  retravaillé entièrement (« laid actuellement, et la physique est cassée ») — pas avant qu'il le rouvre.
 - **À décider avec lui, jamais seul (§2)** : la gare (halte minuscule ou `TOWN_STATION` élargie à 6 cases) ;
   quel bâtiment après le tribunal (Gemini) ; traduction des
   métiers (`job` de `TOWN_RESIDENTS`, une table `jobFr`) ; le jour entre les arcs-boutants de l'église ;
@@ -81,7 +84,8 @@ qu'une « Cité du Palais » de bâtiments vides).
 
 **La phase 12 — la neige** (demande de Guillaume, 2026-09-27 : « la neige ultra réaliste avec traces etc ») :
 checklist au tableau (l'hiver ne change rien en ville : herbe, fleurs, feuillage ; la neige ne tient nulle part —
-sol, toits, haies ; traces de pas). Poser les décisions structurantes AVANT d'écrire (§2) : ce qui garde la
+sol, toits, haies ; traces de pas). ⚠️ Le grand escalier est peint d'UN tenant (`townGrandFlightSurface`) et ses
+garde-corps sont des décors : la neige doit s'y poser aussi, et une trace sur une case du pont a deux sols. Poser les décisions structurantes AVANT d'écrire (§2) : ce qui garde la
 neige (sol, rues pavées au bord libre, toits peints en bitmap), la trace (locale ou partagée : §3, ce qui se
 déduit ne se diffuse pas), la fonte.
 **Puis la phase 7b** : haies et clôtures refaites par quartier, jardins vécus, lampadaires aux carrefours et aux
@@ -385,9 +389,16 @@ dépôt.
   arbres coupés, sans une erreur. Un décor neuf s'y pose par HACHAGE de case, en dernier, et un banc
   compare l'empreinte d'avant. ⚠️ **Changer une case de `solid` en cours de génération déplace autant
   qu'un tirage** (les refus changent) : 717 cases de Valley Town pour une emprise de maison (2026-09-26) —
-  une emprise qui change se pose en passe FINALE. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
+  une emprise qui change se pose en passe FINALE — et quand c'est le RELIEF qui change (569 décors déplacés
+  le 2026-09-27), la génération garde l'ANCIENNE emprise comme graine (`TOWN_STAIR_SEED`) et la rend au terrain
+  en dernière passe. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
   violé 400 jours plus tard par la repousse des ARBRES : *une règle entre deux objets se vérifie chez
   les deux qui peuvent naître*, pas seulement chez le nouveau venu.
+- ⚠️⚠️ **UNE CASE À DEUX SOLS (un pont qu'on passe dessus ET dessous) : `elev` y reste le SOL, et le niveau
+  d'un marcheur se DÉDUIT de son pas précédent** (`E.townLevelE`, 2026-09-27). Tout ce qui lit `elev` tout court
+  voit une chaussée — c'est voulu (taxi, rues, arbres inchangés) — mais tout MARCHEUR qui l'y lit voit le pont
+  comme un mur : les deux bancs qui ont leur propre marcheur ont rougi pour ça, et un A* sur des cases seules
+  « ferme » la marche dès qu'un trajet a longé le pont par dessous. Nœuds (case, niveau), mémoire par marcheur.
 - ⚠️⚠️⚠️ **UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL
   COUPE, LE JOUR OÙ « FINI » GAGNE UNE SUITE** (2026-09-13, `starNearby()` de `FermeGame.js`).
   `if (!e || Q.starDone(e)) return null;` voulait dire « plus rien à faire une fois la quête finie » —
@@ -592,7 +603,7 @@ dépôt.
 | Fichier | Rôle |
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **35 477 l.** (compté le 2026-09-05 ; il était annoncé « ~20 500 » depuis assez longtemps pour qu'on planifie sur un fichier deux fois plus petit que le vrai) |
-| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
+| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath(…, e0)` sur des nœuds (case, niveau), `townLevelE()` (le pont du grand escalier)** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
 | `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C)** : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). ⚠️⚠️ **2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT ENFIN `STAR_SITES`** (`Q.STAR_EVIL_ID`, verbe neuf `revive`, hors de tout chapitre par construction — voir sa note dans le fichier) : `content:"star"` suffit à la faire apparaître dans `starFollowers` dès que `resolveStarFound` écrit son id, exactement comme les six autres. `starWakeAdvance`/`starWakeStrike`/`starWakeGlow`/`starWakeCompanionState`/`starWakeCompanionPulse` prennent un `profile` optionnel (`STAR_WAKE_PROFILE_DEFAULT` pour la reine, `STAR_REVIVE_PROFILE` pour elle) — même geste que `haulStep` juste au-dessus, un jour plus tôt. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : les tables de battements et les résolveurs purs.** Cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène**, et la promesse est tenue depuis le 2026-09-13 : **deux sujets** (`MAYOR_TOPICS` : `yard` douze nœuds, `budget` huit), le sujet porté par le rendez-vous (`appt.topic`, arbitré par l'hôte), un dossier par sujet (`e.mayor` / `e.mayor.budget`), la confiance commune. Une commission ou le cadastre = une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
