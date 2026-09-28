@@ -31,7 +31,7 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers";
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau";
 import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
-import { makeFenceCache, drawTownFenceTile, townFenceHeights } from "./clotures";
+import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis";
 import { treeSnowMix } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
@@ -2721,8 +2721,12 @@ export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
     return true;
   }
   const sp = FARM_BUSH_SPECIES[farmBushSpeciesIdx(i)], vr = farmBushVariant(i);
-  if (sp === "shrub") return drawFarmBuis(ctx, S, vr, ax, ay, seasonKey, lean);
-  const arr = sp === "goldBush" ? S.townGoldBush : sp === "lavender" ? S.townLavender : S.townFlowerClump;
+  /* 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : l'espèce « shrub »
+     redessine l'ancien arbuste à fleurs de la ville (`S.townShrub`), comme avant
+     « buis » (5969306) ; sinon, le buis libre de `buis.js`. */
+  if (sp === "shrub" && !C.TOWN_BUIS_LEGACY) return drawFarmBuis(ctx, S, vr, ax, ay, seasonKey, lean);
+  const arr = sp === "shrub" ? S.townShrub : sp === "goldBush" ? S.townGoldBush
+            : sp === "lavender" ? S.townLavender : S.townFlowerClump;
   const img = arr && arr[vr % Math.max(1, arr.length)];
   if (!img) return false;
   if (!lean) { ctx.drawImage(img, ax - img.width / 2, ay - img.height); return true; }
@@ -7190,6 +7194,19 @@ export function buildSprites() {
     g.fillStyle = "#4f7a4a"; g.beginPath(); g.moveTo(0, 9); g.lineTo(18, 0); g.lineTo(36, 9); g.fill();
     g.fillStyle = "#639159"; g.beginPath(); g.moveTo(0, 9); g.lineTo(18, 0); g.lineTo(18, 3); g.lineTo(4, 9); g.fill();
     P(g, 0, 8, 36, 2, "#2f5a2c");
+    return c;
+  }
+  /* 2026-09-28 (soir) — L'ANCIEN BUIS SUR TIGE DE LA PLACE (trois disques sur un
+     bâton, dans un bac), restauré tel quel depuis 5969306 derrière
+     `C.TOWN_BUIS_LEGACY` (fermeConstants.js) ; construit seulement si l'interrupteur
+     est actif. Le nouveau est dans `buis.js`. */
+  function plazaTopiarySpriteLegacy() {
+    const [c, g] = cv(32, 40);
+    P(g, 10, 32, 12, 6, "#7a6a52"); P(g, 10, 32, 12, 1, "#95866c");  // bac
+    P(g, 15, 24, 2, 9, "#6a4a2e");                                    // tronc
+    g.fillStyle = "#2f6b34"; g.beginPath(); g.arc(16, 16, 11, 0, 7); g.fill();
+    g.fillStyle = "#3f8a44"; g.beginPath(); g.arc(14, 13, 8, 0, 7); g.fill();
+    g.fillStyle = "#57a85c"; g.beginPath(); g.arc(12, 11, 4, 0, 7); g.fill();
     return c;
   }
   /* ══════════════════════════════════════════════════════════════════════════
@@ -12288,6 +12305,59 @@ export function buildSprites() {
   /* 2026-09-28 — `townShrubSprite` (le buisson étoilé semé de carrés de couleur, que
      l'œil lisait comme des baies) est SUPPRIMÉ : la boule de buis est peinte en
      volumes dans `buis.js`, avec le massif en nuage et le buis taillé. */
+  /* ⚠️ 2026-09-28 (soir) — IL REVIENT sous le nom `townShrubSpriteLegacy`, restauré
+     tel quel depuis 5969306 (commentaires compris) derrière `C.TOWN_BUIS_LEGACY`
+     (fermeConstants.js) ; construit seulement si l'interrupteur est actif. */
+  /* Le buisson fleuri. ⚠️ 24 px DE HAUT POUR UNE CASE DE 16 : il DÉBORDE vers
+     le nord, comme la haie du 425, et c'est ce débord qui lui donne du volume.
+     Le rendu l'ancre par le bas (voir la file de props). */
+  /* 2026-09-20 (demande Guillaume : « varier les couleurs des fleurs des buis,
+     pour avoir plus de variété […] en ajouter deux, les jaunes seront toujours
+     les plus répandues ») : la palette passe de trois à six entrées — deux
+     couleurs neuves (corail, bleu pâle) plus le jaune RÉPÉTÉ une deuxième fois.
+     La répétition, pas un poids séparé à tenir d'accord avec le tirage
+     (§8 de CLAUDE.md) : c'est déjà la technique de `CLUSTER_KINDS`
+     (fermeEngine.js) pour favoriser une espèce sans écrire un second système de
+     pondération. Jaune tombe donc 2 fois sur 6, chaque autre couleur 1 fois. */
+  function townShrubSpriteLegacy(vr) {
+    const [c, g] = cv(20, 22), r = makeRnd(0x51d3 + vr * 97);
+    const PAL = [
+      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },  // jaune
+      { l: ["#417f4a", "#589a5f", "#28572f"], f: "#e07aa8", fl: "#f7aecb" },  // rose
+      { l: ["#4a8a3a", "#65a850", "#2c5f24"], f: "#f0efe2", fl: "#ffffff" },  // blanc
+      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },  // jaune (2e fois : reste le plus répandu)
+      { l: ["#458a44", "#5fa457", "#2a5c2c"], f: "#e2833c", fl: "#f6b06a" },  // corail
+      { l: ["#3f8557", "#579f6c", "#265e3e"], f: "#5f9bd4", fl: "#a8d6f2" },  // bleu pâle
+    ][vr % 6];
+    const m = new Uint8Array(20 * 22);
+    for (const [bx, by, rx, ry] of [[10, 13, 8.5, 7.5], [6, 10, 5.5, 5], [14, 11, 5.5, 5]]) {
+      for (let y = 1; y < 21; y++) for (let x = 1; x < 19; x++) {
+        const dx = (x + 0.5 - bx) / rx, dy = (y + 0.5 - by) / ry, d = Math.hypot(dx, dy);
+        const th = Math.atan2(dy, dx);
+        if (d <= 1 + 0.16 * Math.sin(th * 5 + bx)) m[y * 20 + x] = 1;
+      }
+    }
+    const on = (x, y) => (x < 0 || y < 0 || x >= 20 || y >= 22) ? 0 : m[y * 20 + x];
+    for (let y = 0; y < 22; y++) for (let x = 0; x < 20; x++) if (m[y * 20 + x]) P(g, x, y, 1, 1, PAL.l[0]);
+    for (let k = 0; k < 34; k++) {
+      const x = (r() * 20) | 0, y = (r() * 22) | 0;
+      if (!m[y * 20 + x]) continue;
+      P(g, x, y, 1 + ((r() * 2) | 0), 1, r() < 0.55 ? PAL.l[1] : PAL.l[2]);
+    }
+    for (let y = 0; y < 22; y++) for (let x = 0; x < 20; x++) {
+      if (!m[y * 20 + x]) continue;
+      if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      let nx = 0, ny = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!on(x + dx, y + dy)) { nx -= dx; ny -= dy; }
+      P(g, x, y, 1, 1, (nx + ny * 1.15) > 1.5 ? PAL.l[1] : PAL.l[2]);
+    }
+    for (let k = 0; k < 14; k++) {
+      const x = 1 + ((r() * 18) | 0), y = 1 + ((r() * 20) | 0);
+      if (!m[y * 20 + x]) continue;
+      P(g, x, y, 2, 2, PAL.f); P(g, x, y, 1, 1, PAL.fl);
+    }
+    return c;
+  }
   /* Le bloc erratique de la rive du lac. ⚠️ IL EST GRIS-BLEU ET IL A UNE LIGNE
      DE FLOTTAISON : une pierre posée au bord de l'eau est mouillée à sa base.
      Sans cette ligne, on ne sait pas si elle est dans le lac ou à côté. */
@@ -18587,6 +18657,8 @@ export function buildSprites() {
       return { sup: ROAD_SUP, surf, seasonal };
     })(),
     // 2026-09-28 — `townShrub` (le buisson à pastilles) n'existe plus : la boule de buis est dans `buis.js`.
+    // 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : l'ancien dessin, construit seulement si l'interrupteur est actif.
+    ...(C.TOWN_BUIS_LEGACY ? { townShrub: [0, 1, 2, 3, 4, 5].map(v => townShrubSpriteLegacy(v)) } : {}),
     townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
     /* ══ ZIP 439 — LES SPRITES DE LA PLANCHE, TELS QUELS ══
        ⚠️ LES CLÉS N'ONT PAS CHANGÉ quand les dessins ont changé de source :
@@ -18627,6 +18699,8 @@ export function buildSprites() {
     townReedTuft: plancheSprite("reeds"),
     townReedsWater: plancheSprite("reedsWater"),
     // 2026-09-28 — `townHedgeRow` (la haie du quai) est une forme de `buis.js` (`hedge`), dessinée par la branche des buis.
+    // 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` : l'ancienne haie du quai (clotures.js), à la taille de la planche.
+    ...(C.TOWN_BUIS_LEGACY ? { townHedgeRow: hedgeRowSpriteLegacy(PLANCHE.hedgeRow.w, PLANCHE.hedgeRow.h) } : {}),
     // 2026-09-27 (nuit) — le grand escalier de l'église (voir `grandStairSprites`).
     townGrandStair: grandStairSprites(),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
@@ -18639,6 +18713,8 @@ export function buildSprites() {
     townHedgeAngle: planche2Sprite("hedgeCorner"),
     townHedgeBush: plancheSprite("hedgeBush"),
     // 2026-09-28 — `townGrassTuft` (la « bande verte » de la planche) n'est plus peint : le massif de buis est dans `buis.js`.
+    // 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` : la bande verte de la planche, telle quelle.
+    ...(C.TOWN_BUIS_LEGACY ? { townGrassTuft: plancheSprite("grassTuft") } : {}),
     townGrassPatch: plancheSprite("grassPatch"),
     townDeck: plancheSprite("deckPlank"),
     townPuddle: plancheSprite("puddle"),
@@ -18822,6 +18898,8 @@ house: house(),
        fois. */
     plazaBench: plancheSprite("benchWood"),
     // 2026-09-28 — `plazaTopiary` (trois disques sur un bâton, dans un bac) n'existe plus : le buis taillé est dans `buis.js`.
+    // 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` : l'ancien dessin, construit seulement si l'interrupteur est actif.
+    ...(C.TOWN_BUIS_LEGACY ? { plazaTopiary: plazaTopiarySpriteLegacy() } : {}),
     plazaMonument: plazaMonumentSprite(),
     plazaFountain: plazaFountainSprite(),
     fountainGeo: FOUNTAIN_GEO,        // zip 429 : lue par drawTownFrame pour l'eau et le jet

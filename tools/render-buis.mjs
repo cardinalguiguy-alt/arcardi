@@ -22,6 +22,10 @@
         collier et les buis sur tige de la place fixés par le générateur ;
      6. la ferme : l'espèce « shrub » de ses haies sauvages dessine le buis LIBRE ;
      7. l'atlas : aucun canevas par buis — quelques pages pour tout.
+   ⚠️ 2026-09-28 (soir) — INTERRUPTEUR `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : actif
+   (le défaut), le jeu dessine les buis d'AVANT ce banc ; §1 à §5 regardent toujours
+   `buis.js` (le code gardé), §6 et §7 vérifient ce que le jeu pose vraiment — l'ancien
+   arbuste à la ferme, les quatre anciens dessins construits, leur hiver d'alors.
    Planches : tools/out/buis-planche.png (formes × saisons, neige légère et
    épaisse) et tools/out/buis-carte.png (la carte : jaune taillé, rouge libre).
 
@@ -284,7 +288,7 @@ console.log("\n=== 5. qui est taillé, sur la vraie carte ===\n");
   ok(collarN >= 12 && collar === collarN, "leur collier est fait de boules égales", `${collar} sur ${collarN}`);
 }
 
-console.log("\n=== 6. la ferme : le buis libre ===\n");
+console.log("\n=== 6. la ferme : " + (C.TOWN_BUIS_LEGACY ? "l'ancien arbuste (interrupteur actif)" : "le buis libre") + " ===\n");
 {
   const FARM = ["shrub", "goldBush", "lavender", "clump"];
   let i = 0;
@@ -292,21 +296,40 @@ console.log("\n=== 6. la ferme : le buis libre ===\n");
   const vr = A.farmBushVariant(i);
   const a = makeCanvas(64, 64), b = makeCanvas(64, 64);
   const drew = A.drawFarmBush(a.ctx, S, C.O_BUSH, i, 24, 30, "summer", 0);
-  BU.drawBuisCell(b.ctx, BU.buisCell(S.townEnclos, "wild", vr % BT.FORMS.wild.length, "summer", 0), 24 + 8, 30 + 16 - 2, 0);
+  /* ⚠️ 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : interrupteur actif,
+     l'espèce « shrub » redessine l'ancien arbuste de la ville (`S.townShrub`), posé par
+     le bas comme avant « buis » ; coupé, le buis libre. Le banc suit le jeu. */
+  if (C.TOWN_BUIS_LEGACY) {
+    const img = S.townShrub && S.townShrub[vr % S.townShrub.length];
+    if (img) b.ctx.drawImage(img, 24 + 8 - img.width / 2, 30 + 16 - 2 - img.height);
+  } else BU.drawBuisCell(b.ctx, BU.buisCell(S.townEnclos, "wild", vr % BT.FORMS.wild.length, "summer", 0), 24 + 8, 30 + 16 - 2, 0);
   let same = true, n = 0;
   for (let k = 0; k < a.px.length; k++) { if (a.px[k] !== b.px[k]) { same = false; break; } }
   for (let k = 3; k < a.px.length; k += 4) if (a.px[k] > MAT) n++;
-  ok(drew && same && n > 60, "l'espèce « shrub » des haies sauvages de la ferme est le buis LIBRE", `case ${i}, variante ${vr}, ${n} px`);
+  ok(drew && same && n > 60, C.TOWN_BUIS_LEGACY ? "interrupteur `TOWN_BUIS_LEGACY` actif : l'espèce « shrub » de la ferme est l'ancien arbuste (`townShrub`)"
+    : "l'espèce « shrub » des haies sauvages de la ferme est le buis LIBRE", `case ${i}, variante ${vr}, ${n} px`);
 }
 
 console.log("\n=== 7. l'atlas, et ce qui a quitté le jeu ===\n");
 {
   ok(S.townEnclos.pages.length <= 6, "tous les buis de toutes les saisons tiennent dans quelques pages d'atlas", `${S.townEnclos.pages.length} page(s) de 512 × 512, clôtures comprises`);
-  ok(["townShrub", "plazaTopiary", "townGrassTuft", "townHedgeRow"].every(k => S[k] === undefined),
-     "les quatre anciens dessins ne sont plus construits (un dessin qu'on ne pose plus vieillit, §10)",
-     ["townShrub", "plazaTopiary", "townGrassTuft", "townHedgeRow"].filter(k => S[k] !== undefined).join(", ") || "aucun");
-  ok(!["shrub", "grassTuft", "topiary", "hedgeRow"].some(k => NG.WINTER_PROP_MODE[k]) && !EAU.WATER_FLAT_PROPS.has("grassTuft"),
-     "leur hiver n'est plus « hiverné » en brindilles ou en paille, et le massif se tient debout (il se reflète)");
+  /* ⚠️ 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` : interrupteur actif, les quatre anciens
+     dessins SONT construits et reprennent leur hiver et leur absence de reflet d'alors ;
+     coupé, ils ne le sont pas. Le banc tient les deux moitiés, selon ce que le jeu pose. */
+  const OLD4 = ["townShrub", "plazaTopiary", "townGrassTuft", "townHedgeRow"];
+  if (C.TOWN_BUIS_LEGACY) {
+    ok(OLD4.every(k => S[k] !== undefined), "interrupteur `TOWN_BUIS_LEGACY` actif : les quatre anciens dessins sont construits",
+       OLD4.filter(k => S[k] === undefined).join(", ") || "les quatre");
+    ok(NG.WINTER_PROP_MODE.shrub === "bare" && NG.WINTER_PROP_MODE.topiary === "ever" && NG.WINTER_PROP_MODE.hedgeRow === "ever"
+       && NG.WINTER_PROP_MODE.grassTuft === "straw" && EAU.WATER_FLAT_PROPS.has("grassTuft"),
+       "interrupteur actif : leur hiver d'avant « buis » (brindilles, persistant, paille) et la bande couchée sans reflet");
+  } else {
+    ok(OLD4.every(k => S[k] === undefined),
+       "les quatre anciens dessins ne sont plus construits (un dessin qu'on ne pose plus vieillit, §10)",
+       OLD4.filter(k => S[k] !== undefined).join(", ") || "aucun");
+    ok(!["shrub", "grassTuft", "topiary", "hedgeRow"].some(k => NG.WINTER_PROP_MODE[k]) && !EAU.WATER_FLAT_PROPS.has("grassTuft"),
+       "leur hiver n'est plus « hiverné » en brindilles ou en paille, et le massif se tient debout (il se reflète)");
+  }
 }
 
 /* ─────────────────────────── LES PLANCHES ─────────────────────────── */

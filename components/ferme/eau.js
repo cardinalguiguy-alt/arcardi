@@ -1257,8 +1257,10 @@ export function makeWaterReflector(makeCanvas) {
 }
 /* Les décors COUCHÉS (au sol ou à fleur d'eau) : ils n'ont pas de reflet à donner.
    ⚠️ 2026-09-28 : `grassTuft` n'y est plus — la « bande verte » plate de la planche
-   est devenue un massif de buis (buis.js), qui se tient debout et se reflète. */
-export const WATER_FLAT_PROPS = new Set(["lily", "stepStones", "flatStone", "bloomBed", "bloomRow", "rockBed"]);
+   est devenue un massif de buis (buis.js), qui se tient debout et se reflète.
+   ⚠️ 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` (fermeConstants.js) :
+   l'ancienne bande verte (avant « buis », 5969306) est couchée, sans reflet, comme alors. */
+export const WATER_FLAT_PROPS = new Set(["lily", "stepStones", "flatStone", "bloomBed", "bloomRow", "rockBed", ...(C.TOWN_BUIS_LEGACY ? ["grassTuft"] : [])]);
 /* De combien l'AXE du miroir descend sous la ligne de sol d'un objet posé sur la
    case (cx, cy) : la hauteur de ce qui le porte au-dessus de l'eau — le
    parement d'un quai, le tablier du ponton, le talus d'une allée, une berge.

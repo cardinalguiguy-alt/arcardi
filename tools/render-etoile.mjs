@@ -2680,7 +2680,13 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
        des BUIS en volumes (`buis.js`) : on mesure contre leurs vraies cellules, au
        printemps (les pousses vert tendre sont le plus clair qu'ils portent). */
     const buisIm = (form) => mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, form, 0, "spring", 0);
-    const BUSHES = [["buis (boule)", buisIm("ball")], ["buis (massif)", buisIm("cloud")], ["buis (sur tige)", buisIm("topiary")],
+    /* ⚠️ 2026-09-28 (soir) — interrupteur `C.TOWN_BUIS_LEGACY` actif : la liste d'avant
+       « buis » (5969306), les buissons que le jeu pose alors — PLUS le buis sur tige
+       (`plazaTopiary`), que l'ancienne liste oubliait alors qu'il est un décor mou
+       (`TOWN_SOFT_PROPS`) et que son disque clair est le plus clair des anciens buissons. */
+    const BUSHES = C.TOWN_BUIS_LEGACY
+      ? ["townShrub", "townFlowerClump", "townGoldBush", "townLavender", "townGrassTuft", "townReedTuft", "plazaTopiary"].map(k => [k, S[k]])
+      : [["buis (boule)", buisIm("ball")], ["buis (massif)", buisIm("cloud")], ["buis (sur tige)", buisIm("topiary")],
       ["buis (libre)", buisIm("wild")], ["townFlowerClump", S.townFlowerClump], ["townGoldBush", S.townGoldBush],
       ["townLavender", S.townLavender], ["townReedTuft", S.townReedTuft]];
     let bush = null, bushName = "";
@@ -2774,7 +2780,8 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
       /* ⚠️ LA PLANCHE MONTRE L'ARBUSTE VERT, PAS LE BUISSON D'OR : c'est le cas le
          plus dur à l'œil (un vert sur un vert, sans fleurs jaunes pour trancher), et
          une planche qui montre le cas facile ne sert à rien. */
-      const bushIm = mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, "ball", 0, "summer", 0);   // 2026-09-28 : la boule de buis
+      const bushIm = C.TOWN_BUIS_LEGACY ? S.townShrub && S.townShrub[0]   // 2026-09-28 (soir) : l'ancien arbuste, interrupteur actif
+        : mods.buis.BUIS_TEST.buisCanvas(S.townEnclos, "ball", 0, "summer", 0);   // 2026-09-28 : la boule de buis
       const line = [green[0][0], green[0][1], green[0][2], green[0][3], green[2][0],
                     S.starWispColors.yellow[0][0], S.starWispColors.orange[0][0], S.starWispColors.blue[0][0]];
       line.forEach((im, i) => {

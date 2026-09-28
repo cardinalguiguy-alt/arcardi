@@ -22743,7 +22743,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
         "hedgeRow", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
-        "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);
+        "bloomBed", "bloomRow", "rockBed", "hedgeAngle",
+        // 2026-09-28 (soir) — la bande verte de la planche, quand elle est dessinée (`C.TOWN_BUIS_LEGACY`) ;
+        // sinon elle ne passe jamais par ici (la branche des buis la prend plus haut).
+        "grassTuft"]);
       /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
          premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
          tomber le buisson d'or et le buisson fleuri sur la même variante à
@@ -22778,7 +22781,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            `winterPropCanvas` ni le chapeau lu dans les pixels. Ils portent leur
            ombre de contact ; debout, ils se reflètent. Le frisson au passage est
            celui de tout décor mou (`townBushLean`). */
-        if (BU.BUIS_KINDS.has(pr.kind) && sprites.townEnclos) {
+        /* ⚠️ 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : l'affichage
+           d'AVANT « buis » est rendu par défaut ; ces quatre décors repassent alors
+           par la chaîne des sprites plus bas (`plazaTopiary`, `townShrub`,
+           `townHedgeRow`, `townGrassTuft`), avec leur hiver, leur neige et leurs
+           reflets d'alors. */
+        if (!C.TOWN_BUIS_LEGACY && BU.BUIS_KINDS.has(pr.kind) && sprites.townEnclos) {
           const bp = BU.townBuisPick(tw, pr);
           const bMix = snowF ? NG.depthSnowMix(snowF.depthAt(pr.x * T + 8, pr.y * T + 8), (NG.h32(pr.x, pr.y, 5) % 100) / 100) : null;
           const bA = BU.buisCell(sprites.townEnclos, bp.form, bp.variant, snowSeason, bMix ? bMix.a : 0);
@@ -22865,6 +22873,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // (le buis taillé, la boule et le massif en nuage sont dessinés plus haut : `BU.BUIS_KINDS`)
         let img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
                   : pr.kind === "bench" ? sprites.plazaBench
+                  /* 2026-09-28 (soir) — les quatre lignes des anciens buis (5969306),
+                     rendues par `C.TOWN_BUIS_LEGACY` : leurs sprites n'existent que si
+                     l'interrupteur est actif ; sinon la branche des buis les prend plus
+                     haut, et à défaut d'atlas `img` reste vide (on passe), comme avant. */
+                  : pr.kind === "topiary" ? sprites.plazaTopiary
                   /* ⚠️ ZIP 431 — LE MODULO SUIT LA TABLE, il n'est plus écrit en
                      dur. `% 4` sur six métiers aurait rendu deux étals invisibles
                      tout en laissant leur case solide : un mur invisible, le
@@ -22886,6 +22899,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   /* ZIP 437 — le bloc erratique de la rive sauvage. La variante
                      vient de la POSITION (hachage), jamais d'un tirage : trois
                      blocs alignés tirés au sort changeraient à chaque image. */
+                  : pr.kind === "shrub" ? (sprites.townShrub || [])[((pr.x * 7 + pr.y * 13) >>> 0) % Math.max(1, (sprites.townShrub || []).length)]   // 2026-09-28 (soir) : `C.TOWN_BUIS_LEGACY`
                   : pr.kind === "boulder" ? (sprites.townBoulder || [])[((pr.x * 11 + pr.y * 5) >>> 0) % Math.max(1, (sprites.townBoulder || []).length)]
                   /* ══ ZIP 439 — LE MOBILIER DE RIVE, SPRITES DE LA PLANCHE ══
                      ⚠️ LES VARIANTES SE TIRENT DE LA POSITION, jamais d'un
@@ -22918,6 +22932,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "bloomRow" ? sprites.townBloomRow
                   : pr.kind === "rockBed" ? sprites.townRockBed
                   : pr.kind === "hedgeAngle" ? sprites.townHedgeAngle
+                  : pr.kind === "hedgeRow" ? sprites.townHedgeRow       // 2026-09-28 (soir) : `C.TOWN_BUIS_LEGACY`
+                  : pr.kind === "grassTuft" ? sprites.townGrassTuft     // 2026-09-28 (soir) : `C.TOWN_BUIS_LEGACY`
                   : pr.kind === "flatStone" ? sprites.townFlatStone
                   : pr.kind === "goldBush" ? pick(sprites.townGoldBush, pr)
                   : pr.kind === "lavender" ? pick(sprites.townLavender, pr)

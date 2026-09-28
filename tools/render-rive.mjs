@@ -87,11 +87,19 @@ const CASES = [
   ["nénuphars", S.townLilyPads[1]],
   ["roseaux d'eau", S.townReedsWater],
   ["roseaux", S.townReedTuft],
+  /* ⚠️ 2026-09-28 (soir) — interrupteur `C.TOWN_BUIS_LEGACY` (fermeConstants.js) actif :
+     la bande verte et la haie du quai d'avant « buis » (5969306), celles que le jeu
+     pose alors ; coupé, les massifs et la haie en volumes de `buis.js`. */
+  ...(mods.fermeConstants.TOWN_BUIS_LEGACY ? [
+    ["touffe d'herbe", S.townGrassTuft],
+    ["haie du quai", S.townHedgeRow],
+  ] : [
   ["massif de buis (taillé)", buisIm("cloud", 0)],
   ["massif de buis (libre)", buisIm("mound", 0)],
   // 2026-09-28 (phase 7b) : la haie en tuiles est retirée ; ses cases se dessinent
   // en volumes (clotures.js, regardées par render-haies). Reste le décor du quai.
   ["haie du quai", buisIm("hedge", 0)],
+  ]),
   ["lame de ponton", S.townDeck],
 ];
 

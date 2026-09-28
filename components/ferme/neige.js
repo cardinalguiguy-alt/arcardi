@@ -940,6 +940,10 @@ export const WINTER_PROP_MODE = {
   lavender: "ever", hedgeAngle: "ever", bonsai: "ever",
   reedTuft: "straw", potReeds: "straw", tallGrass: "straw",
   flowerTrough: "pot", potPink: "pot", flowerCart: "pot", planter: "pot", bloomBed: "pot", bloomRow: "pot",
+  /* 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : les anciens dessins
+     (avant « buis », 5969306) reprennent leur hiver d'alors — l'arbuste en brindilles,
+     le buis sur tige et la haie du quai en persistant, la bande verte en paille. */
+  ...(C.TOWN_BUIS_LEGACY ? { shrub: "bare", topiary: "ever", hedgeRow: "ever", grassTuft: "straw" } : {}),
 };
 
 /* ── 8. LE CHAPEAU DE NEIGE D'UN SPRITE ─────────────────────────────────────
