@@ -1316,6 +1316,14 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
 
+⚠️ **RÉSEAU, DEMANDE OUVERTE DE GUILLAUME (2026-09-28), APRÈS UNE SESSION DE JEU** : trouver une
+architecture réseau qui reste **gratuite durablement** ET qui minimise le lag / les sauts en jouant
+à plusieurs entre l'Europe, l'Asie de l'Est et l'Australie (voir la géographie réelle des joueurs,
+mémoire `project_multijoueur_geographie_intercontinentale`). ⚠️ Rappel de cette mémoire : une part
+du délai est un plancher PHYSIQUE (~150-300 ms Europe↔Australie/Hong Kong, vitesse de la lumière en
+fibre) qu'aucune architecture ne supprime — l'objectif atteignable est un rendu lisse malgré ce
+délai connu, pas son élimination. Rien d'engagé, aucune piste tranchée : à étudier.
+
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-27 (après la phase 7a), À NE PAS PERDRE** — détail au
 tableau des phases de `components/ferme/README.md` : **UN TERRAIN DE FOOT** dans une prairie vide (idée de
 Guillaume) — emplacement, fonction et style À TRANCHER AVEC LUI (options au README). (Les clôtures par quartier :
