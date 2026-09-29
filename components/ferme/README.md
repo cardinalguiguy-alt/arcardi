@@ -3,13 +3,14 @@
 ## 2026-09-29 (nuit) — LA PLANCHE 3, REÇUE ET IMPORTÉE (PAS ENCORE DANS LE JEU)
 
 Guillaume a déposé `refs/planche3-jardins.jpg` et `refs/planche3-place.jpg` : **des JPG, Gemini ne lui offre
-pas d'autre export**. À l'œil : 28 objets (dont les deux étalons), la facture des deux premières planches
+pas d'autre export**. À l'œil : 28 objets (dont les deux étalons ; 26 importés, voir plus bas), la facture des deux premières planches
 est tenue, le grain de pixel aussi. Écartés ou à trancher : un petit panneau de planches sur tréteau que
 personne n'avait demandé (B, en bas au milieu — jeté, aucune fonction) ; la boîte aux lettres en tôle à
-drapeau rouge, qui lit américaine dans un village à colombages ; le banc rustique et le banc en fonte verte,
-dessinés en trois quarts alors que le banc du jeu est de face (le jeu n'a qu'une
-orientation par sprite).
-- **`tools/import-planche3.mjs` → `planche3.js`** (28 sprites, `PLANCHE3`) + `tools/out/planche3-importee.png`
+drapeau rouge, qui lit américaine dans un village à colombages ; le banc rustique et le banc en fonte verte, **écartés par Guillaume** (« les bancs sont très bien
+comme ils sont ») : non importés, seul le banc ÉTALON est gardé pour l'échelle. Reste à trancher : la boîte aux
+lettres en tôle. **Guillaume a dit « on importe pas tout de suite » après que l'import avait tourné, puis « on en
+reparle »** : garder ou retirer `planche3.js` est une question ouverte.
+- **`tools/import-planche3.mjs` → `planche3.js`** (26 sprites, `PLANCHE3`) + `tools/out/planche3-importee.png`
   (×4 sur herbe, avec une règle : personnage de 23 px, case de 16). Le format est celui des planches 1 et 2,
   plus `'~'` (l'OMBRE que Gemini a peinte, violet foncé — pas grise) et `foot` (dernière rangée de l'objet).
   JPG lu par `sips` (aucune dépendance) ; fond pris par la TEINTE (`min(r,b) − g`, le magenta bruité mesure

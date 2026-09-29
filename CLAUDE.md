@@ -7,7 +7,7 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-29 — saules, bug Tristan/Jérôme, lampadaires, bancs, allée hantée livrés ; la planche 3 est importée, à brancher
+### 2026-09-29 — saules, bug Tristan/Jérôme, lampadaires, bancs, allée hantée livrés ; la planche 3 est importée en données (rien de branché) ; DEMANDER à Guillaume quoi implémenter
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
@@ -108,17 +108,21 @@ aucune végétation dessinée en code — c'est le feuillage en touffes procédu
 
 ### ⏭️ ACTION SUIVANTE
 
-**La planche 3 est REÇUE ET IMPORTÉE (2026-09-29, nuit ; récit en tête de `components/ferme/README.md`)** :
-`tools/import-planche3.mjs` → `components/ferme/planche3.js` (28 sprites ; `'~'` = l'ombre violette de Gemini,
-`foot` = la dernière rangée de l'objet ; JPG lus par `sips`), planche de contrôle `tools/out/planche3-importee.png`.
-**RIEN n'est branché dans le jeu.** Dans cet ordre, avec Guillaume : (1) trancher ce qu'on garde (boîte aux lettres
-en tôle à drapeau ; deux bancs dessinés en trois quarts, le rustique et celui en fonte) ;
-(2) **régler la TAILLE en jeu, à côté d'un personnage** — tout arrive grand, l'échelle étant celle du banc chunky
-du jeu (boîtes 2,1 à 2,7 m, vases 4 m, candélabre 5,9 m) : `step` par objet dans le catalogue ; (3) le rejoueur
-(`planche3Sprite` sur le modèle de `planche2Sprite`, `'~'` semi-transparent, pose par `foot`) et `TOWN_PROP_ART` /
-`townPropBox` étendus à `PLANCHE3` ; (4) le placement : jardins vécus par rang (par hachage de l'adresse, jamais
-sur une allée, un portail ni une case où l'on s'arrête), jardinières de la place (été, hiver), un lampadaire par
-rang (`townRankAt` du lieu de la lampe), ronces et portail rouillé de la maison hantée. Chaque sprite se regarde
+**⚠️ À LA REPRISE, NE RIEN IMPLÉMENTER DE TA PROPRE INITIATIVE : DEMANDE À GUILLAUME QUOI FAIRE, IL LE DIRA**
+(ordre du 2026-09-29, fin de séance : « il devra me le demander à la prochaine session »). Ce qui suit est un
+état des lieux pour lui poser la question, PAS un plan à dérouler.
+**La planche 3** (récit en tête de `components/ferme/README.md`) : reçue (`refs/planche3-*.jpg`) et importée en
+données — `tools/import-planche3.mjs` → `components/ferme/planche3.js` (26 sprites ; `'~'` = l'ombre violette de
+Gemini, `foot` = dernière rangée de l'objet ; JPG lus par `sips`) + `tools/out/planche3-importee.png`. **RIEN n'est
+branché dans le jeu.** Décidé : **les deux bancs de la planche (rustique, fonte) sont écartés** — « les bancs du
+jeu sont très bien comme ils sont ». ⚠️ Guillaume a dit « on importe pas tout de suite » APRÈS que l'import avait
+déjà tourné, puis « on en reparle » : **lui demander s'il garde ces fichiers générés ou s'il les fait retirer**
+(les JPG restent, l'import se relance en une commande). Non tranché : la boîte aux lettres en tôle à drapeau (elle
+lit américaine). Si on branche un jour : la TAILLE se règle EN JEU à côté d'un personnage — tout arrive grand,
+l'échelle étant celle du banc chunky du jeu (boîtes 2,1 à 2,7 m, vases 4 m, candélabre 5,9 m), `step` par objet
+dans le catalogue ; puis le rejoueur (`planche3Sprite` sur le modèle de `planche2Sprite`, `'~'` semi-transparent,
+pose par `foot`), `TOWN_PROP_ART` / `townPropBox` étendus à `PLANCHE3`, puis le placement (jardins par rang,
+jardinières de la place, un lampadaire par rang, ronces et portail de la maison hantée). Chaque sprite se regarde
 en jeu le jour où on le pose (§9). **Les commerces (café, boulangerie, restaurant) restent une séance de
 conception à part** (quelle fonction, quel bâtiment converti ; §2 : LISTER et ATTENDRE).
 Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.

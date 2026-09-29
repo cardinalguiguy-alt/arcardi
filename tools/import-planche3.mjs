@@ -67,9 +67,10 @@
    viennent de la segmentation par teinte, fermée par dilatation de 6 px ; les
    NOMS ne peuvent venir que d'un œil sur la planche. Deux corrections à la
    segmentation : le portail de la planche B sort en DEUX blocs (le jour entre
-   ses vantaux fait plus de 12 px), on prend une boîte qui les réunit ; et un
+   ses vantaux fait plus de 12 px), on prend une boîte qui les réunit ; un
    objet non demandé (un petit panneau de planches sur tréteau, en bas au milieu
-   de la B) a été écarté, il n'a aucune fonction.
+   de la B) a été écarté, il n'a aucune fonction ; et les deux bancs de la A
+   (rustique, en fonte) ne sont pas importés, voir leur note dans le catalogue.
 
    Usage :  node tools/import-planche3.mjs
    ========================================================================== */
@@ -117,8 +118,12 @@ const CATALOGUE = {
     ["wheelbarrow",    448, 310, 186, 162, 14],
     ["rainBarrel",     666, 306, 138, 170, 14],
     ["gardenTable",    822, 310, 239, 162, 14],
-    ["benchLog",      1085, 342, 235, 144, 14],
-    ["benchIron",       46, 524, 266, 230, 14],
+    /* ⚠️ LES DEUX BANCS DE LA PLANCHE (le rustique, à x=1085, et celui en fonte
+       verte, à x=46) NE SONT PAS IMPORTÉS : décision de Guillaume, 2026-09-29,
+       « ils sont très bien comme ils sont actuellement » — les bancs du jeu
+       (`benchWood`, `benchStone`) suffisent, et les deux étaient dessinés en
+       trois quarts alors que le banc du jeu est de face. Seul le banc ÉTALON
+       (`benchRef`) reste : il ne sert pas au jeu, il donne l'échelle. */
     ["birdbath",       362, 582, 108, 158, 12],
     ["herbPots",       544, 540, 244, 210, 18],
     ["swing",          820, 488, 273, 282, 16],
