@@ -7,43 +7,63 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-29 (jour) — météo PAR LIEU (ferme ≠ ville un jour sur cinq, jamais la neige), NEIGE SUR LA FERME, cratères jouables sous la neige, maire plus facile ; DEMANDER à Guillaume quoi faire
+### 2026-09-30 — la CHUTE rejouable au menu dev, l'ÉTANG GELÉ, les FEUILLES MORTES, l'hiver des herbes hautes ; action suivante : LES LAMPADAIRES
 
-Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md` (ligne 12, « 12d »), récits en tête du
-même fichier — celui du jour, puis ceux de la planche 3, de la pluie (12b) et du jour qui change (12c).
-Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, la
-règle « un seul changement visuel par livraison » est LEVÉE.** ⚠️ **COHÉRENCE SOCIALE PAR QUARTIER**
-(`C.townStandingAt` / `C.townRankAt` / `townHouseDistrict`), **PAS DE BÂTIMENT SANS FONCTION**, **PAS DE CLÔTURE
-PARTOUT**. ⚠️⚠️ **CRITÈRE PERMANENT : « comme la pluie est fréquente, il est normal que je sois hyper exigeant sur
-l'aspect des surfaces »** — une surface qui revient tout le temps (sol mouillé, chaussée, neige, désormais celle
-de la ferme) se juge EN JEU ; une flaque comble un creux ; flaques et caniveau seulement sous forte pluie.
-⚠️⚠️ **BUIS : « laids et simplistes »** (`TOWN_BUIS_LEGACY = true`) ; tout objet ou végétal NEUF vient d'une
-PLANCHE GEMINI (`refs/prompts-planche3.md`).
-- **Livré ce jour** (tranché avec Guillaume avant de coder : un jour sur cinq ; neige sol + traces + décors ;
-  « neige fine, sillons lisibles » sur le champ ; « un essai ordinaire signe ») :
-  (1) **météo par lieu** (`meteo.js` § 3 bis) — la ville garde son ciel au bit près, la ferme en dérive le sien ;
-  neige toujours commune, jamais de pluie ajoutée l'hiver, même climat des deux côtés ; le lieu du joueur règle
-  ciel, pluie, neige, tonnerre ; faune, flaques, fumée lisent la ville ; prévision du matin ferme + « En ville ».
-  (2) **neige sur la ferme** — le champ de la ville sur la carte de la ferme (`A.farmSnowEnv`, hook `classify`),
-  classe `TILLED`, rails, quai, berge amincie, ombres calées sur le dessin (murs de la maison, pied des
-  clôtures), traces, chapeaux, toits, arbres chargés, buissons hivernés ; la carte qui change sous la neige
-  (`farmSnowSync` : sol → `invalidateGround`, objets → différé). (3) **cratères** qui font fondre la neige
-  (`setMelts`), sol dégelé détrempé. (4) **maire** : seuil 70, plafond 3, élan 0,1, glissement 1,5 s × 1,3,
-  confiance 5 (`QUETE.md` §16.4).
-- Bancs : les 33 `verify-*` verts (`verify-meteo` 55, `verify-maire` 139), `render-neige-ferme` 12 (neuf),
-  `render-neige`, `render-pluie`, `render-buissons`, `render-buis` verts ; `no-undef`, bundle, `next build`.
-  **Vu en jeu** : la ferme sous 12 cm (midi, aube), traces, maison, clôtures, boutique, arbres, buissons, gare,
-  la chute et un cratère fondu avec son invite. **Pas vu** : la fouille (la touche E de l'automatisation ne
-  l'a lancée NI avec NI sans neige — artefact du harnais), un jour divergent réel, la neige qui s'accumule en
-  temps réel sur la ferme, deux clients. **Supabase : rien.**
-- ⚠️ **Dette connue** : la ferme n'a pas de sol mouillé ; les chênes de la ferme restent verts l'hiver (avec leur
-  neige) ; le buis TAILLÉ à la faux de la ferme garde son ancien dôme et son hiver d'été ; les plantes PEINTES des
-  bitmaps ne fanent que sous la neige ; l'église n'a que des liserés ; `townHedgeAngle` posé nulle part ; la fumée
-  est peinte AVANT le voile de nuit ; la faune ne suit pas la durée du jour ; restes de la pluie (flaques
-  d'ornière en filaments clairs, dallages sans vraie flaque).
+Liste de Guillaume du jour (7 points), dans l'ordre : (1) chute des cratères lançable au menu dev, « juste
+l'animation » ✅ ; (2) étang gelé l'hiver, canards qui marchent et glissent, carpes figées ✅ ; (3) herbes Gemini
+sans neige et trop redondantes — neige/paille ✅, la VARIÉTÉ attend (voir plus bas) ; (4) intérieurs au niveau des
+façades ⬜ ; (5) marché en dessous des maisons ⬜ ; (6) « d'autres choses à voir plus tard » ; (7) lampadaires de la
+planche 3 « un tout petit peu trop fins, pas assez détaillés, pas nets » ⬜ ; (8) feuilles mortes ✅.
+- **Livré, poussé sur `claude/loving-clarke-hnqo0e`** (session cloud : c'est la seule façon que le travail
+  survive au conteneur ; `main` n'est pas touchée) :
+  (1) « Rejouer une scène » (`devStar` op `scene:*`, drapeau `dev`) joue l'animation SEULE, même avant la pluie :
+  `starScenePump` et `drawStarOverlay` ne coupent plus tout sur `starFallen` (la scène ne se CLOSAIT jamais et
+  bloquait les rejouées suivantes et la fouille) ; ni carte de chapitre ni cratère. « ▶ Start » s'arrête toujours au
+  maire (voulu). (2) **`glace.js`** (neuf) + `neige.js` (`ice`, `si`, `iceLag` dans le manteau, froid cumulé : deux
+  nuits froides pour prendre le centre) + `eau.js` (`dsh`, distance à la berge au pixel) + `faune.js` (`env.iceAt`,
+  `env.fishT`) : gel des berges vers le centre, fenêtres de glace noire, fêlures, bulles, congères balayées, canards
+  à pied et en glisse, carpes ralenties puis figées sans saut, nénuphars absents l'hiver ; menu dev « Étang ».
+  Tranché : décor seulement (MARCHER SUR LA GLACE = moyen/long terme, §13). (3) herbes hautes (sous-bois et pied des
+  maisons) en paille l'hiver + chapeau de neige cisaillé avec elles. (8) **`feuilles.js`** (neuf) : chute sur la
+  2e moitié de l'automne (±8 % par arbre), arbre NU dessous + couronne éclaircie par plaques dessus (atlas par cran,
+  `S.townTreesFall`) — à 100 %, c'est AU PIXEL PRÈS l'arbre du 1er jour d'hiver ; tapis au pied (brunit l'hiver,
+  effacé par la neige, parti avant le printemps) ; feuilles qui tombent et que le vent (`W.wind`) emporte, locales ;
+  menu dev « Saison à N % ». **Ville seulement** : la ferme n'a pas d'arbres d'hiver (dette ci-dessous).
+- Bancs : `render-glace` 20/20 et `verify-feuilles` 22/22 (neufs, chaque contrôle falsifié — deux ne rougissaient
+  pas au premier jet et ont été resserrés) ; `verify-faune` 74, `verify-neige` 17, `verify-meteo` 55, `verify-pluie`
+  34, `verify-quete`, `render-eau`, `render-neige`, `render-arbres`, `verify-densite`, `verify-vallee`,
+  `verify-compo` verts ; `no-undef`, bundle. **Vu en jeu** (Chromium sans tête + `fake-supabase`) : la chute rejouée
+  deux fois de suite, l'étang dans ses quatre états et sous 4/12 cm, les canards sur la glace, les herbes sous 12 cm,
+  les arbres à 72/84 %, l'orage et ~150 feuilles en l'air. **Pas vu** : la glisse d'un canard EN MOUVEMENT, les
+  carpes dans une fenêtre de glace, la chute à deux clients. **Supabase : rien.**
+- ⚠️ Session cloud : le hook `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — c'est `node_modules`
+  absent, pas les bancs (`npm ci`, puis 33/33 verts).
+- ⚠️ **Dette connue** : les chênes de la ferme restent verts l'hiver et ne perdent pas leurs feuilles (sprites du
+  zip 232, pas d'arbre nu) ; le pommier de la planche change de tronc à la fin de la chute (son arbre d'hiver est le
+  pommier procédural) ; la mémoire de la glace est celle du manteau (4 jours) — après une pluie, elle peut reculer
+  d'un cran au changement de jour ; les herbes hautes restent six silhouettes répétées.
+
+### ⏭️ ACTION SUIVANTE — LES LAMPADAIRES DE LA PLANCHE 3, « COMME LES MAISONS » (tranché avec Guillaume)
+
+`lampRich` (candélabre) et `lampPoor` sont ramenés à la grille des gros pixels par `import-planche3.mjs` (médiane
+3 × 3, pas 7,5) : Gemini les a peints sur ~85 pixels de haut, le jeu en garde 56, le fût tombe à 1 px et les
+lanternes s'empâtent. Décision : les poser AU PIXEL D'ÉCRAN, une image par cran de zoom, depuis
+`refs/planche3-place.jpg` (1120,24,186×422 et 814,338,79×186), comme les maisons (`TOWN_BITMAPS`, `lib-mip.mjs`,
+détourage magenta de l'import) ; garder la lumière (`townLampArtAt`, halos), la neige (`snowCapCanvas`), les reflets.
+Si ça ne suffit pas : un prompt Gemini (Guillaume le colle lui-même). ⚠️ `sips` n'existe pas hors macOS : convertir
+le JPG autrement (PIL). Ensuite, sur la liste du jour : intérieurs (séance de conception : vue de dessus ou 3/4,
+pièces peintes ou assemblées, pièce pilote) et marché — **les prompts Gemini des herbes et du marché, Guillaume les
+fera dans une autre conversation.**
+**Restent de la feuille de route** : 13 (ombres portées à bord franc, fanions figés, fontaine), 14 (police pixel du
+monde), 8 (intérieurs) ; la ferme sans sol mouillé ; les commerces de la Grand-Rue (café « Chez Juliette »,
+restaurant : séance de conception à part, ligne 15 du tableau de `components/ferme/README.md`).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-09-30** : **la glace** (le rythme du gel — deux nuits froides —, la teinte, les fenêtres noires, la part
+  de neige sur la glace), **la glisse des canards** (un pas sur trois environ), **les feuilles mortes** (la date de la
+  chute, 50 → 92 % de l'automne ; la densité du tapis ; le nombre de feuilles en l'air sous l'orage), **les herbes
+  hautes en paille** l'hiver.
 - **Le 2026-09-29 (jour)** : **la météo par lieu** (un jour sur cinq, ses quatre formes, la prévision « En ville »),
   **la neige de la ferme** (le champ à rayures, la berge de sable, le quai balayé, les ombres, les chapeaux, les
   buissons d'hiver — ils hivernent désormais aussi sans neige, comme en ville), **la fonte des cratères**, et **le
@@ -117,16 +137,8 @@ PLANCHE GEMINI (`refs/prompts-planche3.md`).
 - §13 tient le reste (îles, transport du bois, mariage/cadastre/coiffure, ferme peuplée à deux, et les
   projets mis en réserve le 2026-09-26).
 
-### ⏭️ ACTION SUIVANTE
+### Notes qui restent vraies d'une reprise à l'autre (commerces, intégration d'images)
 
-**⚠️ À LA REPRISE, NE RIEN IMPLÉMENTER DE TA PROPRE INITIATIVE : DEMANDER À GUILLAUME QUOI FAIRE, IL LE DIRA**
-(ordre du 2026-09-29 : « il devra me le demander à la prochaine session »). Ce qui suit est un état des lieux pour
-lui poser la question, PAS un plan à dérouler.
-**Restent, dans l'ordre de la feuille de route** : 13 (ombres portées des bâtiments à bord franc, fanions du marché
-figés, fontaine qui ne vit pas), 14 (le texte du monde en police pixel), 8 (intérieurs au niveau des façades) ; 6a/6b
-au fil de ses images ; la faune qui suit la durée du jour ; la ferme sans sol mouillé (la pluie de la ferme ne
-mouille rien : `pluie.js` ne tourne qu'en ville) ; les chênes de la ferme verts l'hiver ; la nuit sous la pluie
-(reflets plus poussés que deux taches).
 **⚠️ PRIORITÉ DE DOCUMENTATION, PAS À FAIRE TOUT DE SUITE — LES COMMERCES DE LA GRAND-RUE (décidé avec lui le
 2026-09-29) : LE CAFÉ « CHEZ JULIETTE » ET LE RESTAURANT.** Il faut être PRÊT : une séance de conception à part (§2 :
 LISTER les décisions structurantes et ATTENDRE). Le café : un intérieur « superbe, cosy, bobo » où l'on vend des
@@ -716,6 +728,8 @@ dépôt.
 | `components/ferme/buis.js` | **LES BUIS (7b, suite, 2026-09-28)** : boule (`shrub`), massif en nuage (`grassTuft`), buis taillé (`topiary`), haie du quai (`hedgeRow`) et leurs formes LIBRES ; taillé ou libre par le quartier (`townBuisTrimmed`) ; cellules dans l'atlas des clôtures, hiver et neige dans le dessin (ni `winterizePixels` ni chapeau lu dans les pixels). Banc : `render-buis`. ⚠️ **DÉSACTIVÉ PAR DÉFAUT** (`TOWN_BUIS_LEGACY = true` : l'ancien rendu ; verdict de Guillaume, « laids et simplistes ») — gardé, à reprendre |
 | `components/ferme/neige.js` | **LA NEIGE DE VALLEY TOWN (phase 12a, 2026-09-28) — ET DE LA FERME (2026-09-29 : `A.farmSnowEnv`, hook `classify`, classe `TILLED`, `invalidate`/`invalidateGround`/`refreshFields` pour une carte qui change, `setMelts` pour les cratères chauds), pure** : le manteau (`snowPack`, pure fonction de 4 jours de météo), le sol par parcelles en atlas (`makeSnowField` : relief éclairé, ombres portées, grain au bruit bleu, couverture par ordre au pixel), les empreintes locales (`makeWalkers`), les chapeaux et toits lus dans les pixels (`snowCapPixels`, `snowRoofPixels`, `snowStairPixels`), l'hiver du mobilier (`winterizePixels`). Ce que la neige lit du sol : `A.townSnowEnv` (fermeArt.js). Toits peints : `tools/build-snow-roofs.mjs`. Bancs : `verify-neige`, `render-neige` |
 | `components/ferme/pluie.js` | **LA PLUIE DE VALLEY TOWN (phase 12b, 2026-09-29), pure** : l'humidité du sol et le niveau des flaques, intégrés sur la météo de deux jours (`wetPack`, mémoïsé comme le manteau de neige), la parcelle mouillée au pixel (`renderWetChunk`, sur les parcelles STATIQUES de la neige via `snowField.staticOf`) et la couche du jeu (`makeWetLayer`, un atlas alloué à la première goutte). ⚠️ **UNE FLAQUE COMBLE UN CREUX** (`basin` : joints, bord des dalles, ornières, caniveau — jamais un aplat). Banc : `verify-pluie`, `render-pluie` |
+| `components/ferme/glace.js` | **LA GLACE DE L'ÉTANG DU PARC (2026-09-30), pure** : le seuil de gel au pixel (`iceThreshold` : des berges vers le centre), la même règle pour la faune (`pondFrozenAt`), la cuisson de la couche (givre, glace noire en fenêtres, fêlures, bulles, congères). L'épaisseur vient du manteau (`neige.js` : `ice`, `si`, `iceLag`). Banc : `render-glace` |
+| `components/ferme/feuilles.js` | **LES FEUILLES MORTES (2026-09-30), pures** : la chute (`leafFall`, seconde moitié de l'automne), l'ordre au pixel (`leafOrder`, égalisé, fût protégé), le tapis (`litterLevel`, `litterLeaves`), ce qui vole (`makeLeafFlurry`, local). L'arbre nu + la couronne éclaircie : `drawTownTree(…, fall)`, `S.townTreesFall` (fermeArt.js). Banc : `verify-feuilles` |
 | `components/ferme/fumee.js` | **LES CHEMINÉES QUI FUMENT (phase 12c), pure** : le feu d'une maison (`chimneyLevel` : saison × part du jour × seuil de la maison × temps qu'il fait) et les bouffées d'un tuyau LUES dans l'horloge (`smokePuffs`, sans état). La bouche du tuyau est `TOWN_HOUSE_MODELS[..].chimney` (px de la référence). Banc : `verify-jour`, `render-fumee` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -1386,6 +1400,10 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   (résidents jamais vus se comporter à deux clients) : construire un système de relations sur un
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
+
+⚠️ **MARCHER SUR L'ÉTANG GELÉ — MOYEN OU LONG TERME, PAS MAINTENANT (Guillaume, 2026-09-30).** La glace est un
+décor (collision inchangée) ; la rendre praticable touche la collision et le mouvement (glisse), donc les bancs de
+collision. La règle de gel existe déjà au point (`GL.pondFrozenAt`) : c'est elle qu'une collision lirait.
 
 ⚠️ **RÉSEAU, DEMANDE OUVERTE DE GUILLAUME (2026-09-28), APRÈS UNE SESSION DE JEU** : trouver une
 architecture réseau qui reste **gratuite durablement** ET qui minimise le lag / les sauts en jouant
