@@ -1,4 +1,34 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-29
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-30
+
+## 2026-09-30 (reprise) — LES FEUILLES TOMBENT PAR BOUQUETS, LE POMMIER GARDE SON TRONC CHAULÉ L'HIVER
+
+Guillaume, sur la chute livrée le matin : « c'est tout de même très très moche, on dirait que la forme générale
+de l'arbre est rongée, pas que les branches se dénudent ». Le premier jet perçait l'IMAGE d'automne pixel par
+pixel : le cerne restait en éclats dans le vide, la couronne partait en miettes (29 à 68 morceaux à mi-chute),
+et des feuilles flottaient au-delà des rameaux de l'arbre nu, plus étroit que la couronne.
+- **Les essences en code** (chêne, érable, bouleau, pommier, cerisier, magnolia, toutes tailles) redessinent
+  leur couronne par leurs propres bouquets (`fallClumps`, mode `fall` de `townTreeSprite`, fermeArt.js) :
+  chaque bouquet a sa fenêtre de chute (nombre d'or autour de la couronne : les trouées en font le tour),
+  rétrécit sur place puis glisse vers la pointe de rameau la plus proche de l'arbre nu (`bareTree` rend
+  `tips` et `twigs`) ; des grappes semées sur les rameaux, cachées sous la couronne pleine, se découvrent à
+  mesure qu'elle s'ouvre — les dernières au bout des branches, jusqu'à ~95 % ; une grappe n'est cernée que
+  du côté de l'ombre ; l'ombre portée pâlit avec le feuillage restant. Le magnolia (bouquets déjà au bout de
+  son bois) tombe plus franchement : rétrécis lentement, ses bouquets faisaient des sucettes.
+- **Le pommier de la planche** : bouquets découpés dans son image (`FL.clumpThin`) ; **et son hiver change**
+  (`appleWinter`) — la charpente nue semée dans sa boule, sous laquelle le tronc CHAULÉ et le nichoir de l'image
+  restent (le tronc devenait brun au dernier jour de l'automne, et les branches du pommier en code dépassaient
+  de la boule dès le premier cran). Le fût d'un arbre peint se repère par `FL.trunkRegion` (rangée étroite OU
+  coupée ; ce qui touche le fût).
+- **Le saule** perd ses feuilles par mèches (`FL.strandOrder`, un bruit étiré en hauteur) ; son ombre peinte
+  pâlit d'un bloc.
+- Cache par cran gardé par USAGE (les arbres visibles s'étalent sur ±4 crans ; le premier jet jetait un cran à
+  chaque arbre dessiné), pages de 512².
+- `verify-feuilles` §6 (7 contrôles, 29/29) : aucun éclat, deux morceaux au plus jusqu'à 30 %, rien loin du
+  bois à 75 %, jamais de retour, des feuilles à 90 %, pas de saut au premier cran (COMPARÉ à un cran courant) ;
+  chaque mesure rejoue le premier jet et le voit rougir. Planche : seize arbres. Vu en jeu à 60/72/84 % de
+  saison (verger au nord de la gare).
+- Au passage : `verify-cycle` rougissait sur `L.s === 2` (la pose d'une feuille du tapis, lue comme un indice
+  de case de la barre) — le champ s'appelle `sz`.
 
 ## 2026-09-29 (jour) — LA MÉTÉO PAR LIEU, LA NEIGE SUR LA FERME, LE MAIRE PLUS FACILE
 

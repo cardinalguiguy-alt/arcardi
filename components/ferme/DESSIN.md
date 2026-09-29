@@ -37,6 +37,15 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   en beignet (feuilles ou fleurs). ⚠️ *Et un JEUNE n'est pas un adulte en petit* (Guillaume, même soir :
   « les jeunes arbres ne peuvent pas être aussi fournis ») : moins de masses, plus petites, écartées, le
   bois visible entre elles — l'âge se lit à la densité, pas à la taille.
+- ⚠️⚠️ **UN DESSIN FAIT DE FORMES CHANGE PAR SES FORMES, JAMAIS PAR UN MASQUE DE PIXELS SUR SON
+  IMAGE** (feuilles mortes, 2026-09-30 — Guillaume : « on dirait que la forme générale de l'arbre est
+  rongée, pas que les branches se dénudent »). Percer l'image d'une couronne dans un ordre au pixel,
+  même « par plaques », laisse le cerne en éclats dans le vide et des trous qui ne sont le bord de rien :
+  c'est la règle du dessus violée à rebours. La couronne se REDESSINE avec ses bouquets, qui rétrécissent
+  et tombent chacun à sa date ; ce qui reste est toujours une forme cernée. Une image sans formes (un
+  bitmap de Gemini) se découpe en formes d'abord (des disques qui la pavent). ⚠️ Et ce qui reste doit
+  tenir QUELQUE PART : les dernières feuilles se posent sur le bois de l'état d'arrivée (l'arbre nu),
+  sinon elles flottent au-delà de ses rameaux.
 - ⚠️⚠️ **UNE COURBE ÉCRITE `f(x)` NE PEUT PAS SE REPLIER** (437) — pas de crique, pas de
   presqu'île, pas d'îlot, pas d'ovale. Une rive, un contour, une côte, une table de conseil se
   décrivent par un **CHAMP `s(x,y)` dont on prend l'isoligne**, jamais par une hauteur par colonne

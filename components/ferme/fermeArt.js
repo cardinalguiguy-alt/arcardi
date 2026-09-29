@@ -2472,45 +2472,72 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
   const ph = waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000;
   return { img: frames[TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + ph * 8) & 7]], m };
 }
-/* ⚠️ 2026-09-30 — LES COURONNES QUI SE DÉNUDENT (`feuilles.js`). Une image d'automne
-   (canevas ou cellule d'atlas) à la chute `step/FALL_STEPS`, ses pixels tombés rendus
-   transparents dans leur ordre fixe. En ATLAS PAR CRAN (pages de 1024², §10 : le
-   nombre de canevas) ; seuls les crans récents restent (les feuilles tombent en
-   quelques jours réels, un cran dure des dizaines de minutes). */
-function makeFallTrees() {
+/* ⚠️ 2026-09-30 — LES COURONNES QUI SE DÉNUDENT, PAR CRAN (`feuilles.js`).
+   Deux fabriques : les essences DESSINÉES EN CODE se redessinent par bouquets
+   (`build(k, size, fi, step, bare)`, `fallClumps` dans `buildSprites` — la
+   reprise du 2026-09-30, « la forme de l'arbre est rongée ») ; les deux arbres
+   de la PLANCHE (pommier, saule), qui n'ont pas de bouquets, gardent l'image
+   d'automne dont les pixels tombent dans leur ordre fixe (`FL.thinPixels`).
+   En ATLAS PAR CRAN (pages de 512², §10 : le nombre de canevas).
+   ⚠️ LES CRANS SE GARDENT PAR USAGE, PAS PAR VOISINAGE : les arbres visibles
+   s'étalent sur ±4 crans (le décalage de ±8 % par arbre), et le premier jet, qui
+   jetait tout cran à plus de deux du dernier demandé, en jetait un à chaque
+   arbre dessiné — pour le refabriquer à l'arbre suivant, à chaque image. */
+const FALL_KEEP = 12;
+function makeFallTrees(build) {
   const levels = new Map();
-  let last = -1;
+  let clock = 0, last = -1;
   const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.imageSmoothingEnabled = false; return [c, g]; };
+  const place = (L, src, w, h) => {
+    let pg = L.pages[L.pages.length - 1];
+    if (!pg || (pg.x + w > 512 && pg.y + pg.rowH + h > 512) || pg.y + Math.max(pg.rowH, h) > 512) { const [c, g] = mk(512, 512); pg = { c, g, x: 0, y: 0, rowH: 0 }; L.pages.push(pg); }
+    if (pg.x + w > 512) { pg.x = 0; pg.y += pg.rowH; pg.rowH = 0; }
+    pg.g.drawImage(src, pg.x, pg.y);
+    const cell = { img: pg.c, sx: pg.x, sy: pg.y, w, h };
+    pg.x += w; pg.rowH = Math.max(pg.rowH, h);
+    return cell;
+  };
+  /* Les arbres de la planche : le pommier par bouquets découpés dans son image
+     (`FL.clumpThin`, vers les rameaux de son arbre nu) ; le saule par mèches
+     (`FL.strandOrder` : son hiver garde son rideau, la chute se voit entre les fils). */
+  const thinned = (src, step, k, bare) => {
+    const isCell = src.sx !== undefined;
+    const w = isCell ? src.w : src.width, h = isCell ? src.h : src.height;
+    const [tc, tg] = mk(w, h);
+    if (isCell) tg.drawImage(src.img, src.sx, src.sy, w, h, 0, 0, w, h); else tg.drawImage(src, 0, 0);
+    const id = tg.getImageData(0, 0, w, h), f = step / FL.FALL_STEPS;
+    if (k === TT.REF_WILLOW) id.data.set(FL.thinPixels(id.data, w, h, f, FL.strandOrder, bare && bare.m ? bare.m.base : 0));
+    else if (bare && bare.tips) id.data.set(FL.clumpThin(id.data, w, h, f, { tips: bare.tips, twigs: bare.twigs, seed: 7919 + k * 131 }));
+    else id.data.set(FL.thinPixels(id.data, w, h, f));
+    tg.putImageData(id, 0, 0);
+    return tc;
+  };
   return {
-    get(src, step) {
-      if (!src) return null;
+    /* `k`, `size`, `fi` : l'essence, sa taille, sa pose de vent ; `bare` : sa
+       cellule d'hiver nue (pointes des rameaux, alpha du bois) ; `src` : son
+       image d'automne (pour les arbres de la planche). */
+    get(k, size, fi, step, bare, src) {
       let L = levels.get(step);
       if (!L) {
-        L = { pages: [], memo: new WeakMap() };
+        L = { pages: [], memo: new Map(), memoSrc: new WeakMap(), used: 0 };
         levels.set(step, L);
-        // On ne garde que les crans voisins du dernier demandé (un arbre en avance, un en retard).
-        if (levels.size > 5) for (const k of [...levels.keys()]) if (Math.abs(k - step) > 2) levels.delete(k);
+        if (levels.size > FALL_KEEP) {
+          let old = null;
+          for (const [kk, v] of levels) if (kk !== step && (!old || v.used < old[1].used)) old = [kk, v];
+          if (old) levels.delete(old[0]);
+        }
       }
-      last = step;
-      const hit = L.memo.get(src);
-      if (hit !== undefined) return hit;
-      let cell = null;
+      L.used = ++clock; last = step;
+      const key = `${k}|${size}|${fi}`;
+      if (L.memo.has(key)) return L.memo.get(key);
+      if (src && L.memoSrc.has(src)) return L.memoSrc.get(src);
+      let cell = null, bySrc = false;
       try {
-        const isCell = src.sx !== undefined;
-        const w = isCell ? src.w : src.width, h = isCell ? src.h : src.height;
-        const [tc, tg] = mk(w, h);
-        if (isCell) tg.drawImage(src.img, src.sx, src.sy, w, h, 0, 0, w, h); else tg.drawImage(src, 0, 0);
-        const id = tg.getImageData(0, 0, w, h);
-        id.data.set(FL.thinPixels(id.data, w, h, step / FL.FALL_STEPS));
-        tg.putImageData(id, 0, 0);
-        let pg = L.pages[L.pages.length - 1];
-        if (!pg || pg.x + w > 1024 && pg.y + pg.rowH + h > 1024) { const [c, g] = mk(1024, 1024); pg = { c, g, x: 0, y: 0, rowH: 0 }; L.pages.push(pg); }
-        if (pg.x + w > 1024) { pg.x = 0; pg.y += pg.rowH; pg.rowH = 0; }
-        pg.g.drawImage(tc, pg.x, pg.y);
-        cell = { img: pg.c, sx: pg.x, sy: pg.y, w, h };
-        pg.x += w; pg.rowH = Math.max(pg.rowH, h);
+        const c = build ? build(k, size, fi, step, bare) : null;
+        if (c) cell = place(L, c, c.width, c.height);
+        else if (src) { bySrc = true; const t = thinned(src, step, k, bare); cell = place(L, t, t.width, t.height); }
       } catch (e) { cell = null; }
-      L.memo.set(src, cell);
+      if (bySrc) L.memoSrc.set(src, cell); else L.memo.set(key, cell);
       return cell;
     },
     levels: () => levels.size,
@@ -2538,7 +2565,10 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load
      `townTreeFall`). L'arbre NU d'abord (l'atlas d'hiver, même pose de vent, sans
      neige), puis la couronne d'automne dont les pixels tombés sont transparents.
      Les persistants (conifères, mimosa) ne perdent rien. */
-  if (seasonKey === "autumn" && fall > 0 && S.townTreesFall && S.townTreesWinter) {
+  /* Au cran 0, l'arbre d'automne tel quel (plus bas) : le dessiner sur l'arbre
+     nu doublerait son ombre portée. */
+  const fallStep = seasonKey === "autumn" && fall > 0 ? FL.fallStep(fall) : 0;
+  if (fallStep > 0 && S.townTreesFall && S.townTreesWinter) {
     const k = townTreeKind(tw, x, y, obj);
     if (k !== null && !townTreeEvergreen(k)) {
       const r = townTreeImg(S, tw, x, y, "autumn", obj, now);
@@ -2549,11 +2579,9 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load
         const bare = S.townTreesWinter.get(k, size, 0, fi, false);
         const dx = px + SPR_T / 2 - r.m.w / 2, dy = py + SPR_T - r.m.base;
         if (bare) blitCell(ctx, bare, px + SPR_T / 2 - bare.m.w / 2, py + SPR_T - bare.m.base);
-        const step = FL.fallStep(fall);
-        if (step < FL.FALL_STEPS) {
-          const th = step === 0 ? null : S.townTreesFall.get(r.img, step);
+        if (fallStep < FL.FALL_STEPS) {
+          const th = S.townTreesFall.get(k, size, fi, fallStep, bare, r.img);
           if (th) blitCell(ctx, th, dx, dy);
-          else if (step === 0) { if (r.img.sx !== undefined) blitCell(ctx, r.img, dx, dy); else ctx.drawImage(r.img, dx, dy); }
         }
         return true;
       }
@@ -14462,8 +14490,13 @@ export function buildSprites() {
      étage) ; `onSnow` : l'arbre est planté DANS la neige — son ombre cuite se
      réduit à l'ombre de contact au pied du fût (l'ombre portée est projetée sur
      la neige par `neige.js`, depuis le dessin de l'arbre). */
-  function townTreeSprite(sp, season, frame, snowLvl, onSnow) {
+  function townTreeSprite(sp, season, frame, snowLvl, onSnow, fall) {
     const [c, g] = cv(TW_, TH_);
+    /* 2026-09-30 — `fall` : LA COURONNE D'AUTOMNE QUI SE DÉNUDE ({ f, tips, seed,
+       bareA, bareShadow }, voir `fallClumps`). Seules les FEUILLES se peignent (le
+       bois, le fût, le tuteur sont ceux de l'arbre nu, dessiné dessous) ; l'ombre
+       portée s'éclaircit avec ce qui reste de feuillage. */
+    const FALL = fall && fall.f > 0 ? fall : null;
     const pal = (season === "autumn" && sp.autumn) ? Object.assign({}, sp, sp.autumn)
               : (season === "spring" && sp.spring) ? Object.assign({}, sp, sp.spring) : sp;
     /* L'OMBRE PORTÉE AU SOL, cuite dans le sprite. Deux ellipses concentriques
@@ -14484,27 +14517,33 @@ export function buildSprites() {
        vient du nord-ouest (cf. les arêtes claires du muret, du banc, de la
        berge). Une ombre centrée sous l'objet est une ombre de midi pile, et
        elle contredit tout le reste du décor. */
-    if (onSnow) contactOnSnow(g, sp);
+    if (FALL) { /* l'ombre se pose à la fin, à la mesure du feuillage restant */ }
+    else if (onSnow) contactOnSnow(g, sp);
     else for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
       const u = (x - (TCX_ + 1.5)) / (sp.shadowRx || 17), v = (y - (TBASE_ + 1.0)) / 4.0;
       const d = u * u + v * v;
       if (d > 1) continue;
       P(g, x, y, 1, 1, d > 0.44 ? "rgba(18,34,14,0.18)" : "rgba(12,26,10,0.38)");
     }
-    if (sp.stake) treeStake(g, sp);   // 2026-09-27 (phase 11) : le jeune arbre planté, avant son fût
+    if (sp.stake && !FALL) treeStake(g, sp);   // 2026-09-27 (phase 11) : le jeune arbre planté, avant son fût
     if (sp.conifer) { townConifer(g, sp, pal, frame, snowLvl | 0); return c; }
     /* 2026-09-27 (phase 11) — deux crochets pour le magnolia redessiné : sa
        charpente à troncs multiples (`drawWood`) et ses bouquets posés aux pointes
        de ses branches (`clumpList`) au lieu d'un anneau sur une ellipse. Tout le
        reste — ombrage, cerne, nervures, vent — est celui des autres essences. */
-    if (sp.drawWood) sp.drawWood(g, frame); else treeTrunk(g, sp);
-    const clumps = crownClumps(sp, frame);
+    if (FALL) { /* le bois est celui de l'arbre nu */ }
+    else if (sp.drawWood) sp.drawWood(g, frame); else treeTrunk(g, sp);
+    const clumps0 = crownClumps(sp, frame);
+    const clumps = FALL ? fallClumps(sp, clumps0, FALL) : clumps0;
     /* LES RAMEAUX DU JEUNE ARBRE : un trait d'un pixel du haut du fût vers
        chaque bouquet, peint AVANT la couronne — elle en recouvre le bout, et ce
        qu'on voit entre deux bouquets, c'est le bois. */
+    /* En chute : les rameaux des bouquets encore en place seulement — ils suivent le
+       bouquet et partent avec lui (sans eux, le premier cran remplaçait d'un coup
+       ces rameaux par ceux de l'arbre nu : `verify-feuilles` §6, un saut de 14 %). */
     if (sp.twigs) {
       const x0 = TCX_, y0 = sp.trunkTop + 2;
-      for (const o of clumps) {
+      for (const o of FALL ? clumps.filter((q) => q.tier === 1) : clumps) {
         const n = Math.max(2, Math.ceil(Math.hypot(o.x - x0, o.y - y0) * 1.5));
         for (let i = 0; i <= n; i++) {
           const t = i / n, x = Math.round(x0 + (o.x - x0) * t), y = Math.round(y0 + (o.y - y0) * t);
@@ -14515,9 +14554,11 @@ export function buildSprites() {
     /* ZIP 439 — les corolles. Elles entrent dans le MASQUE avec les bouquets
        (voir la note de `bloomAnchors`), donc la silhouette est celle de leur
        union, et elle ne dépend pas de la saison. */
-    const blooms = sp.blossom ? bloomAnchors(sp, frame) : [];
+    const blooms = sp.blossom && !FALL ? bloomAnchors(sp, frame) : [];
     const [leaf, leafL, leafD] = pal.leaf;
     const mask = new Uint8Array(TW_ * TH_);
+    // En chute : le rayon du bouquet qui possède chaque pixel (le cerne des petits est partiel).
+    const own = FALL ? new Float32Array(TW_ * TH_) : null;
     const inClump = (o, x, y) => {
       const dx = x + 0.5 - o.x, dy = (y + 0.5 - o.y) * 1.06;
       return dx * dx + dy * dy <= o.r * o.r;
@@ -14549,12 +14590,15 @@ export function buildSprites() {
        est plus bas est plus PRÈS : peint après, il recouvre — et son arc d'ombre
        vient mordre sur celui du dessus. Peints dans le désordre, les arcs se
        coupent et la couronne redevient un coussin. */
-    const order = clumps.slice().sort((a, b) => a.y - b.y);
+    /* En chute, les petites grappes des rameaux (`tier` 0) passent SOUS les
+       bouquets : elles n'apparaissent qu'à mesure que la couronne s'ouvre. */
+    const order = clumps.slice().sort((a, b) => ((a.tier | 0) - (b.tier | 0)) || (a.y - b.y));
     for (const o of order) {
       const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
       const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
       for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) {
         if (!inClump(o, x, y)) continue;
+        if (own) own[y * TW_ + x] = o.r;
         const dx = (x + 0.5 - o.x) / o.r, dy = (y + 0.5 - o.y) / o.r;
         const lit = (-dx * 0.62 - dy * 0.78);
         /* ⚠️⚠️ LE TON SE DÉCIDE SUR UNE SEULE GRANDEUR, ET C'EST CE QUI REND LE
@@ -14602,12 +14646,17 @@ export function buildSprites() {
     for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
       if (!mask[y * TW_ + x]) continue;
       if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      /* En chute : une petite grappe (rayon < 3,2) n'est cernée que du côté de
+         l'ombre (sud, est). Cernée tout autour, une grappe de trois pixels n'a
+         plus qu'un pixel de couleur : une pastille sombre sur un rameau. */
+      if (own && own[y * TW_ + x] > 0 && own[y * TW_ + x] < 3.2 && on(x + 1, y) && on(x, y + 1)) continue;
       P(g, x, y, 1, 1, pal.out);
     }
     /* LES NERVURES. Deux ou trois traits courts par bouquet, DANS le sens de la
        courbure, du ton clair. Ce sont des feuilles vues de dessus, pas du
        grain : elles suivent une direction, donc l'œil les lit comme un motif. */
     for (const o of order) {
+      if (FALL && o.r < 3.4) continue;       // une grappe n'a pas de place pour des nervures
       for (let k = 0; k < 3; k++) {
         const a = -2.3 + k * 0.55;
         const rr = o.r * 0.52;
@@ -14644,7 +14693,12 @@ export function buildSprites() {
     }
     if (pal.fruit) {
       let k = 0;
+      /* En chute, le fruit reste attaché à SON bouquet (son rang dans la couronne
+         pleine) : compté sur les bouquets restants, il sauterait d'un bouquet à
+         l'autre à chaque bouquet tombé. */
+      const rank = FALL ? new Map(clumps0.map((o, i) => [o, i]).sort((a, b) => a[0].y - b[0].y).map(([, i], m) => [i, m])) : null;
       for (const o of order) {
+        if (rank) { if (o.tier !== 1) continue; k = rank.get(o.i); }
         if ((k++ % 2)) continue;
         const a = 0.9 + k * 1.9;
         const x = Math.round(o.x + Math.cos(a) * o.r * 0.66), y = Math.round(o.y + Math.sin(a) * o.r * 0.66);
@@ -14669,7 +14723,7 @@ export function buildSprites() {
         for (let y = 1; y < TH_ - 1; y++) if (mask[y * TW_ + x]) low = y;
         if (low < 0) continue;
         const edgeF = 0.45 + 0.55 * Math.sin((x - TCX_) / 13 * 1.6 + 1.57);   // long au centre, court aux bouts
-        const len = Math.round(sp.weep * Math.max(0.22, edgeF) * (0.78 + 0.22 * Math.sin(x * 1.7 + frame)));
+        const len = Math.round(sp.weep * (FALL ? 1 - FALL.f : 1) * Math.max(0.22, edgeF) * (0.78 + 0.22 * Math.sin(x * 1.7 + frame)));
         const col = (x % 3 === 0) ? leafD : (x % 3 === 1) ? leaf : leafL;
         for (let q = 1; q <= len && low + q < TBASE_ - 2; q++) {
           const xx = x + ((q > len * 0.62) ? (x < TCX_ ? -1 : 1) : 0);
@@ -14678,7 +14732,123 @@ export function buildSprites() {
         }
       }
     }
+    if (FALL) fallShadow(g, sp, clumps0, mask, FALL);
     return c;
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-30 (reprise) — L'AUTOMNE QUI SE DÉNUDE, PAR BOUQUETS.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume, sur le premier jet : « on dirait que la forme générale de l'arbre
+     est rongée, pas que les branches se dénudent ». Le premier jet perçait
+     l'IMAGE de la couronne pixel par pixel (un bruit à plaques) : le cerne
+     restait en éclats qui flottaient dans le vide, les trous n'étaient le bord
+     de rien, et l'arbre nu dessous — plus étroit que la couronne — laissait des
+     feuilles en l'air au-delà de ses rameaux. C'est la règle de `townTreeSprite`
+     qu'il violait : « tout ce qu'on voit est le bord d'une forme ».
+     ⚠️ ICI LA COURONNE SE REDESSINE, avec ses propres bouquets, par le peintre
+     des autres saisons (ombre en croissant, arc, cerne, nervures) :
+       · chaque bouquet RÉTRÉCIT en GLISSANT vers la pointe de rameau la plus
+         proche de l'arbre nu (`tips`, `bareTree`) — la couronne se resserre sur
+         sa charpente au lieu d'être grignotée, et les branches se voient entre
+         les bouquets ;
+       · les bouquets du CŒUR partent les premiers (l'arbre s'ajoure, on voit le
+         bois), ceux de la couronne ensuite, chacun à sa date (hachage) ;
+       · chaque bouquet finit en GRAPPE de trois pixels au bout de son rameau,
+         puis tombe ; d'autres grappes, posées sur les autres pointes, attendent
+         SOUS la couronne et se découvrent à mesure qu'elle s'ouvre — les
+         dernières feuilles d'un arbre sont au bout des branches ;
+       · à 100 %, il ne reste rien : l'arbre nu du premier jour d'hiver
+         (`verify-feuilles` §3).
+     Rend la liste des bouquets à peindre (`tier` 0 : grappe de rameau, 1 :
+     bouquet), en coordonnées du dessin, vent compris. */
+  function fallClumps(sp, clumps0, F) {
+    const f = F.f, seed = F.seed | 0, tips = F.tips || [], twigs = F.twigs || [];
+    const hs = (i, s) => (((Math.imul(i + 1, 374761393) ^ Math.imul(seed * 31 + s, 668265263)) >>> 0) % 10007) / 10007;
+    // Les bouquets de l'anneau d'abord, ceux du cœur ensuite (`crownClumps`) ; le
+    // magnolia (`clumpList`) : ses nœuds, puis ses pointes (déjà au bout du bois).
+    const nRing = sp.clumpList ? clumps0.length : sp.crown.n;
+    const used = new Set();
+    const out = [];
+    /* ⚠️ CHAQUE BOUQUET A SA FENÊTRE [début, fin], À PEINE PLUS TÔT POUR CEUX DU
+       CŒUR. Premier jet : le cœur d'abord, tous les bouquets rétrécissant dès le
+       premier jour — un BEIGNET à 30 % (le trou au milieu, l'anneau intact),
+       puis une couronne qui DÉGONFLE d'un bloc. Second jet, des débuts tirés au
+       hasard : un chêne sur trois dénudé d'un seul CÔTÉ. Les bouquets de
+       l'anneau sont rangés par angle (`crownClumps`) : leurs débuts suivent le
+       nombre d'or, donc deux voisins ne partent jamais ensemble et les trouées
+       font le tour de la couronne. */
+    const u0 = hs(0, 9);
+    clumps0.forEach((o, i) => {
+      const inner = sp.clumpList ? i < (sp.clumpInner | 0) : i >= nRing;
+      const u = (u0 + 0.618034 * i) % 1;
+      /* ⚠️ LE MAGNOLIA (`clumpList`) : ses bouquets sont DÉJÀ au bout du bois ;
+         rétrécis lentement sur place, ils faisaient des SUCETTES sur des bâtons à
+         40 % (le défaut que sa note écarte déjà en été). Ils tombent plus vite. */
+      const s0 = (inner ? 0.02 + 0.4 * u : 0.06 + 0.52 * u) + (sp.clumpList ? 0.12 : 0);
+      const d = s0 + (sp.clumpList ? 0.1 + 0.08 * hs(i, 2) : 0.22 + 0.16 * hs(i, 2));
+      const q = Math.max(0, (f - s0) / (d - s0));
+      if (q >= 1) return;
+      // Sa pointe : la plus proche, une par bouquet tant qu'il en reste.
+      let best = -1, bd = 1e9;
+      for (let j = 0; j < tips.length; j++) {
+        const dd = (tips[j].x - o.x) ** 2 + (tips[j].y - o.y) ** 2 + (used.has(j) ? 400 : 0);
+        if (dd < bd) { bd = dd; best = j; }
+      }
+      const a = best >= 0 ? tips[best] : o;
+      if (best >= 0) used.add(best);
+      // Il rétrécit d'abord sur place, puis glisse vers sa pointe (glissant dès le premier
+      // jour, il redessinait d'un coup la silhouette d'un jeune arbre, aux pointes lointaines).
+      const t = Math.min(1, Math.max(0, (q - 0.3) / 0.6));
+      out.push({ x: o.x + (a.x - o.x) * t, y: o.y + (a.y - o.y) * t, r: Math.max(sp.clumpList ? 2.4 : 1.7, o.r * Math.sqrt(1 - q)), tier: 1, i });
+    });
+    /* LES GRAPPES DES RAMEAUX : semées le long du bois de l'arbre nu (`twigs`),
+       SOUS la couronne — elles se découvrent à mesure qu'elle s'ouvre, et c'est
+       elles qui font lire « des branches qui se dégarnissent » : du feuillage
+       épars sur une charpente visible. Les plus tardives au bout des branches
+       (loin du centre de la couronne) : un arbre se dénude par l'intérieur. */
+    const cx = clumps0.reduce((a, o) => a + o.x, 0) / Math.max(1, clumps0.length);
+    const cy = clumps0.reduce((a, o) => a + o.y, 0) / Math.max(1, clumps0.length);
+    // Sous la couronne pleine seulement : dehors, une grappe se verrait dès le premier
+    // jour. ⚠️ Le « bout des branches » se mesure sur ces rameaux-là : mesuré sur tous,
+    // les plus tardifs étaient justement ceux qu'on écarte, et l'arbre était nu à 90 %.
+    const under = (x, y) => clumps0.some((o) => { const dx = x - o.x, dy = (y - o.y) * 1.06; return dx * dx + dy * dy <= o.r * o.r; });
+    let rMax = 1;
+    for (const p of twigs) if (under(p.x, p.y)) rMax = Math.max(rMax, Math.hypot(p.x - cx, p.y - cy));
+    twigs.forEach((p, j) => {
+      // Cachée TOUT ENTIÈRE sous la couronne pleine (son centre ne suffit pas : son bord
+      // dépassait, une bosse neuve au premier cran — `verify-feuilles` §6).
+      const r = 1.6 + 0.9 * hs(200 + j, 7), m = r + 0.5;
+      if (hs(200 + j, 3) > 0.85 || !under(p.x, p.y) || !under(p.x - m, p.y) || !under(p.x + m, p.y) || !under(p.x, p.y - m) || !under(p.x, p.y + m)) return;
+      const outer = Math.hypot(p.x - cx, p.y - cy) / rMax;
+      const e = 0.42 + 0.56 * Math.sqrt(0.5 * hs(200 + j, 5) + 0.5 * outer);   // √ : quelques-unes tiennent jusqu'au bout
+      if (f >= e) return;
+      out.push({ x: p.x, y: p.y, r, tier: 0 });
+    });
+    return out;
+  }
+  /* L'ombre portée d'une couronne en chute : entre celle de l'arbre feuillu et
+     celle de l'arbre nu (dessinée dessous, `bareShadow` : ses deux opacités), à
+     la mesure du feuillage restant (pixels de la couronne, rapportés à ceux de la
+     couronne pleine). Jamais sur le bois de l'arbre nu (`bareA`, son alpha). */
+  function fallShadow(g, sp, clumps0, mask, F) {
+    let n0 = 0, n1 = 0;
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+      if (mask[y * TW_ + x]) n1++;
+      for (const o of clumps0) {
+        const dx = x + 0.5 - o.x, dy = (y + 0.5 - o.y) * 1.06;
+        if (dx * dx + dy * dy <= o.r * o.r) { n0++; break; }
+      }
+    }
+    const cover = n0 ? Math.min(1, n1 / n0) : 0;
+    const [b0, b1] = F.bareShadow || [0.10, 0.2];
+    for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
+      const u = (x - (TCX_ + 1.5)) / (sp.shadowRx || 17), v = (y - (TBASE_ + 1.0)) / 4.0;
+      const d = u * u + v * v;
+      if (d > 1 || (F.bareA && F.bareA(x, y) >= 200)) continue;
+      const outer = d > 0.44, b = outer ? b0 : b1, full = outer ? 0.18 : 0.38;
+      const a = ((b + (full - b) * cover) - b) / (1 - b);
+      if (a > 0.01) P(g, x, y, 1, 1, outer ? `rgba(18,34,14,${a.toFixed(3)})` : `rgba(12,26,10,${a.toFixed(3)})`);
+    }
   }
   /* LES CONIFÈRES. ⚠️ CE QUI FAIT LIRE « SAPIN » EST LE FESTON DES BRANCHES,
      pas l'empilement de triangles — c'est ce que faisait `pineTree` depuis le
@@ -15062,7 +15232,7 @@ export function buildSprites() {
   const MAG_PETAL = { base: "#a34a75", mid: "#e48fb3", light: "#f7c9dc", tip: "#fff1f6", out: "#6f2c50" };
   const MAG_LEAF = { summer: ["#3f8546", "#63ad63", "#265c2d", "#132f17"], spring: ["#5aa04e", "#80c86a", "#397a33", "#1b3d17"],
                      autumn: ["#a8772e", "#d1a24c", "#6d4717", "#3a2508"] };
-  function magnoliaTree(season, frame, z) {
+  function magnoliaTree(season, frame, z, fall) {
     z = z || { geom: [48, 64, 58, 24], sx: 1, sy: 1, twS: 1, rs: 1 };
     return withTreeGeom(z, () => {
       /* ⚠️⚠️ LA CHARPENTE SE DESSINE DEPUIS LA COURONNE, PAS DEPUIS LE PIED.
@@ -15155,10 +15325,11 @@ export function buildSprites() {
           trunk: MAG_BARK, drawWood,
           clumpList: young ? pts.filter((_, i) => i % 2 === 0).map(p => ({ x: p.x, y: p.y, r: rr * 0.75 }))
                            : nodes.map(n => ({ x: n.x, y: n.y - 1, r: rr * 1.1 })).concat(pts.map(p => ({ x: p.x, y: p.y, r: rr }))),
+          clumpInner: young ? 0 : nodes.length,   // 2026-09-30 : les bouquets des nœuds tombent avant ceux des pointes (`fallClumps`)
           leaf: ["#3d8545", "#5fab62", "#255c2c"], edge: "#18421f", out: "#0e2912", vein: "#7cc47c",
           autumn: { leaf: ["#b07a2c", "#d8a64c", "#74481a"], edge: "#4c2e0a", out: "#321d06", vein: "#f0c979" },
         };
-        c = townTreeSprite(sp, season, frame);
+        c = townTreeSprite(sp, season, frame, 0, false, fall);
       } else {
         c = cv(TW_, TH_)[0];
         const g0 = c.getContext("2d");
@@ -15379,7 +15550,16 @@ export function buildSprites() {
       P(g, x, y, 1, 1, B.haze);
       mask[y * TW_ + x] = 1;
     }
-    return { c, mask };
+    /* `tips` et `twigs` (2026-09-30) : les pointes des rameaux et des points
+       semés le long des rameaux (au moins 3 px l'un de l'autre), À LEUR PLACE
+       DANS LE DESSIN (vent compris) — les dernières feuilles de l'automne s'y
+       accrochent (`fallClumps`). ⚠️ 3 px : plus serrées, les grappes se recollent en masse. */
+    const cand = [];
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) if (mask[y * TW_ + x] === 2) cand.push({ x: x + 0.5, y: y + 0.5, h: ((x * 73856093) ^ (y * 19349663) ^ (seed * 83492791)) >>> 0 });
+    cand.sort((a, b) => a.h - b.h);
+    const twigs = [];
+    for (const q of cand) if (twigs.every((t) => (t.x - q.x) ** 2 + (t.y - q.y) ** 2 >= 3.0 * 3.0)) twigs.push({ x: q.x, y: q.y });
+    return { c, mask, tips: pts.map((p) => ({ x: p.x + sw(p.y), y: p.y })), twigs };
   }
   const SNW = [[247, 249, 252], [233, 239, 246], [217, 226, 237], [195, 207, 224]];
   /* LA NEIGE SUR UN ARBRE, lue dans ses pixels. `mask` (feuillus nus) ou, s'il
@@ -15610,6 +15790,56 @@ export function buildSprites() {
     }
     return { c, mask };
   }
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-30 — LE POMMIER D'HIVER, TIRÉ DU POMMIER DE LA PLANCHE.
+     Jusqu'ici son hiver était le pommier EN CODE (tronc brun de 7 px, couronne
+     plus large que la boule de Gemini) : le tronc chaulé devenait brun au dernier
+     jour de l'automne (dette notée), et dès le premier cran de la chute les
+     branches brunes dépassaient autour de la boule — `verify-feuilles` §6 : 13 %
+     de l'arbre changé au premier cran contre 5 % à un cran courant.
+     Ici : la charpente nue (`bareTree`) semée dans l'enveloppe de la boule
+     (mesurée dans l'image, par pose de vent), et SOUS la boule le tronc chaulé et
+     le nichoir de l'image, repris tels quels — un tronc chaulé reste blanc
+     l'hiver ; le badigeon s'arrête à la fourche, au ras de la boule, comme au
+     verger. L'ombre peinte de Gemini ne vient pas : c'est celle, légère, de
+     l'arbre nu (la chute la fait pâlir, `FL.clumpThin`). */
+  function appleWinter(frame, seed, onSnow) {
+    const src = plancheTree("treeApple", "autumn", frame, 0);
+    const W = src.width, H = src.height, d = src.getContext("2d").getImageData(0, 0, W, H).data;
+    const { trunkFrom, trunkTo, isTrunk } = FL.trunkRegion(d, W, H);
+    // La boule : tout ce qui est peint au-dessus du fût, et ce qui pend dessous sans le toucher.
+    let x0 = W, x1 = -1, y0 = H, y1 = -1;
+    for (let y = 0; y < trunkTo; y++) for (let x = 0; x < W; x++) {
+      if (d[(y * W + x) * 4 + 3] < 250 || isTrunk[y * W + x]) continue;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    const base = TREE_SPECS[TT.APPLE];
+    const sp = Object.assign({}, base, {
+      tw: 3, trunkTop: trunkFrom - 1,
+      // ⚠️ 0,72 × 0,66 du rayon de la boule : les brindilles prolongent chaque pointe de
+      // 2 à 3 px ; à 0,8, elles dépassaient d'un pixel dès le premier cran de la chute.
+      crown: Object.assign({}, base.crown, { cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2, rx: (x1 - x0 + 1) / 2 * 0.72, ry: (y1 - y0 + 1) / 2 * 0.66 }),
+    });
+    const r = bareTree(sp, frame, BARE.apple, seed, onSnow);
+    const g = r.c.getContext("2d"), im = g.getImageData(0, 0, W, H), o = im.data;
+    // Le pied : les colonnes du tronc peint (ses pixels clairs, cerne compris) juste au-dessus de l'ombre peinte.
+    let tL = W, tR = -1;
+    for (let y = trunkTo - 6; y < trunkTo; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (isTrunk[y * W + x] && d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 > 180) { tL = Math.min(tL, x - 1); tR = Math.max(tR, x + 1); }
+    }
+    for (let y = trunkFrom; y <= TBASE_; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (o[i + 3] >= 250) { o[i + 3] = 0; r.mask[y * W + x] = 0; }           // le fût brun et ses racines
+      // Le tronc chaulé et son nichoir ; au pied, le tronc seul (pas l'ombre peinte).
+      if (d[i + 3] >= 250 && (isTrunk[y * W + x] || (y >= trunkTo && x >= tL && x <= tR))) {
+        o[i] = d[i]; o[i + 1] = d[i + 1]; o[i + 2] = d[i + 2]; o[i + 3] = 255;
+        r.mask[y * W + x] = 4;
+      }
+    }
+    g.putImageData(im, 0, 0);
+    return r;
+  }
   /* L'atlas paresseux des arbres d'hiver : des pages de 1024², rangées en étagères. */
   function makeWinterTrees() {
     const pages = [];
@@ -15637,25 +15867,25 @@ export function buildSprites() {
       const seed = 7919 + k * 131 + (TREE_SIZE_KEYS.indexOf(size) + 1) * 17;
       return withTreeGeom(z, () => {
         const sized = (sp) => (size === "adult" ? sp : sizedSpec(sp, z));
-        let c, mask = null, native = false;
+        let c, mask = null, native = false, tips = null;
         if (k === TT.REF_FIR) { c = plancheTree("treeFir", "autumn", frame, 1); if (onSnow) stripBakedShadow(c, { tw: 4 }); }
         else if (k === TT.REF_MAGNOLIA) { c = magnoliaTree("winter", frame, size === "adult" ? undefined : z); if (onSnow) stripBakedShadow(c, { tw: 5 }); }
         // Le saule : sa propre silhouette, dénudée (`willowWinter`) — plus le saule procédural en vase.
         else if (k === TT.REF_WILLOW) { const r = willowWinter(z === WILLOW_GRAND ? willowGrandData() : PLANCHE.treeWillow, frame, seed, onSnow); c = r.c; mask = r.mask; }
-        else if (k === TT.REF_APPLE) {
-          const sp = TREE_SPECS[TT.APPLE];
-          const r = bareTree(sp, frame, BARE[sp.id], seed, onSnow); c = r.c; mask = r.mask;
-        } else {
+        else if (k === TT.REF_APPLE) { const r = appleWinter(frame, seed, onSnow); c = r.c; mask = r.mask; tips = r; }
+        else {
           const sp = TREE_SPECS[k];
           if (!sp) return null;
           // Les conifères portent leur neige étage par étage, dessinée avec eux (`townConifer`).
           if (sp.conifer) { c = townTreeSprite(sized(sp), "autumn", frame, lvl, onSnow); native = true; }
           else if (sp.id === "mimosa") c = townTreeSprite(sized(sp), "spring", frame, 0, onSnow);
-          else { const r = bareTree(sized(sp), frame, BARE[sp.id] || BARE.oak, seed, onSnow); c = r.c; mask = r.mask; }
+          else { const r = bareTree(sized(sp), frame, BARE[sp.id] || BARE.oak, seed, onSnow); c = r.c; mask = r.mask; tips = r; }
         }
         winterSnowPass(c, native ? 0 : lvl, seed + lvl, mask);
         const cell = place(c);
         cell.m = { w: z.geom[0], h: z.geom[1], base: z.geom[2] };
+        // 2026-09-30 : les pointes et les rameaux, où s'accrochent les dernières feuilles d'automne.
+        if (tips) { cell.tips = tips.tips; cell.twigs = tips.twigs; }
         return cell;
       });
     };
@@ -19764,6 +19994,31 @@ house: house(),
   };
   /* 2026-09-28 (phase 12a) — les arbres d'hiver, fabriqués à leur premier affichage. */
   S.townTreesWinter = makeWinterTrees();
-  S.townTreesFall = makeFallTrees();   // 2026-09-30 — les couronnes d'automne qui se dénudent, par cran
+  /* 2026-09-30 — les couronnes d'automne qui se dénudent, par cran : redessinées
+     par bouquets pour les essences en code (`fallClumps`), éclaircies au pixel
+     pour celles de la planche (pommier, saule : `build` rend null). */
+  const BARE_A = new WeakMap();
+  const bareAlpha = (cell) => {
+    if (!cell) return null;
+    let fn = BARE_A.get(cell);
+    if (!fn) {
+      const d = cell.img.getContext("2d").getImageData(cell.sx, cell.sy, cell.w, cell.h).data, w = cell.w, h = cell.h;
+      fn = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : d[(y * w + x) * 4 + 3]);
+      BARE_A.set(cell, fn);
+    }
+    return fn;
+  };
+  S.townTreesFall = makeFallTrees((k, size, fi, step, bare) => {
+    const isMag = k === TT.REF_MAGNOLIA, sp = k < TREE_SPECS.length ? TREE_SPECS[k] : null;
+    if (!isMag && (!sp || sp.conifer || sp.id === "mimosa")) return null;
+    const z = size === "adult" ? null : TREE_SIZES[size];
+    if (size !== "adult" && !z) return null;
+    const bareA = bareAlpha(bare);
+    const F = { f: step / FL.FALL_STEPS, tips: (bare && bare.tips) || [], twigs: (bare && bare.twigs) || [], seed: 7919 + k * 131 + (TREE_SIZE_KEYS.indexOf(size) + 1) * 17,
+                bareA, bareShadow: isMag ? [0.18, 0.38] : [0.10, 0.2] };
+    const frame = TREE_FRAMES[fi];
+    if (isMag) return magnoliaTree("autumn", frame, z || undefined, F);
+    return z ? withTreeGeom(z, () => townTreeSprite(sizedSpec(sp, z), "autumn", frame, 0, false, F)) : townTreeSprite(sp, "autumn", frame, 0, false, F);
+  });
   return S;
 }

@@ -24911,7 +24911,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const lx = cx + L.x, ly = cy + L.y, gx = (lx / T) | 0, gy = ((ly + (tw.elev[i] || 0) * EP) / T) | 0;
             if (gx >= 0 && gy >= 0 && gx < tw.w && gy < tw.h && tw.ground[gy * tw.w + gx] === C.G_WATER) continue;
             ctx.fillStyle = colOf(lp.pal, L.c, Math.min(1, brownK + L.d * 0.25), L.c + (L.x & 3));
-            ctx.fillRect(lx, ly, L.s === 2 ? 2 : 1, 1);
+            ctx.fillRect(lx, ly, L.sz === 2 ? 2 : 1, 1);
           }
           if (a < 1) ctx.globalAlpha = 1;
         }

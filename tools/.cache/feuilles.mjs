@@ -10,11 +10,13 @@
    ou LOCALES (ce qui vole) — zéro message, comme la neige et la faune :
    1. LA CHUTE (`leafFall`) : la part des feuilles tombées, 0 jusqu'à la moitié de
       l'automne, 1 à 92 % de la saison. L'arbre se dessine NU dessous (l'atlas
-      d'hiver, dessiné dans la même enveloppe de couronne) et sa couronne d'automne
-      par-dessus, dont les pixels tombent dans un ordre FIXE (`leafOrder` : par
-      plaques, pas en poivre et sel) — §4 : une transition qui se voit se fait par
-      un ordre au pixel. À 1, il ne reste que l'arbre nu : c'est l'image du premier
-      jour d'hiver, donc la saison bascule sans que rien ne saute.
+      d'hiver) et sa couronne d'automne par-dessus, qui se DÉNUDE PAR BOUQUETS
+      (reprise du 2026-09-30 — le premier jet perçait l'image au pixel, « on dirait
+      que la forme générale de l'arbre est rongée ») : les essences en code se
+      redessinent (`fallClumps`, fermeArt.js), le pommier de la planche par
+      bouquets découpés dans son image (`clumpThin`, ici), le saule par mèches
+      (`thinPixels` + `strandOrder`). À 1, il ne reste que l'arbre nu : c'est
+      l'image du premier jour d'hiver, donc la saison bascule sans que rien ne saute.
    2. LE TAPIS (`litterLevel`, `litterLeaves`) : ce qui est tombé s'accumule au pied,
       dans l'ellipse de la couronne ; l'hiver, les feuilles brunissent, se tassent,
       disparaissent peu à peu (et la neige les couvre) ; au printemps, plus rien.
@@ -57,7 +59,9 @@ export function fallActivity(seasonKey, p) {
   const f = leafFall(seasonKey, p, 0);
   return f >= 1 ? 0 : 0.12 + 0.88 * 4 * f * (1 - f);
 }
-/* L'ordre de chute d'un pixel de couronne (0..1) : un bruit lent (des trouées par
+/* ⚠️ `leafOrder`/`thinPixels` NE SERVENT PLUS QU'AU SAULE (avec `strandOrder`) et au
+   banc, qui rejoue le premier jet pour prouver que ses mesures le voient rougir.
+   L'ordre de chute d'un pixel de couronne (0..1) : un bruit lent (des trouées par
    plaques de 5 à 6 px) mêlé d'un grain. Un pixel est tombé quand `ordre < f`.
    ⚠️ ÉGALISÉ par sa propre répartition (`ORDER_CDF`, mesurée une fois sur 96 × 96
    points) : la somme de deux bruits se tasse autour de 0,5 — premier jet, 10 % des
@@ -80,7 +84,12 @@ export function leafOrder(x, y) {
    SOUS la couronne (moins de 45 % de sa plus large rangée) : leurs pixels opaques
    restent jusqu'à la fin ; l'ombre (translucide) tombe avec le reste. La couronne
    d'un saule, qui descend bas, reste large : elle tombe. */
-export function thinPixels(src, w, h, f) {
+/* `order` : l'ordre de chute (`leafOrder` par défaut, `strandOrder` pour le saule) ;
+   `base` : la ligne de sol — l'ombre peinte dessous (gris neutre et sombre, à moins
+   de 5 px au-dessus du sol) pâlit d'un bloc au lieu de s'effriter (vu sur le saule :
+   une ombre rayée comme ses mèches). */
+export function thinPixels(src, w, h, f, order, base) {
+  const ord = order || leafOrder;
   const out = new Uint8ClampedArray(src);
   if (f <= 0) return out;
   let wMax = 0;
@@ -97,10 +106,210 @@ export function thinPixels(src, w, h, f) {
     const o = (y * w + x) * 4;
     if (!out[o + 3]) continue;
     if (f < 1 && y >= trunkFrom && y < trunkTo && out[o + 3] >= 250) continue;
-    if (leafOrder(x, y) < f) out[o + 3] = 0;
+    if (base && y >= base - 5) {
+      const mx = Math.max(out[o], out[o + 1], out[o + 2]), mn = Math.min(out[o], out[o + 1], out[o + 2]);
+      if (mx - mn < 26 && mx < 120) { out[o + 3] = Math.round(out[o + 3] * (1 - f)); continue; }
+    }
+    if (ord(x, y) < f) out[o + 3] = 0;
   }
   return out;
 }
+/* 2026-09-30 (reprise) — LE SAULE PERD SES FEUILLES PAR MÈCHES. Son hiver garde sa
+   silhouette (le rideau de rameaux dorés, `willowWinter`) : ce qui tombe se voit
+   ENTRE les mèches, donc l'ordre de chute suit leur sens — un bruit étiré en
+   hauteur (1,4 px de large, 9 de haut), des fentes qui découvrent l'or dessous,
+   pas des plaques rondes. Même égalisation que `leafOrder`. */
+function vnoise2(x, y, px, py, s) {
+  const gx = Math.floor(x / px), gy = Math.floor(y / py), fx = x / px - gx, fy = y / py - gy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = u01(gx, gy, s), b = u01(gx + 1, gy, s), c = u01(gx, gy + 1, s), d = u01(gx + 1, gy + 1, s);
+  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+}
+const rawStrand = (x, y) => 0.78 * vnoise2(x, y, 1.4, 9, 79) + 0.22 * u01(x, y, 83);
+const STRAND_CDF = (() => { const a = []; for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) a.push(rawStrand(x * 7 + 3, y * 5 + 11)); return Float64Array.from(a).sort(); })();
+export function strandOrder(x, y) {
+  const v = rawStrand(x, y);
+  let lo = 0, hi = STRAND_CDF.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (STRAND_CDF[m] < v) lo = m + 1; else hi = m; }
+  return lo / STRAND_CDF.length;
+}
+
+/* 2026-09-30 (reprise) — LE FÛT D'UN ARBRE PEINT, ET CE QUI S'Y ACCROCHE. Sous la
+   rangée la plus large (la couronne), le fût commence à la première rangée ÉTROITE
+   (moins de 45 % de la plus large) ou COUPÉE (deux morceaux ou plus) — ⚠️ la seule
+   étroitesse le faisait commencer huit rangées trop bas sur le pommier, dont le
+   nichoir élargit les rangées sous la boule : le haut du tronc blanc et le nichoir
+   tombaient avec les feuilles. Il finit à la rangée qui s'élargit de nouveau
+   (l'ombre peinte). `isTrunk` : ce qui, dans cette bande, TOUCHE le fût (le nichoir
+   oui, une feuille qui pend sous la boule non). Rend { trunkFrom, trunkTo, isTrunk }. */
+export function trunkRegion(src, w, h) {
+  const A = (x, y) => src[(y * w + x) * 4 + 3];
+  const rowW = new Int32Array(h), runs = new Int32Array(h);
+  let wMax = 0;
+  for (let y = 0; y < h; y++) {
+    let n = 0, r = 0, prev = false;
+    for (let x = 0; x < w; x++) { const on = A(x, y) >= 250; if (on) n++; if (on && !prev) r++; prev = on; }
+    rowW[y] = n; runs[y] = r; if (n > wMax) wMax = n;
+  }
+  let yMax = 0;
+  for (let y = 0; y < h; y++) if (rowW[y] === wMax) { yMax = y; break; }
+  let narrow = h, trunkFrom = h, trunkTo = h;
+  for (let y = yMax; y < h; y++) if (rowW[y] > 0 && rowW[y] <= wMax * 0.45) { narrow = y; break; }
+  for (let y = yMax; y < narrow; y++) if (runs[y] >= 2) { trunkFrom = y; break; }
+  trunkFrom = Math.min(trunkFrom, narrow);
+  for (let y = narrow; y < h; y++) if (rowW[y] > wMax * 0.45) { trunkTo = y; break; }
+  const isTrunk = new Uint8Array(w * h);
+  const st = [];
+  if (trunkTo > trunkFrom) for (let x = 0; x < w; x++) if (A(x, trunkTo - 1) >= 250) { isTrunk[(trunkTo - 1) * w + x] = 1; st.push((trunkTo - 1) * w + x); }
+  while (st.length) {
+    const j = st.pop(), x = j % w, y = (j / w) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx < 0 || xx >= w || yy < trunkFrom || yy >= trunkTo) continue;
+      const k = yy * w + xx;
+      if (!isTrunk[k] && A(xx, yy) >= 250) { isTrunk[k] = 1; st.push(k); }
+    }
+  }
+  return { trunkFrom, trunkTo, isTrunk };
+}
+
+/* 2026-09-30 (reprise) — UNE COURONNE PEINTE (le pommier de la planche) QUI SE
+   DÉNUDE PAR BOUQUETS. Guillaume, sur le premier jet (`thinPixels`) : « on dirait
+   que la forme générale de l'arbre est rongée, pas que les branches se dénudent ».
+   Les essences en code se redessinent avec leurs vrais bouquets (`fallClumps`,
+   fermeArt.js) ; une image de Gemini n'en a pas, alors on lui en découpe :
+   · des disques qui pavent la couronne (semis à 5 px, rayon 4,2) — à 0 %, leur
+     union EST la couronne, pixel pour pixel ;
+   · chacun rétrécit à SA date (nombre d'or autour de la couronne, le cœur un peu
+     plus tôt) en glissant vers la pointe de rameau la plus proche de l'arbre nu
+     (`tips`) ; ce qu'il montre est l'image d'origine TRANSPORTÉE avec lui — la
+     matière peinte reste la sienne ; un bord d'ombre (sud-est) le détache ;
+   · des grappes semées sur les rameaux (`twigs`) attendent dessous ;
+   · le tout est recerné (la couleur du cerne d'origine ; une grappe, du côté de
+     l'ombre seulement) ; le fût reste ; l'ombre portée pâlit.
+   `src` RGBA (w × h) ; rend un NOUVEAU tableau. */
+export function clumpThin(src, w, h, f, opt) {
+  const o = opt || {}, tips = o.tips || [], twigs = o.twigs || [], seed = o.seed | 0;
+  const out = new Uint8ClampedArray(src.length);
+  if (f >= 1) return out;
+  const hs = (i, k) => u01(i, seed, k);
+  const { trunkFrom, trunkTo, isTrunk } = trunkRegion(src, w, h);
+  const A = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src[(y * w + x) * 4 + 3]);
+  const crown = new Uint8Array(w * h);
+  let nC = 0, sx = 0, sy = 0;
+  for (let y = 0; y < trunkTo; y++) for (let x = 0; x < w; x++) if (A(x, y) >= 250 && !isTrunk[y * w + x]) { crown[y * w + x] = 1; nC++; sx += x; sy += y; }
+  // Le fût (et ce qui s'y accroche) reste ; l'ombre portée pâlit avec le feuillage.
+  for (let y = trunkFrom; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, a = src[i + 3];
+    if (!a || crown[y * w + x]) continue;
+    out[i] = src[i]; out[i + 1] = src[i + 1]; out[i + 2] = src[i + 2];
+    out[i + 3] = y < trunkTo && a >= 250 ? a : Math.round(a * (1 - f));
+  }
+  if (!nC) return out;
+  const ccx = sx / nC, ccy = sy / nC;
+  const isC = (x, y) => x >= 0 && y >= 0 && x < w && y < h && crown[y * w + x] === 1;
+  // La couleur du cerne : la plus fréquente, parmi les pixels sombres du bord.
+  const hist = new Map();
+  for (let y = 0; y < trunkTo; y++) for (let x = 0; x < w; x++) {
+    if (!isC(x, y) || (isC(x + 1, y) && isC(x - 1, y) && isC(x, y + 1) && isC(x, y - 1))) continue;
+    const i = (y * w + x) * 4, L = src[i] * 0.3 + src[i + 1] * 0.59 + src[i + 2] * 0.11;
+    if (L > 110) continue;
+    const k = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
+    hist.set(k, (hist.get(k) || 0) + 1);
+  }
+  let outCol = [58, 40, 26], bestN = 0;
+  for (const [k, n] of hist) if (n > bestN) { bestN = n; outCol = [k >> 16, (k >> 8) & 255, k & 255]; }
+  // Les disques qui pavent la couronne.
+  const R0 = 4.2, inD = (c, x, y, r) => { const dx = x + 0.5 - c.x, dy = (y + 0.5 - c.y) * 1.06; return dx * dx + dy * dy <= r * r; };
+  const cand = [];
+  for (let y = 0; y < trunkTo; y++) for (let x = 0; x < w; x++) if (isC(x, y)) cand.push({ x: x + 0.5, y: y + 0.5, k: h32(x, y, seed + 5) });
+  cand.sort((a, b) => a.k - b.k);
+  const discs = [];
+  for (const c of cand) if (discs.every((d) => (d.x - c.x) ** 2 + (d.y - c.y) ** 2 >= 25)) discs.push({ x: c.x, y: c.y });
+  for (const c of cand) if (!discs.some((d) => inD(d, c.x - 0.5, c.y - 0.5, R0))) discs.push({ x: c.x, y: c.y });
+  let rMax = 1, tMax = 1;
+  for (const d of discs) { d.a = Math.atan2(d.y - ccy, d.x - ccx); d.rr = Math.hypot(d.x - ccx, d.y - ccy); rMax = Math.max(rMax, d.rr); }
+  for (const p of twigs) if (isC(Math.floor(p.x), Math.floor(p.y))) tMax = Math.max(tMax, Math.hypot(p.x - ccx, p.y - ccy));
+  discs.sort((a, b) => a.a - b.a);
+  const u0 = hs(0, 9), used = new Set(), live = [];
+  discs.forEach((d, i) => {
+    const inner = d.rr < rMax * 0.45, u = (u0 + 0.618034 * i) % 1;
+    const s0 = inner ? 0.02 + 0.4 * u : 0.06 + 0.52 * u, e = s0 + 0.22 + 0.16 * hs(i, 2);
+    const q = Math.max(0, (f - s0) / (e - s0));
+    if (q >= 1) return;
+    // ⚠️ Une pointe à plus de 6 px ne l'attire pas : l'arbre nu du pommier n'est
+    // pas le sien (le pommier en code), et un disque qui file vers une pointe
+    // lointaine sort de la boule — vu à 20 %, des morceaux au-dessus de la couronne.
+    let best = -1, bd = 36;
+    for (let j = 0; j < tips.length; j++) {
+      const dd = (tips[j].x - d.x) ** 2 + (tips[j].y - d.y) ** 2 + (used.has(j) ? 400 : 0);
+      if (dd < bd) { bd = dd; best = j; }
+    }
+    const a = best >= 0 ? tips[best] : d;
+    if (best >= 0) used.add(best);
+    const t = Math.min(1, Math.max(0, (q - 0.3) / 0.6));   // sur place d'abord, vers sa pointe ensuite
+    live.push({ x: d.x + (a.x - d.x) * t, y: d.y + (a.y - d.y) * t, ox: (a.x - d.x) * t, oy: (a.y - d.y) * t, r: Math.max(1.7, R0 * Math.sqrt(1 - q)), q, tier: 1 });
+  });
+  twigs.forEach((p, j) => {
+    // Cachée TOUT ENTIÈRE sous la couronne : dehors, une grappe se verrait dès le premier jour.
+    const r = 1.6 + 0.9 * hs(200 + j, 7), m = Math.ceil(r + 0.5), px = Math.floor(p.x), py = Math.floor(p.y);
+    if (hs(200 + j, 3) > 0.85 || !isC(px, py) || !isC(px - m, py) || !isC(px + m, py) || !isC(px, py - m) || !isC(px, py + m)) return;
+    const outer = Math.hypot(p.x - ccx, p.y - ccy) / tMax;
+    const e = 0.42 + 0.56 * Math.sqrt(0.5 * hs(200 + j, 5) + 0.5 * outer);
+    if (f >= e) return;
+    live.push({ x: p.x, y: p.y, ox: 0, oy: 0, r, q: 1, tier: 0 });
+  });
+  live.sort((a, b) => (a.tier - b.tier) || (a.y - b.y));
+  const mask = new Uint8Array(w * h), own = new Float32Array(w * h);
+  const pal = autumnPalette(src, w, Math.min(h, trunkFrom + 1));
+  for (const c of live) {
+    const x0 = Math.max(0, Math.floor(c.x - c.r)), x1 = Math.min(w - 1, Math.ceil(c.x + c.r));
+    const y0 = Math.max(0, Math.floor(c.y - c.r)), y1 = Math.min(h - 1, Math.ceil(c.y + c.r));
+    // Le bord d'ombre n'apparaît qu'à mesure que le bouquet se détache (0 : l'image d'origine).
+    const shadeK = Math.min(1, c.q * 4);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!inD(c, x, y, c.r)) continue;
+      const qx = Math.round(x - c.ox), qy = Math.round(y - c.oy);
+      let col;
+      // Une grappe prend les teintes du feuillage (`autumnPalette`) : lue dans l'image,
+      // elle ramassait le rouge d'une pomme peinte.
+      if (c.tier === 0) col = pal[(h32(Math.floor(c.x), Math.floor(c.y), seed) >>> 3) % Math.min(2, pal.length)];
+      else if (isC(qx, qy)) { const i = (qy * w + qx) * 4; col = [src[i], src[i + 1], src[i + 2]]; }
+      else continue;
+      const dx = (x + 0.5 - c.x) / c.r, dy = (y + 0.5 - c.y) / c.r;
+      const lit = -dx * 0.62 - dy * 0.78;
+      const k = lit < -0.45 ? 1 - 0.3 * shadeK : lit > 0.5 && c.tier === 0 ? 1.12 : 1;
+      const i = (y * w + x) * 4;
+      out[i] = Math.min(255, col[0] * k); out[i + 1] = Math.min(255, col[1] * k); out[i + 2] = Math.min(255, col[2] * k); out[i + 3] = 255;
+      mask[y * w + x] = 1; own[y * w + x] = c.r;
+    }
+  }
+  /* Un disque déplacé qui ne trouve plus qu'un ou deux pixels d'image à transporter
+     laisse un ÉCLAT (vu au banc : le pommier à 40 %) : tout morceau de deux pixels
+     ou moins s'en va, avant le cerne. */
+  const seen = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (!mask[i] || seen[i]) continue;
+    const comp = [i], st = [i];
+    seen[i] = 1;
+    while (st.length) {
+      const j = st.pop(), x = j % w, y = (j / w) | 0;
+      for (const k of [x + 1 < w ? j + 1 : -1, x > 0 ? j - 1 : -1, y + 1 < h ? j + w : -1, y > 0 ? j - w : -1]) {
+        if (k >= 0 && mask[k] && !seen[k]) { seen[k] = 1; st.push(k); comp.push(k); }
+      }
+    }
+    if (comp.length <= 2) for (const j of comp) { mask[j] = 0; out[j * 4 + 3] = 0; }
+  }
+  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x] === 1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!on(x, y) || (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1))) continue;
+    if (own[y * w + x] < 3.2 && on(x + 1, y) && on(x, y + 1)) continue;
+    const i = (y * w + x) * 4;
+    out[i] = outCol[0]; out[i + 1] = outCol[1]; out[i + 2] = outCol[2];
+  }
+  return out;
+}
+
 /* Le cran d'un arbre (0..FALL_STEPS) : la couronne se recuit par crans (§10 : le
    nombre de canevas), l'arbre en avance d'un cran sur son voisin. */
 export const FALL_STEPS = 20;
@@ -122,7 +331,9 @@ export function litterBrown(seasonKey, p) {
   return 0;
 }
 /* Les feuilles du tapis d'un arbre, en px autour du pied (x vers l'est, y vers le
-   sud), chacune avec son ordre d'arrivée (`o`) et sa couleur (`c`, un indice de
+   sud), chacune avec son ordre d'arrivée (`o`), sa pose (`sz` : 2 de face, 1 de
+   biais, 0 en long — ⚠️ pas `s` : `verify-cycle` lit `s === 2` comme un indice de
+   case de la barre écrit en dur) et sa couleur (`c`, un indice de
    la palette de l'essence). Denses près du tronc, éparses au bord de la couronne ;
    une feuille sur cinq est « de face » (2 px), les autres de biais (1 px) ou
    posées en long (2 px en x). Mémo par (rx, ry, graine). */
@@ -139,7 +350,7 @@ export function litterLeaves(rx, ry, seed, nPal) {
     const r = Math.pow(u01(k, seed, 13), 0.8);
     const x = Math.round(Math.cos(a) * r * rx), y = Math.round(Math.sin(a) * r * ry);
     const s = u01(k, seed, 17);
-    L.push({ x, y, o: clamp01(0.7 * u01(k, seed, 19) + 0.3 * r), c: h32(k, seed, 23) % nPal, s: s < 0.2 ? 2 : s < 0.55 ? 1 : 0, d: u01(k, seed, 29) });
+    L.push({ x, y, o: clamp01(0.7 * u01(k, seed, 19) + 0.3 * r), c: h32(k, seed, 23) % nPal, sz: s < 0.2 ? 2 : s < 0.55 ? 1 : 0, d: u01(k, seed, 29) });
   }
   if (LITTER_MEMO.size > 400) LITTER_MEMO.clear();
   LITTER_MEMO.set(key, L);

@@ -7,41 +7,27 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-30 — la CHUTE rejouable au menu dev, l'ÉTANG GELÉ, les FEUILLES MORTES, l'hiver des herbes hautes ; action suivante : LES LAMPADAIRES
+### 2026-09-30 (reprise) — LES FEUILLES TOMBENT PAR BOUQUETS ; action suivante : LES LAMPADAIRES
 
-Liste de Guillaume du jour (7 points), dans l'ordre : (1) chute des cratères lançable au menu dev, « juste
-l'animation » ✅ ; (2) étang gelé l'hiver, canards qui marchent et glissent, carpes figées ✅ ; (3) herbes Gemini
-sans neige et trop redondantes — neige/paille ✅, la VARIÉTÉ attend (voir plus bas) ; (4) intérieurs au niveau des
-façades ⬜ ; (5) marché en dessous des maisons ⬜ ; (6) « d'autres choses à voir plus tard » ; (7) lampadaires de la
-planche 3 « un tout petit peu trop fins, pas assez détaillés, pas nets » ⬜ ; (8) feuilles mortes ✅.
-- **Livré, poussé sur `claude/loving-clarke-hnqo0e`** (session cloud : c'est la seule façon que le travail
-  survive au conteneur ; `main` n'est pas touchée) :
-  (1) « Rejouer une scène » (`devStar` op `scene:*`, drapeau `dev`) joue l'animation SEULE, même avant la pluie :
-  `starScenePump` et `drawStarOverlay` ne coupent plus tout sur `starFallen` (la scène ne se CLOSAIT jamais et
-  bloquait les rejouées suivantes et la fouille) ; ni carte de chapitre ni cratère. « ▶ Start » s'arrête toujours au
-  maire (voulu). (2) **`glace.js`** (neuf) + `neige.js` (`ice`, `si`, `iceLag` dans le manteau, froid cumulé : deux
-  nuits froides pour prendre le centre) + `eau.js` (`dsh`, distance à la berge au pixel) + `faune.js` (`env.iceAt`,
-  `env.fishT`) : gel des berges vers le centre, fenêtres de glace noire, fêlures, bulles, congères balayées, canards
-  à pied et en glisse, carpes ralenties puis figées sans saut, nénuphars absents l'hiver ; menu dev « Étang ».
-  Tranché : décor seulement (MARCHER SUR LA GLACE = moyen/long terme, §13). (3) herbes hautes (sous-bois et pied des
-  maisons) en paille l'hiver + chapeau de neige cisaillé avec elles. (8) **`feuilles.js`** (neuf) : chute sur la
-  2e moitié de l'automne (±8 % par arbre), arbre NU dessous + couronne éclaircie par plaques dessus (atlas par cran,
-  `S.townTreesFall`) — à 100 %, c'est AU PIXEL PRÈS l'arbre du 1er jour d'hiver ; tapis au pied (brunit l'hiver,
-  effacé par la neige, parti avant le printemps) ; feuilles qui tombent et que le vent (`W.wind`) emporte, locales ;
-  menu dev « Saison à N % ». **Ville seulement** : la ferme n'a pas d'arbres d'hiver (dette ci-dessous).
-- Bancs : `render-glace` 20/20 et `verify-feuilles` 22/22 (neufs, chaque contrôle falsifié — deux ne rougissaient
-  pas au premier jet et ont été resserrés) ; `verify-faune` 74, `verify-neige` 17, `verify-meteo` 55, `verify-pluie`
-  34, `verify-quete`, `render-eau`, `render-neige`, `render-arbres`, `verify-densite`, `verify-vallee`,
-  `verify-compo` verts ; `no-undef`, bundle. **Vu en jeu** (Chromium sans tête + `fake-supabase`) : la chute rejouée
-  deux fois de suite, l'étang dans ses quatre états et sous 4/12 cm, les canards sur la glace, les herbes sous 12 cm,
-  les arbres à 72/84 %, l'orage et ~150 feuilles en l'air. **Pas vu** : la glisse d'un canard EN MOUVEMENT, les
-  carpes dans une fenêtre de glace, la chute à deux clients. **Supabase : rien.**
+Retour de Guillaume sur la chute livrée le matin : « très très moche, on dirait que la forme générale de l'arbre est
+rongée, pas que les branches se dénudent ». **Refait, non commité** (arbre de travail, `main`) :
+- Les essences en code (chêne, érable, bouleau, pommier, cerisier, magnolia, toutes tailles) **redessinent leur
+  couronne par leurs bouquets** (`fallClumps`, mode `fall` de `townTreeSprite`) : fenêtres de chute décalées
+  autour de la couronne, bouquets qui rétrécissent puis glissent vers les pointes de l'arbre nu (`bareTree` rend
+  `tips`/`twigs`), grappes sur les rameaux qui se découvrent, dernières feuilles au bout des branches (~95 %),
+  ombre qui pâlit. Le saule par mèches (`FL.strandOrder`) ; le pommier de la planche par bouquets découpés
+  (`FL.clumpThin`) **et son HIVER a changé** (`appleWinter` : charpente dans sa boule, tronc chaulé et nichoir
+  gardés — c'était la dette « il change de tronc à la fin de la chute », soldée). Détail : README de
+  `components/ferme/` (en tête). Règle tirée : `DESSIN.md` (« un dessin fait de formes change par ses formes »).
+- Bancs : `verify-feuilles` 29/29 (§6 neuf, 7 contrôles, chacun falsifié ; chaque mesure rejoue le premier jet
+  et le voit rougir) ; les 64 `verify-*`/`render-*` verts ; `no-undef`, bundle. `verify-cycle` rougissait depuis
+  la livraison du matin (`L.s === 2` du tapis) : champ renommé `sz`. Planches `neige-*`/`pluie-rue` changées
+  (le pommier d'hiver et son ombre). **Vu en jeu** (verger au nord de la gare, 60/72/84 % de saison). **Pas vu** :
+  le vent qui fait bouger une couronne en chute, la neige sur le nouveau pommier en jeu. **Supabase : rien.**
+- ⚠️ **Dette connue** : les chênes de la ferme restent verts l'hiver (sprites du zip 232, pas d'arbre nu) ; la
+  mémoire de la glace est celle du manteau (4 jours) ; les herbes hautes restent six silhouettes répétées.
 - ⚠️ Session cloud : le hook `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — c'est `node_modules`
-  absent, pas les bancs (`npm ci`, puis 33/33 verts).
-- ⚠️ **Dette connue** : les chênes de la ferme restent verts l'hiver et ne perdent pas leurs feuilles (sprites du
-  zip 232, pas d'arbre nu) ; le pommier de la planche change de tronc à la fin de la chute (son arbre d'hiver est le
-  pommier procédural) ; la mémoire de la glace est celle du manteau (4 jours) — après une pluie, elle peut reculer
-  d'un cran au changement de jour ; les herbes hautes restent six silhouettes répétées.
+  absent, pas les bancs (`npm ci`, puis relancer).
 
 ### ⏭️ ACTION SUIVANTE — LES LAMPADAIRES DE LA PLANCHE 3, « COMME LES MAISONS » (tranché avec Guillaume)
 
@@ -61,9 +47,10 @@ restaurant : séance de conception à part, ligne 15 du tableau de `components/f
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
 - **Le 2026-09-30** : **la glace** (le rythme du gel — deux nuits froides —, la teinte, les fenêtres noires, la part
-  de neige sur la glace), **la glisse des canards** (un pas sur trois environ), **les feuilles mortes** (la date de la
-  chute, 50 → 92 % de l'automne ; la densité du tapis ; le nombre de feuilles en l'air sous l'orage), **les herbes
-  hautes en paille** l'hiver.
+  de neige sur la glace), **la glisse des canards** (un pas sur trois environ), **les feuilles mortes** (la chute
+  PAR BOUQUETS de la reprise, sa date — 50 → 92 % de l'automne —, le moment où il ne reste que des grappes ; la
+  densité du tapis ; le nombre de feuilles en l'air sous l'orage), **le pommier d'hiver** (tronc chaulé, nichoir),
+  **les herbes hautes en paille** l'hiver.
 - **Le 2026-09-29 (jour)** : **la météo par lieu** (un jour sur cinq, ses quatre formes, la prévision « En ville »),
   **la neige de la ferme** (le champ à rayures, la berge de sable, le quai balayé, les ombres, les chapeaux, les
   buissons d'hiver — ils hivernent désormais aussi sans neige, comme en ville), **la fonte des cratères**, et **le
@@ -309,18 +296,10 @@ chargeur/cache/nommage posés au premier usage.
 
 ## 4. Pièges invisibles — les casser ne produit aucune erreur
 
-⚠️⚠️ **CE CHAPITRE A ÉTÉ SCINDÉ AU 431, SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 430.** Les pièges
-de la FERME, de la VILLE et du TRIBUNAL sont partis dans **`components/ferme/README.md`**, qui
-fait déjà autorité sur ce code — ils y sont **à côté de ce qu'ils décrivent**, et ce chapitre
-avait atteint cent lignes en mélangeant deux sujets sans rapport. ⚠️ **Il a été scindé DEUX fois
-depuis** — le DESSIN au 441 (`components/ferme/DESSIN.md`), le GÉNÉRATEUR au 449
-(`components/ferme/README.md` §15 bis). Il ne reste ici que ce qui est vrai à l'échelle du
-projet : la **CONCEPTION**, et le **LANGAGE** (JavaScript, three.js, canevas).
-
-⚠️ **UN PIÈGE A ÉTÉ SUPPRIMÉ PLUTÔT QUE DÉPLACÉ, ET C'EST LE POINT DE LA VÉRIFICATION** : « la
-boucle de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait plus à rien — le
-symbole n'existe nulle part dans le dépôt. Le §14.2 le disait : *un piège périmé recopié
-ailleurs est pire qu'un piège supprimé.*
+**Ailleurs, à côté de ce qu'ils décrivent** : les pièges de la ferme, de la ville et du tribunal
+(`components/ferme/README.md` §15), du GÉNÉRATEUR (même fichier, §15 bis), et les règles de DESSIN
+(`components/ferme/DESSIN.md`). Ne restent ici que la **CONCEPTION** et le **LANGAGE** (JavaScript,
+three.js, canevas).
 
 ⚠️⚠️ **ET UN SEUL EST RESTÉ ICI BIEN QU'IL PARLE DES CARTES, parce qu'il a été payé SIX
 fois** (425, 427, 430, 431, le 2026-09-25 dans une LISTE DE LUMIÈRES : deux halos de la mairie,
@@ -332,20 +311,6 @@ la grande.** Dernière occurrence au 431, la plus chère : le rectangle du march
 tombe aussi au milieu des champs de la FERME, donc le contrôle « je suis au marché » passait
 depuis un pré. **La parade est UNE position taguée par sa zone, jamais deux jeux de
 coordonnées — et on teste la zone AVANT les distances.**
-
-**Dessin — voir `components/ferme/DESSIN.md`**
-
-⚠️⚠️⚠️ **DEUX LEÇONS DE L'AUDIT 2026-09-12 SONT PARTIES LÀ-BAS** (à côté des dessins qu'elles
-gouvernent) : *une grandeur de dessin qui sert DEUX rôles rend tout réglage impossible* — un seul
-rayon servait le creux d'une étoile ET la largeur de son cœur, donc élargir le visage rebouchait
-les échancrures, et cinq réécritures ont cherché un réglage là où il y avait deux décisions ; et
-*un angle constant n'est pas une largeur constante* — un chanfrein réglé en radians pour un rayon
-donné ne garantit plus aucune largeur de pointe à un rayon plus petit.
-
-Les treize règles de dessin — on assemble des masses et on ne texture pas une silhouette, une
-courbe `f(x)` ne se replie pas, la période prime sur les détails, un cerne sert aussi sur fond
-clair, un sprite haut contre le mur du fond avale ce qui passe devant… — vivent **à côté des
-dessins qu'elles gouvernent**, dans `components/ferme/DESSIN.md`. Rien n'en est recopié ici.
 
 **Conception — vrai partout**
 
@@ -365,7 +330,10 @@ dessins qu'elles gouvernent**, dans `components/ferme/DESSIN.md`. Rien n'en est 
   couverte, pas ce qu'est une flaque (un creux qui suit les joints et les ornières). La mesure qui compte est
   née du retour : *moins de 12 % des pixels d'une flaque ont un carré de 5 × 5 tout en eau* (44 % avec le
   premier jet, falsifié sur lui). Guillaume : « comme la pluie est fréquente, il est normal que je sois hyper
-  exigeant sur l'aspect des surfaces ».
+  exigeant sur l'aspect des surfaces ». ⚠️ **Repayé le 2026-09-30 sur la chute des feuilles** : vingt-deux
+  contrôles verts mesuraient la PART tombée et ses plaques, et Guillaume a vu un arbre « rongé ». *Un banc de
+  transition mesure ce que la chose EST à mi-chemin (ici : aucun éclat, un seul morceau, rien loin du bois), et
+  rejoue le premier jet pour prouver qu'il le voit.*
 
 Les cinq pièges du GÉNÉRATEUR (la case d'un décor, la liste noire, la passe qui pave, le second de
 quelque chose, la variante de décor) décrivent tous `generateTownWorld` et vivent **à côté de lui**,
@@ -729,7 +697,7 @@ dépôt.
 | `components/ferme/neige.js` | **LA NEIGE DE VALLEY TOWN (phase 12a, 2026-09-28) — ET DE LA FERME (2026-09-29 : `A.farmSnowEnv`, hook `classify`, classe `TILLED`, `invalidate`/`invalidateGround`/`refreshFields` pour une carte qui change, `setMelts` pour les cratères chauds), pure** : le manteau (`snowPack`, pure fonction de 4 jours de météo), le sol par parcelles en atlas (`makeSnowField` : relief éclairé, ombres portées, grain au bruit bleu, couverture par ordre au pixel), les empreintes locales (`makeWalkers`), les chapeaux et toits lus dans les pixels (`snowCapPixels`, `snowRoofPixels`, `snowStairPixels`), l'hiver du mobilier (`winterizePixels`). Ce que la neige lit du sol : `A.townSnowEnv` (fermeArt.js). Toits peints : `tools/build-snow-roofs.mjs`. Bancs : `verify-neige`, `render-neige` |
 | `components/ferme/pluie.js` | **LA PLUIE DE VALLEY TOWN (phase 12b, 2026-09-29), pure** : l'humidité du sol et le niveau des flaques, intégrés sur la météo de deux jours (`wetPack`, mémoïsé comme le manteau de neige), la parcelle mouillée au pixel (`renderWetChunk`, sur les parcelles STATIQUES de la neige via `snowField.staticOf`) et la couche du jeu (`makeWetLayer`, un atlas alloué à la première goutte). ⚠️ **UNE FLAQUE COMBLE UN CREUX** (`basin` : joints, bord des dalles, ornières, caniveau — jamais un aplat). Banc : `verify-pluie`, `render-pluie` |
 | `components/ferme/glace.js` | **LA GLACE DE L'ÉTANG DU PARC (2026-09-30), pure** : le seuil de gel au pixel (`iceThreshold` : des berges vers le centre), la même règle pour la faune (`pondFrozenAt`), la cuisson de la couche (givre, glace noire en fenêtres, fêlures, bulles, congères). L'épaisseur vient du manteau (`neige.js` : `ice`, `si`, `iceLag`). Banc : `render-glace` |
-| `components/ferme/feuilles.js` | **LES FEUILLES MORTES (2026-09-30), pures** : la chute (`leafFall`, seconde moitié de l'automne), l'ordre au pixel (`leafOrder`, égalisé, fût protégé), le tapis (`litterLevel`, `litterLeaves`), ce qui vole (`makeLeafFlurry`, local). L'arbre nu + la couronne éclaircie : `drawTownTree(…, fall)`, `S.townTreesFall` (fermeArt.js). Banc : `verify-feuilles` |
+| `components/ferme/feuilles.js` | **LES FEUILLES MORTES (2026-09-30), pures** : la chute (`leafFall`, seconde moitié de l'automne), le pommier de la planche par bouquets découpés dans son image (`clumpThin`, `trunkRegion`), le saule par mèches (`thinPixels` + `strandOrder`), le tapis (`litterLevel`, `litterLeaves`), ce qui vole (`makeLeafFlurry`, local). Les essences en code se dénudent par leurs bouquets (`fallClumps`, mode `fall` de `townTreeSprite`) ; l'arbre nu dessous : `drawTownTree(…, fall)`, `S.townTreesFall` (fermeArt.js). Banc : `verify-feuilles` |
 | `components/ferme/fumee.js` | **LES CHEMINÉES QUI FUMENT (phase 12c), pure** : le feu d'une maison (`chimneyLevel` : saison × part du jour × seuil de la maison × temps qu'il fait) et les bouffées d'un tuyau LUES dans l'horloge (`smokePuffs`, sans état). La bouche du tuyau est `TOWN_HOUSE_MODELS[..].chimney` (px de la référence). Banc : `verify-jour`, `render-fumee` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |

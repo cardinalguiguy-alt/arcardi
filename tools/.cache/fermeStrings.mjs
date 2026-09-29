@@ -2154,7 +2154,8 @@ const STAR_EN = {
       rescue: "🌊➡️🏖️ Hauled onto the shore — ready to carry home",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
-    sceneLabel: "Replay a scene",
+    // 2026-09-30 — « juste l'animation » (Guillaume) : dit ce que le bouton ne fait PAS.
+    sceneLabel: "Replay a scene — animation only, the quest doesn't move",
     stand: "📍 Stand at the next little star",
     /* ⚠️ ZIP 481 — le téléport « Mairie — l'étage » dépose dans le COULOIR ; le
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
@@ -5095,6 +5096,8 @@ export const FERME_STR = {
     devSnowDepth: (v) => (v == null ? "🔄 Météo" : v === 0 ? "∅ Pas de neige" : `❄️ ${String(v).replace(".", ",")} cm`),
     devSnowTrees: (v) => (v == null ? "🌲 Arbres : météo" : ["🌳 Nus", "🌲 Légers", "🎄 Alourdis"][v]),
     devSnowClear: "🧹 Effacer les traces",
+    devLeaf: (v) => (v == null ? "🍂 Feuilles : saison" : `🍂 Saison à ${Math.round(v * 100)} %`),
+    devIce: (v) => (v == null ? "🧊 Étang : météo" : v === 0 ? "💧 Étang libre" : v < 1 ? "🧊 La glace prend" : v < 2 ? "🧊 Presque pris" : "🧊 Étang gelé"),
     devFaunaCat: (i) => ["🐈 Le chat roux (marché)", "🐈‍⬛ Le chat noir (église)", "🐈 La tricolore (port)"][i],
     devFaunaNeedTown: "🛠️ Les chats vivent à Valley Town : prends d'abord le train.",
     devBuildSection: "Constructions & cultures",
@@ -6825,6 +6828,8 @@ export const FERME_STR = {
     devSnowHint: "LOCAL, for judging: forces the ground depth and the state of the trees on this screen only (other players keep the weather's snow). \"Weather\" hands back to the computed snowpack.",
     devSnowDepth: (v) => (v == null ? "🔄 Weather" : v === 0 ? "∅ No snow" : `❄️ ${v} cm`),
     devSnowTrees: (v) => (v == null ? "🌲 Trees: weather" : ["🌳 Bare", "🌲 Light", "🎄 Heavy"][v]),
+    devLeaf: (v) => (v == null ? "🍂 Leaves: season" : `🍂 Season at ${Math.round(v * 100)} %`),
+    devIce: (v) => (v == null ? "🧊 Pond: weather" : v === 0 ? "💧 Pond open" : v < 1 ? "🧊 Ice forming" : v < 2 ? "🧊 Nearly frozen" : "🧊 Pond frozen"),
     devSnowClear: "🧹 Clear the tracks",
     devFaunaCat: (i) => ["🐈 The ginger cat (market)", "🐈‍⬛ The black cat (church)", "🐈 The calico (harbour)"][i],
     devFaunaNeedTown: "🛠️ The cats live in Valley Town: take the train first.",
