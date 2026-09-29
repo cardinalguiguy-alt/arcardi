@@ -4486,9 +4486,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const op = String(req.op || "");
       /* ⚠️ REJOUER UNE SCÈNE NE TOUCHE PAS À L'ÉTAT. C'est le bouton qui rend la
          boucle de qualité tenable — on regarde la chute vingt fois sans repartir
-         de zéro — donc il ne doit surtout pas avancer la quête. */
+         de zéro — donc il ne doit surtout pas avancer la quête.
+         ⚠️ 2026-09-30 — `dev` : « juste l'animation » (Guillaume). La scène se joue
+         même avant la pluie (`starScenePump` ne la bloque plus sur `starFallen`), et
+         elle ne se conclut par aucune carte de chapitre (`starPlayScene`). */
       if (op.startsWith("scene:")) {
-        out.starScene = { key: op.slice(6) };
+        out.starScene = { key: op.slice(6), dev: 1 };
         hostFlushOut(out, f, null);
         return;
       }
@@ -8498,7 +8501,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* ⚠️⚠️ ZIP 445 — LA CHUTE PASSE PAR LA FILE, LES DEUX AUTRES NON. Voir la
          note de `starScenePendRef` : le retournement et la finale sont la suite
          immédiate d'un geste du joueur, la chute est la seule qui ARRIVE. */
-      else if (sc.key === "fall") starQueueScene("fall");
+      else if (sc.key === "fall") starQueueScene("fall", undefined, sc.dev);
       else {
         /* ⚠️⚠️ ZIP 458 — LE RETOURNEMENT ET LA FINALE PASSENT PAR LA FILE EUX
            AUSSI. La note d'à côté disait vrai pour CELUI QUI VIENT DE JOUER — la
@@ -8508,7 +8511,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            (`starPanelsClear` passe, la scène part dans la même image) ; elle ne
            fait quelque chose que dans le cas où l'ancienne version faisait du
            dégât. */
-        starQueueScene(sc.key, sc.ch);
+        starQueueScene(sc.key, sc.ch, sc.dev);
       }
     }
     // 2026-09-16 — repousse des buissons taillés : même forme que townChop
@@ -23002,6 +23005,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          décor qui appartient, lui, à la case d'après. Ce mécanisme n'a pas
          changé depuis le dessin procédural d'origine : il ne sait pas si ce
          qu'il repasse par-dessus est un chemin de canevas ou une image. */
+      /* ⚠️ 2026-09-30 — L'HIVER ET LA NEIGE DES HERBES HAUTES (Guillaume : « les herbes
+         qu'on a générées sur Gemini ne prennent pas la neige »). Elles passaient
+         l'hiver vert vif sous 12 cm : dessinées ici et au pied des maisons
+         (`queueHouseTufts`), elles n'étaient ni dans la file du mobilier
+         (`NG.WINTER_PROP_MODE`) ni dans `propSnowOverlay`. Même traitement que
+         lui : la touffe sèche en PAILLE tout l'hiver, neige ou pas (comme les
+         buissons, 2026-09-29), et porte un chapeau lu dans ses pixels — dessiné
+         DANS le même cisaillement, donc la neige plie avec la tige. La teinte de
+         plaque passe AVANT (`tallGrassTint` indexe par `img.src` : un canevas
+         n'en a pas). */
+      const tallGrassWinter = (img) => (snowSeason === "winter" && img
+        ? winterPropCanvas(img, NG.WINTER_PROP_MODE.tallGrass) || img : img);
       const drawTownTallGrass = (pr) => {
         const i = pr.y * tw.w + pr.x;
         const by = (pr.y + 1) * T;
@@ -23026,7 +23041,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sister = (th >>> 10) % 3 === 0 ? A.TALLGRASS_VARIANTS[(th >>> 12) % A.TALLGRASS_VARIANTS.length] : null;
         pushE((occupiedNow ? occupiedKey : by) + jy, elAt(pr.x, pr.y), () => {
           const img0 = tallGrassBitmap(variant); if (!img0) return;
-          const img = tallGrassTint(img0, tone);
+          const img = tallGrassWinter(tallGrassTint(img0, tone));
           const cx = pr.x * T + T / 2 + jx;
           /* Vent ambiant (vague spatiale, fonction PURE de fermeArt.js) +
              contact (le ressort PARTAGÉ des buissons, déjà dans cette
@@ -23039,18 +23054,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (sister) {
             const s0 = tallGrassBitmap(sister);
             if (s0) {
-              const si = tallGrassTint(s0, tone), sh2 = s0.naturalHeight || s0.height, sw2 = s0.naturalWidth || s0.width;
+              const si = tallGrassWinter(tallGrassTint(s0, tone)), sh2 = s0.naturalHeight || s0.height, sw2 = s0.naturalWidth || s0.width;
+              const sOv = snowF ? propSnowOverlay(si, pr, false) : null;
               ctx.save();
               ctx.translate(cx + (flip ? -7 : 7), by + jy - 2);
               ctx.transform(flip ? 1 : -1, 0, -lean / sh2, 1, 0, 0);
               ctx.drawImage(si, -sw2 / 2, -sh2);
+              if (sOv) drawSnowOverlay(sOv, -sw2 / 2, -sh2);
               ctx.restore();
             }
           }
+          const ov = snowF ? propSnowOverlay(img, pr, false) : null;
           ctx.save();
           ctx.translate(cx, by + jy);
           ctx.transform(flip ? -1 : 1, 0, -lean / ih, 1, 0, 0);
           ctx.drawImage(img, -iw / 2, -ih);
+          if (ov) drawSnowOverlay(ov, -iw / 2, -ih);
           ctx.restore();
         });
       };
@@ -23571,14 +23590,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         spots.forEach((sx, i) => {
           const hv = EAU.waterHash(h0 + i * 17, i * 29 + 5);
           const variant = TUFT_KINDS[hv % TUFT_KINDS.length];
-          const img = tallGrassBitmap(variant); if (!img) return;
+          const img0 = tallGrassBitmap(variant); if (!img0) return;
+          const img = tallGrassWinter(img0);          // 2026-09-30 : paille l'hiver, comme au sous-bois
           const flip = (hv >> 3) & 1, by = byW + 1 + ((hv >> 5) & 1);
+          const ov = snowF ? propSnowOverlay(img, { x: Math.floor(sx / T), y: Math.floor((by - 2) / T) }, false) : null;
           pushE(by, e, () => {
             const lean = A.townTallGrassWaveLean(sx / T, by / T, now);
             ctx.save();
             ctx.translate(Math.round(sx), by);
             ctx.transform(flip ? -1 : 1, 0, -lean / img.height, 1, 0, 0);
             ctx.drawImage(img, -Math.round(img.width / 2), -img.height);
+            if (ov) drawSnowOverlay(ov, -Math.round(img.width / 2), -img.height);
             ctx.restore();
           });
         });
@@ -26772,7 +26794,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        rend la scène gratuite — un seul `send()` pour tout le monde. */
     function drawStarOverlay(now) {
       const e = sharedRef.current.star;
-      if (!e || !Q.starFallen(e)) return;
+      /* ⚠️⚠️ 2026-09-30 — LA CHUTE NE GARDE QUE LA CONSTELLATION, PLUS LES SCÈNES.
+         Ce `return` coupait tout avant la pluie : une scène rejouée depuis le menu
+         (« juste l'animation », `dev`) déplaçait la caméra (`starCamNow` vit ailleurs)
+         sans rien peindre — ni voile, ni fragments, ni texte — et surtout sans jamais
+         se CLORE (la fin se constate plus bas, `starSceneRef.current = null`). La
+         scène restait « en cours » pour toujours : les rejouées suivantes restaient
+         en file, et tout ce qui se tait pendant une scène (la fouille) se taisait. */
+      const fallen = !!e && Q.starFallen(e);
+      if (!fallen && !starSceneRef.current) return;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       const W = canvas.width, H = canvas.height;
       const vw0 = starViewRef.current, cam = vw0 && vw0.cam, zoom = (vw0 && vw0.zoom) || 1;
@@ -26839,9 +26869,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          logo. Le dessin lui-même vit dans `fermeArt.js` (`A.drawStarConstellation`)
          pour qu'un banc puisse le regarder ; ce bloc ne fait plus que décider
          QUAND et À QUELLE INTENSITÉ, jamais COMMENT. */
-      const questDone = Q.starDone(sharedRef.current.star);
+      const questDone = fallen && Q.starDone(sharedRef.current.star);
       const isNight = E.isNightTime(tmin, daySkyBounds());   // 2026-09-29 (phase 12c) : la nuit de la saison (visuel)
-      if (skyZone !== "court" && (isNight || questDone)) {
+      if (fallen && skyZone !== "court" && (isNight || questDone)) {
         const sx = W - 134, sy = 60;
         /* Survol : une seule mesure, jamais recalculée pour le dessin ET pour
            la décision — `A.starConstellationHit` est LA fonction qui répond
@@ -30957,8 +30987,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return true;
   }
 
-  function starQueueScene(key, ch) {
-    starScenePendRef.current = { key, ch, at: performance.now() };
+  function starQueueScene(key, ch, dev) {
+    starScenePendRef.current = { key, ch, at: performance.now(), dev: !!dev };
     setStarTick(t => t + 1);
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -30992,14 +31022,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      « Chapter One » qui le renverrait dans un champ déjà fouillé.
      ⚠️ ET LE DÉLAI EST COMPTÉ SUR L'HORLOGE LOCALE, comme la scène elle-même :
      on ne compare jamais deux horloges (§3). */
-  function starPlayScene(key, ch) {
+  /* ⚠️ 2026-09-30 — `dev` (le menu « Rejouer une scène ») : L'ANIMATION SEULE. Pas
+     de carte de chapitre à la fin — sur une quête pas commencée, elle aurait
+     annoncé « Chapitre Un » devant un champ sans cratère (`starChapterKey` rend
+     toujours une clé). Les cratères, eux, ne se posent pas : `starFarmImpactLandedNow`
+     lit l'état (`starFallen`) et c'est lui qui ouvre aussi la fouille — les faire
+     apparaître pour la scène aurait ouvert des interactions sur une quête qui ne
+     les a pas. */
+  function starPlayScene(key, ch, dev) {
     starScenePendRef.current = null;
-    starSceneRef.current = { key, t0: performance.now() };
+    starSceneRef.current = { key, t0: performance.now(), dev: !!dev };
     setStarTick(t => t + 1);
     if (key === "fall") {
       starCamRef.current = null; starHitRef.current = null;
       starMarkFallSeen("fall");
-      setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FARM_SCENE_MS - 2500);
+      if (!dev) setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FARM_SCENE_MS - 2500);
     } else if (key === "townFall") {
       const hit = starImpactSpot();
       starHitRef.current = hit;
@@ -31007,7 +31044,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const halfDiag = vw1 ? Math.hypot(vw1.vw, vw1.vh) / 2 / C.TILE : 12;
       starCamRef.current = hit ? Q.starCamTarget(hit.zone, hit, halfDiag) : null;
       starMarkFallSeen("townFall");
-      setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FALL_MS - 3000);
+      if (!dev) setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FALL_MS - 3000);
     } else {
       starCamRef.current = null; starHitRef.current = null;
       /* D11 — MARQUÉE ICI, PAS DANS `starScenePump` : la scène peut aussi partir
@@ -31249,9 +31286,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      endroit différent — jamais assouplie. */
   function starScenePump() {
     const e = sharedRef.current.star;
-    if (!e || !Q.starFallen(e)) return;
     const zone = (meRef.current && (meRef.current.zone || "farm")) || "farm";
-    if (!starScenePendRef.current && !starSceneRef.current) {
+    /* ⚠️⚠️ 2026-09-30 — `starFallen` NE GARDE QUE LE RATTRAPAGE, PLUS TOUTE LA POMPE.
+       Il coupait la fonction entière en tête : une scène mise en file par le menu
+       (« Rejouer une scène », `dev`) ne partait jamais sur une quête d'avant la pluie
+       — Guillaume : « déclencher la chute depuis le menu dev ne semble plus marcher »
+       (« ▶ Start », lui, s'arrête au rendez-vous du maire depuis le P1 bis). Et une
+       CARTE mise en attente avant la pluie (l'annonce, la signature du maire) restait
+       bloquée jusqu'à la chute. Ce qui a besoin de la chute, c'est de la RATTRAPER. */
+    if (e && Q.starFallen(e) && !starScenePendRef.current && !starSceneRef.current) {
       if (!Q.starDone(e)) {
         if (zone === "town" && Q.starTownFallen(e) && starFallSeen("townFall") !== e.townFall) starQueueScene("townFall");
         else if (zone === "farm" && starFallSeen("fall") !== e.fall) starQueueScene("fall");
@@ -31275,7 +31318,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (!pend || starSceneRef.current) return;
     if (!starSceneCanPlay(pend.key)) return;
-    starPlayScene(pend.key, pend.ch);
+    starPlayScene(pend.key, pend.ch, pend.dev);
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════

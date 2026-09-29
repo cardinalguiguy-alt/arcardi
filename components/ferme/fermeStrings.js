@@ -2154,7 +2154,8 @@ const STAR_EN = {
       rescue: "🌊➡️🏖️ Hauled onto the shore — ready to carry home",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
-    sceneLabel: "Replay a scene",
+    // 2026-09-30 — « juste l'animation » (Guillaume) : dit ce que le bouton ne fait PAS.
+    sceneLabel: "Replay a scene — animation only, the quest doesn't move",
     stand: "📍 Stand at the next little star",
     /* ⚠️ ZIP 481 — le téléport « Mairie — l'étage » dépose dans le COULOIR ; le
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
