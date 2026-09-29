@@ -80,7 +80,33 @@ export const NEIGE = {
   /* Les ombres portées sur la neige (§5) : un ouvrage de h px porte son ombre à
      h·K px vers l'est et h·K·KY vers le sud (la lumière vient du nord-ouest). */
   SHADOW_K: 0.45, SHADOW_KY: 0.8,
+  /* ⚠️ 2026-09-30 — LA GLACE DE L'ÉTANG DU PARC (Guillaume : « l'étang doit être gelé
+     en hiver » ; tranché : « froid cumulé »). Une épaisseur en cm, intégrée avec le
+     manteau : elle ne prend QUE l'hiver, vite par nuit claire (le rayonnement), plus
+     lentement sous un ciel couvert, à peine de jour ; le soleil (faible l'hiver) et la
+     pluie la rongent, l'air doux des autres saisons la fait partir en quelques heures.
+     Réglé au banc (la vraie météo d'hiver, trente jours) : une nuit claire prend
+     ~1,5 cm (tout sauf le plus creux), une nuit couverte ~0,6 cm (le pourtour), un
+     beau jour d'hiver en rend ~0,5 — il faut DEUX nuits froides pour prendre le
+     centre ; une journée de pluie défait une glace mince. (Premier jet deux fois plus
+     rapide : tout l'étang gelait dès la première nuit, ce n'était plus du froid
+     cumulé.)
+     Chaque pixel gèle à SON seuil (`glace.js`, `iceThreshold`) : de 0,12 cm au bord à
+     1,6 cm au plus creux — la glace part des berges et gagne le centre. */
+  ICE_NIGHT: 0.05, ICE_NIGHT_CLEAR: 0.08, ICE_DAY: 0.02, ICE_SNOW: 0.03,
+  ICE_SUN: 0.12, ICE_RAIN: 0.6, ICE_WARM: { winter: 0, spring: 0.8, summer: 3, autumn: 0.5 }, ICE_MAX: 12,
+  ICE_T0: 0.12, ICE_T1: 1.6,
 };
+/* Les secondes RÉELLES par heure de jeu : le « retard » des carpes (`iceLag`) se compte
+   dans le temps de la faune, qui est le temps réel (faune.js, `env.t`). */
+const REAL_S_PER_GAME_H = 60 * (C.DAY_REAL_MS / 1000) / (C.DAY_END_MIN - C.DAY_START_MIN);
+/* La part de l'étang prise par la glace (0..1) : la même rampe que les seuils des
+   pixels, bruit compris (± 0,15 cm). Une approximation d'aire, pas un compte : elle ne
+   sert qu'à ralentir les carpes et à poser la neige sur la glace. */
+export function iceCover(ice) {
+  const a = NEIGE.ICE_T0 - 0.1, b = NEIGE.ICE_T1 + 0.15;
+  return smooth01((ice - a) / (b - a));
+}
 /* Le soleil : lever et coucher par saison, en heures — depuis la phase 12c, LA table du
    ciel (`C.SUN_HOURS`) : la fonte et la lumière ne peuvent plus diverger. */
 const SUN_HOURS = C.SUN_HOURS;   // 2026-09-29 (phase 12c) : LA table du lever et du coucher, celle du ciel (fermeConstants.js)
@@ -99,8 +125,13 @@ export const fallRate = (snow) => (snow > 0 ? NEIGE.FALL_CM_H * Math.pow(snow, N
    (congère du chasse-neige), rh (toit chauffé), rc (toit froid), tl / tc
    (charge des feuillus / des conifères), since (minutes de jeu depuis la
    dernière vraie chute). Tout en cm, sauf les charges. */
-const zeroPack = () => ({ g: 0, s: 0, r: 0, berm: 0, rh: 0, rc: 0, tl: 0, tc: 0, since: 1e6 });
-const clonePack = (p) => ({ g: p.g, s: p.s, r: p.r, berm: p.berm, rh: p.rh, rc: p.rc, tl: p.tl, tc: p.tc, since: p.since });
+/* 2026-09-30 : `ice` (cm, l'étang), `si` (cm de neige posée SUR la glace — celle qui
+   tombe dans l'eau libre y fond), `iceLag` (secondes réelles de « temps gelé » : les
+   carpes vivent à `t − iceLag`, donc ralentissent avec la glace et se figent quand elle
+   couvre tout, sans jamais sauter). ⚠️ UN CHAMP DE PLUS SE DÉCLARE DANS LES DEUX
+   LIGNES : `clonePack` recopie champ par champ, un champ oublié s'effacerait (§4). */
+const zeroPack = () => ({ g: 0, s: 0, r: 0, berm: 0, rh: 0, rc: 0, tl: 0, tc: 0, since: 1e6, ice: 0, si: 0, iceLag: 0 });
+const clonePack = (p) => ({ g: p.g, s: p.s, r: p.r, berm: p.berm, rh: p.rh, rc: p.rc, tl: p.tl, tc: p.tc, since: p.since, ice: p.ice, si: p.si, iceLag: p.iceLag });
 function relax(v, gain, unload, dtH) {
   const k = gain + unload;
   if (k <= 0) return v;
@@ -128,6 +159,23 @@ export function packStep(st, W, dtH, hour, season) {
   st.tl = relax(st.tl, gain, N.TREE_BASE + unl, dtH);
   st.tc = relax(st.tc, gain, N.TREE_BASE_CONIFER + unl, dtH);
   st.since = f > 0.25 ? 0 : st.since + dtH * 60;
+  /* La glace (voir `NEIGE.ICE_*`). La nuit se lit au soleil BRUT (avant les nuages) ;
+     la clarté du ciel, à `dark`. */
+  const sun0 = sunAt(hour, season);
+  let grow = 0;
+  if (season === "winter") {
+    grow = sun0 <= 0 ? N.ICE_NIGHT + N.ICE_NIGHT_CLEAR * Math.max(0, 1 - W.dark) : N.ICE_DAY * (1 - sun0);
+    if (W.snow > 0.05) grow += N.ICE_SNOW;
+  }
+  const iceMelt = sun * N.ICE_SUN + W.rain * N.ICE_RAIN + (N.ICE_WARM[season] || 0);
+  st.ice = Math.min(N.ICE_MAX, Math.max(0, st.ice + (grow - iceMelt) * dtH));
+  const cov = iceCover(st.ice);
+  /* La neige sur la glace : ce qui tombe sur la part gelée, fondu comme le sol ouvert,
+     jamais plus que le sol (elle ne s'y accumule pas mieux) ; une glace qui s'en va
+     l'emporte. */
+  st.si = Math.max(0, st.si + (f * cov - mOpen) * dtH - st.si * N.SETTLE_H * dtH);
+  st.si = cov < 0.05 ? 0 : Math.min(st.si, st.g);
+  st.iceLag += cov * dtH * REAL_S_PER_GAME_H;
   return st;
 }
 const DAY_A = C.DAY_START_MIN, DAY_B = C.DAY_END_MIN;

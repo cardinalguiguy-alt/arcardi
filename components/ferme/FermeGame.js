@@ -78,6 +78,7 @@ import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui
 import * as FU from "./fumee";      // 2026-09-29 (phase 12c) — les cheminées qui fument : le feu de la maison, les bouffées lues dans l'horloge
 import * as PL from "./pluie";      // 2026-09-29 (phase 12b) — la pluie : le sol mouillé, les flaques (pure fonction de la météo passée)
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
+import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -407,6 +408,27 @@ function drawRollShutter(ctx, q, p, f) {
    Cuites une fois par image chargée, en canevas (jamais `ctx.filter` à chaque
    touffe à chaque image : des centaines de filtres par frame). */
 const TG_TINTS = new Map();
+/* 2026-09-30 — LA COUCHE DE GLACE D'UNE RÉGION D'ÉTANG (`glace.js`), recuite quand sa
+   clé change (`GL.iceBakeKey` : l'épaisseur au 1/25 de cm pendant que le front bouge,
+   la neige au dixième). Au niveau du MODULE, indexée par la région cuite (`eau.js`) :
+   une nouvelle cuisson de l'eau oublie d'elle-même les anciennes couches. */
+const POND_ICE = new WeakMap();
+function pondIceLayer(bake, x, y, ice, snow) {
+  const R = EAU.bakeRegionAt(bake, x, y);
+  if (!R || !R.isPond || !R.dsh) return null;
+  const key = GL.iceBakeKey(ice, snow);
+  let L = POND_ICE.get(R);
+  if (!L || L.key !== key) {
+    const r = GL.bakePondIce(R, ice, snow);
+    const cv = (L && L.cv) || document.createElement("canvas");
+    cv.width = R.RW; cv.height = R.RH;
+    const g = cv.getContext("2d"), id = g.createImageData(R.RW, R.RH);
+    id.data.set(r.px); g.putImageData(id, 0, 0);
+    L = { key, cv, cell: r.cell };
+    POND_ICE.set(R, L);
+  }
+  return { R, cv: L.cv, state: L.cell[(y - R.by0) * R.cw + (x - R.bx0)] };
+}
 function tallGrassTint(img, tone) {
   if (!tone || !img || !(img.naturalWidth || img.width)) return img;
   const key = img.src + "|" + tone;
@@ -997,8 +1019,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const wetFrameRef = useRef(null);                       // ce que la pluie sait du sol, cette image (les ronds des flaques)
   const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
   const wetStepsRef = useRef(new Map());                 // 2026-09-29 (audit pluie) : la foulée de chaque marcheur, pour ses éclaboussures
-  const snowDevRef = useRef({ depth: null, trees: null });
-  const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null });
+  const snowDevRef = useRef({ depth: null, trees: null, ice: null });
+  const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
@@ -8361,7 +8383,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function snowPackNow(place) {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
     const dev = snowDevRef.current, pl = place === "farm" ? "farm" : "town";
-    const key = `${pl}|${dev.depth}|${dev.trees}`;
+    const key = `${pl}|${dev.depth}|${dev.trees}|${dev.ice}`;
     if (mm.pack && now - mm.at < 150 && mm.key === key) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
@@ -8371,6 +8393,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       Object.assign(pk, { g, s: g * 1.08, r: Math.min(NG.NEIGE.ROAD_CAP, g * 0.3), berm: g * 1.1, rh: g * 0.8, rc: g });
     }
     if (dev.trees != null) { const L = [0, 0.3, 0.8][dev.trees]; pk.tl = L; pk.tc = L; }
+    /* 2026-09-30 — la glace de l'étang, forcée (locale, comme la neige) : l'épaisseur,
+       et la neige posée dessus suit celle du sol dès que la glace couvre tout. */
+    if (dev.ice != null) pk.ice = dev.ice;
+    if (dev.ice != null || dev.depth != null) pk.si = NG.iceCover(pk.ice) > 0.9 ? pk.g : 0;
     mm.at = now; mm.pack = pk; mm.key = key;
     return pk;
   }
@@ -23330,7 +23356,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "goldBush" ? pick(sprites.townGoldBush, pr)
                   : pr.kind === "lavender" ? pick(sprites.townLavender, pr)
                   : pr.kind === "clump" ? pick(sprites.townFlowerClump, pr)
-                  : pr.kind === "lily" ? pick(sprites.townLilyPads, pr)
+                  : pr.kind === "lily" ? (snowSeason === "winter" ? null : pick(sprites.townLilyPads, pr))   // 2026-09-30 : le nénuphar disparaît l'hiver (il repart du rhizome au printemps)
                   : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
                   : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
                   : pr.kind === "sacks" ? sprites.townSacks                // zip 431
@@ -24130,6 +24156,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (fw && FAS) {
           const env = faunaEnvLive(); // 2026-09-26 : la météo s'y lit à l'heure de chaque créneau
           faunaEnvNow = env;
+          /* 2026-09-30 — LA GLACE DE L'ÉTANG POUR LA FAUNE. `iceAt` : un canard sur un
+             point pris marche (et glisse) au lieu de nager — la MÊME règle que le
+             dessin (`GL.pondFrozenAt`). `fishT` : le temps des carpes, retardé du
+             temps passé sous la glace (`iceLag`, le manteau) — elles ralentissent quand
+             la glace gagne et se figent quand elle couvre tout, sans jamais sauter.
+             Forcée au menu dev, la glace n'a pas d'histoire : figées si tout est pris. */
+          if (snowPk.ice > 0.05) {
+            const bkI = EAU.townWaterBakeReady(tw), iceNow = snowPk.ice;
+            if (bkI) env.iceAt = (x, y) => GL.pondFrozenAt(bkI, x * T, y * T, iceNow);
+          }
+          env.fishT = snowDevRef.current.ice != null
+            ? (NG.iceCover(snowPk.ice) > 0.99 ? (sharedRef.current.dayStartAt || 0) / 1000 : env.t)
+            : env.t - (snowPk.iceLag || 0);
           const fdt = Math.min(dt, 0.05);
           const nowP = performance.now();
           const view = { x0: x0 - 1, x1: x1 + 1, y0: y0 - 1, y1: yBot + 1 };
@@ -24185,7 +24224,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           };
           // ── Les colverts.
           const ducks = FAU.faunaDucks(fw, env);
-          FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt, env.t);
+          FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt, env.t, env.iceAt);
           // 2026-09-26 (nuit) — les nénuphars que les canards écartent (lus au dessin des décors, via `SL.lily`).
           FAU.faunaReactLilies(SL, fw, ducks, fdt);
           for (const d of ducks) {
@@ -24196,7 +24235,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                sillage ni ligne d'eau, une ombre au sol, l'altitude de la case. */
             if (d.land) {
               const de = elAt(Math.floor(d.x), Math.floor(d.y));
-              pushE(gy, de, () => { groundShadow(gx, gy, d.kind === "duck" ? 9 : 4, 0.16); blitF(cell, gx, gy, d.face); }, 0, Math.floor(d.x));
+              /* 2026-09-30 — sur la glace, la glisse laisse un trait clair derrière les pattes. */
+              const skid = d.ice && d.slide;
+              pushE(gy, de, () => {
+                groundShadow(gx, gy, d.kind === "duck" ? 9 : 4, 0.16);
+                if (skid) { ctx.globalAlpha = 0.45; ctx.fillStyle = "#f6fafc"; ctx.fillRect(snapF(gx - d.face * 9), snapF(gy), 5, 1); ctx.globalAlpha = 1; }
+                blitF(cell, gx, gy, d.face);
+              }, 0, Math.floor(d.x));
               continue;
             }
             const hx = d.face, spd = d.moving ? Math.min(1, 0.4 + (d.spd || 0.5)) : 0;
@@ -24215,11 +24260,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           // ── Les carpes (sous l'eau : peintes avant les reflets) et leurs gobages.
           const fish = FAU.faunaFish(fw, env);
-          FAU.faunaReactFish(SL, fw, fish, foodF, fdt);
+          /* 2026-09-30 — sous la glace, les carpes ne montent plus aux miettes et ne
+             gobent plus (le rond se dessinerait SUR la glace). */
+          const underIce = (f) => !!env.iceAt && env.iceAt(f.x, f.y);
+          FAU.faunaReactFish(SL, fw, fish.filter((f) => !underIce(f)), foodF, fdt);
           for (const f of fish) {
             if (!inView(f.x, f.y, 1)) continue;
             faunaUnder.push(f);
-            if (f.z < 0.22) {
+            if (f.z < 0.22 && !underIce(f)) {
               const ph = ((env.t + (f.id.length * 7.3)) % 2.6) / 2.6;
               if (ph < 0.6) {
                 const hx = f.hx, hy = f.hy;
@@ -24755,16 +24803,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const bakeW = EAU.townWaterBakeReady(tw);
         if (bakeW) {
+          const iceOn = snowPk.ice > 0.05;
           for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
-            if (tw.ground[y * tw.w + x] !== C.G_WATER) continue;
-            const px = x * T, py = y * T;          // l'eau est toujours à l'altitude 0
+            const isW = tw.ground[y * tw.w + x] === C.G_WATER;
+            /* 2026-09-30 — l'eau cuite de l'étang déborde sur les cases de BERGE (le trait
+               d'eau mord la vase) : la glace s'y pose aussi, à l'altitude de la case. */
+            if (!isW && !(iceOn && tw.shore && tw.shore[y * tw.w + x])) continue;
+            const px = x * T, py = isW ? y * T : y * T - tw.elev[y * tw.w + x] * EP;          // l'eau est toujours à l'altitude 0
             if (zmFrac) {
               const L = Math.round(px * zm) - camSx, R = Math.round((px + T) * zm) - camSx;
               const Tp = Math.round(py * zm) - camSy, B = Math.round((py + T) * zm) - camSy;
               const sx = (R - L) / T, sy = (B - Tp) / T;
               ctx.setTransform(sx, 0, 0, sy, L - px * sx, Tp - py * sy);
             }
-            EAU.drawWaterSurface(ctx, sprites, tw, bakeW, x, y, px, py, now);
+            /* 2026-09-30 — LA GLACE DE L'ÉTANG, par-dessus la surface (les carpes et les
+               reflets, peints avant, se voient à travers la glace noire du creux). Une
+               case toute prise ne reçoit plus la houle ni les éclats. */
+            const iceL = iceOn ? pondIceLayer(bakeW, x, y, snowPk.ice, snowPk.si) : null;
+            if (isW && (!iceL || iceL.state !== 2)) EAU.drawWaterSurface(ctx, sprites, tw, bakeW, x, y, px, py, now, snowSeason === "winter");
+            if (iceL && iceL.state) ctx.drawImage(iceL.cv, (x - iceL.R.bx0) * T, (y - iceL.R.by0) * T, T, T, px, py, T, T);
           }
           if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
         }
@@ -39366,6 +39423,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <button key={"devsnowt-" + v} className={"ferme-dev-btn" + (snowDevUi.trees === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, trees: v }; setSnowDevUi(u => ({ ...u, trees: v })); }}>{L.devSnowTrees(v)}</button>
                   ))}
                   <button className="ferme-dev-btn" onClick={() => { const sf = snowFieldRef.current; if (sf && sf.f) sf.f.clearPrints(); }}>{L.devSnowClear}</button>
+                </div>
+                {/* 2026-09-30 — LA GLACE DE L'ÉTANG, LOCALE (`snowDevRef.ice`, lue par `snowPackNow`). */}
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, 0, 0.5, 1.1, 4].map(v => (
+                    <button key={"device-" + v} className={"ferme-dev-btn" + (snowDevUi.ice === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, ice: v }; setSnowDevUi(u => ({ ...u, ice: v })); }}>{L.devIce(v)}</button>
+                  ))}
                 </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
                 <div className="ferme-dev-hint">{L.devFaunaHint}</div>

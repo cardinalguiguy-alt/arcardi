@@ -837,9 +837,17 @@ function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
     swellOK[cy2 * cw + cx2] = n > 0 && bank === 0 ? 1 : 0;
     if (n) depthCell[cy2 * cw + cx2] = Math.round(sum / n);
   }
+  /* ⚠️ 2026-09-30 — LA GLACE DE L'ÉTANG (`glace.js`) : la distance à la berge meuble,
+     en cases, au pixel mouillé. C'est l'ORDRE DE GEL (la glace part des berges) ; elle
+     n'existe que pour l'étang (le port et le fleuve ne gèlent pas). */
+  let dsh = null;
+  if (isPond) {
+    dsh = new Float32Array(N);
+    for (let i = 0; i < N; i++) if (wet[i]) dsh[i] = Math.sqrt(dIn[i]) / T;
+  }
   return {
     isPond, bx0, by0, cw, ch, ox, oy, RW, RH,
-    water: wc, bank: bc, lvl, full, depthCell, cellTop, faceH, swellOK,
+    water: wc, bank: bc, lvl, full, depthCell, cellTop, faceH, swellOK, dsh,
   };
 }
 
@@ -1012,7 +1020,10 @@ function lilyCalmCells(tw) {
   lilyCalm.set(tw, set);
   return set;
 }
-export function drawWaterSurface(ctx, S, tw, bake, x, y, px, py, now) {
+/* `winter` (2026-09-30) : pas de nénuphar l'hiver — la feuille meurt à l'automne et
+   repart du rhizome au printemps (les nénuphars POSÉS, décors du générateur, suivent
+   la même règle dans la file des décors, FermeGame.js). */
+export function drawWaterSurface(ctx, S, tw, bake, x, y, px, py, now, winter) {
   const info = bakedCellInfo(bake, x, y);
   if (!info || tw.ground[y * tw.w + x] !== C.G_WATER) return false;
   const { R, full, depth, top, swellOK } = info;
@@ -1076,7 +1087,7 @@ export function drawWaterSurface(ctx, S, tw, bake, x, y, px, py, now) {
     const hh = waterHash(x * 11 + 3, y * 13 + 7);
     const blit = (cell) => ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, px, py, cell.w, cell.h);
     if (SW.wrock && d <= WAT_SHOAL && (hh % 100) < 7) blit(SW.wrock[(hh >>> 7) % SW.wrock.length]);
-    else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 8 && (R.isPond || lilyCalmCells(tw).has(y * tw.w + x))) blit(SW.lily[(hh >>> 11) % SW.lily.length]);
+    else if (SW.lily && !winter && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 8 && (R.isPond || lilyCalmCells(tw).has(y * tw.w + x))) blit(SW.lily[(hh >>> 11) % SW.lily.length]);
   }
   return true;
 }
