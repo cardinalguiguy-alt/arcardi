@@ -268,5 +268,123 @@ console.log("§10 — La faune sous l'averse");
   ok("les papillons s'effacent PEU À PEU quand l'averse monte", B5 > 0 && B5 < B0, `${B0} au calme, ${B5} à 40 %`);
 }
 
+/* 2026-09-29 — DEUX LIEUX (meteo.js § 3 bis). Guillaume : « cohérence ferme/ville,
+   pas toujours simultanée (bien que fréquemment la même) ; s'il neige,
+   synchroniser les deux » ; un jour sur cinq diffère. */
+console.log("§11 — La ferme et la ville");
+{
+  const P = WX.PLACES;
+  ok("deux lieux, et toute zone qui n'est pas la ferme est en ville", P.length === 2 && WX.placeOf("farm") === "farm"
+     && ["town", "court", "evil", undefined, null].every((z) => WX.placeOf(z) === "town"));
+  // (1) La ville n'a pas bougé d'un bit : son ciel est le ciel de référence.
+  let townDiff = 0, reads = 0;
+  for (const se of SEASONS) for (let d = 1; d <= 500; d++) for (let t = A; t <= B; t += 23) {
+    reads++;
+    if (JSON.stringify(WX.weatherAt(d, t, se, null, "town")) !== JSON.stringify(WX.weatherAt(d, t, se, null))) townDiff++;
+  }
+  ok("⚠️ la ville garde exactement son ciel d'avant (sans lieu = la ville)", townDiff === 0, `${townDiff} écarts sur ${reads} lectures`);
+  // (2) La ferme est une pure fonction du jour et de la saison.
+  let impure = 0;
+  for (const se of SEASONS) for (let d = 1; d <= 300; d++) {
+    const t = A + (d * 53) % (B - A);
+    if (JSON.stringify(WX.weatherAt(d, t, se, null, "farm")) !== JSON.stringify(WX.weatherAt(d, t, se, null, "farm"))) impure++;
+  }
+  ok("deux « clients » tirent le même temps sur la ferme", impure === 0, `${impure} écarts`);
+  // (3) La fréquence : un jour sur cinq hors neige, et chaque jour différent se VOIT.
+  const DD = 4000;
+  let diffDays = 0, nonSnow = 0, invisible = 0, oneWetOtherDry = 0;
+  const forms = {};
+  const isSnowDay = (d, se) => WX.dayWeather(d, se).eps.some((e) => WX.SNOW_KINDS.includes(e.kind));
+  for (const se of SEASONS) for (let d = 1; d <= DD; d++) {
+    if (isSnowDay(d, se)) continue;
+    nonSnow++;
+    const fw = WX.placeDayWeather(d, se, "farm");
+    if (JSON.stringify(fw.eps) === JSON.stringify(WX.dayWeather(d, se).eps)) continue;
+    diffDays++;
+    forms[fw.form] = (forms[fw.form] || 0) + 1;
+    let seen = false, split = false;
+    for (let t = A; t <= B; t += 5) {
+      const a = WX.weatherAt(d, t, se, null, "town"), b = WX.weatherAt(d, t, se, null, "farm");
+      if (Math.abs(a.rain - b.rain) > 0.15 || Math.abs(a.dark - b.dark) > 0.12 || Math.abs(a.hail - b.hail) > 0.15 || Math.abs(a.bolts - b.bolts) > 0.2) seen = true;
+      if ((a.rain > 0.2) !== (b.rain > 0.2)) split = true;
+    }
+    if (!seen) invisible++;
+    if (split) oneWetOtherDry++;
+  }
+  const share = diffDays / nonSnow;
+  /* ⚠️ Le chiffre est la DÉCISION de Guillaume (un jour sur cinq), écrit ici en clair :
+     comparé à `WX.PLACE_SPLIT`, le contrôle suivait la constante au lieu de la tenir
+     (falsifié à 0,35 : il restait vert). */
+  ok("un jour sur cinq (hors neige), à ±3 points", Math.abs(share - 1 / 5) < 0.03, `${(100 * share).toFixed(1)} % de ${nonSnow} jours — ${JSON.stringify(forms)}`);
+  ok("les quatre formes existent : front décalé, intensité voisine, temps propre, ciel", forms.shift > 0 && forms.neighbor > 0 && forms.own > 0 && forms.sky > 0);
+  ok("⚠️ un jour « différent » se VOIT (pluie, ciel, grêle ou éclairs écartés à un moment)", invisible === 0, `${invisible} jours différents à l'écran identique sur ${diffDays}`);
+  ok("⚠️ il pleut sur l'un et pas sur l'autre au même moment, certains jours", oneWetOtherDry > 0.3 * diffDays, `${oneWetOtherDry} jours sur ${diffDays}`);
+  // ⚠️⚠️ Le même CLIMAT des deux côtés (le premier jet mouillait la ferme deux fois plus l'été).
+  {
+    const WETK = new Set(["shower", "rain", "storm", "hail"]), gaps = [];
+    for (const se of SEASONS) {
+      let t = 0, f = 0;
+      for (let d = 1; d <= DD; d++) {
+        if (WX.dayWeather(d, se).eps.some((e) => WETK.has(e.kind))) t++;
+        if (WX.placeDayWeather(d, se, "farm").eps.some((e) => WETK.has(e.kind))) f++;
+      }
+      gaps.push(`${se} ${(100 * t / DD).toFixed(1)}/${(100 * f / DD).toFixed(1)} %`);
+      if (Math.abs(t - f) / DD > 0.03) gaps.push("⚠️");
+    }
+    ok("⚠️⚠️ la ferme n'est pas plus pluvieuse que la ville (jours mouillés à ±3 points, par saison)", !gaps.includes("⚠️"), gaps.join(" · "));
+  }
+  // (4) ⚠️⚠️ LA NEIGE : identique au dixième de milliardième, à chaque instant, chaque jour.
+  let snowDiff = 0, snowReads = 0, farmSnowAlone = 0, snowDays = 0;
+  for (let d = 1; d <= DD; d++) {
+    const snowy = isSnowDay(d, "winter");
+    if (snowy) snowDays++;
+    if (snowy && JSON.stringify(WX.placeDayWeather(d, "winter", "farm").eps) !== JSON.stringify(WX.dayWeather(d, "winter").eps)) snowDiff++;
+    for (let t = A; t <= B; t += 17) {
+      snowReads++;
+      const a = WX.weatherAt(d, t, "winter", null, "town"), b = WX.weatherAt(d, t, "winter", null, "farm");
+      if (Math.abs(a.snow - b.snow) > 1e-12 || Math.abs(a.flake - b.flake) > 1e-12) farmSnowAlone++;
+    }
+  }
+  ok("⚠️⚠️ s'il neige, les deux lieux ont la MÊME journée, épisodes compris", snowDiff === 0, `${snowDiff} écarts sur ${snowDays} jours de neige`);
+  ok("⚠️⚠️ …et jamais un flocon sur l'un sans l'autre, à aucun instant", farmSnowAlone === 0, `${farmSnowAlone} écarts sur ${snowReads} lectures d'hiver`);
+  ok("hors hiver, la ferme ne tire jamais de neige", ["spring", "summer", "autumn"].every((se) => {
+    for (let d = 1; d <= DD; d++) if (WX.placeDayWeather(d, se, "farm").eps.some((e) => WX.SNOW_KINDS.includes(e.kind))) return false;
+    return true;
+  }));
+  // L'hiver, une divergence n'ajoute jamais de pluie (elle ferait fondre un seul des deux manteaux).
+  let winterRain = 0;
+  for (let d = 1; d <= DD; d++) {
+    const fw = WX.placeDayWeather(d, "winter", "farm");
+    if (fw.form !== "same" && fw.form && fw.eps.some((e) => e.kind === "rain" || e.kind === "shower" || e.kind === "storm")
+        && !WX.dayWeather(d, "winter").eps.some((e) => e.kind === "rain")) winterRain++;
+  }
+  ok("⚠️ l'hiver, la ferme ne reçoit pas de pluie que la ville n'a pas", winterRain === 0, `${winterRain} jours`);
+  // (5) La ferme suit les mêmes lois : aucun saut, zéro aux bouts, épisodes dans la journée.
+  let worst = 0, edge = 0, late = 0;
+  for (const se of SEASONS) for (let d = 1; d <= 600; d++) {
+    for (const e of WX.placeDayWeather(d, se, "farm").eps) if (e.t0 < A || e.t0 + e.rise + e.hold + e.fall > B - 9.99) late++;
+    let prev = WX.weatherAt(d, A, se, null, "farm");
+    for (const c of WX.CHANNELS) if (prev[c] > 1e-6) edge++;
+    for (let t = A + 0.25; t <= B; t += 0.25) {
+      const w = WX.weatherAt(d, t, se, null, "farm");
+      for (const c of WX.CHANNELS) worst = Math.max(worst, Math.abs(w[c] - prev[c]));
+      prev = w;
+    }
+    for (const c of WX.CHANNELS) if (prev[c] > 1e-6) edge++;
+  }
+  ok("ferme : aucun saut, zéro aux deux bouts, chaque épisode dans sa journée", worst <= 0.06 && edge === 0 && late === 0, `pire pas ${worst.toFixed(3)}, ${edge} bouts non nuls, ${late} épisodes débordants`);
+  // (6) Le forçage vaut pour les deux lieux.
+  let fdiff = 0;
+  for (let d = 1; d < 200; d++) for (const kind of WX.WX_KINDS) {
+    const f = { day: d, kind, at: 10 * 60 };
+    for (const t of [10 * 60 + WX.FORCE_BLEND + 1, 15 * 60, B]) if (JSON.stringify(WX.weatherAt(d, t, "autumn", f, "farm")) !== JSON.stringify(WX.weatherAt(d, t, "autumn", f, "town"))) fdiff++;
+  }
+  ok("⚠️ une météo commandée au menu dev tombe sur les deux lieux", fdiff === 0, `${fdiff} écarts`);
+  // (7) La prévision du matin lit le lieu.
+  let fcDiff = 0;
+  for (let d = 1; d <= 600; d++) if (JSON.stringify(WX.forecast(d, "autumn", "farm")) !== JSON.stringify(WX.forecast(d, "autumn"))) fcDiff++;
+  ok("la prévision de la ferme diffère parfois de celle de la ville", fcDiff > 0, `${fcDiff} jours d'automne sur 600`);
+}
+
 console.log(`\nverify-meteo : ${n - fail}/${n}`);
 process.exit(fail ? 1 : 0);

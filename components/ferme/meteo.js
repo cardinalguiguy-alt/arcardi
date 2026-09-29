@@ -1,5 +1,5 @@
 /* ╔══════════════════════════════════════════════════════════════════════════
-   ║ 2026-09-26 — LA MÉTÉO (Valley Town ET la ferme : il n'y a qu'un ciel).
+   ║ 2026-09-26 — LA MÉTÉO (Valley Town ET la ferme ; un seul ciel, deux averses depuis le 2026-09-29 : § 3 bis).
    ╚══════════════════════════════════════════════════════════════════════════
    Ce qui remplace `E.isStormyDay(day)` (un jour sur sept, orage et pluie à
    pleine force de 6 h à 2 h, sans montée) — demande de Guillaume après la
@@ -193,6 +193,133 @@ export function dayWeather(day, season) {
   return out;
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 3 bis. 2026-09-29 — DEUX LIEUX SOUS LE MÊME CIEL, PAS SOUS LA MÊME AVERSE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume : « une cohérence météo ferme/ville mais qui ne soit pas toujours
+   simultanée (bien que fréquemment la même). Par exemple il peut pleuvoir sur
+   l'une et pas sur l'autre au même moment de la journée. Mais s'il neige, alors
+   synchroniser les deux. » Fréquence choisie par lui : UN JOUR SUR CINQ.
+   ⚠️ LA VILLE EST LA RÉFÉRENCE ET NE BOUGE PAS D'UN BIT : `dayWeather` reste son
+   tirage, donc tout ce qui la lisait (neige, pluie, faune, lumière, bancs) lit
+   exactement le même ciel qu'avant. La ferme en DÉRIVE le sien (`placeDayWeather`) —
+   une pure fonction du jour et de la saison, comme le reste : les deux joueurs
+   voient la même averse sur la ferme, sans un message (§3 de CLAUDE.md).
+   ⚠️⚠️ LA NEIGE N'A PAS DE LIEU : un jour où la ville a un épisode de neige, la
+   ferme a le MÊME jour, épisodes compris, et aucune divergence ne tire jamais de
+   neige (`allowedHere`). La neige tombe donc ensemble ou pas du tout. Ce qui peut
+   encore différer sous la neige, c'est la FONTE (une pluie sur un seul des deux
+   lieux) — et l'hiver, une divergence n'ajoute jamais de pluie (voir plus bas).
+   Trois formes de divergence, pour qu'un jour différent reste un jour COHÉRENT :
+   · LE FRONT PASSE PLUS TÔT OU PLUS TARD (le même temps, décalé de 40 à 150 min) :
+     l'averse de la ville arrive sur la ferme une heure avant ou après ;
+   · UNE INTENSITÉ VOISINE (`NEIGHBOR`) : pluie ici, averse là ; orage ici, pluie là ;
+   · UN TEMPS PROPRE : il pleut sur l'un, il fait sec sur l'autre. */
+export const PLACES = ["town", "farm"];
+/* La zone d'un joueur → son lieu. Tout ce qui n'est pas la ferme est en ville :
+   le tribunal, la mairie, l'église (on y voit la ville par les fenêtres). */
+export const placeOf = (zone) => (zone === "farm" ? "farm" : "town");
+export const PLACE_SPLIT = 0.2;                    // un jour sur cinq (Guillaume, 2026-09-29)
+export const SNOW_KINDS = ["snowLight", "snow", "snowHeavy"];
+const isSnowKind = (k) => SNOW_KINDS.includes(k);
+const WET_KINDS = new Set(["shower", "rain", "storm", "hail"]);
+/* L'intensité voisine de chaque genre (`null` : le beau temps). */
+const NEIGHBOR = {
+  overcast: ["shower", null], shower: ["rain", "overcast"], rain: ["shower", "storm"],
+  storm: ["rain", "dryStorm"], dryStorm: ["overcast", "storm"], hail: ["shower", "overcast"],
+};
+/* Ce qu'une divergence a le droit de tirer : jamais de neige ; seulement des genres
+   de la saison (ou le couvert) ; et L'HIVER, JAMAIS DE PLUIE EN PLUS — elle ferait
+   fondre la neige d'un seul des deux lieux, et le manteau que la neige a posé
+   ensemble se séparerait en deux paysages. */
+function allowedHere(k, season) {
+  if (k === null || k === "overcast") return true;
+  if (isSnowKind(k)) return false;
+  if (season === "winter") return k === "hail";
+  return (SEASON_ODDS[season] || {})[k] > 0 || k === "shower";
+}
+/* Un épisode décalé de `dt` minutes, gardé dans la journée (il FINIT dans la
+   journée, comme dans `makeEpisode`). */
+function shiftEp(ep, dt) {
+  const len = ep.rise + ep.hold + ep.fall;
+  return { ...ep, t0: Math.max(DAY_A, Math.min(DAY_B - len, ep.t0 + dt)) };
+}
+const placeCache = new Map();
+/* Le front décalé de 40 à 150 min. ⚠️ Un épisode qui remplit toute la journée ne
+   se décale pas : on prend alors l'autre sens ; rend null s'il ne bouge toujours
+   pas de 30 min (la divergence prend alors une autre forme). */
+function shiftedFront(town, day) {
+  const main = town.eps[0];
+  if (!main) return null;
+  const mag = inR([40, 150], u01(day, 47)), sg = u01(day, 45) < 0.5 ? -1 : 1;
+  let moved = town.eps.map((e) => shiftEp(e, sg * mag));
+  if (Math.abs(moved[0].t0 - main.t0) < 30) moved = town.eps.map((e) => shiftEp(e, -sg * mag));
+  return Math.abs(moved[0].t0 - main.t0) >= 30 ? moved : null;
+}
+/* La part de jours mouillés d'une saison (épisode principal), lue dans ses chances. */
+function wetShare(season) {
+  const odds = SEASON_ODDS[season] || SEASON_ODDS.spring;
+  let w = 0;
+  for (const k of Object.keys(odds)) if (WET_KINDS.has(k)) w += odds[k] / 100;
+  return w;
+}
+export function placeDayWeather(day, season, place) {
+  const town = dayWeather(day, season);
+  if (place !== "farm") return town;
+  const key = (day | 0) + ":" + season;
+  const hit = placeCache.get(key);
+  if (hit) return hit;
+  let eps = town.eps, form = "same";
+  if (!town.eps.some((e) => isSnowKind(e.kind)) && u01(day, 41) < PLACE_SPLIT) {
+    const r = u01(day, 43);
+    const main = town.eps[0] || null;
+    if (town.eps.some((e) => WET_KINDS.has(e.kind))) {
+      /* ── LA VILLE EST MOUILLÉE. 1. Le front décalé (40 %) ; 2. l'intensité voisine
+         (35 %), à la même heure à ±30 min ; 3. le reste : sec sur la ferme. */
+      const moved = r < 0.4 ? shiftedFront(town, day) : null;
+      if (moved) { eps = moved; form = "shift"; }
+      if (form === "same" && r < 0.75) {
+        const cands = (NEIGHBOR[main.kind] || []).filter((k) => allowedHere(k, season));
+        if (cands.length) {
+          const nk = cands[Math.floor(u01(day, 49) * cands.length) % cands.length];
+          eps = nk ? [makeEpisode(nk, day, 500, [Math.max(DAY_A, main.t0 - 30), main.t0 + 30])] : [];
+          form = "neighbor";
+        }
+      }
+      if (form === "same") { eps = u01(day, 51) < 0.6 ? [] : [makeEpisode("overcast", day, 600)]; form = "own"; }
+    } else {
+      /* ── LA VILLE EST SÈCHE. ⚠️⚠️ LE MÊME CLIMAT DES DEUX CÔTÉS : le premier jet
+         mouillait la ferme à CHAQUE jour sec divergent, et elle sortait pluvieuse un
+         jour d'été sur trois contre un sur six en ville (mesuré : 31,9 % contre
+         18,1 %). Un jour sec de la ville ne devient donc pluvieux sur la ferme
+         qu'avec la probabilité qui ÉQUILIBRE les jours mouillés que la divergence
+         assèche (≈ 0,355 par jour mouillé divergent : le quart « sec » plus la part
+         sèche des voisins) ; les autres divergent par le CIEL — le couvert décalé,
+         ou couvert d'un côté et dégagé de l'autre. L'hiver, « mouillé » n'est que
+         de la grêle (`allowedHere`). */
+      const w = wetShare(season), q = Math.min(1, 0.355 * w / Math.max(0.05, 1 - w));
+      const pool = Object.keys(SEASON_ODDS[season] || {}).filter((k) => WET_KINDS.has(k) && allowedHere(k, season));
+      if (r < q && pool.length) {
+        const odds = SEASON_ODDS[season];
+        let tot = 0, acc = 0, pick = pool[0];
+        for (const k of pool) tot += odds[k];
+        const roll = u01(day, 55) * tot;
+        for (const k of pool) { acc += odds[k]; if (roll < acc) { pick = k; break; } }
+        eps = [makeEpisode(pick, day, 600)];
+        form = "own";
+      } else {
+        const moved = u01(day, 57) < 0.5 ? shiftedFront(town, day) : null;
+        if (moved) { eps = moved; form = "shift"; }
+        else { eps = main ? [] : [makeEpisode("overcast", day, 600)]; form = "sky"; }
+      }
+    }
+  }
+  const out = { day: day | 0, season, eps, place: "farm", form };
+  if (placeCache.size > 64) placeCache.clear();
+  placeCache.set(key, out);
+  return out;
+}
+
 /* ── 4. L'ENVELOPPE D'UN CANAL ───────────────────────────────────────────── */
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 function chanEnv(ep, t, w) {
@@ -244,10 +371,13 @@ export function normalizeForce(f) {
 }
 
 /* ── 6. LE TEMPS QU'IL FAIT ──────────────────────────────────────────────────
-   `tm` : minutes de jeu (`E.gameTimeMin`). Rend les huit canaux. */
-export function weatherAt(day, tm, season, force) {
+   `tm` : minutes de jeu (`E.gameTimeMin`). Rend les huit canaux.
+   `place` : "town" (défaut : le ciel de référence) ou "farm" (§ 3 bis).
+   ⚠️ Le forçage du menu dev vaut pour les DEUX lieux : commander un orage, c'est
+   le commander sur toute la carte du jeu. */
+export function weatherAt(day, tm, season, force, place) {
   const out = ZERO(); out._b = 0;
-  for (const ep of dayWeather(day, season).eps) epAt(ep, tm, out);
+  for (const ep of placeDayWeather(day, season, place).eps) epAt(ep, tm, out);
   if (force && force.day === (day | 0) && tm >= force.at) {
     const k = smooth((tm - force.at) / FORCE_BLEND);
     for (const c of CHANNELS) out[c] *= 1 - k;
@@ -268,11 +398,11 @@ export function weatherAt(day, tm, season, force) {
 /* Même chose depuis un horodatage réel (ms), pour qui raisonne en temps réel
    (les créneaux de la faune). Avant le début du jour courant, c'est la
    VEILLE qu'on lit. */
-export function weatherAtMs(ms, dayStartAt, day, seasonOf, force) {
+export function weatherAtMs(ms, dayStartAt, day, seasonOf, force, place) {
   let d = day | 0, ds = dayStartAt;
   if (ms < ds && d > 1) { d -= 1; ds -= C.DAY_REAL_MS; }
   const tm = Math.min(C.DAY_END_MIN, C.DAY_START_MIN + ((ms - ds) / C.DAY_REAL_MS) * (C.DAY_END_MIN - C.DAY_START_MIN));
-  return weatherAt(d, tm, typeof seasonOf === "function" ? seasonOf(ds) : seasonOf, force);
+  return weatherAt(d, tm, typeof seasonOf === "function" ? seasonOf(ds) : seasonOf, force, place);
 }
 
 /* ── 7. CE QUE LE MONDE EN FAIT ──────────────────────────────────────────── */
@@ -301,9 +431,10 @@ export function thunderFor(near, u) {
 
 /* ── 8. LA PRÉVISION DU MATIN (le chat, au lever du jour) ────────────────────
    Rend { kind, part } pour l'épisode principal, ou null s'il fait beau.
-   `part` : "morning" (< 12 h), "afternoon" (< 17 h), "evening" (< 21 h), "night". */
-export function forecast(day, season) {
-  const { eps } = dayWeather(day, season);
+   `part` : "morning" (< 12 h), "afternoon" (< 17 h), "evening" (< 21 h), "night".
+   `place` : le lieu (§ 3 bis) — la ville par défaut. */
+export function forecast(day, season, place) {
+  const { eps } = placeDayWeather(day, season, place);
   if (!eps.length) return null;
   const ep = eps[0];
   const t = ep.t0 + ep.rise * 0.5;

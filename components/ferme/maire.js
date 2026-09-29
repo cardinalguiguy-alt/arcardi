@@ -15,7 +15,8 @@
    l'une des deux chaises, le maire est en face, derrière son bureau, à
    contre-jour de la fenêtre qui donne sur le quai où l'on veut construire.
    Une jauge d'ADHÉSION, qui FUIT. Douze battements, trois réponses chacun :
-   une idéale, une tiède, une qui casse quelque chose. À 75 il peut signer.
+   une idéale, une tiède, une qui casse quelque chose. À `C.MAYOR_ADH_WIN` (70 depuis
+   le 2026-09-29, 75 avant : « rendre la négociation plus facile ») il peut signer.
 
    ───────────────────────────────────────────────────────────────────────────
    ⚠️⚠️⚠️ CE FICHIER EST UN SYSTÈME DE NÉGOCIATION, PAS UNE SCÈNE — ET C'EST UNE
@@ -682,7 +683,7 @@ export function mayorPlay(s, key, dtMs) {
 
   if (key === "__settle") {
     /* « Je crois qu'on s'est compris. » ⚠️ C'EST LE MEILLEUR BOUTON DU SYSTÈME,
-       et il ne coûte qu'une condition : à partir de 75 on peut empocher — ou
+       et il ne coûte qu'une condition : à partir du seuil (`C.MAYOR_ADH_WIN`) on peut empocher — ou
        pousser pour la confiance, en risquant tout ce qu'on a. Une jauge qu'on
        franchit et c'est fini ne se joue qu'une fois. */
     if (s.adh < C.MAYOR_ADH_WIN) return { s, delta: 0, why: [], grade: null };

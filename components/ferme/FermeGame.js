@@ -990,6 +990,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      (épaisseur et charge des arbres imposées sur CET écran, pour juger). */
   const snowFieldRef = useRef(null);
   const snowWalkersRef = useRef(null);
+  const farmSnowFieldRef = useRef(null);   // 2026-09-29 : la neige de la ferme ({ w, f, g, o, walkers })
   const snowPackMemoRef = useRef({ at: 0, pack: null, key: "" });
   const wetPackMemoRef = useRef({ at: 0, pack: null });   // 2026-09-29 (phase 12b)
   const daySkyMemoRef = useRef({ at: 0, b: null });        // 2026-09-29 (phase 12c) : les bornes du ciel de la saison
@@ -8320,10 +8321,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ La saison d'une journée est celle de son DÉBUT (`seasonAt(dayStartAt)`) :
      une saison qui bascule en pleine journée ne doit pas retirer au hasard
      l'averse en cours. */
-  function weatherNow(ms) {
+  /* ⚠️⚠️ 2026-09-29 — ET DU LIEU (`WX.placeOf`) : la ferme et la ville n'ont pas
+     toujours la même averse (un jour sur cinq, jamais pour la neige — meteo.js
+     § 3 bis). Sans lieu, c'est celui du joueur local : le ciel, la pluie, la neige
+     et le tonnerre qu'il voit sont ceux d'où il se tient. Ce qui vit en VILLE quoi
+     qu'il arrive (la faune, les flaques, la fumée) passe "town" explicitement. */
+  function weatherNow(ms, place) {
     const sh = sharedRef.current;
+    const pl = place || WX.placeOf(meRef.current && meRef.current.zone);
     return WX.weatherAtMs(ms == null ? Date.now() : ms, sh.dayStartAt || Date.now(), sh.day || 1,
-      (ds) => E.seasonAt(ds).key, sh.forcedWeather || null);
+      (ds) => E.seasonAt(ds).key, sh.forcedWeather || null, pl);
   }
   /* 2026-09-28 (phase 12a) — LE MANTEAU NEIGEUX À L'INSTANT (`neige.js`) : une pure
      fonction du jour, de l'heure de jeu, des saisons des jours remontés et du
@@ -8341,18 +8348,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mm.pack && now - mm.at < 150) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
-    const pk = PL.wetPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null);
+    const pk = PL.wetPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, "town");
     mm.at = now; mm.pack = pk;
     return pk;
   }
-  function snowPackNow() {
+  /* 2026-09-29 — PAR LIEU (`place` : "town" par défaut, "farm" pour la ferme) : la
+     neige tombe ensemble (meteo.js § 3 bis), mais une pluie d'un seul côté la fait
+     fondre d'un seul côté. Le mémo garde le lieu dans sa clé. */
+  function snowPackNow(place) {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
-    const dev = snowDevRef.current;
-    const key = `${dev.depth}|${dev.trees}`;
+    const dev = snowDevRef.current, pl = place === "farm" ? "farm" : "town";
+    const key = `${pl}|${dev.depth}|${dev.trees}`;
     if (mm.pack && now - mm.at < 150 && mm.key === key) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
-    const pk = NG.snowPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null);
+    const pk = NG.snowPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, pl);
     if (dev.depth != null) {
       const g = dev.depth;
       Object.assign(pk, { g, s: g * 1.08, r: Math.min(NG.NEIGE.ROAD_CAP, g * 0.3), berm: g * 1.1, rh: g * 0.8, rc: g });
@@ -8371,10 +8381,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      insectes des lampes, qui s'effacent peu à peu quand l'averse monte. */
   function faunaEnvLive() {
     const sh = sharedRef.current, day = sh.day || 1, now = Date.now();
-    const wetNow = WX.wetness(weatherNow(now));
+    const wetNow = WX.wetness(weatherNow(now, "town"));   // 2026-09-29 : la faune vit en ville
     return FAU.faunaEnv({ nowMs: now, dayStartAt: sh.dayStartAt, day, seasonKey: E.seasonOf().key,
       stormy: wetNow >= WX.SHELTER_AT, calm: 1 - Math.min(1, wetNow / WX.SHELTER_AT),
-      stormAt: (ms) => WX.wetness(weatherNow(ms)) >= WX.SHELTER_AT });
+      stormAt: (ms) => WX.wetness(weatherNow(ms, "town")) >= WX.SHELTER_AT });
   }
   /* LE TONNERRE (décision de Guillaume : le son du monde maléfique ; la pluie
      et le reste attendent un chantier son). Chaque image, on cherche les
@@ -9385,8 +9395,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            (un chat de plus serait un `send()` de plus, §3) : ce qu'annonce le
            ciel, et quand (meteo.js, `forecast`). Une météo commandée au menu
            dev ne se prévoit pas : elle est annoncée par le menu lui-même. */
-        const fc = WX.forecast(s.day, E.seasonAt(s.dayStartAt).key);
-        broadcastChat(fc ? L.wxEmoji(fc.kind) : "☀", L.chatNewDay(s.day) + (fc ? " " + L.chatForecast(fc.kind, fc.part) : ""));
+        /* 2026-09-29 — DEUX LIEUX : la prévision est celle de la FERME (le message dit
+           « bonne journée à la ferme »), et la ville s'ajoute quand elle diffère. */
+        const seK = E.seasonAt(s.dayStartAt).key;
+        const fc = WX.forecast(s.day, seK, "farm"), fcT = WX.forecast(s.day, seK, "town");
+        const sameSky = JSON.stringify(fc) === JSON.stringify(fcT);
+        broadcastChat(fc ? L.wxEmoji(fc.kind) : "☀", L.chatNewDay(s.day) + (fc ? " " + L.chatForecast(fc.kind, fc.part) : "")
+          + (sameSky ? "" : " " + L.chatForecastTown(fcT ? L.chatForecast(fcT.kind, fcT.part) : "")));
       }
     }, 1000);
     const saveTimer = setInterval(() => {
@@ -16417,6 +16432,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       nameTagRef.current.dt = dt;   // 2026-09-25 : le pas du fondu des noms (voir queueNameTag)
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
+      /* 2026-09-29 — la neige d'une carte ne teinte jamais les ombres d'une autre : la
+         ferme et la ville la reposent chacune dans leur image (le tribunal, le lac, jamais). */
+      groundSnowK = 0;
       /* 2026-09-25 (phase 4) — L'EAU DE LA VILLE CUIT EN TÂCHE DE FOND : quatre
          millisecondes par image, où que l'on soit (voir eau.js § 3). La carte de
          la ville est tirée au montage, avec les sprites : la cuisson est donc
@@ -16426,7 +16444,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-09-26 — le tonnerre, UNE fois par image et avant toute branche de
          zone : on l'entend aussi dans l'église ou le tribunal (assourdi), qui
          n'ont pas de ciel à dessiner (voir thunderTick). */
-      thunderTick(weatherNow(epochNow), m.zone || "farm");
+      thunderTick(weatherNow(epochNow, WX.placeOf(m.zone || "farm")), m.zone || "farm");
 
       /* ⚠️⚠️ ZIP 425 — LA FERME NE PEINT PLUS DERRIÈRE UNE IFRAME DE MINI-JEU.
          ---------------------------------------------------------------------
@@ -16690,6 +16708,52 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const pipA = pipFadeRef.current.a;
 
+      /* ╔══════════════════════════════════════════════════════════════════
+         ║ 2026-09-29 — LA NEIGE DE LA FERME : le manteau de la FERME (sa météo
+         ║ peut différer de la ville, sa neige non — meteo.js § 3 bis), le champ
+         ║ de la carte, le réglage de l'image. Même geste que `drawTownFrame`.
+         ╚══════════════════════════════════════════════════════════════════
+         Elle se pose CASE PAR CASE, juste après le sol de la case et AVANT ses
+         voiles (repousse, pont fermé, arrosage) et ses cultures : un champ arrosé
+         reste plus sombre sous sa neige fine, une culture dépasse de la neige. */
+      const fSnowPk = snowPackNow("farm"), fSnowSeason = E.seasonOf().key;
+      groundSnowK = Math.max(0, Math.min(1, (fSnowPk.g - 0.3) / 1.5));
+      charSnowAt = null; charSnowZone = null;
+      let fSnowRec = null, fSnowF = null;
+      if (fSnowPk.g + fSnowPk.s > 0.05 || fSnowSeason === "winter") {
+        fSnowRec = farmSnowField(w);
+        farmSnowSync(fSnowRec);
+        fSnowF = fSnowRec.f;
+        const Wsn = wxFrame();
+        const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+        const frost = fSnowSeason === "winter" && fSnowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
+        const sunSn = Math.min(1, NG.sunAt(hr, fSnowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
+        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05 });
+        fSnowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
+        /* Les cratères de la quête sont chauds (leur chaleur ne descend jamais sous
+           0,12 sur la ferme, voir leur dessin plus bas) : ils font fondre la neige
+           autour d'eux, sur un peu plus que leur gerbe de terre. */
+        {
+          const melts = [];
+          if (Q.starFallen(sharedRef.current.star)) for (const site of starFarmImpactSites()) {
+            if (!starFarmImpactLandedNow(site.impact) || site.unavailable) continue;
+            const sc = C.STAR_FARM_CRATER_DRAW_SCALE * (C.STAR_FARM_CRATER_DRAW_SCALES[site.impact] || 1);
+            melts.push({ x: (site.x + 0.5) * T, y: (site.y + 0.5) * T, r: C.STAR_CRATER_DRAW_R * T * sc * 1.1 });
+          }
+          fSnowF.setMelts(melts);
+        }
+        fSnowF.view(x0, y0, x1, y1);
+        fSnowF.update(6, () => performance.now());
+        const sfNow = fSnowF;
+        charSnowAt = (p) => sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T);
+        charSnowZone = "farm";
+      }
+      /* Blitte la neige d'une case (le champ de l'image), à sa place. */
+      const farmSnowCell = (x, y) => {
+        const sc = fSnowF && fSnowF.cell(x, y);
+        if (sc) ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, x * T, y * T, T, T);
+      };
+
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = idxOf(x, y), g = w.ground[i];
         let img;
@@ -16707,6 +16771,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_DARK_PASSAGE) img = sprites.grass[0];
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
+        if (fSnowF) farmSnowCell(x, y);   // 2026-09-29 — la neige de la case (voir plus haut)
         if (g === C.G_DARK_PASSAGE) {
           // Passage sombre (chantier 2026-07, demande Guillaume) : voile
           // violine pulsant, pour être repéré de loin sans être un simple
@@ -16827,8 +16892,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
         const o = w.objects[i];
-        if (o === C.O_ROCK) ctx.drawImage(sprites.rock, x * T, y * T);
-        else if (o === C.O_STUMP) ctx.drawImage(sprites.stump, x * T, y * T);
+        if (o === C.O_ROCK) { ctx.drawImage(sprites.rock, x * T, y * T); if (fSnowF) farmPropSnow(fSnowF, sprites.rock, x, y, x * T, y * T); }   // 2026-09-29 : son chapeau de neige
+        else if (o === C.O_STUMP) { ctx.drawImage(sprites.stump, x * T, y * T); if (fSnowF) farmPropSnow(fSnowF, sprites.stump, x, y, x * T, y * T); }
         else if (o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V) {
           // Clôture (posée librement par un joueur, OU section de l'enclos de
           // départ, désormais unifiés) : orientation FORCÉE si le joueur a
@@ -16836,9 +16901,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // sprite dépend des sections voisines pour que les lisses se
           // prolongent bien d'une tuile à l'autre.
           const fk = fenceKindAt(w, x, y);
-          ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
+          const fimg = fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence;
+          ctx.drawImage(fimg, x * T, y * T);
+          if (fSnowF) farmPropSnow(fSnowF, fimg, x, y, x * T, y * T);   // 2026-09-29 : la neige sur les lisses
         }
-        else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
+        else if (o === C.O_WALL) { ctx.drawImage(sprites.wall, x * T, y * T); if (fSnowF) farmPropSnow(fSnowF, sprites.wall, x, y, x * T, y * T); }
         else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
         /* 2026-09-13 — LE BUISSON SAUVAGE / TAILLÉ. Dans la file triée en y, ancré
            au pied comme le verger : marcher dedans fait passer le feuillage devant
@@ -16846,7 +16913,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            `render-buissons` appelle — rien de réglé ici. */
         else if (o === C.O_BUSH || o === C.O_BUSH_TRIM) {
           const lean = bushSpringLean(farmBushSwayRef.current, i, now);
-          draws.push({ y: (y + 1) * T, fn: () => A.drawFarmBush(ctx, sprites, o, i, x * T, y * T, E.seasonOf().key, lean) });
+          /* 2026-09-29 — l'hiver des massifs de la ville (brindilles, persistant terni) et la
+             neige de leur case, au lieu de fleurs sous la neige (`A.drawFarmBush`, `winter`). */
+          const bSe = E.seasonOf().key, bWin = bSe === "winter" || (fSnowF && fSnowPk.g > 0.6) ? {
+            img: (im, mode) => (bSe === "winter" ? winterPropCanvas(im, mode) : null),
+            cap: (im) => {
+              if (!fSnowF) return null;
+              const d = fSnowF.depthAt(x * T + 8, y * T + 8);
+              if (d < 0.6) return null;
+              const k2 = Math.max(0, Math.min(1, (d - 3) / 5)), bury = Math.min(3, Math.floor(d / 7.4));
+              return [[k2 < 1 ? snowCapCanvas(im, 1, bury) : null, Math.min(1, (d - 0.6) / 1.5) * (1 - k2)], [k2 > 0 ? snowCapCanvas(im, 2, bury) : null, k2]];
+            },
+          } : null;
+          draws.push({ y: (y + 1) * T, fn: () => A.drawFarmBush(ctx, sprites, o, i, x * T, y * T, bSe, lean, bWin) });
         }
         /* ZIP 398 — LE VERGER. Le stade vient de `E.orchardStage`, la même
            fonction pure que lisent le moteur et les contrôles : personne ne
@@ -16984,6 +17063,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
 
+      /* ╔══════════════════════════════════════════════════════════════════
+         ║ 2026-09-29 — LES PAS DANS LA NEIGE DE LA FERME, locaux comme en ville
+         ║ (décision de Guillaume pour la ville : « calculées en local ») : chaque
+         ║ client creuse ce qu'il voit marcher. Les résidents posent les leurs
+         ║ dans leur propre boucle, plus bas.
+         ╚══════════════════════════════════════════════════════════════════ */
+      if (fSnowRec) {
+        const fwk = fSnowRec.walkers;
+        const walk = (id, kind, fx, fy) => fwk.step(id, kind, fx * T, fy * T, now, fSnowF, 1);
+        if (!m.sleeping && !m.sitOn) walk("me", isRidingId(me.id) ? "hoof" : "boot", C.footX(m.x), C.footY(m.y));
+        for (const p of playersRef.current.values()) if (!p.zone || p.zone === "farm") walk("p:" + p.id, isRidingId(p.id) ? "hoof" : "boot", C.footX(p.x), C.footY(p.y));
+        (sharedRef.current.horses || []).forEach((h, hi) => { if (!h.rider && typeof h.x === "number") walk("h:" + hi, "hoof", h.x + 0.5, h.y + 0.9); });
+        for (const wf of (sharedRef.current.wolves || [])) if (!wf.deadUntil) walk("w:" + wf.id, "paw", wf.x + 0.1, wf.y + 0.7);
+        for (const rb of (sharedRef.current.rabbits || [])) walk("rb:" + rb.id, "paw", rb.x, rb.y + 0.5);
+        if (fwk.size() > 80) fwk.prune(now, 10000);
+      }
+
       // Zip 367 : `tt` est maintenant declaree avant la boucle de tuiles
       // (elle y sert au fondu des pips) — l'appel a targetTile() a simplement
       // ete remonte, ce lisere de curseur est inchange.
@@ -17040,6 +17136,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const houseShadowGy = houseGroundY - 8;
         drawBuildingShadowConnected(ctx, houseCx, houseShadowGy, img.width / 2);
         ctx.drawImage(img, C.HOUSE.x * T, houseGroundY - 96);
+        if (fSnowF) farmRoofSnow(fSnowPk, img, C.HOUSE.x * T, houseGroundY - 96);   // 2026-09-29 : la neige du toit
         drawBuildingFooting(ctx, houseCx, houseShadowGy, img.width / 2);
         if (hh.upgradeUntil > Date.now()) {
           const pal = C.HOUSE_LEVELS[hh.level - 1];
@@ -17056,12 +17153,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const gy = (C.SHOP.y + 1) * T, cx = C.SHOP.x * T - 4 + sprites.shop.width / 2;
         drawBuildingShadowConnected(ctx, cx, gy, sprites.shop.width / 2);
         ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, gy - 28);
+        if (fSnowF) farmRoofSnow(fSnowPk, sprites.shop, C.SHOP.x * T - 4, gy - 28);   // 2026-09-29
         drawBuildingFooting(ctx, cx, gy, sprites.shop.width / 2);
       } });
       draws.push({ y: (C.BIN.y + 1) * T, fn: () => {
         const gy = (C.BIN.y + 1) * T, cx = C.BIN.x * T - 2 + sprites.bin.width / 2;
         drawBuildingShadow(ctx, cx, gy, sprites.bin.width / 2);
         ctx.drawImage(sprites.bin, C.BIN.x * T - 2, gy - 18);
+        if (fSnowF) farmPropSnow(fSnowF, sprites.bin, C.BIN.x, C.BIN.y, C.BIN.x * T - 2, gy - 18);   // 2026-09-29
         drawBuildingFooting(ctx, cx, gy, sprites.bin.width / 2);
       } });
       // Grange collaborative persistante : sprite réel dès le palier 1 (elle
@@ -17096,6 +17195,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const barnShadowGy = barnGy - (BARN_SHADOW_PAD[barnNow.level - 1] || 0);
             drawBuildingShadowConnected(ctx, barnCx, barnShadowGy, spr.width / 2);
             ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);
+            if (fSnowF) farmRoofSnow(fSnowPk, spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);   // 2026-09-29
             drawBuildingFooting(ctx, barnCx, barnShadowGy, spr.width / 2);
           } else {
             ctx.font = "14px monospace"; ctx.textAlign = "center";
@@ -17149,8 +17249,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
-        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
-        else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
+        if (o === C.O_TREE || o === C.O_TREE2) {
+          const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine);
+          /* 2026-09-29 — la neige dans ses branches : la charge du manteau (`tl` pour le
+             chêne, `tc` pour le pin, qui la garde plus longtemps), décalée par arbre. */
+          const load = fSnowF ? (o === C.O_TREE2 ? fSnowPk.tc : fSnowPk.tl) : 0, jit = (NG.h32(x, y, 7) % 100) / 100;
+          draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(img, x * T - 8, (y + 1) * T - 48); if (load > 0.02) farmTreeSnow(img, load, jit, x * T - 8, (y + 1) * T - 48); } });
+        }
+        else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30); if (fSnowF) farmPropSnow(fSnowF, sprites.well, x, y, x * T - 4, (y + 1) * T - 30); } });
         else if (o === C.O_LAMP) {
           const readyAt = w.objHp.get(idxOf(x, y));
           const ready = E.buildReady(readyAt, epochNow);
@@ -17165,7 +17271,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               if (gl) lampHeads.push({ x: x * T + gl.x, y: (y + 1) * T - 32 + gl.y, r: gl.r });
             }
             draws.push({ y: (y + 1) * T, fn: () => {
-              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
+              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.lamp, x, y, x * T, (y + 1) * T - 32);
               if (farmLampLit) {
                 // Lanterne allumée : petit point lumineux sur la vitre, en plus
                 // du halo percé dans l'overlay nocturne (voir plus bas).
@@ -17184,7 +17290,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
+              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.lamp, x, y, x * T, (y + 1) * T - 32);
               ctx.restore();
               const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 38;
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
@@ -17204,7 +17310,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (ready) {
             // Aucun effet de jeu actif pour l'instant (contre les oiseaux,
             // pas encore implémentés) : sprite simplement affiché plein.
-            draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32) });
+            draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.scarecrow, x, y, x * T, (y + 1) * T - 32); } });
           } else {
             // Chantier en cours (10s réelles) : même traitement visuel que le
             // lampadaire (sprite assombri + jauge + compte à rebours mm:ss).
@@ -17213,7 +17319,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32);
+              ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.scarecrow, x, y, x * T, (y + 1) * T - 32);
               ctx.restore();
               const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 38;
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
@@ -17259,7 +17365,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             draws.push({ y: (y + 1) * T, fn: () => {
               drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
+              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); if (fSnowF) farmPropSnow(fSnowF, sprites.mill, x, y, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
               ctx.restore();
               drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
               const barW = 24, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 58; // zip 264 : au-dessus du sprite agrandi
@@ -17276,7 +17382,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const ms = w.mills.get(ii) || { wheat: 0, nextAt: 0 };
             draws.push({ y: (y + 1) * T, fn: () => {
               drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
-              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
+              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); if (fSnowF) farmPropSnow(fSnowF, sprites.mill, x, y, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
               drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
               // Zip 262 (demande Guillaume : "on doit voir les moulins TOURNER
               // quand ils produisent") : ailes de moulin qui tournent tant
@@ -17342,7 +17448,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24);
+              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24); if (fSnowF) farmPropSnow(fSnowF, sprites.cauldron, x, y, x * T - 2, (y + 1) * T - 24);
               ctx.restore();
               const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 30;
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
@@ -17365,7 +17471,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                le regarde (§13 là-bas). */
             const dishPh = starDishNow();
             draws.push({ y: (y + 1) * T, fn: () => {
-              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24);
+              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24); if (fSnowF) farmPropSnow(fSnowF, sprites.cauldron, x, y, x * T - 2, (y + 1) * T - 24);
               if ((dishPh === "cook" || dishPh === "ready") && sprites.drawStarDish)
                 sprites.drawStarDish(ctx, x * T + 8, (y + 1) * T - 30, T, dishPh === "ready" ? 1 : 0.55, performance.now());
               const barW = 20, bx = x * T + 8 - barW / 2;
@@ -17546,11 +17652,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             A.drawStationTile(ctx, sprites, "rail", 0, yy, C.STATION_RAIL_X * T, yy * T);
             A.drawStationTile(ctx, sprites, "rail", 1, yy, (C.STATION_RAIL_X + 1) * T, yy * T);
           }
+          /* 2026-09-29 — la voie est peinte APRÈS les cases : sa neige (le ballast
+             blanc, le champignon d'acier nu — `A.farmSnowEnv`) se repose dessus. */
+          if (fSnowF) for (let yy = Math.max(C.STATION_RAIL_Y0, y0); yy <= Math.min(C.STATION_RAIL_Y1, y1); yy++) {
+            farmSnowCell(C.STATION_RAIL_X, yy); farmSnowCell(C.STATION_RAIL_X + 1, yy);
+          }
         } });
         draws.push({ y: -999, fn: () => {
           for (let yy = C.STATION_PLATFORM.y; yy < C.STATION_PLATFORM.y + C.STATION_PLATFORM.h; yy++)
             for (let xx = C.STATION_PLATFORM.x; xx < C.STATION_PLATFORM.x + C.STATION_PLATFORM.w; xx++)
-              A.drawStationTile(ctx, sprites, "platformFarm", xx - C.STATION_PLATFORM.x, yy - C.STATION_PLATFORM.y, xx * T, yy * T);
+              { A.drawStationTile(ctx, sprites, "platformFarm", xx - C.STATION_PLATFORM.x, yy - C.STATION_PLATFORM.y, xx * T, yy * T); if (fSnowF) farmSnowCell(xx, yy); }   // 2026-09-29 : et sa neige
         } });
         // The train slides in from the north while visitors arrive, and
         // back out when they depart. Timestamps are already relocated onto
@@ -17590,6 +17701,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const gy = (C.STATION.y + C.STATION.h) * T, cx = C.STATION.x * T + sprites.station.width / 2;
           drawBuildingShadow(ctx, cx, gy, sprites.station.width / 2);
           ctx.drawImage(sprites.station, C.STATION.x * T, gy - sprites.station.height);
+          if (fSnowF) farmRoofSnow(fSnowPk, sprites.station, C.STATION.x * T, gy - sprites.station.height);   // 2026-09-29
           drawBuildingFooting(ctx, cx, gy, sprites.station.width / 2);
         } });
         draws.push({ y: (C.STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.STATION_SIGN.x * T - 1, C.STATION_SIGN.y * T - 6) });
@@ -18209,6 +18321,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpcPath("resident:" + res.rid, res, dt);
           const rx = rp.x, ry = rp.y;
+          // 2026-09-29 — ses pas dans la neige de la ferme (Eduardo à cheval : des sabots).
+          if (fSnowRec) fSnowRec.walkers.step("r:" + res.rid, ro.skill === "voyager" ? "hoof" : "boot", C.footX(rx) * T, C.footY(ry) * T, now, fSnowF, 1);
           // Chantier "mouvement fluide" : côté invité, dir/moving/animT
           // viennent désormais du trajet rejoué localement (rp), plus fluides
           // qu'une simple retransmission de l'état brut de l'hôte (~1,33 Hz).
@@ -20543,6 +20657,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        (l'ombre bleue, les pieds enfoncés) — posée par `drawTownFrame`, lue
        seulement quand on regarde la ville (le piège des deux cartes, §4). */
     let charSnowAt = null;
+    /* 2026-09-29 — la carte dont `charSnowAt` lit la neige ("town" ou "farm") : un
+       personnage ne s'enfonce que dans la neige de la carte qu'on regarde. */
+    let charSnowZone = null;
     let birdSnowSeq = 0;   // un identifiant local par oiseau, pour ses traces
     const roofSnowOf = (cm) => {
       const sm = (v) => (v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v));
@@ -20619,6 +20736,88 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       snowFieldRef.current = { tw, f, baked: !!bake };
       if (!snowWalkersRef.current) snowWalkersRef.current = NG.makeWalkers();
       return f;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-29 — LA NEIGE DE LA FERME (Guillaume : « s'il neige, alors
+       ║ synchroniser les deux ; je veux donc amener la neige sur la ferme »).
+       ╚══════════════════════════════════════════════════════════════════════
+       Le même champ que la ville (`NG.makeSnowField`), sur la carte de la ferme,
+       avec ce que la ferme sait de son sol (`A.farmSnowEnv`). ⚠️ LA FERME CHANGE
+       SOUS LA NEIGE (on laboure, on pave, on coupe) : `farmSnowSync` compare la
+       carte à sa dernière image, case par case (25 200 comparaisons, une fraction
+       de milliseconde), et ne rebâtit que les parcelles qui touchent une case
+       changée — l'abri des arbres est refait quand un OBJET a changé. Ses propres
+       marcheurs : un pas sur la ferme ne se pose jamais dans la neige de la ville. */
+    function farmSnowField(w) {
+      const cur = farmSnowFieldRef.current;
+      if (cur && cur.w === w) return cur;
+      const env = A.farmSnowEnv(w, spritesRef.current);
+      env.makeCanvas = (cw, chh) => { const c = document.createElement("canvas"); c.width = cw; c.height = chh; return c; };
+      const rec = { w, f: NG.makeSnowField(w, env), g: Uint8Array.from(w.ground), o: Uint8Array.from(w.objects), walkers: NG.makeWalkers() };
+      farmSnowFieldRef.current = rec;
+      return rec;
+    }
+    /* ⚠️⚠️ DEUX PRIX, DEUX CHEMINS (mesuré le 2026-09-29) : rebâtir une parcelle coûte
+       14 à 80 ms et l'abri des arbres 24 ms — à chaque coup de houe, un à-coup. Un
+       changement de SOL (labour, pavage, repousse) ne relit donc que le sol de ses
+       pixels (`invalidateGround`, quelques ms) ; un changement d'OBJET (arbre coupé,
+       clôture posée : les ombres portées changent) est REGROUPÉ et différé d'une
+       seconde et demie, puis rebâti d'un coup. */
+    function farmSnowSync(rec) {
+      const w = rec.w, N = w.w * w.h, G = rec.g, O = rec.o;
+      for (let i = 0; i < N; i++) {
+        const g = w.ground[i], o = w.objects[i];
+        if (g === G[i] && o === O[i]) continue;
+        const x = i % w.w, y = (i / w.w) | 0;
+        if (g !== G[i]) rec.f.invalidateGround(x, y, x, y);
+        if (o !== O[i]) { (rec.objDue || (rec.objDue = [])).push(i); rec.objAt = Date.now() + 1500; }
+        G[i] = g; O[i] = o;
+      }
+      if (rec.objDue && rec.objDue.length && Date.now() >= rec.objAt) {
+        rec.f.refreshFields();
+        for (const i of rec.objDue) { const x = i % w.w, y = (i / w.w) | 0; rec.f.invalidate(x, y, x, y); }
+        rec.objDue = [];
+      }
+    }
+    /* Le chapeau de neige d'un décor de la ferme, à l'épaisseur de SA case (le même
+       fondu léger → épais que le mobilier de la ville, `propSnowOverlay`), posé
+       sur son dessin en (dx, dy). */
+    function farmPropSnow(f, img, tx, ty, dx, dy) {
+      if (!f || !img) return;
+      const d = f.depthAt(tx * T + 8, ty * T + 8);
+      if (d < 0.6) return;
+      const bury = Math.min(3, Math.floor(d / 7.4)), k2 = Math.max(0, Math.min(1, (d - 3) / 5));
+      const list = [];
+      if (k2 < 1) list.push([snowCapCanvas(img, 1, bury), Math.min(1, (d - 0.6) / 1.5) * (1 - k2)]);
+      if (k2 > 0) list.push([snowCapCanvas(img, 2, bury), k2]);
+      for (const [cv, a] of list) {
+        if (!cv || a <= 0.01) continue;
+        ctx.globalAlpha = Math.min(1, a); ctx.drawImage(cv, dx, dy - cv.pad); ctx.globalAlpha = 1;
+      }
+    }
+    /* Un arbre de la ferme : la charge de ses branches (`pk.tl` feuillu, `pk.tc`
+       conifère), en trois états fondus (`NG.treeSnowMix`, décalés d'un arbre à
+       l'autre : ils ne basculent pas tous à la même seconde). */
+    function farmTreeSnow(img, load, jit, dx, dy) {
+      if (!img || !(load > 0.02)) return;
+      const mx = NG.treeSnowMix(load, jit);
+      for (const [lv, a] of [[mx.a, 1], [mx.b !== mx.a ? mx.b : 0, mx.k]]) {   // l'état a, puis b par-dessus à k
+        if (!lv || a <= 0.01) continue;
+        const cv = snowCapCanvas(img, lv, 0);
+        if (!cv) continue;
+        ctx.globalAlpha = Math.min(1, a); ctx.drawImage(cv, dx, dy - cv.pad); ctx.globalAlpha = 1;
+      }
+    }
+    /* Le toit d'un bâtiment dessiné en code (`NG.snowRoofPixels`, le calque de la
+       gare de la ville) : léger puis épais, au manteau des toits CHAUFFÉS (`rh`). */
+    function farmRoofSnow(pk, img, dx, dy) {
+      if (!pk || !img || !(pk.rh > 0.25)) return;
+      const rs = roofSnowOf(pk.rh);
+      for (const [lv, a] of [[11, rs.l], [12, rs.h]]) {
+        const cv = a > 0.01 ? snowCapCanvas(img, lv, 0) : null;
+        if (!cv) continue;
+        ctx.globalAlpha = a; ctx.drawImage(cv, dx, dy); ctx.globalAlpha = 1;
+      }
     }
     /* La couche mouillée de la ville (`pluie.js`) : elle lit les parcelles statiques du champ
        de neige (`sf.staticOf`), donc suit le champ quand la cuisson de l'eau le refait. */
@@ -20795,7 +20994,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const snowPk = snowPackNow();
       const snowSeason = E.seasonOf().key;
       roofSnowFrame = { house: roofSnowOf(snowPk.rh), cold: roofSnowOf(snowPk.rc) };
-      charSnowAt = null;
+      charSnowAt = null; charSnowZone = null;
       groundSnowK = Math.max(0, Math.min(1, (snowPk.g - 0.3) / 1.5));
       let snowF = null;
       if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter") {
@@ -20812,10 +21011,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         snowF.setParams(snowPk, { winter: snowSeason === "winter", frost, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 });
         // Ce qui tombe pendant cette image comble les traces (une heure de jeu = 48 s réelles).
         snowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
+        /* 2026-09-29 — le cratère de la quête fait fondre la neige tant qu'il est chaud
+           (et plus du tout une fois refroidi en bassin de verre : la neige y revient). */
+        {
+          const cpM = starCraterPos(), stM = sharedRef.current.star;
+          const hot = !!(cpM && stM && starImpactLandedNow() && !Q.starDone(stM) && starCraterHeatNow() > 0.1);
+          snowF.setMelts(hot ? [{ x: (cpM.x + 0.5) * T, y: (cpM.y + 0.5) * T, r: C.STAR_CRATER_DRAW_R * T * 1.05 }] : []);
+        }
         snowF.view(xL, Math.max(0, y0 - 1), xR, yBot);
         snowF.update(6, () => performance.now());
         const sfNow = snowF;
         charSnowAt = (p) => sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T);
+        charSnowZone = "town";
       }
       /* ╔══════════════════════════════════════════════════════════════════
          ║ 2026-09-29 (phase 12b) — LE SOL MOUILLÉ : chaussée et dallages plus
@@ -27298,7 +27505,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          a laissé la collision décalée d'une demi-case pendant vingt zips. */
       /* 2026-09-28 (phase 12a) — DANS LA NEIGE : l'ombre est bleue (le ciel s'y
          reflète), et les pieds s'enfoncent (un bourrelet, plus bas). */
-      const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === "town" && !inBoat ? charSnowAt(p) : 0;
+      /* 2026-09-29 — la neige de la carte QU'ON REGARDE (la ville ou, depuis ce jour, la ferme). */
+      const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === charSnowZone && !inBoat ? charSnowAt(p) : 0;
       if (!swimmingHere) { ctx.fillStyle = snowFeet > 1 ? "rgba(36,54,104,0.32)" : "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill(); }
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
@@ -27769,10 +27977,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     /* Le temps de cette image (meteo.js), calculé une fois : le ciel, la pluie
        et la lumière le lisent chacun plusieurs fois par image. */
-    let wxMemo = { at: -1, W: null };
+    /* 2026-09-29 — le lieu du joueur local fait partie du mémo : on ne garde pas
+       l'averse de la ville une image de trop en descendant du train. */
+    let wxMemo = { at: -1, W: null, pl: "" };
     function wxFrame() {
-      const n = Date.now();
-      if (n - wxMemo.at > 30 || !wxMemo.W) wxMemo = { at: n, W: weatherNow(n) };
+      const n = Date.now(), pl = WX.placeOf(meRef.current && meRef.current.zone);
+      if (n - wxMemo.at > 30 || !wxMemo.W || wxMemo.pl !== pl) wxMemo = { at: n, W: weatherNow(n, pl), pl };
       return wxMemo.W;
     }
     /* Le ciel de cette image : l'heure, l'assombrissement du temps qu'il fait,
@@ -29210,18 +29420,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // cette orientation est utilisée directement ; sinon (O_FENCE, "auto"), le
   // sprite choisi dépend des sections DÉJÀ voisines (haut/bas/gauche/droite),
   // pour que les lisses se prolongent bien quelle que soit la forme dessinée.
-  function fenceKindAt(w, x, y) {
-    const o = w.objects[idxOf(x, y)];
-    if (o === C.O_FENCE_H) return "h";
-    if (o === C.O_FENCE_V) return "v";
-    const isFence = (oo) => oo === C.O_FENCE || oo === C.O_FENCE_H || oo === C.O_FENCE_V;
-    const has = (xx, yy) => inMap(xx, yy) && isFence(w.objects[idxOf(xx, yy)]);
-    const horiz = has(x - 1, y) || has(x + 1, y), vert = has(x, y - 1) || has(x, y + 1);
-    if (horiz && vert) return "corner";
-    if (vert) return "v";
-    if (horiz) return "h";
-    return "post";
-  }
+  /* 2026-09-29 — la règle vit dans `A.farmFenceKind` (fermeArt.js) : la neige de la
+     ferme y lit aussi le pied de chaque clôture, et deux copies divergeraient (§8). */
+  function fenceKindAt(w, x, y) { return A.farmFenceKind(w, x, y); }
   // Fermier blessé le plus proche (portée C.HEAL_RANGE), pour le soin à la
   // trousse (chantier 2026-07). Ne considère que les AUTRES joueurs : on ne
   // se soigne pas soi-même.
@@ -39080,14 +39281,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     rendu du menu : les canaux non nuls de `meteo.js`, en pictos. */}
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSkySection}</div>
                 <div className="ferme-dev-hint">{L.devSkyHint((() => {
-                  const Wn = weatherNow(), pc = (v) => Math.round(v * 100) + " %";
+                  /* 2026-09-29 — les DEUX lieux (meteo.js § 3 bis) : 🌾 la ferme, 🏛️ la ville ;
+                     un seul relevé quand ils ont le même temps. */
+                  const pc = (v) => Math.round(v * 100) + " %";
+                  const chans = (Wn) => {
+                    const b = [];
+                    if (Wn.rain > 0.01) b.push("🌧️ " + pc(Wn.rain));
+                    if (Wn.snow > 0.01) b.push("🌨️ " + pc(Wn.snow));
+                    if (Wn.hail > 0.01) b.push("🧊 " + pc(Wn.hail));
+                    if (Wn.bolts > 0.01) b.push("⚡ " + pc(Wn.bolts));
+                    if (Wn.dark > 0.01) b.push("☁️ " + pc(Wn.dark));
+                    return b.length ? b.join(" ") : "☀️";
+                  };
                   const bits = [L.devSeasonBtn(E.seasonOf().key)];
                   if (forcedSkyUi.weather && forcedSkyUi.weather.day === (sharedRef.current.day || 1)) bits.push("🛠️ " + L.devWeatherBtn(forcedSkyUi.weather.kind));
-                  if (Wn.rain > 0.01) bits.push("🌧️ " + pc(Wn.rain));
-                  if (Wn.snow > 0.01) bits.push("🌨️ " + pc(Wn.snow));
-                  if (Wn.hail > 0.01) bits.push("🧊 " + pc(Wn.hail));
-                  if (Wn.bolts > 0.01) bits.push("⚡ " + pc(Wn.bolts));
-                  if (Wn.dark > 0.01) bits.push("☁️ " + pc(Wn.dark));
+                  const wf = chans(weatherNow(null, "farm")), wt = chans(weatherNow(null, "town"));
+                  bits.push(wf === wt ? wf : "🌾 " + wf + " / 🏛️ " + wt);
                   return bits.join(" · ");
                 })())}</div>
                 <div className="ferme-dev-grid">

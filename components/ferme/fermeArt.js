@@ -37,7 +37,7 @@ import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis";
-import { treeSnowMix } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver
+import { treeSnowMix, CL as SNOW_CL } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
 
 /* ---------------------------------------------------------------- PALETTE ---
@@ -2664,6 +2664,185 @@ export function townSnowEnv(tw, S, waterAt) {
   };
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-29 — LA NEIGE DE LA FERME : CE QUE `neige.js` DOIT SAVOIR DE SON SOL.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume : « s'il neige, alors synchroniser les deux [lieux]. Je veux donc
+   amener la neige sur la ferme » — sol, traces et décors. Le MÊME moteur que la
+   ville (`NG.makeSnowField` : dépôt progressif, fonte, ombres bleues, empreintes
+   qui se comblent), avec la lecture du sol de la ferme au lieu de celle de la
+   ville (`classify`) — ⚠️ jamais une constante de la ville lue ici (§4 de
+   CLAUDE.md, le piège des deux cartes).
+   · LE CHAMP (`G_TILLED`, `G_WATERED`, l'herbe qui repousse) : classe TILLED, le
+     creux du sillon (`ax` = 1) et la crête — les sillons du dessin (`tilledTile` :
+     un trait sombre tous les quatre pixels, à y ≡ 2) restent lisibles sous la
+     neige (décision de Guillaume : « neige fine, sillons lisibles »).
+   · PAS DE NEIGE sur l'eau, le chantier de pont, le PASSAGE SOMBRE (son voile violet
+     doit rester visible de loin : c'est un indice de jeu).
+   · LES RAILS de la gare : le champignon d'acier ne garde pas la neige, le ballast
+     si (mêmes colonnes que la ville : le même dessin, `drawStationTile("rail")`).
+   · LES ARBRES : leur couronne abrite le sol, leur dessin porte son ombre sur la
+     neige ; les chênes sèment des brindilles, les pins des aiguilles.
+   ⚠️ UNE CARTE QUI CHANGE : `refresh()` relit les arbres (on en coupe, ils
+   repoussent) ; le jeu appelle `invalidate` / `refreshFields` du champ quand une
+   case change (FermeGame.js, `farmSnowSync`). */
+/* Le sens d'une clôture de la ferme (« h », « v », « corner », « post ») : forcé par
+   la pose (O_FENCE_H / O_FENCE_V), sinon lu dans ses voisines. ⚠️ ÉCRIT UNE FOIS, ICI :
+   le jeu (`fenceKindAt`, FermeGame.js) choisit son sprite par elle, la neige y pose
+   l'ombre de ses poteaux — deux lectures qui divergeraient au premier réglage (§8). */
+export function farmFenceKind(w, x, y) {
+  const o = w.objects[y * w.w + x];
+  if (o === C.O_FENCE_H) return "h";
+  if (o === C.O_FENCE_V) return "v";
+  const has = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= w.w || yy >= w.h) return false;
+    const oo = w.objects[yy * w.w + xx];
+    return oo === C.O_FENCE || oo === C.O_FENCE_H || oo === C.O_FENCE_V;
+  };
+  const horiz = has(x - 1, y) || has(x + 1, y), vert = has(x, y - 1) || has(x, y + 1);
+  if (horiz && vert) return "corner";
+  if (vert) return "v";
+  if (horiz) return "h";
+  return "post";
+}
+export function farmSnowEnv(w, S) {
+  const W = w.w, H = w.h;
+  /* La hauteur de ce qui se dresse (px d'art) : l'ombre portée sur la neige.
+     ⚠️ VU EN JEU (2026-09-29) : une case entière qui porte une ombre dessine un PAVÉ.
+     La boutique, le bac, le puits, le chaudron et les rochers n'en portent donc plus
+     (le mobilier de la ville non plus : leurs ombres sont dans leur dessin) ; la
+     maison la porte par ses MURS, la clôture par la LIGNE de ses poteaux (plus bas). */
+  const CAST = { [C.O_MILL]: 40, [C.O_SUCRERIE]: 30, [C.O_WALL]: 14 };
+  const isFence = (o) => o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V;
+  /* Les murs de la maison, lus dans son dessin (les trois niveaux ont le même pied) :
+     colonnes 8 à 87 d'un sprite de 96 posé à `HOUSE.x`, pied 9 px au-dessus du bas.
+     Tout ce qui est hors des murs dans son emprise (sous l'avant-toit, devant la
+     porte) est du SOL : il reçoit l'ombre et l'occlusion du mur — sinon un liseré
+     blanc de pleine lumière encadrait la maison (vu en jeu). */
+  const HOUSE_X0 = C.HOUSE.x * SPR_T + 8, HOUSE_X1 = C.HOUSE.x * SPR_T + 88, HOUSE_FOOT = (C.HOUSE.y + C.HOUSE.h) * SPR_T - 9;
+  const inStation = (x, y) => x >= C.STATION.x && x < C.STATION.x + C.STATION.w && y >= C.STATION.y && y < C.STATION.y + C.STATION.h;
+  const tall = (i) => { const o = w.objects[i]; return (CAST[o] || 0) >= 9 || o === C.O_HOUSE || isFence(o) || inStation(i % W, (i / W) | 0); };
+  const TREES = {
+    [C.O_TREE]: { r: 1.3, kind: 0, ever: false, spr: "oak" },
+    [C.O_TREE2]: { r: 1.0, kind: 5, ever: true, spr: "pine" },
+    [C.O_TREE_DEAD]: { r: 0.8, kind: 0, ever: false, spr: "deadTree" },
+    [C.O_ORCHARD]: { r: 1.0, kind: 2, ever: false, spr: null },
+  };
+  const noSnowG = (g) => g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_DARK_PASSAGE;
+  const shadowMemo = new Map();
+  const env = {
+    farm: true,
+    trees: [],
+    /* Relit les arbres de la carte (couronne, essence, sprite de l'ombre). */
+    refresh() {
+      const out = [];
+      for (let i = 0; i < W * H; i++) {
+        const t = TREES[w.objects[i]];
+        if (t) out.push({ x: i % W, y: (i / W) | 0, r: t.r, kind: t.kind, ever: t.ever, spr: t.spr });
+      }
+      env.trees = out;
+    },
+    waterAt: (wx, wy) => {
+      const x = Math.floor(wx / SPR_T), y = Math.floor(wy / SPR_T);
+      return x >= 0 && y >= 0 && x < W && y < H && noSnowG(w.ground[y * W + x]);
+    },
+    classify(x, y, i, g, lx, ly) {
+      if (noSnowG(g)) return null;
+      if (x >= C.STATION_RAIL_X && x <= C.STATION_RAIL_X + 1) {
+        const col = (x - C.STATION_RAIL_X) * SPR_T + lx;
+        if (col === 7 || col === 8 || col === 23 || col === 24) return { c: SNOW_CL.RAIL, r: 0 };
+        return { c: SNOW_CL.SOFT, r: 0.9 };
+      }
+      if (x >= C.STATION_PLATFORM.x && x < C.STATION_PLATFORM.x + C.STATION_PLATFORM.w
+          && y >= C.STATION_PLATFORM.y && y < C.STATION_PLATFORM.y + C.STATION_PLATFORM.h) return { c: SNOW_CL.STONE, r: 0.12 };   // le quai est balayé : une pellicule (sous 30 cm, le premier jet l'effaçait entièrement)
+      if (g === C.G_TILLED || g === C.G_WATERED || g === C.G_GRASS_GROWING) return { c: SNOW_CL.TILLED, r: 1, ax: (ly & 3) >= 2 ? 1 : 0 };
+      if (g === C.G_PATH || g === C.G_PATH_STONE) return { c: SNOW_CL.SOFT, r: 0.95 };
+      /* La berge de sable : la neige s'y amincit à l'approche de l'eau (le sable
+         mouillé la fond) — sur six pixels, pas au bord de la case. ⚠️ Sans elle, la
+         neige bordait l'eau CASE PAR CASE, et la rivière de la ferme (des tuiles de
+         16 px) devenait un escalier dur sur fond blanc (vu au banc, 2026-09-29) ;
+         la bande de sable mouillé redonne une rive. */
+      if (g === C.G_SAND) {
+        let dmin = 99;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if ((!dx && !dy) || xx < 0 || yy < 0 || xx >= W || yy >= H || !noSnowG(w.ground[yy * W + xx])) continue;
+          const ex = dx < 0 ? lx + 0.5 : dx > 0 ? SPR_T - 0.5 - lx : 0, ey = dy < 0 ? ly + 0.5 : dy > 0 ? SPR_T - 0.5 - ly : 0;
+          dmin = Math.min(dmin, Math.hypot(ex, ey));
+        }
+        return { c: SNOW_CL.SHORE, r: dmin > 10 ? 0.8 : Math.max(0.03, Math.min(0.8, (dmin - 2) / 10)) };
+      }
+      if (g === C.G_BRIDGE || g === C.G_BRIDGE_CLOSED) { const ax = (ly & 3) === 3 ? 0 : 1; return { c: SNOW_CL.DECK, r: ax ? 0.95 : 0.35, ax }; }
+      if (g === C.G_BRIDGE_STONE || g === C.G_BRIDGE_STONE_CLOSED) return { c: SNOW_CL.STONE, r: 0.92 };
+      return { c: SNOW_CL.GRASS, r: 1 };
+    },
+    tall,
+    casterAt: (wx, wy) => {
+      const x = Math.floor(wx / SPR_T), y = Math.floor(wy / SPR_T);
+      if (x < 0 || y < 0 || x >= W || y >= H) return 0;
+      if (inStation(x, y)) return 40;
+      const o = w.objects[y * W + x];
+      if (o === C.O_HOUSE) return wx >= HOUSE_X0 && wx < HOUSE_X1 && wy < HOUSE_FOOT ? 40 : 0;
+      if (isFence(o)) {
+        /* Le pied de la clôture (`fence`, `fenceV`, `fencePost`, 16 × 16) : les poteaux
+           d'une clôture est-ouest se posent aux rangées 12-13, ceux d'une nord-sud au
+           milieu de la case ; les lisses sont à 9 px du sol. */
+        const k = farmFenceKind(w, x, y), lx = wx - x * SPR_T, ly = wy - y * SPR_T;
+        const onH = (k === "h" || k === "corner") && ly >= 12 && ly <= 13;
+        const onV = (k === "v" || k === "corner") && lx >= 8 && lx <= 10;
+        const onP = k === "post" && lx >= 6 && lx <= 9 && ly >= 12 && ly <= 14;
+        return onH || onV || onP ? 9 : 0;
+      }
+      return CAST[o] || 0;
+    },
+    /* L'ombre d'un arbre de la ferme, projetée au sud-est depuis son dessin (le
+       même calcul que `townSnowEnv.treeShadow`) : le sprite (32 × 48) est posé à
+       8 px à gauche de sa case, son bas sur le bas de la case. */
+    treeShadow: (t, k, ky) => {
+      const key = `${t.spr}|${k}|${ky}`;
+      if (shadowMemo.has(key)) return shadowMemo.get(key);
+      let out = null;
+      try {
+        const img = t.spr && S && S[t.spr];
+        if (img && img.getContext) {
+          const cw = img.width, chh = img.height, base = chh;
+          const d = img.getContext("2d").getImageData(0, 0, cw, chh).data;
+          const ox = -8, ext = Math.ceil(base * k) + 3;
+          const sw = cw + ext + 2, sh = Math.ceil(base * k * ky) + 6, oy = SPR_T - 3;
+          const F = new Float32Array(sw * sh);
+          for (let sy = 0; sy < chh - 1; sy++) for (let sx = 0; sx < cw; sx++) {
+            const al = d[(sy * cw + sx) * 4 + 3];
+            if (al < 60) continue;
+            const hg = base - sy, a = al >= 150 ? 1 : (al / 255) * 0.9;
+            const gx = Math.round(sx + hg * k) + 1, gy = Math.round(hg * k * ky) + 3;
+            if (gx < 0 || gy < 0 || gx >= sw || gy >= sh) continue;
+            if (a > F[gy * sw + gx]) F[gy * sw + gx] = a;
+          }
+          const a8 = new Uint8Array(sw * sh);
+          for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+            let s = F[y * sw + x] * 4, n = 4;
+            for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < sw && yy < sh) { s += F[yy * sw + xx]; n++; } }
+            a8[y * sw + x] = Math.min(255, Math.round(255 * Math.min(1, (s / n) * 1.2)));
+          }
+          out = { ox: ox - 1, oy, w: sw, h: sh, a: a8 };
+        }
+      } catch (e) { out = null; }
+      shadowMemo.set(key, out);
+      return out;
+    },
+    /* La neige que garde une case, relative au pré : le champ n'en garde qu'une
+       mince couche (les pieds s'y enfoncent peu). */
+    depthScale: (x, y) => {
+      if (x < 0 || y < 0 || x >= W || y >= H) return 0;
+      const g = w.ground[y * W + x];
+      if (noSnowG(g)) return 0;
+      return g === C.G_TILLED || g === C.G_WATERED || g === C.G_GRASS_GROWING ? 0.35 : 1;
+    },
+  };
+  env.refresh();
+  return env;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    2026-09-20 — L'HERBE HAUTE DU SOUS-BOIS, EN BITMAP GEMINI.
    ──────────────────────────────────────────────────────────────────────────
@@ -2747,7 +2926,13 @@ export function townTallGrassWaveLean(x, y, now) {
 const FARM_BUSH_SPECIES = ["shrub", "goldBush", "lavender", "clump"];
 export function farmBushVariant(i) { return ((Math.imul(i | 0, 2654435761) >>> 0) >>> 16) % 3; }
 export function farmBushSpeciesIdx(i) { return ((Math.imul(i | 0, 2246822519) >>> 0) >>> 16) % FARM_BUSH_SPECIES.length; }
-export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
+/* 2026-09-29 — `winter` (facultatif) : { img(img, mode) → l'image d'hiver du jeu
+   (`winterPropCanvas`), cap(img) → [[calque, alpha], …] (la neige posée dessus,
+   `snowCapCanvas`) }. Les buissons sauvages de la ferme sont les massifs de la ville
+   (`S.townShrub`…) : ils prennent le MÊME hiver qu'elle (`NG.WINTER_PROP_MODE` —
+   brindilles, persistant terni) et sa neige, au lieu de fleurir sous la neige. */
+const FARM_BUSH_WINTER = { shrub: "bare", goldBush: "bare", lavender: "ever", clump: "bare" };
+export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean, winter) {
   if (!S || (obj !== C.O_BUSH && obj !== C.O_BUSH_TRIM)) return false;
   const ax = px + SPR_T / 2, ay = py + SPR_T - 2; // ancre (sol), identique pour les deux états
   if (obj === C.O_BUSH_TRIM) {
@@ -2770,13 +2955,23 @@ export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
   if (sp === "shrub" && !C.TOWN_BUIS_LEGACY) return drawFarmBuis(ctx, S, vr, ax, ay, seasonKey, lean);
   const arr = sp === "shrub" ? S.townShrub : sp === "goldBush" ? S.townGoldBush
             : sp === "lavender" ? S.townLavender : S.townFlowerClump;
-  const img = arr && arr[vr % Math.max(1, arr.length)];
-  if (!img) return false;
-  if (!lean) { ctx.drawImage(img, ax - img.width / 2, ay - img.height); return true; }
+  const img0 = arr && arr[vr % Math.max(1, arr.length)];
+  if (!img0) return false;
+  const img = (winter && winter.img && winter.img(img0, FARM_BUSH_WINTER[sp] || "bare")) || img0;
+  const caps = winter && winter.cap ? winter.cap(img) : null;
+  const drawCaps = (x, y) => {
+    if (!caps) return;
+    for (const [cv, a] of caps) {
+      if (!cv || a <= 0.01) continue;
+      ctx.globalAlpha = Math.min(1, a); ctx.drawImage(cv, x, y - (cv.pad || 0)); ctx.globalAlpha = 1;
+    }
+  };
+  if (!lean) { ctx.drawImage(img, ax - img.width / 2, ay - img.height); drawCaps(ax - img.width / 2, ay - img.height); return true; }
   ctx.save();
   ctx.translate(ax, ay);
   ctx.transform(1, 0, -lean / Math.max(1, img.height), 1, 0, 0);
   ctx.drawImage(img, -img.width / 2, -img.height);
+  drawCaps(-img.width / 2, -img.height);
   ctx.restore();
   return true;
 }

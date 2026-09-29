@@ -8573,7 +8573,18 @@ export const TOWN_STATION = { x: 6, y: 62, w: 4, h: 3 };   // même gabarit que 
    `verify-maire.mjs` les lit, la vue 3D ne lit que la jauge résolue.
    ═══════════════════════════════════════════════════════════════════════════ */
 export const MAYOR_ADH_MAX = 100;          // le haut de la jauge d'adhésion
-export const MAYOR_ADH_WIN = 75;           // à partir d'ici il PEUT signer
+/* ⚠️⚠️ 2026-09-29 — 75 → 70 (Guillaume : « rendre la négociation avec le maire plus
+   facile » ; tranché avec lui : UN ESSAI ORDINAIRE SIGNE). Mesuré par une simulation
+   de 240 essais ordinaires (une faute non fatale, une réponse tiède sur trois, quatre à
+   sept secondes de réflexion, les plans posés au bon moment) : 15 % signaient, 75 %
+   signent — 97 % de bonne humeur, 53 % de mauvaise. Le seuil seul n'y suffisait pas :
+   à 65, le jeu TOUT TIÈDE signait (quinze fois sur soixante). Ce qui a porté le reste
+   aide la partie qui a de BONNES réponses sans aider celle qui n'en a pas : l'élan
+   (`MAYOR_STREAK_HOLD_K`), le glissement après une faute (`MAYOR_SLIP_*`) et le plafond
+   de fuite par échange (`MAYOR_DRAIN_CAP`). Le tout tiède plafonne à 66 : il ne signe
+   toujours pas ; les mains vides restent très difficiles et gagnables ; l'insulte
+   reste fatale. */
+export const MAYOR_ADH_WIN = 70;           // à partir d'ici il PEUT signer
 export const MAYOR_ADH_FLOOR = 0;          // en dessous, il met fin à l'entretien
 
 /* ⚠️⚠️ LES DEUX DÉPARTS, ET C'EST TOUTE LA RÉPONSE DE GUILLAUME SUR LES PLANS :
@@ -8615,8 +8626,10 @@ export const MAYOR_DRAIN_AUDIENCE_K = 0.7;
    plus grosse que la pénalité visible n'est pas une pénalité, c'est un piège.*
    Le banc tient maintenant l'invariant : le glissement ne coûte jamais plus que
    la faute elle-même. */
-export const MAYOR_SLIP_MS = 3000;
-export const MAYOR_SLIP_K = 1.7;
+/* 2026-09-29 — 3 000 ms × 1,7 → 1 500 ms × 1,3 : une maladresse coûte ce qu'elle affiche,
+   et à peine plus (la négociation plus facile — voir `MAYOR_ADH_WIN`). */
+export const MAYOR_SLIP_MS = 1500;
+export const MAYOR_SLIP_K = 1.3;
 
 /* ⚠️⚠️ L'ÉLAN — « d'où l'intérêt de trouver les bonnes réponses et de les
    ENCHAÎNER ». Deux réponses idéales de suite ARRÊTENT la fuite ; trois
@@ -8636,7 +8649,11 @@ export const MAYOR_STREAK_RISE_PER_S = 0.8;
    en lisant la colonne de gauche d'un entretien imprimé. *Une négociation dont
    la seconde moitié ne peut plus rien changer n'est pas longue, elle est finie
    depuis un moment.* */
-export const MAYOR_STREAK_HOLD_K = 0.3;
+/* 2026-09-29 — 0,3 → 0,1 : deux bonnes réponses d'affilée arrêtent PRESQUE la fuite (un
+   dixième). Jamais zéro (la seconde moitié redeviendrait décorative, note au-dessus), et
+   c'est le levier qui aide l'essai ordinaire sans aider le jeu tiède : une réponse tiède
+   ramène l'élan à un, donc un joueur tout tiède n'y a jamais droit. */
+export const MAYOR_STREAK_HOLD_K = 0.1;
 
 /* ⚠️⚠️⚠️ AUCUNE HÉSITATION NE PEUT COÛTER PLUS QU'UNE BONNE RÉPONSE NE RAPPORTE.
    C'est l'invariant qui décide si ce jeu récompense de répondre BIEN ou de
@@ -8648,7 +8665,9 @@ export const MAYOR_STREAK_HOLD_K = 0.3;
    ⚠️ Et elle ne court pas AVANT le premier échange : il vous a reçu, il vous a
    donné un quart d'heure, il ne se lève pas parce que vous avez marqué un temps
    avant votre première phrase. */
-export const MAYOR_DRAIN_CAP = 4;
+/* 2026-09-29 — 4 → 3 (la négociation plus facile, voir `MAYOR_ADH_WIN`) : réfléchir six
+   secondes coûte trois points, pas quatre. */
+export const MAYOR_DRAIN_CAP = 3;
 /* ⚠️⚠️ SA VALEUR N'EST PAS LIBRE : elle doit rester SOUS la plus faible des
    répliques idéales de la table, sinon la phrase ci-dessus devient fausse chez
    le maire le plus hostile — c'est ce qui arrivait à 9, où deux hésitations
@@ -8698,7 +8717,10 @@ export const MAYOR_PLANS_LATE = 4;         // le repli, quand ce n'est pas le mo
    NÉGOCIATION dès le premier jour et pas une scène unique : la confiance est un
    départ plus haut pour toute audience future, quelle qu'elle soit. */
 export const MAYOR_TRUST_MAX = 3;
-export const MAYOR_TRUST_START_BONUS = 6;  // points de départ par cran gagné
+/* 2026-09-29 — 6 → 5 : le seuil est descendu à 70 (`MAYOR_ADH_WIN`), et à confiance
+   pleine un joueur TOUT TIÈDE chez Vasseur montait à 70,2 — il signait sans avoir rien
+   dit de bon, exactement ce que la note ci-dessous interdit. À 5, il plafonne dessous. */
+export const MAYOR_TRUST_START_BONUS = 5;  // points de départ par cran gagné
 export const MAYOR_TRUST_DRAIN_K = 0.9;    // et il s'énerve un peu moins vite
 /* ⚠️⚠️⚠️ CE QUE LA CONFIANCE ACHÈTE VRAIMENT, C'EST LE PARDON — ET C'EST LE BANC
    QUI A IMPOSÉ CETTE FORME. Le premier réglage donnait un simple bonus de
@@ -8783,9 +8805,9 @@ export const MAYOR_MOOD_AUDIENCE_LIFT = 1;   // d'un cran vers le haut, une fois
 export const MAYOR_WAIT_CHOICES_MS = [3 * 60000, 4 * 60000, 5 * 60000];
 /* ⚠️⚠️⚠️ AUDIT 2026-08-31 — LE SECOND RENDEZ-VOUS NE COÛTE PAS LE PRIX DU PREMIER,
    ET C'EST UNE CORRECTION DE JUSTICE, PAS DE DIFFICULTÉ.
-   Le §16.4 de `QUETE.md` chiffre le réglage VOULU : un premier essai ordinaire
-   culmine à 69,9 contre un seuil à 75 — il échoue de cinq points, exprès. C'est
-   une bonne tension. Mais `resolveMayor` consomme le créneau QUOI QU'IL ARRIVE
+   Le §16.4 de `QUETE.md` chiffrait le réglage VOULU : un premier essai ordinaire
+   culminait à 69,9 contre un seuil à 75 — il échouait de cinq points, exprès (depuis
+   le 2026-09-29 il signe : « rendre la négociation plus facile », voir `MAYOR_ADH_WIN`). Mais `resolveMayor` consomme le créneau QUOI QU'IL ARRIVE
    (et il le doit : sans ça une audience ratée serait un droit de rentrer
    aussitôt), donc l'échec prévu par la conception coûtait un second rendez-vous
    PLEIN. Mesuré : 8 minutes d'attente pour une négociation qu'on est censé perdre

@@ -101,10 +101,10 @@ export function packStep(st, W, dtH, hour, season) {
 const DAY_A = C.DAY_START_MIN, DAY_B = C.DAY_END_MIN;
 /* Une journée entière, de `DAY_START_MIN` à `DAY_END_MIN` — la nuit de 2 h à 6 h
    n'existe pas dans le jeu (même règle que le manteau de neige). */
-function integrate(st, day, season, force, t0, t1) {
+function integrate(st, day, season, force, t0, t1, place) {
   const S = PLUIE.STEP_MIN;
   for (let t = t0; t + S <= t1 + 1e-9; t += S) {
-    const W = WX.weatherAt(day, t + S / 2, season, force);
+    const W = WX.weatherAt(day, t + S / 2, season, force, place);
     packStep(st, W, S / 60, (t + S / 2) / 60, season);
   }
   return st;
@@ -114,17 +114,17 @@ function integrate(st, day, season, force, t0, t1) {
    depuis 6 h — deux clients qui demandent la même minute rendent le même
    nombre au bit près. */
 const packMemo = new Map();
-export function wetPack(day, tm, seasonOfDay, force) {
+export function wetPack(day, tm, seasonOfDay, force, place) {
   day = Math.max(1, day | 0);
   const d0 = Math.max(1, day - PLUIE.WINDOW_DAYS);
   const keys = [];
   for (let d = d0; d <= day; d++) keys.push(seasonOfDay(d));
   const fk = force ? `${force.day}:${force.kind}:${Math.round(force.at * 10)}` : "";
-  const key = `${day}|${keys.join(",")}|${fk}`;
+  const key = `${day}|${keys.join(",")}|${fk}|${place === "farm" ? "farm" : "town"}`;
   let rec = packMemo.get(key);
   if (!rec) {
     const st = zeroPack();
-    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B);
+    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B, place);
     rec = { start: st, cur: clonePack(st), at: DAY_A };
     if (packMemo.size > 24) packMemo.clear();
     packMemo.set(key, rec);
@@ -134,10 +134,10 @@ export function wetPack(day, tm, seasonOfDay, force) {
   const t = Math.max(DAY_A, Math.min(DAY_B, tm));
   const tq = DAY_A + Math.floor((t - DAY_A) / S) * S;
   if (tq < rec.at) { rec.cur = clonePack(rec.start); rec.at = DAY_A; }
-  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq); rec.at = tq; }
+  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq, place); rec.at = tq; }
   const out = clonePack(rec.cur);
   if (t > rec.at + 1e-6) {
-    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force);
+    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force, place);
     packStep(out, W, (t - rec.at) / 60, ((rec.at + t) / 2) / 60, season);
   }
   return out;

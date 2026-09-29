@@ -3202,10 +3202,18 @@ lente.* Trois autres défauts sont sortis du même banc, chacun d'une famille co
 | le glissement après une faute coûtait quatorze points de plus que la faute affichée | *une pénalité invisible plus grosse que la pénalité visible n'est pas une pénalité, c'est un piège* |
 | les mains vides, quatre malus s'empilaient et l'entretien était arithmétiquement ingagnable | *une difficulté empilée quatre fois n'est pas quatre fois plus difficile, c'est un mur* |
 
-⚠️ **Réglage actuel, mesuré :** un premier essai ordinaire (une faute de tact au milieu, quatre à
-six secondes de réflexion) culmine à **69,9** contre un seuil à 75 — il échoue de cinq points. Un
-sans-faute **les mains vides** signe à **94,7** sans décrocher la confiance pleine. C'est la
-tension qu'on voulait ; elle n'a jamais été jouée par un humain.
+⚠️ **Réglage actuel, mesuré — ASSOUPLI LE 2026-09-29 sur la demande de Guillaume (« rendre la
+négociation avec le maire plus facile » ; tranché avec lui : *un essai ordinaire signe*).** Seuil
+75 → **70**, plafond de fuite par échange 4 → 3, élan (deux idéales d'affilée) 0,3 → **0,1** de la
+fuite, glissement après une faute 3 s × 1,7 → 1,5 s × 1,3, confiance 6 → 5 points par cran. Le
+premier essai ordinaire du banc (une faute de tact au milieu) **signe** à 79 (il culminait à 69,9
+contre 75) ; balayé sur 120 essais ordinaires par humeur (`verify-maire`, `ordinarySweep`), les
+plans en main : **75 %** signent en humeur moyenne, 97 % en bonne, 53 % en mauvaise. Ce qui n'a
+pas bougé : le jeu tout tiède ne signe **jamais** (il plafonne à 66, confiance pleine comprise),
+l'insulte reste fatale, et **les mains vides** restent très difficiles — un essai ordinaire y
+échoue toujours (0 sur 120), un sans-faute y signe (97,2). Le seuil seul n'aurait pas suffi : à 65,
+le jeu tout tiède signait quinze fois sur soixante. Rien de tout ça n'a encore été joué par un
+humain.
 
 ### 16.5 ⚠️ CE QUI RESTE, ET IL FAUT LE LIRE AVANT DE ROUVRIR
 

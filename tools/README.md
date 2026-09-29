@@ -331,6 +331,15 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   canevas (falsifié : `FALSIFY=cadre`). ⚠️ Il ne voit ni la lumière de la scène ni les maisons (des
   pavés gris) : la neige se juge ensuite en jeu. `tools/build-snow-roofs.mjs` fabrique les calques des
   toits et sa planche (`tools/out/toits-neige.png`).
+- **`tools/render-neige-ferme.mjs` — 12 contrôles + planches (2026-09-29 : la neige sur la ferme).**
+  De vrais morceaux d'une ferme générée (`cour` avec un champ labouré, `riviere`, `gare`, `cratere`) avec
+  le sol, la neige (`A.farmSnowEnv`), les chapeaux et les toits du jeu, en PNG ×3
+  (`node tools/render-neige-ferme.mjs [lieu] [cm]`). Il tient : aucune neige sur l'eau ni le passage sombre ;
+  les rails nus, le ballast blanc ; le champ sous 30 cm, creux blancs et crêtes nues ; un labour sous la
+  neige qui se voit dès l'invalidation, et la relecture bon marché (`invalidateGround`) IDENTIQUE à une
+  reconstruction (falsifié : 2 784 écarts) ; la fontaine de la ville absente du pré de la ferme ; un cratère
+  chaud qui fond (et la neige qui revient) ; un arbre abattu qui n'abrite plus. ⚠️ Le faux canevas ignore
+  `globalAlpha` dans `drawImage` : les chapeaux n'y sont posés que s'ils dominent.
 - **`tools/verify-planche3.mjs` — 31 contrôles, 31/31 (2026-09-29 : la planche 3 dans la ville).**
   Ce que le branchement n'a pas le droit de casser ou d'oublier : la CARTE (empreinte FNV du sol, des
   arbres, des altitudes, des clôtures, des portails et des potagers, relevée sur le générateur d'avant :
@@ -367,7 +376,12 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   chaque version et au niveau du toit. Falsifié sur sept sabotages (une saison sans effet, un ciel qui
   ignore les bornes, un saut à la frontière, une cheminée hors cadre, un vent sans effet…). `render-fumee`
   peint la colonne sur un ciel de jour, couvert et de nuit, à trois vents (`tools/out/fumee.png`).
-- **`tools/verify-meteo.mjs` — 40 contrôles, 40/40 (2026-09-26 : la météo).** Il JOUE
+- **`tools/verify-meteo.mjs` — 55 contrôles, 55/55 (2026-09-26 : la météo ; §11, 2026-09-29 : la
+  ferme et la ville).** Le §11 tient la météo PAR LIEU : la ville au bit près d'avant, la ferme pure,
+  un jour sur cinq différent (le chiffre de Guillaume écrit en clair, pas `PLACE_SPLIT` — comparé à la
+  constante, le contrôle la suivait), chaque jour différent VISIBLE, le même CLIMAT des deux côtés (jours
+  mouillés à ±3 points par saison), la NEIGE identique à chaque instant, jamais de pluie ajoutée l'hiver,
+  aucun saut, le forçage sur les deux lieux. Falsifié trois fois (fréquence, neige, climat). Il JOUE
   `components/ferme/meteo.js` sur 4 000 journées par saison : le temps est une PURE fonction (deux
   clients tirent le même) ; les SAISONS (au moins deux fois plus de jours de pluie à l'automne qu'en
   été, l'été surtout des orages dont des secs, la neige l'hiver seulement en trois intensités, la
@@ -417,7 +431,10 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   en ~4 s. ⚠️ **Ce qu'il ne voit pas** : le plateau (clics, glisser, animations) et le réseau à deux
   clients, jugés dans le navigateur le 2026-09-24 (voir le bloc ⏭️ REPRISE de `CLAUDE.md`).
 
-- **`tools/verify-maire.mjs` — 137 contrôles, 137/137 (480, étendu au 481, 2026-09-15).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
+- **`tools/verify-maire.mjs` — 139 contrôles, 139/139 (480, étendu au 481, 2026-09-15 ; 2026-09-29 : la
+  négociation plus facile).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE. ⚠️ 2026-09-29 : `ordinarySweep` joue 120
+  essais ORDINAIRES par humeur (une faute, une tiède sur trois, 4 à 7 s) — avec les plans ils signent
+  (≥ 70 % en humeur moyenne), les mains vides presque jamais ; falsifié sur l'ancien réglage (15 %).
   ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la
   relire** — quatre cents entretiens par propriété, balayés sur cinq maires × deux mondes (plans en
   main / mains vides) × quatre crans de confiance × dix vitesses de réflexion, de zéro à neuf

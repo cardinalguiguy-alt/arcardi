@@ -4751,6 +4751,10 @@ export const FERME_STR = {
         hail: `Gare à la grêle ${when} !`, snowLight: `Quelques flocons ${when}.`, snow: `Il neigera ${when}.`, snowHeavy: `Tempête de neige ${when} !`,
       })[k] || "";
     },
+    /* 2026-09-29 — la ville n'a pas toujours le temps de la ferme (meteo.js § 3 bis) :
+       sa prévision s'ajoute quand elle diffère. `txt` : une phrase de `chatForecast`,
+       ou "" s'il fera beau en ville. */
+    chatForecastTown: (txt) => txt ? `En ville : ${txt.charAt(0).toLowerCase()}${txt.slice(1)}` : "En ville : pas un nuage.",
     wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
     chatJoin: (name) => `${name} rejoint la ferme.`,
     chatLeave: (name) => `${name} a quitté la ferme.`,
@@ -5081,7 +5085,7 @@ export const FERME_STR = {
     devFaunaSection: "Faune de Valley Town",
     devFaunaHint: "Se poser à côté d'un des trois chats. La saison de la faune se force plus haut (« Météo et saison »). Les lucioles sortent la nuit, de 21h15 à 1h30.",
     devSkySection: "Météo et saison",
-    devSkyHint: (now) => `Pour TOUT LE MONDE (arbitré par l'hôte). La météo commandée vaut pour la journée en cours, puis la rotation reprend ; elle arrive progressivement (un orage met une à deux minutes à monter). La saison forcée tient jusqu'à « Saison réelle » : arbres, buissons, neige, faune, miel et vergers la suivent. Maintenant : ${now}.`,
+    devSkyHint: (now) => `Pour TOUT LE MONDE (arbitré par l'hôte). La météo commandée vaut pour la journée en cours, puis la rotation reprend ; elle arrive progressivement (un orage met une à deux minutes à monter). Elle tombe sur la ferme ET sur la ville (hors commande, les deux lieux ont le même temps quatre jours sur cinq, et toujours la même neige). La saison forcée tient jusqu'à « Saison réelle » : arbres, buissons, neige, faune, miel et vergers la suivent. Maintenant : ${now}.`,
     devWeatherBtn: (k) => ({ clear: "☀️ Beau", overcast: "☁️ Couvert", shower: "🌦️ Averse", rain: "🌧️ Pluie", storm: "⛈️ Orage", dryStorm: "🌩️ Orage sec", hail: "🧊 Grêle", snowLight: "🌨️ Neige fine", snow: "🌨️ Neige", snowHeavy: "❄️ Tempête de neige" }[k] || "🔄 Rotation"),
     devSeasonBtn: (k) => ({ spring: "🌸 Printemps", summer: "☀️ Été", autumn: "🍂 Automne", winter: "❄️ Hiver" }[k] || "🔄 Saison réelle"),
     devWeatherChat: (who, k) => k ? `🛠️ ${who} a commandé la météo du jour : ${({ clear: "beau temps", overcast: "ciel couvert", shower: "averse", rain: "pluie", storm: "orage", dryStorm: "orage sec", hail: "grêle", snowLight: "neige fine", snow: "neige", snowHeavy: "tempête de neige" })[k]}.` : `🛠️ ${who} a rendu la météo à sa rotation.`,
@@ -6512,6 +6516,7 @@ export const FERME_STR = {
         hail: `Watch out for hail ${when}!`, snowLight: `A few flakes ${when}.`, snow: `It will snow ${when}.`, snowHeavy: `Snowstorm ${when}!`,
       })[k] || "";
     },
+    chatForecastTown: (txt) => txt ? `In town: ${txt.charAt(0).toLowerCase()}${txt.slice(1)}` : "In town: not a cloud.",
     wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
     chatJoin: (name) => `${name} joined the farm.`,
     chatLeave: (name) => `${name} left the farm.`,
@@ -6811,7 +6816,7 @@ export const FERME_STR = {
     devFaunaSection: "Valley Town wildlife",
     devFaunaHint: "Stand next to one of the three cats. The wildlife season is forced above (\"Weather and season\"). Fireflies come out at night, 9:15 pm to 1:30 am.",
     devSkySection: "Weather and season",
-    devSkyHint: (now) => `For EVERYONE (the host decides). Ordered weather lasts for the current day, then the rotation resumes; it arrives gradually (a storm takes one to two minutes to build). A forced season holds until "Real season": trees, bushes, snow, wildlife, honey and orchards follow it. Now: ${now}.`,
+    devSkyHint: (now) => `For EVERYONE (the host decides). Ordered weather lasts for the current day, then the rotation resumes; it arrives gradually (a storm takes one to two minutes to build). It falls on the farm AND the town (otherwise both places share the same weather four days out of five, and always the same snow). A forced season holds until "Real season": trees, bushes, snow, wildlife, honey and orchards follow it. Now: ${now}.`,
     devWeatherBtn: (k) => ({ clear: "☀️ Clear", overcast: "☁️ Overcast", shower: "🌦️ Shower", rain: "🌧️ Rain", storm: "⛈️ Storm", dryStorm: "🌩️ Dry storm", hail: "🧊 Hail", snowLight: "🌨️ Light snow", snow: "🌨️ Snow", snowHeavy: "❄️ Snowstorm" }[k] || "🔄 Rotation"),
     devSeasonBtn: (k) => ({ spring: "🌸 Spring", summer: "☀️ Summer", autumn: "🍂 Autumn", winter: "❄️ Winter" }[k] || "🔄 Real season"),
     devWeatherChat: (who, k) => k ? `🛠️ ${who} ordered today's weather: ${({ clear: "clear skies", overcast: "overcast", shower: "shower", rain: "rain", storm: "storm", dryStorm: "dry storm", hail: "hail", snowLight: "light snow", snow: "snow", snowHeavy: "snowstorm" })[k]}.` : `🛠️ ${who} returned the weather to its rotation.`,

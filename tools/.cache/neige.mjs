@@ -134,10 +134,10 @@ const DAY_A = C.DAY_START_MIN, DAY_B = C.DAY_END_MIN;
 /* Une journée entière, de `DAY_START_MIN` à `DAY_END_MIN`. ⚠️ La nuit de 2 h à
    6 h n'existe pas dans le jeu (le jour suivant repart à 6 h) : on ne l'intègre
    pas, sinon le manteau fondrait dans une nuit que personne ne voit. */
-function integrate(st, day, season, force, t0, t1) {
+function integrate(st, day, season, force, t0, t1, place) {
   const S = NEIGE.STEP_MIN;
   for (let t = t0; t + S <= t1 + 1e-9; t += S) {
-    const W = WX.weatherAt(day, t + S / 2, season, force);
+    const W = WX.weatherAt(day, t + S / 2, season, force, place);
     packStep(st, W, S / 60, (t + S / 2) / 60, season);
   }
   return st;
@@ -151,17 +151,17 @@ const packMemo = new Map();
    l'heure réelle de son début, `seasonAt(dayStartAt − k·DAY_REAL_MS)` — une
    saison qui bascule laisse fondre la neige de la semaine d'avant au lieu de
    l'effacer d'un coup). `force` : le forçage du menu dev (meteo.js). */
-export function snowPack(day, tm, seasonOfDay, force) {
+export function snowPack(day, tm, seasonOfDay, force, place) {
   day = Math.max(1, day | 0);
   const d0 = Math.max(1, day - NEIGE.WINDOW_DAYS);
   const keys = [];
   for (let d = d0; d <= day; d++) keys.push(seasonOfDay(d));
   const fk = force ? `${force.day}:${force.kind}:${Math.round(force.at * 10)}` : "";
-  const key = `${day}|${keys.join(",")}|${fk}`;
+  const key = `${day}|${keys.join(",")}|${fk}|${place === "farm" ? "farm" : "town"}`;
   let rec = packMemo.get(key);
   if (!rec) {
     const st = zeroPack();
-    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B);
+    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B, place);
     rec = { start: st, cur: clonePack(st), at: DAY_A };
     if (packMemo.size > 24) packMemo.clear();
     packMemo.set(key, rec);
@@ -171,10 +171,10 @@ export function snowPack(day, tm, seasonOfDay, force) {
   const t = Math.max(DAY_A, Math.min(DAY_B, tm));
   const tq = DAY_A + Math.floor((t - DAY_A) / S) * S;
   if (tq < rec.at) { rec.cur = clonePack(rec.start); rec.at = DAY_A; }
-  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq); rec.at = tq; }
+  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq, place); rec.at = tq; }
   const out = clonePack(rec.cur);
   if (t > rec.at + 1e-6) {
-    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force);
+    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force, place);
     packStep(out, W, (t - rec.at) / 60, ((rec.at + t) / 2) / 60, season);
   }
   return out;
@@ -359,26 +359,43 @@ function bil(F, W, H, fx, fy) {
    parcelle en flottants pesait 350 Ko, et on en garde une centaine. */
 export const CH = 128;
 export const SZ = CH + 2;
-export const CL = { NONE: 0, GRASS: 1, LAWN: 2, SOFT: 3, STONE: 4, STREET: 5, STAIR: 6, DECK: 7, RAIL: 8, SHORE: 9 };
+/* 2026-09-29 — `TILLED` : la terre labourée de la FERME (le champ, arrosé ou non,
+   l'herbe qui repousse). Guillaume : « neige fine, sillons lisibles » — la neige
+   remplit le creux des sillons et laisse la crête de terre à nu, jamais plus de
+   quelques centimètres (§6) : on voit toujours où l'on a travaillé. */
+export const CL = { NONE: 0, GRASS: 1, LAWN: 2, SOFT: 3, STONE: 4, STREET: 5, STAIR: 6, DECK: 7, RAIL: 8, SHORE: 9, TILLED: 10 };
 const Q_RECV = 100;
 export const Q_AUX = 32;
 /* La marge des ombres portées au nord-ouest : 40 px × SHADOW_K, plus la pénombre. */
 const MG = 24, MA = 5;
 /* Le relief du sol sous la neige, par classe (cm) : la prairie est bosselée,
    la pelouse l'est à peine, une dalle ne l'est pas. */
-const LUMP_CM = [0, 3.2, 1.3, 1.6, 0, 0, 0, 0, 0, 2.4];
+const LUMP_CM = [0, 3.2, 1.3, 1.6, 0, 0, 0, 0, 0, 2.4, 0];
 /* Les débris : brindille sombre, brindille, feuille brune, feuille fauve,
    aiguilles sombres, aiguilles, cône, pompon de mimosa, rameau de bouleau. */
 const DEBRIS = ["", "#3d3029", "#584536", "#83582f", "#a37744", "#2a4030", "#3c593a", "#5a3e28", "#e0bb33", "#7a4335"].map((s) => (s ? [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)] : null));
 /* `env` : { waterAt(wx, wy), stairTread(x, y, lx, ly) → 0..1 (la marche : 1 sur
    le giron éclairé, 0 sur la contremarche), jointAt(x, y, lx, ly) → 0..1 (un
    joint de dallage ou de pavés), casterAt(wx, wy) → px (ce qui se dresse),
-   treeShadow(t, k, ky) → l'ombre projetée d'un arbre, trees, fields (§4) }. */
-export function buildChunkStatic(tw, cx, cy, env) {
+   treeShadow(t, k, ky) → l'ombre projetée d'un arbre, trees, fields (§4) }.
+   ⚠️ 2026-09-29 — `classify(x, y, i, g, lx, ly, wx, wy)` : UNE AUTRE CARTE QUE LA
+   VILLE (la ferme, `A.farmSnowEnv`) dit elle-même ce qu'est chacun de ses pixels —
+   { c, r, ax } ou null (pas de neige : l'eau, le passage sombre). Sans lui, la
+   lecture de la ville ci-dessous (fontaine, rails, rues, marches) ; avec lui, AUCUNE
+   constante de la ville n'est lue — le piège des deux cartes (§4 de CLAUDE.md) :
+   la fontaine de la ville tombe au milieu d'un pré de la ferme. */
+/* ⚠️ 2026-09-29 — `only` : { st, px0, py0, px1, py1 } (pixels de la parcelle, marge
+   comprise). Au lieu de tout rebâtir, ne REFAIT QUE la lecture du sol de ces pixels
+   dans une parcelle existante (classe, réception, sillons, bruit, ordre de
+   couverture) — ni ombres portées, ni arbres, qui ne dépendent que des OBJETS. C'est
+   ce qui rend le labour sous la neige gratuit sur la ferme : rebâtir une parcelle
+   coûte 14 à 80 ms (mesuré), la lecture d'une case et de ses voisines quelques-unes. */
+export function buildChunkStatic(tw, cx, cy, env, only) {
   const W = tw.w, H = tw.h, NP = SZ * SZ;
-  const cls = new Uint8Array(NP), recv = new Uint8Array(NP), shade = new Uint8Array(NP), aux = new Uint8Array(NP);
-  const fine = new Int8Array(NP), und = new Int8Array(NP), lump = new Uint8Array(NP), rip = new Int8Array(NP);
-  const cast = new Uint8Array(NP), ao = new Uint8Array(NP), deb = new Uint8Array(NP), pit = new Int8Array(NP), cov = new Uint8Array(NP);
+  const P0 = only ? only.st : null;
+  const cls = P0 ? P0.cls : new Uint8Array(NP), recv = P0 ? P0.recv : new Uint8Array(NP), shade = P0 ? P0.shade : new Uint8Array(NP), aux = P0 ? P0.aux : new Uint8Array(NP);
+  const fine = P0 ? P0.fine : new Int8Array(NP), und = P0 ? P0.und : new Int8Array(NP), lump = P0 ? P0.lump : new Uint8Array(NP), rip = P0 ? P0.rip : new Int8Array(NP);
+  const cast = P0 ? P0.cast : new Uint8Array(NP), ao = P0 ? P0.ao : new Uint8Array(NP), deb = P0 ? P0.deb : new Uint8Array(NP), pit = P0 ? P0.pit : new Int8Array(NP), cov = P0 ? P0.cov : new Uint8Array(NP);
   /* 2026-09-29 (audit pluie) — LE CANIVEAU VU DEPUIS LA BORDURE, lu par `pluie.js` seul (la
      neige ne le lit pas : ses congères gardent `aux`). `aux` mesure la distance au bord de la
      BANDE de rue, et la bordure (`kerbW`, 4 px, fermeArt.js) occupe justement ces pixels-là :
@@ -386,7 +403,7 @@ export function buildChunkStatic(tw, cx, cy, env) {
      le trottoir. `gut` : 0 ailleurs, 255 sur la bordure, 1 + la distance au pied de la bordure
      (1 = le premier pixel de chaussée contre elle), par côté, et seulement là où une bordure
      est dessinée (le voisin n'est pas dallé, même test que `drawTownRoadTile`). */
-  const gut = new Uint8Array(NP);
+  const gut = P0 ? P0.gut : new Uint8Array(NP);
   const pavedT = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return false;
     const gg = tw.ground[y * W + x];
@@ -416,12 +433,20 @@ export function buildChunkStatic(tw, cx, cy, env) {
     laneMemo.set(k, v);
     return v;
   };
-  for (let py = 0; py < SZ; py++) for (let px = 0; px < SZ; px++) {
+  const pyA = only ? Math.max(0, only.py0) : 0, pyB = only ? Math.min(SZ - 1, only.py1) : SZ - 1;
+  const pxA = only ? Math.max(0, only.px0) : 0, pxB = only ? Math.min(SZ - 1, only.px1) : SZ - 1;
+  for (let py = pyA; py <= pyB; py++) for (let px = pxA; px <= pxB; px++) {
     const wx = ox + px, wy = oy + py, o = py * SZ + px;
     const x = Math.floor(wx / T), y = Math.floor(wy / T);
+    if (only) { gut[o] = 0; aux[o] = 0; }
     if (x < 0 || y < 0 || x >= W || y >= H) { cls[o] = CL.NONE; continue; }
     const i = y * W + x, g = tw.ground[i], lx = wx - x * T, ly = wy - y * T;
     let c = CL.GRASS, r = 1, ax = 0;
+    if (env.classify) {
+      const k = env.classify(x, y, i, g, lx, ly, wx, wy);
+      if (!k) { cls[o] = CL.NONE; continue; }
+      c = k.c; r = k.r == null ? 1 : k.r; ax = k.ax || 0;
+    } else {
     const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2 && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
     if (!inFtn && env.waterAt(wx, wy)) { cls[o] = CL.NONE; continue; }
     if (g === C.G_TOWN_LAWN) c = CL.LAWN;
@@ -460,7 +485,10 @@ export function buildChunkStatic(tw, cx, cy, env) {
       const col = (x - C.TOWN_RAIL_X) * T + lx;
       if (col === 7 || col === 8 || col === 23 || col === 24) { c = CL.RAIL; r = 0; }
     }
-    if (tw.shore && tw.shore[i] > 0 && c !== CL.STREET && c !== CL.STAIR) {
+    }
+    /* La berge — celle de la ville (`tw.shore`), ou la classe SHORE qu'une autre
+       carte a donnée (le sable des rives de la ferme). */
+    if ((tw.shore ? tw.shore[i] > 0 : c === CL.SHORE) && c !== CL.STREET && c !== CL.STAIR) {
       // La berge : la neige s'arrête un pixel avant la ligne d'eau, et s'amincit en s'en approchant.
       let near = 0;
       for (let d = 1; d <= 2 && !near; d++) if (env.waterAt(wx + d, wy) || env.waterAt(wx - d, wy) || env.waterAt(wx, wy + d) || env.waterAt(wx, wy - d)) near = d;
@@ -472,6 +500,10 @@ export function buildChunkStatic(tw, cx, cy, env) {
        d'une haie se lirait comme un trottoir. */
     const shel = bil(F.shelter, F.W, F.H, fx, fy), dr = bil(F.drift, F.W, F.H, fx, fy) * (0.55 + 0.9 * vnoise(wx, wy, 14, 17));
     if (c !== CL.STREET) r *= shel * (1 + dr);
+    /* 2026-09-29 — LA FONTE D'UN CRATÈRE CHAUD (`setMelts`, makeSnowField) : un trou
+       brûlant ne garde pas la neige, et sa lisière s'effrange (l'ordre de couverture,
+       §6, fait le reste : la terre mouillée apparaît pixel par pixel). */
+    if (env.meltAt) { const mk = env.meltAt(wx + 0.5, wy + 0.5); if (mk < 1) r *= mk; }
     cls[o] = c; recv[o] = Math.round(Math.min(2.55, r) * Q_RECV); aux[o] = Math.round(Math.min(7.9, ax) * Q_AUX);
     shade[o] = Math.round(Math.min(1, bil(F.shade, F.W, F.H, fx, fy)) * 255);
     /* Le bruit fin : l'herbe perce une neige mince en BRINS (plus haut que
@@ -512,6 +544,7 @@ export function buildChunkStatic(tw, cx, cy, env) {
     const ramp = Math.max(0, Math.min(1, (pk2 - 0.2) / 0.6));   // plus de contraste : des plaques, pas un semis
     cov[o] = Math.round(Math.max(0, Math.min(1, ramp * 0.74 + (BN[(wy & 63) * 64 + (wx & 63)] / 256) * 0.16 + (1 - fn) * (blade ? 0.12 : 0.06))) * 255);
   }
+  if (only) return P0;
   /* ── LES OMBRES PORTÉES ET L'OCCLUSION ──────────────────────────────────
      La hauteur de ce qui se dresse, sur la parcelle et ses marges (au
      nord-ouest, d'où viennent les ombres ; de tous côtés, pour l'occlusion).
@@ -700,12 +733,27 @@ export function renderChunk(st, pack, P, imp, out) {
          des arbres et des maisons, et la dessine en blanc sur l'herbe. */
       const base = G + (Sd - G) * Math.max(st.shade[o] / 255, 0.9 * st.cast[o] / 255);
       d = base * (st.recv[o] / Q_RECV);
-      const rp = c === CL.GRASS || c === CL.LAWN || c === CL.SHORE || c === CL.SOFT ? (st.rip[o] / 127) * ripA : 0;
+      /* ⚠️ 2026-09-29 — une ride du vent demande de la neige : là où le sol ne reçoit
+         presque rien (le fond d'un cratère chaud, `setMelts`), elle en posait quand même
+         jusqu'à 4 mm — des flocons au fond d'un trou brûlant (vu au banc). Sans effet au-delà
+         d'un tiers de réception, c'est-à-dire partout en ville. */
+      const rp = c === CL.GRASS || c === CL.LAWN || c === CL.SHORE || c === CL.SOFT ? (st.rip[o] / 127) * ripA * Math.min(1, st.recv[o] / Q_RECV * 3) : 0;
       d += rp * 0.35;
+      /* 2026-09-29 — LE CHAMP LABOURÉ (Guillaume : « neige fine, sillons lisibles »).
+         `ax` : 1 au creux du sillon, 0 sur la crête. La neige COMBLE le creux et
+         laisse la crête presque nue ; les deux sont BORNÉS (3,2 cm au creux, une
+         poussière de 3 mm sur la crête — à 1 cm, mesuré par `render-neige-ferme`, les
+         trois quarts de la crête blanchissaient et le champ redevenait un pré) : même
+         sous une tempête, le champ reste une rayure blanche et brune — on voit où l'on
+         a labouré, arrosé, semé. La crête porte le relief (elle accroche la lumière). */
+      if (c === CL.TILLED) {
+        d = ax ? Math.min(3.2, d * 1.25) : Math.min(0.3, d * 0.4);
+        rel = (1 - ax) * 1.5;
+      }
       /* Les joints d'un dallage se remplissent les premiers : sous une neige
          mince, le dessin des pierres apparaît en creux blanc. */
       if (c === CL.STONE && base < 3) d += ax * Math.min(base, 3 - base) * 0.8;
-      rel = (st.lump[o] / 255) * LUMP_CM[c] * drape;
+      rel += (st.lump[o] / 255) * LUMP_CM[c] * drape;
       // Sur une motte, une neige mince est soufflée : son sommet perce le premier.
       if (rel > 0) d -= rel * 0.45 * Math.max(0, 1 - base / 7);
       /* ⚠️ LE RELIEF QUI S'ÉCLAIRE EST FORCÉ (×RELIEF_GAIN) : à 7,4 cm le pixel,
@@ -722,7 +770,9 @@ export function renderChunk(st, pack, P, imp, out) {
     const d0 = d;
     if (imp) {
       const k = imp((o % SZ) - 1, ((o / SZ) | 0) - 1);
-      if (k) d *= 1 - k / 100;
+      /* ⚠️ 2026-09-29 — sur la crête d'un labour, le bourrelet d'un pas (k < 0) ne relève
+         pas une neige qui n'y est pas : il posait des taches blanches sur la terre nue. */
+      if (k && !(k < 0 && c === CL.TILLED)) d *= 1 - k / 100;
     }
     if (d < 0) d = 0;
     Dp[o] = d0 > 3 ? Math.max(d, Math.min(d0, 3.2)) : d; Sf[o] = d + rel;
@@ -734,7 +784,7 @@ export function renderChunk(st, pack, P, imp, out) {
      tiennent) à COV0 + COVR (les dessus de dalle, les plaques tardives) ; la
      pierre, qui garde la chaleur, demande plus que l'herbe. À la fonte, le même
      ordre à l'envers : les plaques s'ouvrent, s'élargissent, se rejoignent. */
-  const COV0 = 0.06, COVR = 2.5, CLS_COV = [1, 1, 1.05, 1.1, 1.5, 1, 1.35, 0.85, 1, 1.1];
+  const COV0 = 0.06, COVR = 2.5, CLS_COV = [1, 1, 1.05, 1.1, 1.5, 1, 1.35, 0.85, 1, 1.1, 0.7];
   const falling = !!P.falling;
   const dout = out;
   const glints = [];
@@ -755,17 +805,22 @@ export function renderChunk(st, pack, P, imp, out) {
       /* LE SOL MOUILLÉ AUTOUR DES PLAQUES : là où la neige vient de partir (ou
          s'amincit sans couvrir), la terre et l'herbe sont trempées, plus
          sombres ; pendant la chute, elles sont au contraire saupoudrées. */
-      if (c && c !== CL.RAIL && c !== CL.STREET && dd > 0.02) {
-        const r = Math.min(1, dd / need);
+      /* 2026-09-29 — et le sol DÉGELÉ d'un cratère chaud (réception nulle sous un
+         manteau : `setMelts`) est détrempé par l'eau de fonte — sans quoi l'anneau
+         dégagé montrait une herbe d'été vive, une pelouse posée dans la neige. */
+      const thawed = !st.recv[o] && c !== CL.NONE && G > 0.3;
+      if (c && c !== CL.RAIL && c !== CL.STREET && (dd > 0.02 || thawed)) {
+        const r = thawed ? 0.9 : Math.min(1, dd / need);
         if (falling) { if (b1 < r * 0.5) { dout[q] = 236; dout[q + 1] = 241; dout[q + 2] = 248; dout[q + 3] = 150; } }
         else { dout[q] = 24; dout[q + 1] = 30; dout[q + 2] = 36; dout[q + 3] = Math.round(34 + 50 * r); }
         continue;
       }
-      if (c === CL.GRASS || c === CL.LAWN || c === CL.SHORE) {
+      if (c === CL.GRASS || c === CL.LAWN || c === CL.SHORE || c === CL.TILLED) {
         /* L'HIVER SANS NEIGE : l'herbe dort (olive paille), et le matin la
-           gelée blanche givre les brins. */
-        if (P.frost > 0.02 && st.fine[o] / 127 > 0.55 - P.frost * 0.9) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, P.frost * 1.4)); }
-        else if (P.winter) { dout[q] = WINTER_GRASS[0]; dout[q + 1] = WINTER_GRASS[1]; dout[q + 2] = WINTER_GRASS[2]; dout[q + 3] = 96; }
+           gelée blanche givre les brins — et les crêtes d'un labour (2026-09-29 :
+           la terre ne « dort » pas, elle ne prend que la gelée). */
+        if (P.frost > 0.02 && st.fine[o] / 127 > 0.55 - P.frost * 0.9 && (c !== CL.TILLED || !st.aux[o])) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, P.frost * 1.4)); }
+        else if (P.winter && c !== CL.TILLED) { dout[q] = WINTER_GRASS[0]; dout[q + 1] = WINTER_GRASS[1]; dout[q + 2] = WINTER_GRASS[2]; dout[q + 3] = 96; }
       } else if (c === CL.STREET && P.wetRoad > 0.02) {
         /* La chaussée mouillée, plus sombre dans les ornières où l'eau de fonte
            reste (et où les pneus ont chassé la neige). */
@@ -1113,8 +1168,22 @@ export function snowStairPixels(src, w, h, lvl) {
    cran, les parcelles visibles se refont en quelques images, jamais toutes
    dans la même. */
 export function makeSnowField(tw, env) {
-  const fields = snowTileFields(tw, env.trees || [], env.tall || (() => false));
+  let fields = snowTileFields(tw, env.trees || [], env.tall || (() => false));
   const envS = { ...env, fields };
+  /* Les fontes (`setMelts`) : 0 dans le disque, 1 au-delà d'une fois et demie son
+     rayon, un bruit lent entre les deux (une lisière ronde au compas se lirait). */
+  let melts = [], meltKey = "";
+  envS.meltAt = (wx, wy) => {
+    let k = 1;
+    for (const m of melts) {
+      const dx = wx - m.x, dy = (wy - m.y) / 0.86, R = m.r * 1.5 + 2;
+      if (Math.abs(dx) > R || Math.abs(dy) > R) continue;
+      const d = Math.hypot(dx, dy) / m.r + (vnoise(wx, wy, 6, 93) - 0.5) * 0.35;
+      const v = d <= 1 ? 0 : d >= 1.5 ? 1 : (d - 1) / 0.5;
+      if (v < k) k = v;
+    }
+    return k;
+  };
   const NX = Math.ceil(tw.w * T / CH), NY = Math.ceil(tw.h * T / CH);
   const ATL = 2048, PER = ATL / CH, NSLOT = PER * PER;
   let atlas = null, ag = null, scratch = null;
@@ -1251,7 +1320,72 @@ export function makeSnowField(tw, env) {
       for (const ch of chunks.values()) if (ch.use === frame && ch.slot >= 0 && ch.ver === ver) for (const g of ch.glints) out.push(g);
       return out;
     },
-    depthAt(wx, wy) { return depthAtTile(tw, pack, fields, Math.floor(wx / T), Math.floor(wy / T)); },
+    depthAt(wx, wy) {
+      const x = Math.floor(wx / T), y = Math.floor(wy / T), d = depthAtTile(tw, pack, fields, x, y);
+      /* 2026-09-29 — une autre carte peut dire que sa case garde moins de neige (le
+         champ labouré de la ferme, `env.depthScale`) : les pieds s'y enfoncent moins. */
+      return env.depthScale ? d * env.depthScale(x, y) : d;
+    },
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-29 — UNE CARTE QUI CHANGE SOUS LA NEIGE (la ferme).
+       ╚══════════════════════════════════════════════════════════════════════
+       La ville ne change jamais de sol ; la ferme, si : on laboure, on pave, on
+       coupe un arbre, on pose une clôture. Ce qui a changé est rebâti À LA
+       DEMANDE : `invalidate` oublie le statique des parcelles qui touchent ces
+       cases (avec la marge des ombres portées et des congères — trois cases), et
+       `refreshFields` refait l'abri, l'ombre et la congère de la carte entière
+       (les arbres ont pu changer ; ~1 ms sur la ferme). Les EMPREINTES restent. */
+    invalidate(x0, y0, x1, y1) {
+      const M = 3;
+      const a = Math.max(0, Math.floor((x0 - M) * T / CH)), b = Math.min(NX - 1, Math.floor((x1 + M + 1) * T / CH));
+      const c = Math.max(0, Math.floor((y0 - M) * T / CH)), d = Math.min(NY - 1, Math.floor((y1 + M + 1) * T / CH));
+      for (let cy = c; cy <= d; cy++) for (let cx = a; cx <= b; cx++) {
+        const ch = chunks.get(key(cx, cy));
+        if (ch) { ch.st = null; ch.dirty = true; }
+      }
+    },
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-29 — LES FONTES : les cratères chauds de la quête (Guillaume :
+       ║ « les animations de cratères et la quête jouables avec la neige »).
+       ╚══════════════════════════════════════════════════════════════════════
+       `list` : [{ x, y, r }] en px monde (le centre et le rayon de la terre nue ;
+       la neige revient entre r et 1,5 r, effrangée par un bruit lent). Rien n'est
+       rebâti tant que la liste ne change pas ; quand elle change, les parcelles
+       touchées oublient leur statique et se rebâtissent UNE PAR IMAGE dans le budget
+       de `update` — ⚠️ relire d'un coup le disque du grand cratère de la ville
+       coûtait 260 ms (mesuré), un à-coup en pleine cinématique d'impact. */
+    setMelts(list) {
+      const next = (list || []).filter((m) => m && m.r > 0).map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), r: Math.round(m.r) }));
+      const k = next.map((m) => `${m.x},${m.y},${m.r}`).join(";");
+      if (k === meltKey) return;
+      const touched = melts.concat(next);
+      melts = next; meltKey = k;
+      for (const m of touched) {
+        const R = m.r * 1.6 + T;
+        api.invalidate(Math.floor((m.x - R) / T), Math.floor((m.y - R) / T), Math.floor((m.x + R) / T), Math.floor((m.y + R) / T));
+      }
+    },
+    /* Un changement de SOL seul (labour, pavage, l'herbe qui repousse) : on relit le
+       sol des pixels de ces cases et de leurs voisines (la berge lit l'eau d'à côté)
+       dans les parcelles existantes, sans rebâtir leurs ombres. */
+    invalidateGround(x0, y0, x1, y1) {
+      const X0 = (x0 - 1) * T, Y0 = (y0 - 1) * T, X1 = (x1 + 2) * T - 1, Y1 = (y1 + 2) * T - 1;
+      const a = Math.max(0, Math.floor((X0 - 1) / CH)), b = Math.min(NX - 1, Math.floor((X1 + 1) / CH));
+      const c = Math.max(0, Math.floor((Y0 - 1) / CH)), d = Math.min(NY - 1, Math.floor((Y1 + 1) / CH));
+      for (let cy = c; cy <= d; cy++) for (let cx = a; cx <= b; cx++) {
+        const ch = chunks.get(key(cx, cy));
+        if (!ch || !ch.st) continue;
+        const ox = cx * CH - 1, oy = cy * CH - 1;
+        buildChunkStatic(tw, cx, cy, envS, { st: ch.st, px0: X0 - ox, py0: Y0 - oy, px1: X1 - ox, py1: Y1 - oy });
+        ch.dirty = true;
+      }
+    },
+    refreshFields() {
+      if (env.refresh) env.refresh();
+      FIELD_MEMO.delete(tw);
+      fields = snowTileFields(tw, env.trees || [], env.tall || (() => false));
+      envS.fields = fields; envS.trees = env.trees; api.fields = fields;
+    },
     /* 2026-09-29 (phase 12b) — LA PLUIE LIT LE MÊME SOL : ce que la parcelle sait de chaque pixel
        (sa classe, ses joints, ses ornières, ses creux, l'ombre qu'elle reçoit) ne dépend pas
        de la neige, et le construire coûte assez cher pour ne pas le faire deux fois. `pluie.js`

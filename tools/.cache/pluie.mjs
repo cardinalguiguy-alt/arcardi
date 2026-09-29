@@ -56,12 +56,19 @@ export const PLUIE = {
   WET_GAIN: 5,
   WET_DRY: { winter: 0.2, spring: 0.34, summer: 0.6, autumn: 0.28 },
   SUN_DRY: 0.45, WIND_DRY: 0.3,
-  /* Les flaques : elles ne montent qu'au-delà d'une pluie de 0,18 (la bruine
-     mouille, elle ne remplit pas) et sèchent à vitesse CONSTANTE, plus vite au
-     soleil. Sous un ciel d'automne : ~5 h de jeu (4 min réelles), plus que le sol
+  /* Les flaques : elles ne montent qu'au-delà d'une pluie de 0,5 et sèchent à vitesse
+     CONSTANTE, plus vite au soleil. ⚠️ 2026-09-29 (audit, règle de Guillaume : « elles ne
+     doivent apparaître qu'en cas de forte pluie ; si la pluie est fine, pas de flaques ni de
+     torrent, juste les plocs et les éclaboussures des pieds ») : le seuil était 0,18, et une
+     simple AVERSE (0,28 à 0,5, meteo.js) remplissait les ornières. À 0,5 : la « pluie »
+     (0,55 à 0,8) en pose quelques-unes, l'orage (0,85 à 1) les remplit, l'averse aucune. Sous un ciel d'automne : ~5 h de jeu (4 min réelles), plus que le sol
      n'en met à sécher (premier jet : 1 h 40, la place était sèche avant qu'on ait fini
      d'y regarder la pluie ; deuxième : 4 h 20, les flaques partaient avant le sol). */
-  PUD_FILL: 0.9, PUD_MIN_RAIN: 0.18,
+  PUD_FILL: 0.9, PUD_MIN_RAIN: 0.5,
+  /* L'eau qui COULE au caniveau : seulement pendant une forte pluie (même seuil), et
+     elle monte avec elle — `run` 0 → 1 entre 0,5 et 0,8 de pluie au sol. Elle ne suit
+     pas l'humidité du sol (`w`), qui atteint 0,88 sous une averse. */
+  RUN_MIN: 0.5, RUN_SPAN: 0.3,
   PUD_DRAIN: { winter: 0.06, spring: 0.1, summer: 0.26, autumn: 0.08 },
   PUD_SUN: 0.08,
 };
@@ -79,6 +86,8 @@ function relax(v, gain, unload, dtH) {
 }
 /* La pluie qui arrive au sol : la pluie, et la grêle qui fond. */
 export const groundRain = (W) => Math.min(1, W.rain + 0.6 * W.hail);
+/* L'eau qui coule au caniveau, 0..1, pour le temps de CETTE image. */
+export const runOf = (W) => Math.max(0, Math.min(1, (groundRain(W) - PLUIE.RUN_MIN) / PLUIE.RUN_SPAN));
 export function packStep(st, W, dtH, hour, season) {
   const N = PLUIE, rain = groundRain(W);
   const sun = sunAt(hour, season) * Math.max(0, 1 - 1.25 * W.dark) * Math.max(0, 1 - 2 * rain);
@@ -92,10 +101,10 @@ export function packStep(st, W, dtH, hour, season) {
 const DAY_A = C.DAY_START_MIN, DAY_B = C.DAY_END_MIN;
 /* Une journée entière, de `DAY_START_MIN` à `DAY_END_MIN` — la nuit de 2 h à 6 h
    n'existe pas dans le jeu (même règle que le manteau de neige). */
-function integrate(st, day, season, force, t0, t1) {
+function integrate(st, day, season, force, t0, t1, place) {
   const S = PLUIE.STEP_MIN;
   for (let t = t0; t + S <= t1 + 1e-9; t += S) {
-    const W = WX.weatherAt(day, t + S / 2, season, force);
+    const W = WX.weatherAt(day, t + S / 2, season, force, place);
     packStep(st, W, S / 60, (t + S / 2) / 60, season);
   }
   return st;
@@ -105,17 +114,17 @@ function integrate(st, day, season, force, t0, t1) {
    depuis 6 h — deux clients qui demandent la même minute rendent le même
    nombre au bit près. */
 const packMemo = new Map();
-export function wetPack(day, tm, seasonOfDay, force) {
+export function wetPack(day, tm, seasonOfDay, force, place) {
   day = Math.max(1, day | 0);
   const d0 = Math.max(1, day - PLUIE.WINDOW_DAYS);
   const keys = [];
   for (let d = d0; d <= day; d++) keys.push(seasonOfDay(d));
   const fk = force ? `${force.day}:${force.kind}:${Math.round(force.at * 10)}` : "";
-  const key = `${day}|${keys.join(",")}|${fk}`;
+  const key = `${day}|${keys.join(",")}|${fk}|${place === "farm" ? "farm" : "town"}`;
   let rec = packMemo.get(key);
   if (!rec) {
     const st = zeroPack();
-    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B);
+    for (let d = d0; d < day; d++) integrate(st, d, keys[d - d0], force, DAY_A, DAY_B, place);
     rec = { start: st, cur: clonePack(st), at: DAY_A };
     if (packMemo.size > 24) packMemo.clear();
     packMemo.set(key, rec);
@@ -125,10 +134,10 @@ export function wetPack(day, tm, seasonOfDay, force) {
   const t = Math.max(DAY_A, Math.min(DAY_B, tm));
   const tq = DAY_A + Math.floor((t - DAY_A) / S) * S;
   if (tq < rec.at) { rec.cur = clonePack(rec.start); rec.at = DAY_A; }
-  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq); rec.at = tq; }
+  if (tq > rec.at) { integrate(rec.cur, day, season, force, rec.at, tq, place); rec.at = tq; }
   const out = clonePack(rec.cur);
   if (t > rec.at + 1e-6) {
-    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force);
+    const W = WX.weatherAt(day, (rec.at + t) / 2, season, force, place);
     packStep(out, W, (t - rec.at) / 60, ((rec.at + t) / 2) / 60, season);
   }
   return out;
@@ -155,13 +164,35 @@ export function wetPack(day, tm, seasonOfDay, force) {
      creux larges de la pierre ; le bruit large ne compte plus que pour un tiers ;
    · sur une chaussée, les ornières (deux par voie, allongées le long de la rue) et
      le caniveau au pied du trottoir. */
-export function basin(st, o) {
+/* ⚠️ 2026-09-29 (audit) — LE QUAI EN BOIS DE LA GARE est peint PAR-DESSUS un sol de dalles
+   (`drawStationTile`, FermeGame.js) que la parcelle statique classe en pierre : vu en jeu, les
+   planches portaient la grille de joints et les bords de flaque d'un dallage invisible. On le lit
+   ici comme un tablier (`CL.DECK` : il fonce, il ne retient pas l'eau). */
+const PF = C.TOWN_PLATFORM;
+export function wetCls(st, o) {
   const c = st.cls[o];
+  if (c !== CL.STONE && c !== CL.STREET) return c;
+  const wx = st.cx * CH + (o % SZ) - 1, wy = st.cy * CH + Math.floor(o / SZ) - 1;
+  const x = Math.floor(wx / T), y = Math.floor(wy / T);
+  return x >= PF.x && x < PF.x + PF.w && y >= PF.y && y < PF.y + PF.h ? CL.DECK : c;
+}
+/* Le pied de la bordure (`gut`, neige.js) : 0 hors bord de rue, 255 sur la bordure, 1 + la
+   distance à son pied. Une vieille parcelle sans `gut` (aucune) rendrait 0 partout. */
+const gutAt = (st, o) => (st.gut ? st.gut[o] : 0);
+export function basin(st, o) {
+  const c = wetCls(st, o);
   if (c !== CL.STREET && c !== CL.STONE) return -9;
   const ax = st.aux[o] / Q_AUX;
   let b = (-st.und[o] / 127) * (c === CL.STONE ? 0.62 : 0.85) + (st.fine[o] / 127) * 0.1;
   if (c === CL.STREET) {
-    if (ax === 1) b += 0.56; else if (ax === 0.5) b += 0.2; else if (ax >= 2) b += 0.46 * Math.max(0, 1 - (ax - 2) / 3.9);
+    /* ⚠️ 2026-09-29 (audit) — le caniveau se lisait sur `aux` (la distance au bord de la
+       bande), c'est-à-dire SUR la bordure : l'eau la plus profonde de la rue était posée sur la
+       pierre levée. Il se lit maintenant au pied de la bordure (`gut`), et la bordure ne
+       retient rien. */
+    const gu = gutAt(st, o);
+    if (gu === 255) return -9;
+    if (ax === 1) b += 0.56; else if (ax === 0.5) b += 0.2;
+    if (gu) b += 0.46 * Math.max(0, 1 - (gu - 1) / 3.9);
   } else {
     if (ax >= 0.5) b += 0.5;                                        // un joint : l'eau y coule
     else {
@@ -198,14 +229,14 @@ export function skyReflect(dark) {
   const k = Math.max(0, Math.min(1, dark));
   return mix([158, 190, 224], [124, 138, 156], Math.min(1, k * 1.6));
 }
-/* `wp` : { wet, pud, sky:[r,g,b] } — l'humidité et le niveau (0..1) après
-   avoir ôté la neige qui couvre, et le ciel reflété. `out` : CH × CH × 4.
+/* `wp` : { wet, pud, run, sky:[r,g,b] } — l'humidité et le niveau (0..1) après
+   avoir ôté la neige qui couvre, l'eau qui coule au caniveau (`runOf`), et le ciel reflété. `out` : CH × CH × 4.
    Rend { ripples: [[wx, wy, hash]…] (des points d'où partent les ronds de
    la pluie, dans les flaques), flow: [[wx, wy, hash, horizontal]…] (les départs
    de l'eau qui coule au caniveau) }, et remplit `mask` (CH × CH, 1 = flaque) si donné. */
 export function renderWetChunk(st, wp, out, mask) {
   const NP = SZ * SZ, BN = blueNoise();
-  const thr = puddleThr(wp.pud), sky = wp.sky;
+  const thr = puddleThr(wp.pud), sky = wp.sky, run = wp.run || 0;
   const pm = new Uint8Array(NP);
   if (wp.pud > 0.02) for (let o = 0; o < NP; o++) {
     const b = basin(st, o);
@@ -215,7 +246,7 @@ export function renderWetChunk(st, wp, out, mask) {
   const wx0 = st.cx * CH, wy0 = st.cy * CH;
   const pudColor = mix(DARK, sky, 0.3), rimDark = mix(DARK, [0, 0, 8], 0.5), rimLight = mix(sky, [255, 255, 255], 0.3), skyStreak = mix(sky, [255, 255, 255], 0.2);
   for (let y = 0; y < CH; y++) for (let x = 0; x < CH; x++) {
-    const o = (y + 1) * SZ + (x + 1), q = (y * CH + x) * 4, c = st.cls[o];
+    const o = (y + 1) * SZ + (x + 1), q = (y * CH + x) * 4, c = wetCls(st, o);
     out[q + 3] = 0;
     if (mask) mask[y * CH + x] = 0;
     if (!c || c === CL.RAIL) continue;
@@ -252,14 +283,16 @@ export function renderWetChunk(st, wp, out, mask) {
     }
     const ax = st.aux[o] / Q_AUX;
     if (c === CL.STREET) {
-      /* Le caniveau coule : un filet d'eau clair le long du trottoir, sous une vraie pluie. */
-      if (ax >= 2 && ax < 3 && wp.wet > 0.55 && level === 2) {
-        out[q] = sky[0]; out[q + 1] = sky[1]; out[q + 2] = sky[2]; out[q + 3] = 96;
+      /* Le caniveau coule : un filet d'eau clair au PIED de la bordure (`gut` 1), pendant une
+         forte pluie seulement (`run`, jamais l'humidité du sol — voir `PLUIE.RUN_MIN`). */
+      const gu = gutAt(st, o);
+      if (gu === 1 && run > 0.05 && level === 2) {
+        out[q] = sky[0]; out[q + 1] = sky[1]; out[q + 2] = sky[2]; out[q + 3] = Math.round(96 * run);
         /* L'eau COULE le long du caniveau : un point de départ tous les ~23 pixels, avec
            le sens de la rue (horizontale si les voisins de gauche ou de droite sont aussi
            caniveau). Le jeu y fait glisser un éclat (`flowPoints`). */
         if (flow.length < 90 && (h32(wx, wy, 91) % 23) === 0) {
-          const g = (k) => { const v = st.aux[k] / Q_AUX; return v >= 2 && v < 3; };
+          const g = (k) => gutAt(st, k) === 1;
           flow.push([wx, wy, h32(wx, wy, 92), g(o - 1) || g(o + 1) ? 1 : 0]);
         }
         continue;
@@ -269,9 +302,10 @@ export function renderWetChunk(st, wp, out, mask) {
     } else if (c === CL.DECK) {
       out[q] = 30; out[q + 1] = 20; out[q + 2] = 16; out[q + 3] = level === 2 ? 66 : 34;
     } else {
-      // Un dallage : le joint est plus sombre, la pierre trempée renvoie un peu de ciel sur ses creux larges.
+      /* Un dallage : le joint est plus sombre. ⚠️ 2026-09-29 (audit) — le reflet de ciel des
+         creux larges était tramé une case sur deux au bruit bleu : vu en jeu, les dalles
+         trempées se lisaient « granité », salies d'un semis de points clairs. Retiré. */
       const joint = c === CL.STONE && ax > 0.6;
-      if (level === 2 && !joint && st.und[o] > 30 && b2 < 0.5) { out[q] = sky[0]; out[q + 1] = sky[1]; out[q + 2] = sky[2]; out[q + 3] = 40; continue; }
       const a = (level === 2 ? 62 : 30) + (joint ? 30 : 0);
       out[q] = DARK[0]; out[q + 1] = DARK[1]; out[q + 2] = DARK[2]; out[q + 3] = a;
     }
@@ -296,7 +330,7 @@ export function makeWetLayer(tw, env) {
   const chunks = new Map();          // clé → { slot, ver, use, cx, cy, mask, rip }
   const free = [];
   for (let s = NSLOT - 1; s >= 0; s--) free.push(s);
-  let P = { wet: 0, pud: 0, sky: [158, 190, 224] }, ver = 1, pkey = "", frame = 0;
+  let P = { wet: 0, pud: 0, run: 0, sky: [158, 190, 224] }, ver = 1, pkey = "", frame = 0;
   const key = (cx, cy) => cy * NX + cx;
   const ensureAtlas = () => {
     if (atlas) return;
@@ -327,7 +361,7 @@ export function makeWetLayer(tw, env) {
     /* Les réglages de l'image. Une parcelle se refait quand un cran a bougé. */
     setParams(p) {
       P = p;
-      const k = `${Math.round(p.wet / 0.05)}|${Math.round(p.pud / 0.04)}|${p.sky.map((v) => Math.round(v / 12)).join(",")}`;
+      const k = `${Math.round(p.wet / 0.05)}|${Math.round(p.pud / 0.04)}|${Math.round((p.run || 0) / 0.2)}|${p.sky.map((v) => Math.round(v / 12)).join(",")}`;
       if (k !== pkey) { pkey = k; ver++; }
     },
     view(x0, y0, x1, y1) {

@@ -123,6 +123,33 @@ const ctxOf = (o = {}) => ({
 /* Un générateur reproductible : un banc qui tire au hasard mesure un jeu
    différent à chaque exécution, donc il ne mesure rien. */
 const seq = (list) => { let i = 0; return () => list[i++ % list.length]; };
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-29 — L'ESSAI ORDINAIRE, BALAYÉ (Guillaume : « rendre la négociation avec
+   ║ le maire plus facile » ; tranché : UN ESSAI ORDINAIRE SIGNE).
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Un vrai premier essai : une faute (jamais l'insulte), une réponse tiède sur trois,
+   la meilleure sinon, les plans posés au bon moment, quatre à sept secondes pour
+   choisir — et, une fois sur deux, il empoche dès que le bouton s'offre dans la
+   seconde moitié. Balayé sur les cinq maires × quatre moments de faute × trois
+   décalages de la tiède × avec et sans l'empochage : 120 essais par monde et humeur. */
+function ordinarySweep({ plans, mood }) {
+  let win = 0, n = 0;
+  for (const mk of MAIRES) for (const F of [2, 4, 6, 8]) for (const o of [0, 1, 2]) for (const settle of [false, true]) {
+    const s = M.mayorOpen(ctxOf({ mayorKey: mk, plans, mood }));
+    let g = 0;
+    while (!s.over && g++ < 60) {
+      const ch = M.mayorChoices(s), n0 = s.node, i = M.MAYOR_NODE_IDS.indexOf(n0);
+      let k;
+      if (settle && i >= 6 && ch.some(c => c.kind === "settle")) k = "__settle";
+      else if (n0 === "m5" && ch.some(c => c.kind === "plans")) k = "__plans";
+      else if (i === F && ch.some(c => c.kind === "say" && c.grade === "fault" && !c.fatal)) k = ch.find(c => c.kind === "say" && c.grade === "fault" && !c.fatal).k;
+      else k = pickGrade((i + o) % 3 === 1 ? "warm" : "ideal")(ch);
+      M.mayorPlay(s, k, 4000 + (g * 977) % 3000);
+    }
+    n++; if (s.over === "signed") win++;
+  }
+  return { rate: win / n, n };
+}
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ §1 — LA TABLE : CE QUE GUILLAUME A DEMANDÉ, MOT POUR MOT
@@ -350,9 +377,15 @@ section("§3 la négociation jouée");
     ok("⚠️⚠️ …ET LES MAINS VIDES LA MARGE FOND : la même bourde y coûte au moins un cran de confiance",
        sameTier.length === 0 && noneLost.length === 0,
        [...sameTier, ...noneLost].join(" · ") || "cinq maires, la même faute jouée dans les deux mondes");
-    const lostSig = MAIRES.filter(mk => oneSlip(1)(ctxOf({ mayorKey: mk, plans: false }), 3200).over !== "signed");
-    ok("⚠️ …et chez le maire le plus dur elle coûte carrément la signature",
-       lostSig.length >= 1, lostSig.length ? lostSig.join(", ") : "aucun");
+    /* ⚠️ 2026-09-29 — CE CONTRÔLE EXIGEAIT QUE LA BOURDE COÛTE LA SIGNATURE CHEZ
+       BONNEFOY, mains vides. Guillaume a demandé une négociation plus facile (« un essai
+       ordinaire signe ») : un sans-faute qui rattrape UNE bourde chez le maire le plus dur
+       en est la conséquence directe, et le commentaire au-dessus le disait déjà — c'était
+       un résultat d'équilibrage promu en invariant. L'INTENTION (« très difficile » les
+       mains vides) se mesure mieux sur un joueur ORDINAIRE : il y échoue presque toujours. */
+    const bareOrd = ordinarySweep({ plans: false, mood: "mid" });
+    ok("⚠️ …et les mains vides, un essai ORDINAIRE échoue presque toujours",
+       bareOrd.rate <= 0.15, `${Math.round(100 * bareOrd.rate)} % de ${bareOrd.n} essais signent`);
   }
   /* ⚠️ LE SEUIL EST À DEUX CRANS DE CONFIANCE, PAS À TROIS, et ce n'est pas une
      retouche de commodité : c'est là que la récompense de Guillaume commence à
@@ -723,6 +756,13 @@ section("§7 trois entretiens joués, en clair");
   ok("⚠️⚠️ …et le premier essai ordinaire se joue PRÈS du seuil, des deux côtés",
      Math.abs(d.peak - C.MAYOR_ADH_WIN) <= 25,
      `sommet ${d.peak} contre un seuil à ${C.MAYOR_ADH_WIN} (${d.over})`);
+  /* ⚠️⚠️ 2026-09-29 — ET IL SIGNE (Guillaume : « rendre la négociation plus facile ») :
+     jusqu'ici il culminait à 69,9 contre 75, exprès. */
+  ok("⚠️⚠️ 2026-09-29 — ce premier essai ordinaire SIGNE", d.over === "signed", `${d.over}, sommet ${d.peak}`);
+  const ordMid = ordinarySweep({ plans: true, mood: "mid" }), ordGood = ordinarySweep({ plans: true, mood: "good" }), ordBad = ordinarySweep({ plans: true, mood: "bad" });
+  ok("⚠️⚠️ 2026-09-29 — les plans en main, un essai ordinaire signe (humeur moyenne ≥ 70 %, bonne ≥ 90 %, mauvaise ≥ 40 %)",
+     ordMid.rate >= 0.7 && ordGood.rate >= 0.9 && ordBad.rate >= 0.4,
+     `moyenne ${Math.round(100 * ordMid.rate)} %, bonne ${Math.round(100 * ordGood.rate)} %, mauvaise ${Math.round(100 * ordBad.rate)} % (${ordMid.n} essais chacune)`);
 }
 
 

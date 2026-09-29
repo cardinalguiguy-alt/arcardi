@@ -1,5 +1,65 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-29
 
+## 2026-09-29 (jour) — LA MÉTÉO PAR LIEU, LA NEIGE SUR LA FERME, LE MAIRE PLUS FACILE
+
+Guillaume : « une cohérence météo ferme/ville mais qui ne soit pas toujours simultanée (bien que fréquemment
+la même) — il peut pleuvoir sur l'une et pas sur l'autre au même moment de la journée. Mais s'il neige, alors
+synchroniser les deux. Je veux donc amener la neige sur la ferme, et tu t'assureras que les animations de
+cratères et la quête sont jouables avec la neige. Rendre la négociation avec le maire plus facile. »
+Tranché avec lui avant de coder : **un jour sur cinq** diffère ; neige **sol + traces + décors** ; sur le
+champ, **neige fine, sillons lisibles** ; le maire, **un essai ordinaire signe**.
+- **La météo par lieu** (`meteo.js` § 3 bis, `placeDayWeather`, `placeOf`) : la VILLE garde son tirage au bit
+  près (tout ce qui la lisait est inchangé) ; la FERME en dérive le sien, pure fonction du jour. Tout jour de
+  neige est identique des deux côtés, épisodes compris, et aucune divergence ne tire de neige ; l'hiver, elle
+  n'ajoute jamais de pluie (elle ferait fondre un seul des deux manteaux). Formes : le front décalé de 40 à
+  150 min, l'intensité voisine, un temps propre (sec contre mouillé), le ciel (couvert contre dégagé).
+  ⚠️ **Le premier jet mouillait la ferme à chaque jour sec divergent** : un jour d'été sur trois contre un sur
+  six en ville ; le tirage « mouillé » d'un jour sec est maintenant ÉQUILIBRÉ sur ce que la divergence assèche
+  (mesuré : 17,6 / 17,6 % l'été). Le forçage du menu dev vaut pour les deux lieux ; la faune, les flaques et la
+  fumée lisent la ville ; le ciel, la pluie, la neige et le tonnerre lisent le lieu du joueur ; la prévision
+  du matin est celle de la ferme, plus « En ville : … » quand elle diffère ; le menu dev affiche 🌾 / 🏛️.
+  `verify-meteo` §11 (19 contrôles, trois falsifiés : fréquence, neige désynchronisée, climat déséquilibré —
+  ⚠️ le contrôle de fréquence comparait d'abord à `PLACE_SPLIT` lui-même, donc suivait la constante : il tient
+  maintenant le chiffre de Guillaume).
+- **La neige de la ferme** : le MÊME champ que la ville (`NG.makeSnowField`) sur la carte de la ferme, avec sa
+  lecture du sol (`A.farmSnowEnv`, hook `classify` de `buildChunkStatic` — ⚠️ aucune constante de la ville lue :
+  sans lui, la fontaine de la ville dallait un pré de la ferme). Classe neuve `TILLED` : la neige comble le
+  creux du sillon (≤ 3,2 cm) et laisse la crête à nu (≤ 3 mm — à 1 cm, les trois quarts des crêtes
+  blanchissaient) ; le bourrelet d'un pas n'y relève rien. Pas de neige sur l'eau, le chantier de pont, le
+  PASSAGE SOMBRE (indice de jeu) ; les rails nus sur un ballast blanc ; le quai balayé ; la berge de sable
+  s'amincit sur dix pixels (sans elle, la rivière en tuiles devenait un escalier dur sur fond blanc). Ombres
+  portées calées sur le DESSIN (vu en jeu : une case entière dessinait un pavé) : la maison par ses murs
+  (colonnes 8 à 87 du sprite — un liseré blanc l'encadrait), la clôture par la ligne de ses poteaux
+  (`A.farmFenceKind`, désormais lue aussi par `fenceKindAt`), rien pour le mobilier. Empreintes locales (moi,
+  les autres, les résidents, chevaux, loups, lapins), pieds enfoncés, ombres bleues. Chapeaux de neige
+  (`snowCapCanvas`) sur rochers, souches, clôtures, murs, puits, lampadaires, épouvantails, moulins, chaudrons,
+  bac ; charge des branches (`treeSnowMix`) sur chênes et pins ; toits (`snowRoofPixels`) de la maison, la
+  boutique, la grange, la gare ; les buissons sauvages prennent l'hiver des massifs de la ville (brindilles,
+  persistant terni) au lieu de fleurir sous la neige (`drawFarmBush`, paramètre `winter`).
+  ⚠️ **La ferme change sous la neige** : `farmSnowSync` compare la carte à sa dernière image ; un changement de
+  SOL ne relit que les pixels de la case (`invalidateGround`, mode `only` de `buildChunkStatic` — rebâtir une
+  parcelle coûte 14 à 80 ms, mesuré : un à-coup à chaque coup de houe) ; un changement d'OBJET est regroupé et
+  différé d'1,5 s (`refreshFields` + `invalidate`).
+- **Les cratères sous la neige** (`setMelts`) : un trou chaud fait fondre la neige sur un peu plus que sa
+  gerbe (ferme : toujours ; ville : tant qu'il est chaud et pas encore bassin de verre) ; le sol dégelé est
+  détrempé (sinon une pelouse d'été vive) ; les rides du vent ne posent plus de flocons au fond du trou.
+  ⚠️ Relire d'un coup le disque du grand cratère coûtait 260 ms : les parcelles touchées se rebâtissent une par
+  image. Aucune règle de quête ne lit la météo ni le sol (vérifié) ; **vu en jeu** : la chute, le cratère
+  fondu, l'invite « E : fouiller le cratère ». **Pas vu** : la fouille elle-même (la touche E de
+  l'automatisation n'a déclenché la fouille NI avec NI sans neige — un artefact du harnais, pas mesuré plus loin).
+- **Le maire plus facile** (`fermeConstants.js`) : seuil 75 → 70, plafond de fuite par échange 4 → 3, élan
+  0,3 → 0,1, glissement 3 s × 1,7 → 1,5 s × 1,3, confiance 6 → 5 points par cran. Choisi par simulation
+  (240 essais ordinaires) : le seuil seul faisait signer le jeu TOUT TIÈDE (quinze fois sur soixante à 65) ;
+  l'élan et le glissement n'aident que qui a de bonnes réponses. `verify-maire` 139/139 (deux contrôles neufs,
+  falsifiés sur l'ancien réglage ; celui « la bourde coûte la signature chez Bonnefoy » remplacé par
+  l'intention — les mains vides, un essai ordinaire échoue presque toujours : 0/120). Détail : `QUETE.md` §16.4.
+- Bancs : les 33 `verify-*` verts ; `render-neige-ferme` (neuf, 12 contrôles, planches `neige-ferme-*`) ;
+  `render-neige`, `render-pluie`, `render-buissons`, `render-buis` verts ; `no-undef`, bundle, `next build`.
+  **Vu en jeu** (échafaudage local, Chromium) : la ferme sous 12 cm à midi et à l'aube, les traces, la maison,
+  les clôtures, la boutique, les arbres, les buissons d'hiver, la gare, la chute et un cratère fondu.
+  **Pas vu** : à deux clients, un jour de pluie divergent en vrai, la neige qui tombe et s'accumule en temps
+  réel sur la ferme (le menu dev pose l'épaisseur), le labour sous la neige en jeu (tenu par le banc).
+
 ## 2026-09-29 (fin de nuit) — AUDIT DE LA PLUIE, CORRIGÉ
 
 Guillaume : « les flaques ne doivent pas être trop distrayantes, elles n'apparaissent qu'en cas de forte pluie ;
@@ -1109,7 +1169,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 9 | **Défauts nets (audit du 2026-09-27) — livrée le 2026-09-27 (nuit)**. ✅ Les deux lampadaires des allées (28,68) et (60,68) passent côté jardin. ✅ Nénuphars cuits réservés à l'étang et aux roselières. ✅ Porte de la maison hantée dégagée. ✅ Reflets : l'axe est la RIVE devant l'objet, et derrière un quai la bande du parement est cachée (les bancs du quai, au bord, étaient justes ; ce qui collait à l'eau, c'étaient les arbres derrière le quai). ➡️ Parcelle (160,102), la haie nord derrière le toit : renvoyée en phase 7 (haies refaites). ✅ Le grand escalier : **REFAIT le 2026-09-27 (nuit)** — volée droite dans l'axe du portail, qui enjambe le boulevard (récit en tête) | petits, visibles, sans parti pris : se font pendant que les images de 6a/6b arrivent |
 | ✅ | 10 | **Sols, seconde passe — livrée le 2026-09-27 (nuit)** (récit en tête) : goudron refait (gris, caniveaux, traces de roues, variantes par bloc) ; trois dallages par rang de lieu (opus civique et rosace de la fontaine, éventail du marché, grès des terrasses) ; herbe selon le quartier (tonte, pré, semis) ; massifs de saison en rangs ; rebord est-ouest des terrasses (chaperon et ombre) ; herbes hautes en bouquets teintés. ⬜ Reste : l'usure qui suit les passages sur les dallages (« chemins de désir », avec la phase 4) | le tapis de la phase 4 revu de près ; avant 7, qui repose des surfaces sur ces matières |
 | ✅ | 11 | **Végétation à l'échelle des maisons — livrée le 2026-09-27 (nuit)** (récit en tête) : quatre tailles par essence dessinée en code (jeune clairsemé, tuteuré, trapu, grand ×1,5), le magnolia redessiné (fleurs de 3 à 5 px), cerisier et mimosa en nuages de petites fleurs, repère « où suis-je ? » (L), vent en cinq poses ; ➡️ la matière des haies part en phase 7. Constat d'origine : ~~Les arbres sont trop petits depuis que les maisons ont grandi (×1,17 à ×1,24 : un feuillu arrive au premier étage), et un seul gabarit par essence — même taille, même silhouette ; en forêt, un papier peint. Deux ou trois tailles par essence, des silhouettes variées, de grands arbres isolés (tilleul de place, marronnier). ⬜ Haies : barres lisses peu texturées, au niveau des anciennes maisons (leur placement est en 7, leur matière ici). Balancement : deux poses échangées d'un coup~~ | avant 7 : la composition place des arbres, il faut d'abord les bons |
-| 🟨 | 12 | **Saisons et intempéries en ville**. ✅ **12a, la neige (2026-09-28)** : manteau intégré sur quatre jours de météo (`neige.js`), sol éclairé en relief avec ombres portées bleues (bâtiments, clôtures ajourées, dentelle des arbres nus), grain au bruit bleu, rides du vent, mottes, débris sous les arbres, dépôt et fonte progressifs par plaques (sol mouillé autour), chaussée tassée à ornières, congères du chasse-neige, empreintes locales (joueurs, habitants, chats, pigeons) comblées par la neige fraîche ; toits peints en deux calques par cran (`build-snow-roofs`), gare, grand escalier, murs de soutènement, clôtures, portails, potagers, mobilier ; arbres d'hiver à trois états (sapins étage par étage, feuillus nus) dont la neige tombe au vent et au choc ; buissons hivernés, fontaine gelée, piquets à neige, pieds enfoncés, ombres bleues ; menu dev local. ✅ **12b, la pluie (2026-09-29, récit en tête)** : chaussée et dallages mouillés par plaques (l'ombre sèche en dernier), flaques qui COMBLENT LES CREUX (joints, bord des dalles, ornières, caniveaux — pas des plaques), l'eau qui coule au caniveau, ronds de pluie dans les flaques, lumière des lampadaires qui s'étale et se reflète. ✅ **12c, la durée du jour** (le ciel suit le lever et le coucher de la saison, en continu) **et les cheminées qui fument** (cinq modèles, chez qui habite). ⬜ Reste : la ferme n'a ni neige ni sol mouillé (Valley Town seule) ; la faune garde ses horaires en heures ; la fumée n'est pas éclairée la nuit | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
+| 🟨 | 12 | **Saisons et intempéries en ville**. ✅ **12a, la neige (2026-09-28)** : manteau intégré sur quatre jours de météo (`neige.js`), sol éclairé en relief avec ombres portées bleues (bâtiments, clôtures ajourées, dentelle des arbres nus), grain au bruit bleu, rides du vent, mottes, débris sous les arbres, dépôt et fonte progressifs par plaques (sol mouillé autour), chaussée tassée à ornières, congères du chasse-neige, empreintes locales (joueurs, habitants, chats, pigeons) comblées par la neige fraîche ; toits peints en deux calques par cran (`build-snow-roofs`), gare, grand escalier, murs de soutènement, clôtures, portails, potagers, mobilier ; arbres d'hiver à trois états (sapins étage par étage, feuillus nus) dont la neige tombe au vent et au choc ; buissons hivernés, fontaine gelée, piquets à neige, pieds enfoncés, ombres bleues ; menu dev local. ✅ **12b, la pluie (2026-09-29, récit en tête)** : chaussée et dallages mouillés par plaques (l'ombre sèche en dernier), flaques qui COMBLENT LES CREUX (joints, bord des dalles, ornières, caniveaux — pas des plaques), l'eau qui coule au caniveau, ronds de pluie dans les flaques, lumière des lampadaires qui s'étale et se reflète. ✅ **12c, la durée du jour** (le ciel suit le lever et le coucher de la saison, en continu) **et les cheminées qui fument** (cinq modèles, chez qui habite). ✅ **12d, la ferme et la ville (2026-09-29, récit en tête)** : une météo PAR LIEU (un jour sur cinq diffère, jamais la neige) et **la neige sur la ferme** (sol, traces, champ à sillons lisibles, décors, toits, buissons hivernés, fonte autour des cratères chauds). ⬜ Reste : la ferme n'a pas de sol mouillé ; la faune garde ses horaires en heures ; la fumée n'est pas éclairée la nuit ; les chênes de la ferme restent verts l'hiver | la ville, la carte la plus vue, n'a qu'une saison ; réutilise 3 et la météo |
 | ⬜ | 15 | **PRIORITÉ DE DOCUMENTATION (décidé avec Guillaume le 2026-09-29) : LES COMMERCES DE LA GRAND-RUE — LE CAFÉ « CHEZ JULIETTE » ET LE RESTAURANT.** ⚠️ PAS À FAIRE TOUT DE SUITE : il faut être PRÊT (séance de conception à part, §2 de `CLAUDE.md` : LISTER les décisions structurantes et ATTENDRE). **Le café** : un intérieur « superbe, cosy, bobo » (Guillaume) où l'on vend des BOISSONS en tout genre ; **le rôle de barman ou de vendeur doit être accessible aux joueurs SANS CASSER LA MÉCANIQUE** (qui sert, à quelle heure, contre quoi : à décider — la porte n'est jamais la caisse, §4, donc toute vente passe par une `req` arbitrée par l'hôte, comme le marché) ; **un lieu de rencontre entre résidents** (`townSpots`, routines) **et un lieu de développement narratif** pour de futures missions ou quêtes. Le restaurant suit le même principe. À trancher : la fonction de chaque lieu, quel bâtiment est converti (`TOWN_SHOP_MODELS` a déjà `garfield` et `salon`), l'intérieur (les sols d'intérieur existent pour le tribunal, la mairie, l'église — au niveau des façades : c'est la phase 8), la carte des boissons et ses prix (l'économie du marché existe), le rôle du joueur (état partagé dans `ferme_saves`, aucune migration SQL sans validation), le prompt Gemini avec références pour l'intérieur (jamais un appel automatique) | le dernier grand lieu social de la ville ; dépend de 8 (intérieurs) pour son intérieur, du n° 1 de `CLAUDE.md` §13 (résidents à deux clients) pour ses rencontres |
 | ⬜ | 13 | **Lumière et animation, finitions**. ⬜ Ombres portées des bâtiments : quadrilatères à bord franc qui ignorent le toit (à droite de l'hôtel de ville, un rectangle net) ; celles des maisons, une tache ovale. ⬜ Fanions du marché figés (0 pixel changé en une seconde) alors que l'herbe ondule. ⬜ Fontaine : le jet vit à peine, le bassin ne ride pas, aucune goutte ne retombe | morceaux restés de 3 et de 5 ; se glissent entre deux phases |
 | ⬜ | 14 | **Texte du monde**. ⬜ Une seule écriture : les noms sont en `pixelFont`, mais les plaques des maisons, les bulles de dialogue et les enseignes (« MARCHÉ », salon) en `monospace` système (38 appels `ctx.font` dans `FermeGame.js`). ⬜ La plaque « À vendre » ou du propriétaire flotte au faîte du toit : un panneau planté au portail serait un objet du monde, pas une étiquette. ⬜ Panneaux indicateurs vides (deux planches blanches) : y écrire les destinations, en police pixel, dans la langue du joueur | indépendante du reste, se place où l'on veut |
