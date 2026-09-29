@@ -16,6 +16,7 @@
    ========================================================================== */
 import { PLANCHE } from "./planche";
 import { PLANCHE2 } from "./planche2";   // 447
+import { PLANCHE3 } from "./planche3";   // 2026-09-29 (phase 7b)
 
 // --- Carte ---
 export const MAP_W = 180;   // largeur en tuiles
@@ -1659,6 +1660,45 @@ export const ANIMAL_WALK_FRAME_MS = 260;     // durée d'une frame de patte pend
 // paliers que le voile visuel, sans dupliquer les valeurs à deux endroits.
 export const DAWN_START_MIN = 5 * 60 + 30, DAWN_END_MIN = 6 * 60 + 30;   // 5h30 → 6h30
 export const DUSK_START_MIN = 17 * 60, DUSK_MID_MIN = 20 * 60, DEEP_END_MIN = 23 * 60; // 17h / 20h / 23h
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-29 (phase 12c) — LA DURÉE DU JOUR SUIT LA SAISON.
+   ──────────────────────────────────────────────────────────────────────────
+   Les cinq constantes ci-dessus sont le ciel de RÉFÉRENCE : un lever à 6 h et un
+   coucher à 19 h (aube 5 h 30 → 6 h 30, heure dorée à 17 h, mauve à 20 h, nuit
+   noire à 23 h). Le ciel du jeu, lui, se calcule depuis le LEVER et le COUCHER de
+   la saison (`SUN_HOURS`) : jours courts et nuits longues l'hiver, longues soirées
+   l'été — et la table est LA MÊME que celle de la fonte de la neige (`neige.js`
+   `sunAt`, qui l'anticipait), donc le soleil de la fonte et celui du ciel ne
+   peuvent plus diverger.
+   ⚠️ CONTINUE, PAS PAR PALIERS : une saison dure sept jours réels ; un coucher qui
+   sauterait de 18 h à 16 h 30 au changement de saison serait un défaut
+   d'affichage vu par tous à la même seconde. `sunHoursAt(ms)` interpole (en
+   cosinus) entre les CENTRES de deux saisons voisines — une pure fonction de
+   l'horloge réelle, donc chaque client la calcule chez soi (§3).
+   ⚠️ Chaque instant clé du ciel s'en DÉDUIT (`skyBoundsOf`), dans les mêmes
+   écarts que la référence : aube = lever ∓ 30 min, heure dorée = coucher − 2 h,
+   mauve = coucher + 1 h, nuit noire = coucher + 4 h. Lever 6 h et coucher 19 h
+   redonnent exactement les cinq constantes (tenu par `verify-jour`). */
+export const SUN_HOURS = { winter: [8.5, 16.5], spring: [6.5, 19.5], summer: [6, 21.5], autumn: [7.5, 18] };   // [lever, coucher], en heures de jeu
+export const SUN_REF = [6, 19];
+const SUN_SEASON_ORDER = ["spring", "summer", "autumn", "winter"];      // l'ordre de `SEASONS`
+export function skyBoundsOf(rise, set) {
+  return {
+    dawnStart: Math.round((rise - 0.5) * 60), dawnEnd: Math.round((rise + 0.5) * 60),
+    duskStart: Math.round((set - 2) * 60), duskMid: Math.round((set + 1) * 60), deepEnd: Math.round((set + 4) * 60),
+  };
+}
+/* Le lever et le coucher (heures) à l'instant réel `ms`, interpolés entre les
+   centres des saisons ; `forced` (le menu dev) fige une saison. */
+export function sunHoursOf(ms, forced) {
+  if (forced && SUN_HOURS[forced]) return SUN_HOURS[forced].slice();
+  const u = Math.max(0, ms - SEASON_EPOCH) / SEASON_REAL_MS;          // saisons écoulées, depuis le printemps
+  const t = u - 0.5, i0 = Math.floor(t), f = t - i0;
+  const a = SUN_HOURS[SUN_SEASON_ORDER[(((i0 % 4) + 4) % 4)]], b = SUN_HOURS[SUN_SEASON_ORDER[((((i0 + 1) % 4) + 4) % 4)]];
+  const k = 0.5 - 0.5 * Math.cos(Math.PI * f);
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+}
 
 // --- Météo (2026-09-26) : le TEMPS lui-même vit dans `meteo.js` (épisodes,
 // saisons, forçage). Ici, seulement le rendu de la pluie, de la neige et de la
@@ -5414,6 +5454,7 @@ export const TOWN_HOUSE_DOOR_PX = 23 * 2.04 / 1.70;   // 27,6 px d'art : le vant
 export const townDoorScale = (m) => TOWN_HOUSE_DOOR_PX / m.doorH;   // px d'ART par px de référence
 export const TOWN_HOUSE_MODELS = {
   s1: { size: "std", door: 399, doorH: 224, foot: 948, wall: [102, 998],   // vantail : 686 → 910
+        chimney: [[950, 12]],   // ⚠️ la bouche du tuyau, en px de la RÉFÉRENCE (le repère de `wins`) — la fumée de `fumee.js`, phase 12c ; S4 n'a pas de cheminée
         wins: [
           { x: 288, y: 234, w: 62, h: 62 }, { x: 742, y: 234, w: 62, h: 62 },          // lucarnes
           { x: 280, y: 420, w: 84, h: 112, hv: { riche: 80 } },                          // étage (celle du milieu :
@@ -5433,6 +5474,7 @@ export const TOWN_HOUSE_MODELS = {
           riche:    { src: "refs/maison-s1-riche.jpg",    crop: [28, 6, 1035, 978] },
         } },
   n1: { size: "narrow", door: 393, doorH: 217, foot: 945, wall: [206, 882],   // vantail : 717 (sommet de l'arc) → 934
+        chimney: [[708, 8]],   // deux tuyaux (690 et 725) : la fumée sort entre eux
         wins: [
           { x: 290, y: 238, w: 84, h: 92, hv: { riche: 70 } },                             // pignon
           { x: 296, y: 470, w: 88, h: 92, hv: { riche: 72 } },                             // étage
@@ -5465,6 +5507,7 @@ export const TOWN_HOUSE_MODELS = {
      lampe allumerait le laiton. Elle est sortie sur fond BLANC : détourée par
      remplissage depuis le bord (`build-maison-sprites`). Pas d'enrichie. */
   n2: { size: "narrow", door: 391, doorH: 213, foot: 945, wall: [177, 909],   // vantail : 721 → 934
+        chimney: [[727, 8]],
         wins: [
           { x: 504, y: 218, w: 78, h: 72, hv: { riche: 52 } },                            // lucarne (garde-corps chez la riche)
           { x: 336, y: 443, w: 108, h: 120, hv: { riche: 78 } },                          // étage
@@ -5512,6 +5555,7 @@ export const TOWN_HOUSE_MODELS = {
      enrichie : la même maison, repeinte lie-de-vin, boiseries crème — pas la
      patine de la passe enrichie, un choix de Guillaume. */
   s3: { size: "wide", door: 427, doorH: 186, foot: 948, wall: [53, 1034],   // vantail : 702 → 888 (imposte 667 → 692)
+        chimney: [[148, 14], [945, 15]],   // deux souches, une à chaque pignon
         wins: [
           { x: 748, y: 225, w: 58, h: 61 },                                               // lucarne
           { x: 169, y: 407, w: 83, h: 142 }, { x: 392, y: 407, w: 84, h: 123 },           // étage (la 2e : sa jardinière)
@@ -5543,6 +5587,7 @@ export const TOWN_HOUSE_MODELS = {
      lecture que le 948 de S1. Vitres : le verre relevé + 2 px de chaque côté ;
      la lanterne, son verre seul (règle de N1 et N2). */
   s2: { size: "center", door: 547, doorH: 241, foot: 937, wall: [100, 996],   // vantail : 668 → 909
+        chimney: [[828, 72]],
         wins: [
           { x: 518, y: 385, w: 51, h: 55 },                                               // la lucarne en sourcil
           { x: 202, y: 681, w: 48, h: 98, g: 1 },                                         // au-dessus des fleurs
@@ -7183,7 +7228,37 @@ export const TOWN_PROP_ART = {
      c'est `townPropBox` qui va chercher dans l'une puis l'autre. */
   bloomBed: "flowerBedL", bloomBed2: "flowerBedR",
   bloomRow: "flowerRow", rockBed: "rockBed", hedgeAngle: "hedgeCorner",
+  /* ⚠️ 2026-09-29 (phase 7b) — LES DÉCORS DE LA TROISIÈME PLANCHE : le mobilier
+     des jardins par rang (boîte aux lettres, bois, linge, brouette, tonneau,
+     salon, vasque, pots, balançoire, clapier), les urnes, et la maison hantée
+     (ronces, herbes sèches, portail). Même table, même mécanique. Le dessin d'un
+     décor est `sprites.townProp3[<nom ci-dessous>]` (`TOWN_PLANCHE3_KINDS`).
+     ⚠️ `planter` et `lamp` n'y sont PAS : ils existent depuis le 425, posés par le
+     générateur avant qu'aucune emprise ne le renseigne ; leur en donner une
+     changerait ce que les passes suivantes acceptent autour d'eux — donc des
+     arbres, donc la carte. Leur nouveau dessin vient de la planche 3 sans que
+     leur emprise de génération bouge (voir `TOWN_LAMP_ART`). */
+  mailboxTin: "mailboxTin", mailboxRed: "mailboxRed", mailboxIron: "mailboxIron",
+  woodpileRoofed: "woodpileRoofed", woodpileAxe: "woodpileAxe", clothesline: "clothesline",
+  wheelbarrow: "wheelbarrow", rainBarrel: "rainBarrel", gardenTable: "gardenTable",
+  birdbath: "birdbath", herbPots: "herbPots", swing: "swing", hutch: "hutch",
+  urn: "urnSummer",
+  bramble: "bramble", brambleSmall: "brambleSmall", brambleRow: "brambleRow",
+  wildGrass: "wildGrass", ruinGate: "gate",
 };
+/* Les décors dont le dessin vient de la planche 3 (et d'elle seule) — DÉRIVÉ de
+   la table, jamais écrit deux fois : la boucle de rendu n'a qu'une ligne pour eux. */
+export const TOWN_PLANCHE3_KINDS = new Set(Object.keys(TOWN_PROP_ART).filter((k) => {
+  const a = TOWN_PROP_ART[k];
+  return PLANCHE3[a] && !PLANCHE[a] && !PLANCHE2[a];
+}));
+/* Le lampadaire selon le RANG de son quartier (`townRankAt`, la cohérence sociale
+   par quartier — la lumière comprise) : 0 riche → le candélabre à deux lanternes,
+   1 classe moyenne → le lampadaire d'origine, 2 modeste → la lanterne sur potence.
+   Le générateur ne connaît pas ce choix (la pose des lampes ne change pas d'un
+   pixel) ; seul le dessin et le halo le lisent. */
+export const TOWN_LAMP_ART = ["rich", null, "poor"];
+export const townLampArtAt = (x, y) => TOWN_LAMP_ART[townRankAt(x, y)];
 /* L'emprise d'un décor, en cases, dans le repère du monde : le sprite est
    dessiné centré en x sur `pr.x` et POSÉ par le bas sur `pr.y + 1` (voir la
    boucle de rendu). Rendue en flottant — c'est l'appelant qui décide de son
@@ -7195,7 +7270,7 @@ export function townPropBox(kind, x, y) {
      d'UNE case : le générateur l'aurait cru minuscule et aurait semé un arbre
      dedans. C'est exactement le défaut du §4 (« la case d'un décor n'est pas la
      surface qu'il couvre »), qu'un `|| {}` silencieux aurait ramené. */
-  const a = TOWN_PROP_ART[kind], s = a && (PLANCHE[a] || PLANCHE2[a]);
+  const a = TOWN_PROP_ART[kind], s = a && (PLANCHE[a] || PLANCHE2[a] || PLANCHE3[a]);
   if (!s) return { x0: x, x1: x + 1, y0: y, y1: y + 1 };
   const hw = s.w / (2 * TILE);
   return { x0: x + 0.5 - hw, x1: x + 0.5 + hw, y0: y + 1 - s.h / TILE, y1: y + 1 };

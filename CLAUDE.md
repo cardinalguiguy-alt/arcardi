@@ -7,46 +7,57 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-29 — saules, bug Tristan/Jérôme, lampadaires, bancs, allée hantée livrés ; la planche 3 est importée en données (rien de branché) ; DEMANDER à Guillaume quoi implémenter
+### 2026-09-29 (nuit, suite) — planche 3 branchée, pluie (12b), jour qui change et fumée (12c) livrés ; le café « Chez Juliette » et le restaurant sont une PRIORITÉ de documentation ; DEMANDER à Guillaume quoi faire
 
 Checklist (✅/⬜) au tableau des phases de `components/ferme/README.md`, récits en tête du même fichier.
 Cadre : personnages ÉVOCATEURS ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce
-chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre restant : la fin de 7b
-(planche 3, puis les commerces en séance de conception à part), 12b (pluie), 12c (durée du jour,
-cheminées), 13, 14, 8 ; 6a/6b au fil de ses images.
+chantier, la règle « un seul changement visuel par livraison » est LEVÉE.** Ordre restant : 13 (ombres, fanions,
+fontaine), 14 (texte du monde), 8 (intérieurs) ; 6a/6b au fil de ses images ; **les commerces — voir plus bas**.
 ⚠️ **PRINCIPE : LA COHÉRENCE SOCIALE PAR QUARTIER** — `C.townStandingAt` / `C.townRankAt` / `townHouseDistrict` ;
-tout ce qui se compose doit la lire, la lumière comprise. ⚠️ **PAS DE BÂTIMENT SANS FONCTION.** ⚠️ **PAS DE
-CLÔTURE PARTOUT** (un jardin sur trois reste ouvert, dans chaque rang).
-⚠️⚠️ **VERDICT DE GUILLAUME SUR LES BUIS (2026-09-28) : « laids et simplistes, un peu comme la texture des
-haies qui entourent cimetière et jardin botanique ».** L'ancien rendu est remis par défaut
-(`TOWN_BUIS_LEGACY = true`, fermeConstants.js), `buis.js` est gardé, « nous y reviendrons ». **Décidé avec lui
-le 2026-09-29 : tout objet ou végétal NEUF vient d'une PLANCHE GEMINI** (`refs/prompts-planche3.md`), plus
-aucune végétation dessinée en code — c'est le feuillage en touffes procédurales qu'il trouve laid.
-- **Livré** : les SAULES — leur dessin n'avait pas bougé, les grands arbres de la phase 11 les écrasaient :
-  aucun grand ni trapu ne touche plus un saule (`willowNear`, fermeArt.js), deux grands saules ×1,2 tirés de
-  la même grille (`willowGrandData`), l'hiver tiré du saule de la planche (`willowWinter`) au lieu du vase
-  procédural de 31 px ; le BUG TRISTAN/JÉRÔME — la cible descendait en ville en pleine course
-  (`residentTownEligible`, élan qui retombe, scène annulée, arrêts envoyés aux invités) ; les BANCS de la
-  place et du monument dans l'axe de la porte de l'hôtel de ville ; les LAMPADAIRES (passe finale « LES
-  LAMPADAIRES AUX CARREFOURS ET AUX PORTES », fermeEngine.js : la grille de la rue de la Gare remplacée par des
-  paires au rythme de ses arbres, un angle par carrefour — jamais le sud-est, où l'on flâne —, l'entrée des
-  allées selon le rang) ; les dalles de l'allée de la maison hantée ; les prompts de la PLANCHE 3 (A jardins
-  vécus, B place, lampadaires par rang, maison hantée — chacune avec un ÉTALON du jeu redessiné).
-- Bancs : les 56 verts (30 `verify-*`, 26 `render-*`), dont `verify-vallee` 279, `render-arbres` 33 (+8,
-  falsifiés sur le vrai code d'avant), `render-parc` 39, `render-haies` 49, `verify-collision` 35,
-  `verify-lumiere` 86 ; `no-undef`, bundle, `next build` verts. Vu en jeu : le saule de l'étang (automne ;
-  hiver sous 12 cm), la scène T/J chez l'hôte (départ en ville simulé en pleine scène et en pleine course), la
-  place et l'avenue de nuit, l'allée hantée. **Pas vu** : à deux clients. **Pas de Supabase.**
-- ⚠️ **Dette connue** : le buis TAILLÉ à la faux de la ferme (`farmBushTrimSprite`) garde son ancien dôme ; la
-  ferme n'a pas de neige ; les plantes PEINTES des bitmaps ne fanent que sous la neige ; l'église n'a que des
-  liserés ; `verify-neige` §4/§5 falsifiés en forçant le verdict ; `townHedgeAngle` (planche 2) est construit
-  et posé nulle part.
+tout ce qui se compose doit la lire, la lumière comprise (les lampadaires par rang en sont la dernière
+application). ⚠️ **PAS DE BÂTIMENT SANS FONCTION.** ⚠️ **PAS DE CLÔTURE PARTOUT** (un jardin sur trois reste ouvert).
+⚠️⚠️ **CRITÈRE PERMANENT (Guillaume, 2026-09-29) : « comme la pluie est fréquente, il est normal que je sois
+hyper exigeant sur l'aspect des surfaces ».** Une surface qui revient tout le temps à l'écran (sol mouillé,
+chaussée, dallages, neige) se juge EN JEU, à plusieurs zooms et heures — pas seulement sur la planche du banc. ⚠️
+**UNE FLAQUE COMBLE UN CREUX, ELLE NE RECOUVRE PAS UNE ZONE** (son premier jet, des taches claires lisses, s'est
+lu « surélevé ») : joints, bord des dalles, ornières, caniveaux ; plus sombre que le sol, transparente ; l'eau
+COULE au caniveau. Mémoire : `feedback-surfaces-pluie-exigence`.
+⚠️⚠️ **VERDICT SUR LES BUIS (2026-09-28) : « laids et simplistes ».** Ancien rendu par défaut
+(`TOWN_BUIS_LEGACY = true`), `buis.js` gardé, « nous y reviendrons ». **Décidé le 2026-09-29 : tout objet ou
+végétal NEUF vient d'une PLANCHE GEMINI** (`refs/prompts-planche3.md`), plus aucune végétation dessinée en code.
+- **Livré le 2026-09-29 (nuit, suite)** : (1) **LA PLANCHE 3 EST DANS LE JEU** — jardins par rang (boîte aux
+  lettres fonte / bois peint / tôle, deux objets par jardin dans un cycle par rang, jamais devant le mur derrière
+  une grille), jardinières d'été / d'hiver et deux urnes à la mairie, lampadaires par rang (candélabre à deux verres
+  / lampadaire d'origine / lanterne sur potence), maison hantée (ronces, herbes sèches, portail rouillé
+  traversable) ; carte identique au bit près ; `step` par objet enfin réel dans l'outil. (2) **12b, LA PLUIE**
+  (`pluie.js`) : sol mouillé par plaques, flaques-creux, eau qui coule au caniveau, ronds dans les flaques, lumière
+  des lampadaires qui s'étale. (3) **12c** : le ciel suit le lever et le coucher de la SAISON en continu
+  (`SUN_HOURS`, hiver 8 h de jour / été 15,5 h ; lanternes à 14 h 50 l'hiver, 19 h 50 l'été) et les cheminées de
+  cinq modèles fument chez qui habite (`fumee.js`, sans état). ⚠️ Le GAMEPLAY ne bouge pas : `E.isNightTime` (lapins,
+  loups de l'hôte) garde le ciel de référence ; la faune garde ses horaires en heures.
+- Bancs : les 61 verts (33 `verify-*`, 28 `render-*`), dont les cinq neufs `verify-planche3` 31,
+  `verify-pluie` 33, `render-pluie` 22, `verify-jour` 40, `render-fumee` 5, tous falsifiés ; `no-undef`, bundle,
+  `next build` verts. Vu en jeu : la place et la rue en pluie forcée (jour, nuit), les jardins de trois rangs, la
+  maison hantée, le candélabre allumé, l'hiver de la place, la fumée à l'écran (faible à ce zoom). **Pas vu** : à
+  deux clients, la fumée dans la lueur des fenêtres, l'été et le printemps sous la pluie, un vrai iPad.
+  **Supabase : rien.**
+- ⚠️ **Dette connue** : le buis TAILLÉ à la faux de la ferme garde son ancien dôme ; la ferme n'a ni neige ni sol
+  mouillé ; les plantes PEINTES des bitmaps ne fanent que sous la neige ; l'église n'a que des liserés ;
+  `townHedgeAngle` (planche 2) est construit et posé nulle part ; la fumée est peinte AVANT le voile de nuit (plus
+  sombre que le ciel, jamais éclairée par les fenêtres) ; la faune ne suit pas la durée du jour.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Le 2026-09-29** : les deux grands saules (l'étang du parc, la rive sud) et le saule d'hiver doré ; les
-  lampadaires (les paires de l'avenue tous les 18 pas, les carrefours, les portails par rang — carte de la
-  livraison) ; les bancs recentrés ; les dalles de l'allée hantée ; **la scène Tristan/Jérôme à deux clients**.
+- **Le 2026-09-29 (nuit, suite)** : **TOUT LE NEUF** — la taille de chaque objet de la planche 3 contre un
+  personnage (`step` du catalogue, réglé à l'œil sur trois écrans), la place et le nombre des objets de jardin, le
+  candélabre (4,2 m) et ses deux flaques de lumière, le portail de la maison hantée ; **la pluie** : la force du
+  mouillé (trois niveaux), les flaques (`puddleThr`, jusqu'à ~19 % du sol dur à pleine flaque), leur durée (7 h de
+  jeu sous ciel d'automne, 2 h l'été), l'eau qui coule au caniveau, les ronds, la lumière des lampadaires sur sol
+  mouillé ; **les saisons** : les heures de lever et de coucher (`SUN_HOURS` — le jour de jeu commence à 6 h : en
+  hiver il fait encore noir jusqu'à 8 h 30) ; **les cheminées** : la fréquence du feu par saison, la taille et la
+  visibilité de la fumée. **Le 2026-09-29 (jour)** : les deux grands saules (l'étang du parc, la rive sud) et le
+  saule d'hiver doré ; les lampadaires (paires de l'avenue, carrefours, portails par rang) ; les bancs recentrés ;
+  les dalles de l'allée hantée ; **la scène Tristan/Jérôme à deux clients**.
 - **La neige (2026-09-28, soir)** : tout est réglage, à juger à l'écran — la force des ombres portées
   (`NEIGE.SHADOW_K` 0,45, bloc de 40 px pour une maison), le grain (un tiers de ton), la vitesse du dépôt
   (`COV0`/`COVR`, couvert vers 2,5 cm), la chaussée et ses ornières, les calques de toit (dont les liserés
@@ -108,23 +119,27 @@ aucune végétation dessinée en code — c'est le feuillage en touffes procédu
 
 ### ⏭️ ACTION SUIVANTE
 
-**⚠️ À LA REPRISE, NE RIEN IMPLÉMENTER DE TA PROPRE INITIATIVE : DEMANDE À GUILLAUME QUOI FAIRE, IL LE DIRA**
-(ordre du 2026-09-29, fin de séance : « il devra me le demander à la prochaine session »). Ce qui suit est un
-état des lieux pour lui poser la question, PAS un plan à dérouler.
-**La planche 3** (récit en tête de `components/ferme/README.md`) : reçue (`refs/planche3-*.jpg`) et importée en
-données — `tools/import-planche3.mjs` → `components/ferme/planche3.js` (26 sprites ; `'~'` = l'ombre violette de
-Gemini, `foot` = dernière rangée de l'objet ; JPG lus par `sips`) + `tools/out/planche3-importee.png`. **RIEN n'est
-branché dans le jeu.** Décidé : **les deux bancs de la planche (rustique, fonte) sont écartés** — « les bancs du
-jeu sont très bien comme ils sont ». ⚠️ Guillaume a dit « on importe pas tout de suite » APRÈS que l'import avait
-déjà tourné, puis « on en reparle » : **lui demander s'il garde ces fichiers générés ou s'il les fait retirer**
-(les JPG restent, l'import se relance en une commande). Non tranché : la boîte aux lettres en tôle à drapeau (elle
-lit américaine). Si on branche un jour : la TAILLE se règle EN JEU à côté d'un personnage — tout arrive grand,
-l'échelle étant celle du banc chunky du jeu (boîtes 2,1 à 2,7 m, vases 4 m, candélabre 5,9 m), `step` par objet
-dans le catalogue ; puis le rejoueur (`planche3Sprite` sur le modèle de `planche2Sprite`, `'~'` semi-transparent,
-pose par `foot`), `TOWN_PROP_ART` / `townPropBox` étendus à `PLANCHE3`, puis le placement (jardins par rang,
-jardinières de la place, un lampadaire par rang, ronces et portail de la maison hantée). Chaque sprite se regarde
-en jeu le jour où on le pose (§9). **Les commerces (café, boulangerie, restaurant) restent une séance de
-conception à part** (quelle fonction, quel bâtiment converti ; §2 : LISTER et ATTENDRE).
+**⚠️ À LA REPRISE, NE RIEN IMPLÉMENTER DE TA PROPRE INITIATIVE : DEMANDER À GUILLAUME QUOI FAIRE, IL LE DIRA**
+(ordre du 2026-09-29 : « il devra me le demander à la prochaine session »). Ce qui suit est un état des lieux pour
+lui poser la question, PAS un plan à dérouler.
+**Restent, dans l'ordre de la feuille de route** : 13 (ombres portées des bâtiments à bord franc, fanions du marché
+figés, fontaine qui ne vit pas), 14 (le texte du monde en police pixel), 8 (intérieurs au niveau des façades) ; 6a/6b
+au fil de ses images ; la faune qui suit la durée du jour ; la ferme sans neige ni sol mouillé ; la nuit sous la
+pluie (reflets plus poussés que deux taches).
+**⚠️ PRIORITÉ DE DOCUMENTATION, PAS À FAIRE TOUT DE SUITE — LES COMMERCES DE LA GRAND-RUE (décidé avec lui le
+2026-09-29) : LE CAFÉ « CHEZ JULIETTE » ET LE RESTAURANT.** Il faut être PRÊT : une séance de conception à part (§2 :
+LISTER les décisions structurantes et ATTENDRE). Le café : un intérieur « superbe, cosy, bobo » où l'on vend des
+BOISSONS en tout genre ; **le rôle de barman ou de vendeur doit être accessible aux joueurs SANS CASSER LA
+MÉCANIQUE** (toute vente passe par une `req` arbitrée par l'hôte, comme le marché : la porte n'est jamais la caisse,
+§4) ; **un lieu de rencontre entre résidents et un lieu de développement narratif** pour de futures missions ou
+quêtes. Le restaurant : même principe. À décider : la fonction de chaque lieu, quel bâtiment est converti
+(`TOWN_SHOP_MODELS` a `garfield` et `salon`), l'intérieur (la phase 8 : les sols d'intérieur existent pour le
+tribunal, la mairie, l'église), la carte des boissons et ses prix, le rôle du joueur (état dans `ferme_saves`, aucune
+migration SQL sans validation), et un prompt Gemini avec références pour l'intérieur (jamais un appel
+automatique). Ligne 15 du tableau des phases de `components/ferme/README.md`.
+**La planche 3** : branchée ; il reste la boîte aux lettres en tôle à drapeau (non tranchée : elle lit
+américaine ; les trois modèles sont en jeu) et les deux bancs écartés (« les bancs du jeu sont très bien »).
+`tools/import-planche3.mjs` se relance en une commande (les JPG restent dans `refs/`).
 Intégrer au fil de l'eau ses images si elles tombent dans `refs/`.
 ⚠️ **Avant d'intégrer une image, mesurer sa porte en H ET son cadrage** : la ligne du prompt ne garantit
 rien, et une retouche de Gemini peut décaler le dessin dans son fichier (`at`, mesuré par recouvrement
@@ -320,6 +335,18 @@ clair, un sprite haut contre le mur du fond avale ce qui passe devant… — viv
 dessins qu'elles gouvernent**, dans `components/ferme/DESSIN.md`. Rien n'en est recopié ici.
 
 **Conception — vrai partout**
+
+- ⚠️⚠️ **UNE OPTION DE CATALOGUE QUE PERSONNE NE LIT EST UN MENSONGE DE DOCUMENTATION** (planche 3, 2026-09-29).
+  `opt.step` figurait dans l'outil d'import, dans son en-tête et dans sa note (« se règle ici, par le champ
+  `step` ») — et la découpe lisait la feuille échantillonnée au pas COMMUN : un objet à pas propre sortait
+  décalé, sans une erreur. Elle n'a servi que le jour où on a voulu s'en servir. *Une option qu'on documente se
+  branche et se teste le jour où on l'écrit.*
+- ⚠️⚠️ **UNE SURFACE QUI REVIENT TOUT LE TEMPS À L'ÉCRAN NE SE JUGE PAS SUR LA PLANCHE DU BANC** (pluie, 2026-09-29).
+  Dix-huit contrôles verts sur des flaques qui se lisaient « surélevées » : le banc mesurait la part de sol
+  couverte, pas ce qu'est une flaque (un creux qui suit les joints et les ornières). La mesure qui compte est
+  née du retour : *moins de 12 % des pixels d'une flaque ont un carré de 5 × 5 tout en eau* (44 % avec le
+  premier jet, falsifié sur lui). Guillaume : « comme la pluie est fréquente, il est normal que je sois hyper
+  exigeant sur l'aspect des surfaces ».
 
 Les cinq pièges du GÉNÉRATEUR (la case d'un décor, la liste noire, la passe qui pave, le second de
 quelque chose, la variante de décor) décrivent tous `generateTownWorld` et vivent **à côté de lui**,
@@ -672,15 +699,17 @@ dépôt.
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte — et depuis le 2026-09-02 les **cinq maires** (`tools/out/maire-cinq.png`), avec le seul contrôle du dépôt qui mesure un RAPPORT entre deux morceaux (stature rendue contre stature écrite, tête contre carrure, pieds au parquet, quatorze mains à leur cible pour chacun des cinq corps). ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. ⚠️ **Depuis le 2026-09-02 il mesure aussi le CONTRAIRE** : que les vingt-huit cases de végétation basse ne refusent RIEN, par les quatre côtés, et qu'aucune ne soit solide pour une autre raison que son buisson. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
-| `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
+| `components/ferme/planche.js` · `planche2.js` · `planche3.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` / `import-planche3.mjs` — les sprites des TROIS planches de Guillaume, en données (la 3e : jardins, place, lampadaires par rang, maison hantée ; JPG lus par `sips`, échelle par objet = son `step`, `'~'` = l'ombre de Gemini, branchée le 2026-09-29 par `planche3Sprite`). Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
-| `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
+| `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure ET LA SAISON (`skyAt(t, bornes)`, phase 12c : `C.SUN_HOURS`, `skyBoundsOf`, sans bornes = le ciel de référence 6 h / 19 h) (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
 | `components/ferme/meteo.js` | **LA MÉTÉO (2026-09-26), pure** : épisodes par jour et par saison (`dayWeather`), huit canaux avec leur fenêtre dans la montée (`weatherAt`, `weatherAtMs`), forçage du menu dev qui commence à SON heure (`normalizeForce`), abri de la faune (`wetness`), éclairs et tonnerre (`boltOdds`, `flashGain`, `thunderFor`), prévision du matin (`forecast`). Le forçage et la saison forcée (`E.setForcedSeason`) passent par `applyForcedSky` (FermeGame.js) et par personne d'autre. Banc : `verify-meteo` |
 | `components/ferme/eau.js` | **L'EAU DE LA VILLE (phase 4, 2026-09-25), pure** : la cuisson au pixel (berge + eau, une région par plan d'eau, par tranches : `townWaterBakeStep`/`townWaterBakeReady`), la surface animée (`drawWaterSurface` : houle à deux trains, éclats, courant, clapot), les reflets de jour et de nuit (`makeWaterReflector`), l'isocontour partagé avec le gazon et les sentiers (`contourMargin`), `waterHash` et la rampe du port (`WAT_STOPS`). Banc : `render-eau` |
 | `components/ferme/faune.js` · `components/ferme/fauneArt.js` | **LA FAUNE (phase 5, 2026-09-26)** : `faune.js` pur — lieux dérivés de la carte (`faunaWorld`), routines en créneaux à cibles indépendantes (`slotMove`), colverts, carpes, sauts, goélands, chats, papillons, lucioles, réactions locales (`faunaReact*`) ; `fauneArt.js` — dessins en données (une pose = un tableau de chaînes, une palette par robe), un atlas, et les dessins au pixel du rendu (carpe, goéland en vol, ronds, sillage). Les pigeons (`S.birds`) y sont redessinés. Banc : `verify-faune` |
 | `components/ferme/clotures.js` | **LES CLÔTURES (phase 7b, 2026-09-28)** : cinq matières en VOLUMES `(u, v, z) → matière` projetées en 3/4 par l'algorithme du peintre (`paintVoxels`), le voisinage d'une case (`townFenceConf`), les portails tournés autour de leurs gonds, les potagers de saison ; atlas paresseux (`S.townEnclos`) ; **LA MATIÈRE DU BUIS** (`boxLight`, `boxColor`, palettes, saisons), partagée avec `buis.js`. Qui a quoi : `townParcelFence`/`townFenceLayout` (fermeConstants.js). Banc : `render-haies` |
 | `components/ferme/buis.js` | **LES BUIS (7b, suite, 2026-09-28)** : boule (`shrub`), massif en nuage (`grassTuft`), buis taillé (`topiary`), haie du quai (`hedgeRow`) et leurs formes LIBRES ; taillé ou libre par le quartier (`townBuisTrimmed`) ; cellules dans l'atlas des clôtures, hiver et neige dans le dessin (ni `winterizePixels` ni chapeau lu dans les pixels). Banc : `render-buis`. ⚠️ **DÉSACTIVÉ PAR DÉFAUT** (`TOWN_BUIS_LEGACY = true` : l'ancien rendu ; verdict de Guillaume, « laids et simplistes ») — gardé, à reprendre |
 | `components/ferme/neige.js` | **LA NEIGE DE VALLEY TOWN (phase 12a, 2026-09-28), pure** : le manteau (`snowPack`, pure fonction de 4 jours de météo), le sol par parcelles en atlas (`makeSnowField` : relief éclairé, ombres portées, grain au bruit bleu, couverture par ordre au pixel), les empreintes locales (`makeWalkers`), les chapeaux et toits lus dans les pixels (`snowCapPixels`, `snowRoofPixels`, `snowStairPixels`), l'hiver du mobilier (`winterizePixels`). Ce que la neige lit du sol : `A.townSnowEnv` (fermeArt.js). Toits peints : `tools/build-snow-roofs.mjs`. Bancs : `verify-neige`, `render-neige` |
+| `components/ferme/pluie.js` | **LA PLUIE DE VALLEY TOWN (phase 12b, 2026-09-29), pure** : l'humidité du sol et le niveau des flaques, intégrés sur la météo de deux jours (`wetPack`, mémoïsé comme le manteau de neige), la parcelle mouillée au pixel (`renderWetChunk`, sur les parcelles STATIQUES de la neige via `snowField.staticOf`) et la couche du jeu (`makeWetLayer`, un atlas alloué à la première goutte). ⚠️ **UNE FLAQUE COMBLE UN CREUX** (`basin` : joints, bord des dalles, ornières, caniveau — jamais un aplat). Banc : `verify-pluie`, `render-pluie` |
+| `components/ferme/fumee.js` | **LES CHEMINÉES QUI FUMENT (phase 12c), pure** : le feu d'une maison (`chimneyLevel` : saison × part du jour × seuil de la maison × temps qu'il fait) et les bouffées d'un tuyau LUES dans l'horloge (`smokePuffs`, sans état). La bouche du tuyau est `TOWN_HOUSE_MODELS[..].chimney` (px de la référence). Banc : `verify-jour`, `render-fumee` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
@@ -1419,6 +1448,13 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   fait — et c'est cette réponse-là qui décide si le navire est une fin ou une porte.
 
 
+- ⚠️⚠️ **LE CAFÉ « CHEZ JULIETTE » ET LE RESTAURANT — PRIORITÉ DE DOCUMENTATION, PAS À FAIRE TOUT DE SUITE
+  (Guillaume, 2026-09-29).** Il faut être PRÊT : séance de conception à part, LISTER les décisions et ATTENDRE. Le
+  café : un intérieur « superbe, cosy, bobo », des boissons en tout genre ; le rôle de barman ou de vendeur
+  accessible aux joueurs SANS CASSER LA MÉCANIQUE (toute vente = une `req` arbitrée par l'hôte, comme le marché) ;
+  un lieu de rencontre entre résidents et de développement narratif pour de futures missions ou quêtes. Le
+  restaurant : même principe. Détail et questions ouvertes : « ⏭️ ACTION SUIVANTE » ci-dessus et la ligne 15 du
+  tableau des phases de `components/ferme/README.md`.
 - ⚠️ **LE CADASTRE ET LE NOTAIRE SONT DES GUICHETS FERMÉS** : les deux pièces existent, meublées,
   et ne rendent aucun service depuis que le 444 a retiré l'histoire qui les employait. La question
   est donc entière : **acheter une parcelle, avec un prix, un titre et une conséquence sur la

@@ -13,7 +13,7 @@ catalogue écrit à la main).
 2. Coller la BASE, puis la liste de la planche (A ou B) **dans le même message**.
 3. Enregistrer le résultat dans `refs/` : `planche3-jardins.jpg` (A), `planche3-place.jpg` (B). ⚠️ Gemini ne
    livre que du JPG à Guillaume : `tools/import-planche3.mjs` le lit tel quel (conversion par `sips`).
-   ✅ Fait le 2026-09-29 : les deux planches sont là et importées (récit en tête de `components/ferme/README.md`).
+   ✅ Fait le 2026-09-29 : les deux planches sont là, importées ET BRANCHÉES dans le jeu (récit en tête de `components/ferme/README.md`, banc `verify-planche3`).
 
 Si des objets se touchent : `Same sheet, but move the objects apart: at least one object-width of empty
 magenta between any two objects, nothing touching.`
@@ -94,7 +94,7 @@ Draw these objects:
     rust, one leaf hanging open on a broken hinge, a little ivy climbing it; about one bench wide.
 ```
 
-## CE QUE L'IMPORT FERA (pour mémoire, rien n'est codé)
+## CE QUE L'IMPORT A FAIT (pour mémoire ; le placement est branché depuis le 2026-09-29)
 
 Un `tools/import-planche3.mjs` sur le modèle des deux premiers : fond pris par la COULEUR (magenta), échelle
 dérivée de l'étalon (banc : 36 pixels de jeu de large ; lampadaire : 48 de haut), catalogue écrit à la main

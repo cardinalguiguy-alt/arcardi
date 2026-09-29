@@ -3833,8 +3833,9 @@ export const idxOf = idx;
 
 // Vrai entre le crépuscule (17h) et l'aube (6h30), mêmes paliers que le
 // voile visuel nightAlpha (voir C.DUSK_START_MIN/DAWN_END_MIN).
-export function isNightTime(tmin) {
-  return tmin < C.DAWN_END_MIN || tmin >= C.DUSK_START_MIN;
+export function isNightTime(tmin, bounds) {
+  const b = bounds || { dawnEnd: C.DAWN_END_MIN, duskStart: C.DUSK_START_MIN };   // 2026-09-29 (phase 12c) : les bornes de la saison, à défaut celles de référence
+  return tmin < b.dawnEnd || tmin >= b.duskStart;
 }
 
 // Centre de la rivière à la rangée y (clampée aux bords de la carte).
@@ -8349,6 +8350,139 @@ export function generateTownWorld() {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-29 (phase 7b) — LA TROISIÈME PLANCHE, POSÉE : LES JARDINS VÉCUS PAR
+     RANG, LES URNES DE LA MAIRIE, LES RONCES ET LE PORTAIL DE LA MAISON HANTÉE.
+     ───────────────────────────────────────────────────────────────────────
+     Guillaume : « fais 1 » — brancher la planche (`planche3.js`, dessinée par
+     Gemini, échelle réglée EN JEU objet par objet). La cohérence sociale par
+     quartier vaut ici comme partout : la boîte aux lettres suit le rang de
+     l'adresse (fonte chez les riches, bois peint en classe moyenne, tôle chez
+     les modestes), et le mobilier de jardin aussi — la vasque et les pots d'herbes
+     d'un côté, le bois, le linge et la brouette de l'autre.
+     ⚠️ EN PASSE FINALE ET SANS UN TIRAGE (§4 de CLAUDE.md : un `rnd()` inséré au
+     milieu de la génération déplace tout ce qui vient après, dans toutes les
+     fermes) : les cases se choisissent par HACHAGE de l'adresse, et l'ordre des
+     objets d'un rang est un CYCLE (le cycle des clôtures : sur une douzaine de
+     jardins, un hachage seul laisserait des objets absents). Tout ce qui est
+     posé l'est sur une case restée libre, jamais à la place d'autre chose : la
+     carte (sols, arbres, clôtures, portails, potagers) ne bouge pas d'un pixel.
+     ⚠️ Un jardin est PETIT (une à trois rangées devant le mur, une colonne de
+     chaque côté) : un objet ne se pose que si son emprise dessinée
+     (`townPropCovers`) tient sur des cases d'herbe libres, hors de l'allée, et
+     les objets HAUTS (plus de 21 px : ils cacheraient les fenêtres du rez-de-
+     chaussée) restent sur les flancs, jamais devant le mur. */
+  {
+    const hash2 = (a, b, k) => { let h = Math.imul(a | 0, 0x27d4eb2d) ^ Math.imul((b | 0) + k * 0x9e3779b1, 0x165667b1); h ^= h >>> 15; h = Math.imul(h, 0x85ebca77); h ^= h >>> 13; return h >>> 0; };
+    const green = (i) => ground[i] === C.G_GRASS || ground[i] === C.G_TOWN_LAWN;
+    /* Une case d'herbe libre, à l'altitude voulue : ni solide, ni clôture, ni arbre, ni rue. */
+    const freeCell = (x, y, e0) => {
+      if (!inMap(x, y)) return false;
+      const i = id(x, y);
+      return !solid[i] && !hedge[i] && objects[i] === C.O_NONE && street[i] === 0 && green(i) && elev[i] === e0;
+    };
+    /* Un décor de la planche tient en (x, y) si sa case est libre, si personne ne
+       le recouvre ni ne le traverse (`compoFree`), et si les cases voisines que son
+       dessin recouvre sur la même rangée ne sont ni une allée, ni une clôture, ni
+       une rue (il déborderait sur le passage). */
+    const fits = (kind, x, y, e0) => {
+      if (!freeCell(x, y, e0) || !compoFree(kind, x, y)) return false;
+      for (let dx = -3; dx <= 3; dx++) {
+        if (!dx || !inMap(x + dx, y) || !C.townPropCovers(kind, x, y, x + dx, y)) continue;
+        const j = id(x + dx, y);
+        if (ground[j] === C.G_PATH || hedge[j] || street[j] > 0) return false;
+      }
+      // Et aucun arbre dans le corps dessiné (`verify-compo` : « aucun arbre dans l'emprise d'un décor »).
+      for (let dy = -3; dy <= 0; dy++) for (let dx = -3; dx <= 3; dx++) {
+        if (!inMap(x + dx, y + dy) || !C.townPropCovers(kind, x, y, x + dx, y + dy)) continue;
+        const o = objects[id(x + dx, y + dy)];
+        if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP) return false;
+      }
+      return true;
+    };
+    const put = (x, y, kind, extra) => { props.push({ x, y, kind, ...(extra || {}) }); solid[id(x, y)] = 1; };
+    const heightPx = (kind) => { const b = C.townPropBox(kind, 0, 0); return (b.y1 - b.y0) * C.TILE; };
+
+    const MAILBOX = { riche: "mailboxIron", enrichie: "mailboxRed", simple: "mailboxTin" };
+    const MENU = {
+      riche: ["birdbath", "herbPots", "gardenTable", "swing", "herbPots", "birdbath"],
+      enrichie: ["gardenTable", "rainBarrel", "clothesline", "herbPots", "swing", "woodpileRoofed"],
+      simple: ["woodpileRoofed", "clothesline", "wheelbarrow", "rainBarrel", "woodpileAxe", "hutch"],
+    };
+    const byRank = { riche: [], enrichie: [], simple: [] };
+    for (const L of C.townFenceLayout()) if (L.hsn.variant !== "ruine") byRank[C.townHouseDistrict(L.hsn)].push(L);
+    for (const [rank, list] of Object.entries(byRank)) {
+      list.sort((a, b) => hash2(a.hsn.x, a.hsn.y, 3) - hash2(b.hsn.x, b.hsn.y, 3));
+      list.forEach((L, k) => {
+        const hsn = L.hsn, H3 = C.TOWN_HOUSE_H, e0 = elev[id(hsn.x + 2, hsn.y + H3)] | 0;
+        const cand = [];
+        for (let y = hsn.y; y <= hsn.y + H3 + 1; y++) for (let x = L.west + 1; x < L.east; x++) {
+          if (x === L.gateX || x === L.gateX + 1) continue;
+          cand.push({ x, y, flank: y < hsn.y + H3, h: hash2(x, y, 11) });
+        }
+        // La boîte aux lettres : à côté de l'allée, à la rangée la plus proche de la rue.
+        const mk = MAILBOX[rank];
+        const mail = cand.filter((c) => !c.flank && (c.x === L.gateX - 1 || c.x === L.gateX + 2))
+          .sort((a, b) => (b.y - a.y) || (a.h - b.h));
+        for (const c of mail) if (fits(mk, c.x, c.y, e0)) { put(c.x, c.y, mk); break; }
+        // Le mobilier : deux objets du cycle du rang, dans l'ordre de l'adresse.
+        const menu = MENU[rank], seen = new Set();
+        for (const kind of [menu[(2 * k) % menu.length], menu[(2 * k + 1) % menu.length]]) {
+          if (seen.has(kind)) continue;
+          seen.add(kind);
+          /* Un objet haut (il cacherait les fenêtres du rez-de-chaussée) ET tout objet derrière
+             une GRILLE (28 px avec ses piliers : mesuré sur `townFenceHeights`, les autres
+             matières font 13 à 16 px, la rangée de devant n'est cachée par aucune) vivent sur
+             les flancs, pas devant le mur : vu en jeu, le tiers bas d'une vasque disparaissait
+             derrière le muret de la grille. */
+          const flankOnly = heightPx(kind) > 21 || L.style === C.TOWN_FENCE.IRON;
+          // Un objet bas : devant le mur d'abord, puis sur les flancs.
+          const spots = (flankOnly ? cand.filter((c) => c.flank) : cand.slice()).sort((a, b) => (flankOnly ? 0 : Number(a.flank) - Number(b.flank)) || (a.h - b.h));
+          for (const c of spots) if (fits(kind, c.x, c.y, e0)) { put(c.x, c.y, kind); break; }
+        }
+      });
+    }
+
+    /* LA MAISON HANTÉE : ce que la nature a repris. Les RONCES et les herbes sèches
+       bordent son allée et son pied de mur (une case libre sur deux ou trois, par
+       hachage : l'envahissement est irrégulier), et le PORTAIL rouillé ferme le
+       bout de l'allée, du côté de la rue. Le portail est TRAVERSABLE (l'allée est le
+       seul chemin jusqu'à la porte, et le dallage l'est déjà : `flatStone` marquées
+       `ruin`) ; ses deux piliers tombent sur des cases d'arbres ou de route, au-delà
+       des deux colonnes de l'allée. `ox` : le portail est centré sur l'axe des DEUX
+       colonnes, pas sur la case de la première (le rendu décale d'`ox` pixels). */
+    {
+      const R = C.TOWN_RUIN, H3 = C.TOWN_HOUSE_H, doorX = R.x + 2, doorY = R.y + H3;
+      const st = inMap(doorX, doorY) ? streetBelow(doorX, doorY, 8) : undefined;
+      const last = st === undefined ? doorY + 2 : st - 1;
+      const e0 = elev[id(doorX, doorY)] | 0;
+      for (let y = R.y - 1; y <= last; y++) for (let x = R.x - 4; x <= R.x + C.TOWN_HOUSE_W + 4; x++) {
+        if (x === doorX || x === doorX + 1) continue;
+        const v = hash2(x, y, 21) % 10, near = x >= doorX - 2 && x <= doorX + 3;   // au bord de l'allée, l'envahissement est presque complet
+        const kind = near ? (v < 3 ? "bramble" : v < 7 ? "brambleSmall" : "wildGrass") : v < 2 ? "bramble" : v < 5 ? "brambleSmall" : v < 8 ? "wildGrass" : null;
+        // Le grand fourré ne tient pas contre le dallage (son dessin le recouvrirait) : on retombe sur les petits.
+        if (kind) for (const k of [kind, "brambleSmall", "wildGrass"]) if (fits(k, x, y, e0)) { put(x, y, k); break; }
+      }
+      if (inMap(doorX, last) && !solid[id(doorX, last)] && !solid[id(doorX + 1, last)]) {
+        /* Le portail est haut (32 px) : il recouvre la rangée du dessus. Les dalles qui s'y
+           trouvent s'effacent — « aucun décor n'est planté dans le corps d'un autre »
+           (`verify-compo`) — et l'herbe a repris l'entrée, ce qui est le sujet. */
+        for (let k = props.length - 1; k >= 0; k--) {
+          const q = props[k];
+          if (q.kind === "flatStone" && q.ruin && C.townPropCovers("ruinGate", doorX, last, q.x, q.y)) props.splice(k, 1);
+        }
+        props.push({ x: doorX, y: last, kind: "ruinGate", ox: 8, ruin: 1 });
+      }
+    }
+
+    /* LES URNES DE LA MAIRIE : deux, de part et d'autre de l'axe de la porte, sur la
+       rangée des jardinières — la place d'une ville qui a les moyens. */
+    {
+      const py = C.TOWN_PLAZA.y + 1, fx = C.TOWN_FOUNTAIN.x;   // l'axe de la porte passe entre fx et fx + 1 (voir « les bancs de la place »)
+      for (const x of [fx - 2, fx + 3]) if (inMap(x, py) && !solid[id(x, py)] && objects[id(x, py)] === C.O_NONE && compoFree("urn", x, py)) put(x, py, "urn");
+    }
+  }
+
   const soft = new Uint8Array(W * H);
   {
     const hard = new Uint8Array(W * H);
@@ -12113,6 +12247,11 @@ export function seasonAt(ms) {
 }
 export function seasonOf() {
   return seasonAt(Date.now());
+}
+/* 2026-09-29 (phase 12c) — le lever et le coucher (heures) de l'instant `ms` : la saison
+   réelle, interpolée (`C.sunHoursOf`), ou la saison forcée du menu dev. */
+export function sunHoursAt(ms) {
+  return C.sunHoursOf(ms, forcedSeasonKey);
 }
 
 // Host normalization at load: the pre-built station must stand on clear

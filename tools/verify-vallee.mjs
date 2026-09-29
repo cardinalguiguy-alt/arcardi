@@ -373,8 +373,11 @@ if (tw.shipX)
   const overhead = (p) => p.kind === "stairRail" && C.townOverpassCell(p.x, p.y);
   /* 2026-09-29 (phase 7b) — et les dalles de l'allée de la maison hantée
      (`flatStone` marquées `ruin`) : elles SONT le sol de l'allée, on marche
-     dessus. Seulement elles — une `flatStone` posée ailleurs reste un décor. */
-  const paving = (p) => p.kind === "flatStone" && p.ruin;
+     dessus. Seulement elles — une `flatStone` posée ailleurs reste un décor.
+     Et le PORTAIL de la même allée (`ruinGate`, planche 3, 2026-09-29) : ouvert, un
+     vantail pendant sur sa charnière brisée — l'allée est le seul chemin jusqu'à la
+     porte, il ne peut pas la fermer. Même marque `ruin`, même raison. */
+  const paving = (p) => (p.kind === "flatStone" || p.kind === "ruinGate") && p.ruin;
   const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !overhead(p) && !paving(p) && !tw.solid[idx(p.x, p.y)]);
   ok("aucun décor n'est traversable", ghosts.length === 0, ghosts.slice(0, 8).map(p => `${p.kind}(${p.x},${p.y})`).join(" "));
 }

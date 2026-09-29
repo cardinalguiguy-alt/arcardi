@@ -81,9 +81,9 @@ export const NEIGE = {
      h·K px vers l'est et h·K·KY vers le sud (la lumière vient du nord-ouest). */
   SHADOW_K: 0.45, SHADOW_KY: 0.8,
 };
-/* Le soleil : lever et coucher par saison, en heures (la phase 12c fera suivre
-   la durée du jour à la lumière ; la fonte, elle, en a besoin dès maintenant). */
-const SUN_HOURS = { winter: [8.5, 16.5], spring: [6.5, 19.5], summer: [6, 21.5], autumn: [7.5, 18] };
+/* Le soleil : lever et coucher par saison, en heures — depuis la phase 12c, LA table du
+   ciel (`C.SUN_HOURS`) : la fonte et la lumière ne peuvent plus diverger. */
+const SUN_HOURS = C.SUN_HOURS;   // 2026-09-29 (phase 12c) : LA table du lever et du coucher, celle du ciel (fermeConstants.js)
 export function sunAt(hour, season) {
   const [a, b] = SUN_HOURS[season] || SUN_HOURS.spring;
   const h = ((hour % 24) + 24) % 24;
@@ -358,9 +358,10 @@ function bil(F, W, H, fx, fy) {
    ⚠️ STOCKÉ SERRÉ (un octet par grandeur et par pixel, avec son échelle) : une
    parcelle en flottants pesait 350 Ko, et on en garde une centaine. */
 export const CH = 128;
-const SZ = CH + 2;
+export const SZ = CH + 2;
 export const CL = { NONE: 0, GRASS: 1, LAWN: 2, SOFT: 3, STONE: 4, STREET: 5, STAIR: 6, DECK: 7, RAIL: 8, SHORE: 9 };
-const Q_RECV = 100, Q_AUX = 32;
+const Q_RECV = 100;
+export const Q_AUX = 32;
 /* La marge des ombres portées au nord-ouest : 40 px × SHADOW_K, plus la pénombre. */
 const MG = 24, MA = 5;
 /* Le relief du sol sous la neige, par classe (cm) : la prairie est bosselée,
@@ -939,7 +940,7 @@ export const WINTER_PROP_MODE = {
   goldBush: "bare", clump: "bare", roseBox: "bare",
   lavender: "ever", hedgeAngle: "ever", bonsai: "ever",
   reedTuft: "straw", potReeds: "straw", tallGrass: "straw",
-  flowerTrough: "pot", potPink: "pot", flowerCart: "pot", planter: "pot", bloomBed: "pot", bloomRow: "pot",
+  flowerTrough: "pot", potPink: "pot", flowerCart: "pot", bloomBed: "pot", bloomRow: "pot",   // 2026-09-29 : plus `planter` — la planche 3 a son propre hiver (jardinière de terre nue)
   /* 2026-09-28 (soir) — `C.TOWN_BUIS_LEGACY` (fermeConstants.js) : les anciens dessins
      (avant « buis », 5969306) reprennent leur hiver d'alors — l'arbuste en brindilles,
      le buis sur tige et la haie du quai en persistant, la bande verte en paille. */
@@ -1168,6 +1169,12 @@ export function makeSnowField(tw, env) {
     ch.ver = ver; ch.dirty = false;
     return true;
   };
+  const evict = () => {
+    if (chunks.size > 140) {
+      const old = [...chunks.values()].filter((c2) => c2.use < frame - 60).sort((p, q) => p.use - q.use);
+      for (const c2 of old.slice(0, chunks.size - 140)) { if (c2.slot >= 0) free.push(c2.slot); chunks.delete(key(c2.cx, c2.cy)); }
+    }
+  };
   const api = {
     fields,
     /* Le manteau et les réglages de l'image. Une parcelle se refait quand
@@ -1209,12 +1216,11 @@ export function makeSnowField(tw, env) {
         if (!renderOne(ch.cx, ch.cy, ch)) break;
         if (now() - t0 > budgetMs) break;
       }
-      // Les parcelles invisibles oublient leur statique au-delà de cent quarante.
-      if (chunks.size > 140) {
-        const old = [...chunks.values()].filter((c2) => c2.use < frame - 60).sort((p, q) => p.use - q.use);
-        for (const c2 of old.slice(0, chunks.size - 140)) { if (c2.slot >= 0) free.push(c2.slot); chunks.delete(key(c2.cx, c2.cy)); }
-      }
+      evict();
     },
+    /* Les parcelles invisibles oublient leur statique au-delà de cent quarante
+       (appelé par `update`, et par `pluie.js` quand la neige ne tourne pas). */
+    evict() { evict(); },
     /* La cellule de la case (x, y) dans l'atlas, ou null. */
     cell(x, y) {
       const cx = Math.floor(x * T / CH), cy = Math.floor(y * T / CH);
@@ -1229,6 +1235,19 @@ export function makeSnowField(tw, env) {
       return out;
     },
     depthAt(wx, wy) { return depthAtTile(tw, pack, fields, Math.floor(wx / T), Math.floor(wy / T)); },
+    /* 2026-09-29 (phase 12b) — LA PLUIE LIT LE MÊME SOL : ce que la parcelle sait de chaque pixel
+       (sa classe, ses joints, ses ornières, ses creux, l'ombre qu'elle reçoit) ne dépend pas
+       de la neige, et le construire coûte assez cher pour ne pas le faire deux fois. `pluie.js`
+       le demande ici ; il reste dans la même table de parcelles (donc sous le même plafond). */
+    staticOf(cx, cy) {
+      const k = key(cx, cy);
+      let ch = chunks.get(k);
+      if (!ch) { ch = { st: null, slot: -1, ver: 0, dirty: true, glints: [], use: frame, cx, cy }; chunks.set(k, ch); }
+      if (!ch.st) ch.st = buildChunkStatic(tw, cx, cy, envS);
+      ch.use = frame;
+      return ch.st;
+    },
+    chunkCount: () => ({ nx: NX, ny: NY }),
     /* Creuse une empreinte (§7). `frac` : la fraction du manteau (0..1). */
     stamp(p, wx, wy, ux, uy, frac) {
       if (frac <= 0) return;

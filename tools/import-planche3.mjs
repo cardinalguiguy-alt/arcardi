@@ -63,6 +63,18 @@
       petit, au MÊME grain de pixel à l'écran, avec moins de détail) — jamais
       en agrandissant ou réduisant le sprite dans le jeu.
 
+   ⚠️ LES PAS PROPRES (2026-09-29, au branchement) : « tout arrive grand » s'est
+   confirmé (un clapier de 2,8 m à côté d'une porte de 2,04 m), et le champ `step`
+   du catalogue, qui existait sans jamais servir (la découpe lisait la feuille
+   échantillonnée au pas COMMUN), est maintenant une vraie feuille par pas. Les
+   pas retenus visent des tailles humaines contre la porte (27 px) : boîtes aux
+   lettres 1,3 à 1,6 m, bois 1 à 2 m, salon 1,2 m, balançoire 2 m, jardinière 2,2 m
+   (contre le 24 × 24 d'origine), urnes 2,4 m, candélabre 4,2 m, portail 2,3 m ;
+   la lanterne sur potence garde le pas commun (2,6 m). Un pas plus grand est un
+   objet plus petit AU MÊME GRAIN — le sous-échantillonnage (médiane 3 × 3) tient
+   très bien à 1,6 fois le pas commun. Vu en jeu le même jour : place, rues des
+   trois rangs, allée hantée. Se retouche ICI, jamais dans le jeu.
+
    ⚠️ LE CATALOGUE EST ÉCRIT À LA MAIN (comme aux 439 et 447) : les boîtes
    viennent de la segmentation par teinte, fermée par dilatation de 6 px ; les
    NOMS ne peuvent venir que d'un œil sur la planche. Deux corrections à la
@@ -107,45 +119,45 @@ const CATALOGUE = {
     // ── L'ÉTALON : le banc de bois de la planche 1, redessiné ────────────────
     ["benchRef",        63, 124, 191, 110, 12, { ref: true }],
     // ── LE BOIS ET LE LINGE ─────────────────────────────────────────────────
-    ["woodpileRoofed", 334,  16, 252, 242, 16],
-    ["woodpileAxe",    624,  96, 242, 140, 14],
-    ["clothesline",    910,  36, 366, 196, 16],
+    ["woodpileRoofed", 334,  16, 252, 242, 16, { step: 8.8 }],
+    ["woodpileAxe",    624,  96, 242, 140, 14, { step: 9.7 }],
+    ["clothesline",    910,  36, 366, 196, 16, { step: 8.2 }],
     // ── LES BOÎTES AUX LETTRES, une par rang (tôle, bois peint, fonte) ──────
-    ["mailboxTin",      48, 308,  86, 158, 12],
-    ["mailboxRed",     178, 284,  98, 184, 12],
-    ["mailboxIron",    312, 278,  90, 199, 14],
+    ["mailboxTin",      48, 308,  86, 158, 12, { step: 8.6 }],
+    ["mailboxRed",     178, 284,  98, 184, 12, { step: 9.1 }],
+    ["mailboxIron",    312, 278,  90, 199, 14, { step: 8.9 }],
     // ── LE MOBILIER DE JARDIN ───────────────────────────────────────────────
-    ["wheelbarrow",    448, 310, 186, 162, 14],
-    ["rainBarrel",     666, 306, 138, 170, 14],
-    ["gardenTable",    822, 310, 239, 162, 14],
+    ["wheelbarrow",    448, 310, 186, 162, 14, { step: 8.8 }],
+    ["rainBarrel",     666, 306, 138, 170, 14, { step: 9 }],
+    ["gardenTable",    822, 310, 239, 162, 14, { step: 10.5 }],
     /* ⚠️ LES DEUX BANCS DE LA PLANCHE (le rustique, à x=1085, et celui en fonte
        verte, à x=46) NE SONT PAS IMPORTÉS : décision de Guillaume, 2026-09-29,
        « ils sont très bien comme ils sont actuellement » — les bancs du jeu
        (`benchWood`, `benchStone`) suffisent, et les deux étaient dessinés en
        trois quarts alors que le banc du jeu est de face. Seul le banc ÉTALON
        (`benchRef`) reste : il ne sert pas au jeu, il donne l'échelle. */
-    ["birdbath",       362, 582, 108, 158, 12],
-    ["herbPots",       544, 540, 244, 210, 18],
-    ["swing",          820, 488, 273, 282, 16],
-    ["hutch",         1126, 560, 187, 202, 14],
+    ["birdbath",       362, 582, 108, 158, 12, { step: 10.5 }],
+    ["herbPots",       544, 540, 244, 210, 18, { step: 11 }],
+    ["swing",          820, 488, 273, 282, 16, { step: 10.5 }],
+    ["hutch",         1126, 560, 187, 202, 14, { step: 12 }],
   ],
   B: [
     // ── L'ÉTALON : le lampadaire noir de la planche 2, allumé ───────────────
     ["lampRef",         44,  32,  54, 264, 12, { ref: true }],
     // ── LA PLACE : jardinières et vases, été puis hiver ─────────────────────
-    ["planterSummer",  136,  74, 302, 216, 20],
-    ["planterWinter",  474,  84, 260, 206, 16],
-    ["urnSummer",      778,  14, 144, 305, 18],
-    ["urnWinter",      963,  28, 111, 290, 16],
+    ["planterSummer",  136,  74, 302, 216, 20, { step: 7.5 }],
+    ["planterWinter",  474,  84, 260, 206, 16, { step: 7.5 }],
+    ["urnSummer",      778,  14, 144, 305, 18, { step: 9.5 }],
+    ["urnWinter",      963,  28, 111, 290, 16, { step: 9.5 }],
     // ── LES LAMPADAIRES PAR RANG ────────────────────────────────────────────
-    ["lampRich",      1120,  24, 186, 422, 16],
+    ["lampRich",      1120,  24, 186, 422, 16, { step: 7.5 }],
     ["lampPoor",       814, 338,  79, 186, 12],
     // ── LA MAISON HANTÉE ET LE SOUS-BOIS ────────────────────────────────────
-    ["bramble",         26, 344, 366, 208, 16],
-    ["brambleSmall",   441, 407, 161, 145, 14],
-    ["brambleRow",      16, 590, 658, 174, 16],
-    ["wildGrass",      716, 552, 182, 200, 14],
-    ["gate",           946, 516, 376, 252, 16],
+    ["bramble",         26, 344, 366, 208, 16, { step: 7.7 }],
+    ["brambleSmall",   441, 407, 161, 145, 14, { step: 6.8 }],
+    ["brambleRow",      16, 590, 658, 174, 16, { step: 7.4 }],
+    ["wildGrass",      716, 552, 182, 200, 14, { step: 9 }],
+    ["gate",           946, 516, 376, 252, 16, { step: 8.5 }],
   ],
 };
 
@@ -240,12 +252,25 @@ const out = [], report = [], sprites = [];
 
 for (const key of Object.keys(SHEETS)) {
   const png = toPNG(SHEETS[key], key);
-  const sh = nativeSheet(png, { step: STEP3, ox: 0, oy: 0 });
-  const kind = classify(sh);
-  let nb = 0, ns = 0; for (const v of kind) { if (v === 1) nb++; else if (v === 2) ns++; }
-  console.log(`planche ${key} : ${sh.w}×${sh.h} natifs (pas ${STEP3}) — fond ${(100 * nb / kind.length).toFixed(1)} %, ombre ${(100 * ns / kind.length).toFixed(1)} %`);
+  /* ⚠️ UNE FEUILLE ÉCHANTILLONNÉE PAR PAS (2026-09-29, branchement) : `opt.step`
+     existait dans le catalogue sans jamais servir — la découpe divisait par le
+     pas de l'objet mais lisait la feuille échantillonnée au pas commun, donc un
+     objet à pas propre sortait décalé. Chaque pas a maintenant sa feuille et sa
+     classification, calculées une fois. */
+  const sheets = new Map();
+  const sheetAt = (step) => {
+    if (!sheets.has(step)) {
+      const sh = nativeSheet(png, { step, ox: 0, oy: 0 });
+      const kind = classify(sh);
+      let nb = 0, ns = 0; for (const v of kind) { if (v === 1) nb++; else if (v === 2) ns++; }
+      console.log(`planche ${key} : ${sh.w}×${sh.h} natifs (pas ${step}) — fond ${(100 * nb / kind.length).toFixed(1)} %, ombre ${(100 * ns / kind.length).toFixed(1)} %`);
+      sheets.set(step, { sh, kind });
+    }
+    return sheets.get(step);
+  };
   for (const [name, x, y, w, h, K, opt = {}] of CATALOGUE[key]) {
     const step = opt.step ?? STEP3;
+    const { sh, kind } = sheetAt(step);
     const s = cutObject(sh, kind, x, y, w, h, step);
     if (!s) { console.log("  ⚠️  " + name + " : rien dans la boîte"); continue; }
     const q = quantize(s, K);

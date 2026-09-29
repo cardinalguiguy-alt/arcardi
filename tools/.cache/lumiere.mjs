@@ -47,9 +47,11 @@ const SKY_GOLD = [1.0, 0.93, 0.80];               // l'heure dorée
 const SKY_SUNSET = [1.0, 0.80, 0.66];             // le soleil se couche
 const SKY_DUSK = [0.72, 0.60, 0.70];              // 20h : mauve
 const SKY_BLUE_HOUR = [0.42, 0.42, 0.64];         // l'heure bleue
-export function skyKeys() {
-  const DS = C.DAWN_START_MIN, DE = C.DAWN_END_MIN;
-  const KS = C.DUSK_START_MIN, KM = C.DUSK_MID_MIN, KD = C.DEEP_END_MIN;
+/* `b` : les bornes du ciel (`C.skyBoundsOf(lever, coucher)`, phase 12c) — à défaut, le
+   ciel de référence (lever 6 h, coucher 19 h : les cinq constantes). */
+export function skyKeys(b) {
+  const DS = b ? b.dawnStart : C.DAWN_START_MIN, DE = b ? b.dawnEnd : C.DAWN_END_MIN;
+  const KS = b ? b.duskStart : C.DUSK_START_MIN, KM = b ? b.duskMid : C.DUSK_MID_MIN, KD = b ? b.deepEnd : C.DEEP_END_MIN;
   return [
     [0, SKY_NIGHT], [DS, SKY_NIGHT],
     [(DS + DE) / 2, SKY_DAWN], [DE, SKY_MORNING], [DE + 90, SKY_DAY],
@@ -57,8 +59,19 @@ export function skyKeys() {
     [KM, SKY_DUSK], [(KM + KD) / 2, SKY_BLUE_HOUR], [KD, SKY_NIGHT], [48 * 60, SKY_NIGHT],
   ];
 }
-const KEYS = skyKeys();
-export function skyAt(tmin) {
+const KEYS_REF = skyKeys();
+/* Les clés d'un ciel de saison, en mémo (la boucle de rendu les lit plusieurs fois par
+   image, et les bornes ne bougent que d'une minute de temps en temps). */
+const keyMemo = new Map();
+function keysFor(b) {
+  if (!b) return KEYS_REF;
+  const k = `${b.dawnStart}|${b.dawnEnd}|${b.duskStart}|${b.duskMid}|${b.deepEnd}`;
+  let v = keyMemo.get(k);
+  if (!v) { if (keyMemo.size > 24) keyMemo.clear(); v = skyKeys(b); keyMemo.set(k, v); }
+  return v;
+}
+export function skyAt(tmin, bounds) {
+  const KEYS = keysFor(bounds);
   const t = Math.max(0, Math.min(KEYS[KEYS.length - 1][0], tmin));
   for (let i = 1; i < KEYS.length; i++) {
     const [t1, c1] = KEYS[i];
@@ -141,8 +154,8 @@ export function strikesIn(fromMs, toMs, day, odds) {
 }
 /* Le ciel d'une image : l'heure, l'orage, l'éclair. `dark` : 0..1 (un
    booléen vaut 0 ou 1, pour les anciens appelants et les bancs). */
-export function skyLight(tmin, dark, flash) {
-  const s = skyAt(tmin);
+export function skyLight(tmin, dark, flash, bounds) {
+  const s = skyAt(tmin, bounds);
   const d = dark === true ? 1 : Math.max(0, Math.min(1, +dark || 0));
   if (d > 0) for (let k = 0; k < 3; k++) s[k] *= 1 - (1 - STORM_SKY[k]) * d;
   if (flash > 0) {

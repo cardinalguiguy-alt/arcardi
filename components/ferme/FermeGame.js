@@ -75,6 +75,8 @@ import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au p
 import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
 import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
 import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui montent, selon la saison, forçage partagé
+import * as FU from "./fumee";      // 2026-09-29 (phase 12c) — les cheminées qui fument : le feu de la maison, les bouffées lues dans l'horloge
+import * as PL from "./pluie";      // 2026-09-29 (phase 12b) — la pluie : le sol mouillé, les flaques (pure fonction de la météo passée)
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import { fstr } from "./fermeStrings";
@@ -989,6 +991,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const snowFieldRef = useRef(null);
   const snowWalkersRef = useRef(null);
   const snowPackMemoRef = useRef({ at: 0, pack: null, key: "" });
+  const wetPackMemoRef = useRef({ at: 0, pack: null });   // 2026-09-29 (phase 12b)
+  const daySkyMemoRef = useRef({ at: 0, b: null });        // 2026-09-29 (phase 12c) : les bornes du ciel de la saison
+  const wetFrameRef = useRef(null);                       // ce que la pluie sait du sol, cette image (les ronds des flaques)
+  const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
   const snowDevRef = useRef({ depth: null, trees: null });
   const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
@@ -8326,6 +8332,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      boucle le lit plusieurs fois par image). Le réglage LOCAL du menu dev
      (`snowDevRef`) remplace l'épaisseur et la charge des arbres, sur cet écran
      seulement. */
+  /* 2026-09-29 (phase 12b) — L'HUMIDITÉ DU SOL ET LE NIVEAU DES FLAQUES, l'équivalent du
+     manteau (`PL.wetPack`) : une pure fonction de la météo des deux jours passés, mise
+     en cache 150 ms. Rien ne circule. */
+  function wetPackNow() {
+    const sh = sharedRef.current, now = Date.now(), mm = wetPackMemoRef.current;
+    if (mm.pack && now - mm.at < 150) return mm.pack;
+    const day = sh.day || 1, ds = sh.dayStartAt || now;
+    const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
+    const pk = PL.wetPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null);
+    mm.at = now; mm.pack = pk;
+    return pk;
+  }
   function snowPackNow() {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
     const dev = snowDevRef.current;
@@ -20601,6 +20619,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!snowWalkersRef.current) snowWalkersRef.current = NG.makeWalkers();
       return f;
     }
+    /* La couche mouillée de la ville (`pluie.js`) : elle lit les parcelles statiques du champ
+       de neige (`sf.staticOf`), donc suit le champ quand la cuisson de l'eau le refait. */
+    function townWetLayer(tw, sf) {
+      const cur = wetLayerRef.current;
+      if (cur && cur.tw === tw && cur.sf === sf) return cur.layer;
+      const layer = PL.makeWetLayer(tw, {
+        makeCanvas: (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; },
+        staticOf: (cx, cy) => sf.staticOf(cx, cy),
+      });
+      wetLayerRef.current = { tw, sf, layer };
+      return layer;
+    }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!tw || !sprites) return;
@@ -20786,6 +20816,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sfNow = snowF;
         charSnowAt = (p) => sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T);
       }
+      /* ╔══════════════════════════════════════════════════════════════════
+         ║ 2026-09-29 (phase 12b) — LE SOL MOUILLÉ : chaussée et dallages plus
+         ║ sombres, flaques dans les creux (les ornières d'abord), séchage par
+         ║ plaques. Posé case par case AVANT la neige (voir plus bas) : là où la
+         ║ neige couvre, elle recouvre ; là où elle fond, le sol mouillé reparaît.
+         ╚══════════════════════════════════════════════════════════════════ */
+      const wetPk = wetPackNow();
+      const wetSnowK = Math.max(0, Math.min(1, snowPk.g / 1.2));     // sous 1 cm de neige, le sol ne s'y voit presque plus
+      const wetP = { wet: wetPk.w * (1 - wetSnowK), pud: wetPk.p * (1 - wetSnowK), sky: PL.skyReflect(wxFrame().dark) };
+      let wetF = null;
+      if (PL.wetActive(wetP)) {
+        const sfw = snowF || townSnowField(tw);
+        wetF = townWetLayer(tw, sfw);
+        wetF.setParams(wetP);
+        if (!snowF) sfw.view(xL, Math.max(0, y0 - 1), xR, yBot);         // sans neige, la vue est à annoncer ici
+        wetF.view(xL, Math.max(0, y0 - 1), xR, yBot);
+        wetF.update(6, () => performance.now());
+        if (!snowF) sfw.evict();
+      }
+      wetFrameRef.current = wetF ? { layer: wetF, pud: wetP.pud, wet: wetP.wet } : null;
       /* LES PAS DANS LA NEIGE (locaux, décision de Guillaume) : chaque client
          creuse ce qu'il voit marcher. ⚠️ Ce qui marche SUR le grand escalier
          au-dessus de la chaussée (`townOverpassCell`, niveau de marche) ne
@@ -21135,6 +21185,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
           A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
         }
+        /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
+        if (wetF && y >= y0 - 1) {
+          const wc = wetF.cell(x, y);
+          if (wc) ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T);
+        }
         /* 2026-09-28 (phase 12a) — la neige de cette case (voir plus haut). Le
            tablier d'un pont en arc monte avec son dos d'âne : sa neige aussi. */
         if (snowF && y >= y0 - 1) {
@@ -21293,6 +21348,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (((tS * 0.55 + ph / 1000) % 1) > 0.05 * sunG) continue;
             ctx.fillRect(gx, gy - elAt(gx >> 4, gy >> 4) * EP, 1, 1);
           }
+        }
+      }
+      /* 2026-09-29 (phase 12b) — L'EAU COULE AU CANIVEAU : des éclats qui glissent le long du
+         pied du trottoir (le sens de la rue : est pour une rue horizontale, sud pour une rue
+         verticale), en fondu à chaque bout de leur course — un éclat qui saute d'un bout à
+         l'autre serait une boucle qui se voit. Seulement sous un sol trempé, et pas sous la
+         neige. Position lue par la couche (`flowPoints`), jamais un tirage à chaque image. */
+      if (wetF && wetP.wet > 0.55) {
+        const tS = performance.now() / 1000, sky = wetP.sky;
+        for (const [gx, gy, hh, horiz] of wetF.flowPoints()) {
+          const ph = (tS * 0.42 * (0.7 + (hh & 7) / 10) + (hh >>> 8) / 4194304) % 1;
+          const a = Math.sin(Math.PI * ph) * 0.62 * Math.min(1, (wetP.wet - 0.55) * 4);
+          if (a < 0.05) continue;
+          const d = Math.round((ph - 0.5) * 14), e = elAt(gx >> 4, gy >> 4) * EP;
+          ctx.fillStyle = `rgba(${Math.min(255, sky[0] + 40)},${Math.min(255, sky[1] + 40)},${Math.min(255, sky[2] + 40)},${a.toFixed(2)})`;
+          if (horiz) ctx.fillRect(gx + d, gy - e, 3, 1); else ctx.fillRect(gx, gy + d - e, 1, 3);
         }
       }
       /* 2026-09-28 (phase 12a) — LES PIQUETS À NEIGE, l'hiver, au bord des rues
@@ -22788,6 +22859,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
         "hedgeRow", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
         "bloomBed", "bloomRow", "rockBed", "hedgeAngle",
+        /* 2026-09-29 (phase 7b) — la troisième planche : son ombre est CUITE dans le sprite
+           (`planche3Sprite`, le '~' de Gemini rejoué en translucide). La jardinière
+           d'origine (24 × 24 en code) est remplacée par celle de la planche ; le
+           lampadaire, lui, a ses trois rangs (voir `bakedShadow`). */
+        ...C.TOWN_PLANCHE3_KINDS, "planter",
         // 2026-09-28 (soir) — la bande verte de la planche, quand elle est dessinée (`C.TOWN_BUIS_LEGACY`) ;
         // sinon elle ne passe jamais par ici (la branche des buis la prend plus haut).
         "grassTuft"]);
@@ -22805,6 +22881,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const lampNa = nightAlpha();
       // 2026-09-25 (phase 3) : le seuil vit dans `LUM.lampLit`, que la lumière lit aussi.
       const townLampLit = (pr) => LUM.lampLit(pr.x, pr.y, lampNa);
+      /* 2026-09-29 (phase 7b) — LE LAMPADAIRE SUIT LE RANG DE SON QUARTIER (`C.townLampArtAt`,
+         la lumière lit la cohérence sociale comme les façades et les clôtures) : candélabre
+         à deux lanternes chez les riches, lanterne sur potence chez les modestes, le lampadaire
+         d'origine entre les deux. Une fonction du dessin seul — le halo lit la même. */
+      const townLampImg = (pr) => {
+        const art = C.townLampArtAt(pr.x, pr.y), lit = townLampLit(pr);
+        return art === "rich" ? (lit ? sprites.townLampRich : sprites.townLampRichOff)
+             : art === "poor" ? (lit ? sprites.townLampPoor : sprites.townLampPoorOff)
+             : (lit ? sprites.plazaLamp : sprites.plazaLampOff);
+      };
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
@@ -22915,7 +23001,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            couleur (vu au banc de rendu). Le générateur, lui, connaît l'indice de
            l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
         // (le buis taillé, la boule et le massif en nuage sont dessinés plus haut : `BU.BUIS_KINDS`)
-        let img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
+        let img = pr.kind === "lamp" ? townLampImg(pr)
                   : pr.kind === "bench" ? sprites.plazaBench
                   /* 2026-09-28 (soir) — les quatre lignes des anciens buis (5969306),
                      rendues par `C.TOWN_BUIS_LEGACY` : leurs sprites n'existent que si
@@ -22929,7 +23015,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "stall" ? ((pr.alt ? sprites.townStallsAlt : sprites.townStalls) || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
                   : pr.kind === "kiosk" ? sprites.townKiosk
                   : pr.kind === "grave" ? sprites.townGrave
-                  : pr.kind === "planter" ? sprites.townPlanter
+                  : pr.kind === "planter" ? sprites.townPlanter3[snowSeason === "winter" ? 1 : 0]     // 2026-09-29 (phase 7b) : été / hiver de la planche 3
+                  : pr.kind === "urn" ? sprites.townUrn3[snowSeason === "winter" ? 1 : 0]
+                  : C.TOWN_PLANCHE3_KINDS.has(pr.kind) ? sprites.townProp3[C.TOWN_PROP_ART[pr.kind]]
                   : pr.kind === "streetSign" ? sprites.townStreetSign
                   : pr.kind === "statue" ? sprites.townStatue
                   : pr.kind === "townWell" ? sprites.townWell
@@ -23002,7 +23090,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dessin, mis en cache par image. */
         const wMode = snowSeason === "winter" ? NG.WINTER_PROP_MODE[pr.kind] : null;
         if (wMode) img = winterPropCanvas(img, wMode) || img;
-        const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
+        const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2 + (pr.ox || 0);   // `ox` : le portail de la maison hantée, centré sur ses deux colonnes
         /* 2026-09-28 (phase 12a) — LA NEIGE SUR LE MOBILIER : un chapeau lu dans
            les pixels du sprite (`NG.snowCapPixels`, mis en cache par image et par
            niveau), et le pied enfoui ; ce qui est COUCHÉ au sol (pas japonais,
@@ -23019,7 +23107,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              l'objet), pas une ellipse. En rajouter une par-dessus donne deux
              ombres décalées sous chaque objet — le genre de défaut qu'on ne
              nomme pas en jouant mais qui fait dire « ça fait sale ». */
-          if (!PLANCHE_PROPS.has(pr.kind)) {
+          if (!PLANCHE_PROPS.has(pr.kind) && !(pr.kind === "lamp" && C.townLampArtAt(pr.x, pr.y))) {
             ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.24)" : "rgba(20,26,16,0.22)";   // bleue sur la neige (phase 12a)
             ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
           }
@@ -23254,6 +23342,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           });
         });
       };
+      /* La fumée d'une maison : les bouffées de chaque tuyau, lues dans l'horloge réelle (`FU.smokePuffs`,
+         sans état), en disques de pixels d'art — plus clairs et plus nets quand ils sont jeunes, plus
+         gris et plus fondus en vieillissant. Le vent penche la colonne, la nuit (le ciel multiplie la
+         scène, plus tard) les assombrit comme tout le reste. Posés à l'entier : un disque à un demi-pixel
+         d'écran scintille pendant un fondu de zoom (la parade de la couture verte, phase 2). */
+      const smokeBuf = [], smokeWind = () => wxFrame().wind || 0;
+      const drawChimneySmoke = (chims, level) => {
+        const tSec = now / 1000, wk = smokeWind();
+        for (const c of chims) {
+          FU.smokePuffs(c.key, level, tSec, wk, smokeBuf);
+          for (const q of smokeBuf) {
+            const px = Math.round(c.x + q.dx), py = Math.round(c.y - q.dy);
+            const g = Math.round(238 - 34 * Math.min(1, q.r / 4.2));
+            ctx.fillStyle = `rgba(${g},${g - 2},${g - 6},${Math.min(0.72, q.a).toFixed(3)})`;
+            if (q.r < 1.7) ctx.fillRect(px, py, 2, 2);                      // une bouffée naissante : un carré de 2 pixels, pas une croix
+            else {
+              const rr = Math.max(2, Math.round(q.r - 0.3));
+              for (let dy = -rr; dy <= rr; dy++) {
+                const hw = Math.floor(Math.sqrt(rr * rr + 0.25 - dy * dy));
+                ctx.fillRect(px - hw, py + dy, 2 * hw + 1, 1);
+              }
+            }
+          }
+        }
+      };
       const queueTownHouse = (hsn, look, o) => {
         const M = C.TOWN_HOUSE_MODELS[look.model], V = M.variants[look.variant];
         const SB = C.TOWN_BITMAPS[C.townHouseBitmapKey(look.model, look.variant)];
@@ -23285,6 +23398,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           glowA = on ? houseLit * (0.55 + 0.45 * Math.abs(Math.sin(now / 170) * Math.sin(now / 430 + 1.3))) : 0;
           if (on) for (const w of wins) if (w.ghost) rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
         }
+        /* 2026-09-29 (phase 12c) — LES CHEMINÉES QUI FUMENT (`fumee.js`) : le feu de la maison
+           selon la saison, l'heure et le temps qu'il fait ; seulement chez qui habite là.
+           La bouche du tuyau est posée comme une fenêtre : son repère de référence, mis à l'échelle
+           de la porte. */
+        const chimLevel = o.owned && M.chimney && !o.ruin ? FU.chimneyLevel(o.hi, winTmin, snowSeason, !!o.asleep, FU.chillOf(wxFrame())) : 0;
+        const baseChim = chimLevel > 0.02 ? M.chimney.map(([cx0, cy0], ci) => ({ x: doorWX + (cx0 - M.door) * k, y: footWY + (cy0 - M.foot) * k, key: o.hi * 4 + ci })) : null;
         /* Le trottoir peint (sous le pied du mur, plus large que lui) : ses bords,
            en px monde — l'image a ~12 px de fond de chaque côté (mesuré). */
         const baseL = cxW - (cw / 2 - 12) * k, baseR = cxW + (cw / 2 - 12) * k;
@@ -23297,6 +23416,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
             if (r.glowImg && r.glowParts) for (const q of r.glowParts) lightScreenGlow(r.glowImg, q.sx, q.sy, q.sw, q.sh, glowA, q.src);
           }
+          if (baseChim) drawChimneySmoke(baseChim, chimLevel);
           if (o.label) {
             ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
             const tx2 = doorWX, ty2 = topW + 12;
@@ -24447,10 +24567,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              du rendu de la ville, et il ne s'applique pas tout seul ici parce
              que le voile nocturne travaille en espace écran. */
           const lift = elAt(pr.x, pr.y) * EP;
-          const img = sprites[lk[0]], gl = sprites.lampGlass && sprites.lampGlass[lk[0]];
+          /* 2026-09-29 (phase 7b) — le lampadaire d'un quartier riche a DEUX verres :
+             une flaque et un verre par lanterne (`gl.list`), un peu plus petites. */
+          const wetLampK = 1 + 0.2 * Math.min(1, wetP.wet);   // 2026-09-29 (phase 12b) : sur un sol mouillé, la flaque de lumière s'étale
+          const lampKey = pr.kind === "lamp" ? ({ rich: "townLampRich", poor: "townLampPoor" }[C.townLampArtAt(pr.x, pr.y)] || lk[0]) : lk[0];
+          const img = sprites[lampKey], gl = sprites.lampGlass && sprites.lampGlass[lampKey];
+          const gls = gl ? (gl.list || [gl]) : null;
           const hx = img && gl ? pr.x * T + T / 2 - img.width / 2 + gl.x : (pr.x + 0.5) * T;
-          lights.push({ x: hx / T, y: pr.y + 0.5 - lift / T, r: lk[1] });
-          if (img && gl) heads.push({ x: hx, y: (pr.y + 1) * T - img.height + gl.y - lift, r: gl.r });
+          if (img && gls) {
+            for (const g1 of gls) {
+              const hx1 = pr.x * T + T / 2 - img.width / 2 + g1.x;
+              lights.push({ x: hx1 / T, y: pr.y + 0.5 - lift / T, r: (gls.length > 1 ? lk[1] * 0.8 : lk[1]) * wetLampK });
+              heads.push({ x: hx1, y: (pr.y + 1) * T - img.height + g1.y - lift, r: g1.r });
+              /* 2026-09-29 (phase 12b) — LE REFLET DE LA LANTERNE sur le sol mouillé : deux taches de
+                 lumière sous le pied du poteau (une plus vive, une plus basse), en ordre de fondu.
+                 Pas sur une case en hauteur (le sol y est ailleurs) ni sur un sol sec. */
+              if (wetP.wet > 0.35 && !lift) for (const [dy, kk] of [[5, 0.55], [11, 0.3]]) heads.push({ x: hx1, y: (pr.y + 1) * T + dy, r: g1.r * 0.9, k: kk * Math.min(1, wetP.wet) });
+            }
+          } else lights.push({ x: hx / T, y: pr.y + 0.5 - lift / T, r: lk[1] * wetLampK });
           /* 2026-09-25 (phase 4) — SON REFLET, si l'eau est à ses pieds : le verre
              renvoyé par le miroir de `eau.js` (§ 7), là où la colonne de lumière
              tombera. Une lampe de la Haute-Ville (lift > 0) ne donne sur aucune eau. */
@@ -26465,7 +26599,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          pour qu'un banc puisse le regarder ; ce bloc ne fait plus que décider
          QUAND et À QUELLE INTENSITÉ, jamais COMMENT. */
       const questDone = Q.starDone(sharedRef.current.star);
-      const isNight = E.isNightTime(tmin);
+      const isNight = E.isNightTime(tmin, daySkyBounds());   // 2026-09-29 (phase 12c) : la nuit de la saison (visuel)
       if (skyZone !== "court" && (isNight || questDone)) {
         const sx = W - 134, sy = 60;
         /* Survol : une seule mesure, jamais recalculée pour le dessin ET pour
@@ -27613,7 +27747,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const day = sharedRef.current.day || 1, W = wxFrame(), n = Date.now();
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, n);
       const odds = WX.boltOdds(W);
-      return LUM.skyLight(tmin, W.dark, odds > 0 ? LUM.flashAt(n, day, odds) * WX.flashGain(W) : 0);
+      return LUM.skyLight(tmin, W.dark, odds > 0 ? LUM.flashAt(n, day, odds) * WX.flashGain(W) : 0, daySkyBounds());
     }
     /* `lights` : { x, y (CASES, déjà remontées de l'altitude), r (cases), c, k }.
        `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
@@ -27727,12 +27861,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return x >= 0 && y >= 0 && x < wgrid.w && y < wgrid.h && wgrid.ground[y * wgrid.w + x] === C.G_WATER;
       };
       /* Pose `rate` impacts par seconde et par 10 000 px d'art², en px monde. */
+      /* 2026-09-29 (phase 12b) — une goutte qui tombe dans une FLAQUE de la ville y fait un rond,
+         comme sur l'eau (`pluie.js`, la couche mouillée de l'image). */
+      const wfr = zoneNow === "town" ? wetFrameRef.current : null;
+      const onPud = (wx, wy) => !!(wfr && wfr.pud > 0.05 && wfr.layer.puddleAt(wx, wy));
       const scatter = (rate, kind) => {
         let n = Wa * Ha / 10000 * rate * dt;
         while (n > 0) {
           if (n >= 1 || Math.random() < n) {
             const x = Math.floor((Math.random() * canvas.width - M.e) / M.a), y = Math.floor((Math.random() * canvas.height - M.f) / M.a);
-            sp.push({ x, y, t: now2, w: onWater(x, y), k: kind });
+            sp.push({ x, y, t: now2, w: onWater(x, y) || onPud(x, y), k: kind });
           }
           n -= 1;
         }
@@ -27761,6 +27899,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              l'intensité : quelques-unes sous la bruine, une pluie de plocs sous
              l'orage. */
           scatter(C.STORM_SPLASH_RATE * k, "r");
+          /* Et les ronds ciblés : le hasard de l'écran ne tombe que rarement dans une flaque
+             (elles couvrent un sixième du sol dur) ; on tire donc aussi parmi les points que
+             la couche a semés DANS les flaques visibles (`ripplePoints`). */
+          if (wfr && wfr.pud > 0.08) {
+            const pts = wfr.layer.ripplePoints();
+            let nr = pts.length * 0.3 * k * dt * Math.min(1, wfr.pud * 1.5);
+            while (pts.length && nr > 0) {
+              if (nr >= 1 || Math.random() < nr) { const q = pts[(Math.random() * pts.length) | 0]; sp.push({ x: q[0], y: q[1], t: now2, w: true, k: "r" }); }
+              nr -= 1;
+            }
+          }
         }
       }
       /* LA GRÊLE (automne, hiver) : des grêlons de 1 ou 2 px d'art, presque
@@ -28037,6 +28186,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillStyle = "#eaf4ff"; ctx.fillText(label, lx, ly + 12);
       ctx.textAlign = "left";
     }
+    /* 2026-09-29 (phase 12c) — LES BORNES DU CIEL DE LA SAISON (lever, coucher : jours courts
+       l'hiver, longues soirées l'été), en cache une seconde. ⚠️ Le ciel VISUEL seul les lit :
+       `E.isNightTime` (les lapins, les loups de l'hôte) reste sur le ciel de référence — la
+       difficulté d'une nuit ne change pas avec la saison sans qu'on l'ait décidé. */
+    function daySkyBounds() {
+      const n = Date.now(), m = daySkyMemoRef.current;
+      if (m.b && n - m.at < 1000) return m.b;
+      const [r, st] = E.sunHoursAt(n);
+      m.b = C.skyBoundsOf(r, st); m.at = n;
+      return m.b;
+    }
     function nightAlpha() {
       /* ⚠️ 2026-09-25 (phase 3) — UNE LECTURE DU CIEL, PLUS UNE SECONDE COURBE.
          Elle disait « l'obscurité » avec ses propres paliers (17h-20h amorce,
@@ -28047,7 +28207,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          fenêtres — gardent leurs seuils. L'orage n'y compte pas : une lanterne
          ne s'allume pas à midi parce qu'il pleut. */
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      return LUM.nightFromSky(LUM.skyAt(tmin));
+      return LUM.nightFromSky(LUM.skyAt(tmin, daySkyBounds()));
     }
     /* ══════════════════════════════════════════════════════════════════════
        ZIP 426 — LA CARTE MARCHE DANS LES TROIS ZONES.

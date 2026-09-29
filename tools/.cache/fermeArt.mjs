@@ -23,6 +23,10 @@ import { PLANCHE } from "./planche.mjs";
    maison, arbres). Générée par `tools/import-planche2.mjs` ; voir sa note
    d'en-tête pour l'échelle, qui est DÉRIVÉE et non mesurée. */
 import { PLANCHE2 } from "./planche2.mjs";
+/* 2026-09-29 (phase 7b) — la TROISIÈME planche : jardins vécus, place, lampadaires
+   par rang, maison hantée. Générée par `tools/import-planche3.mjs` ; l'échelle
+   propre à chaque objet est le champ `step` de son entrée de catalogue. */
+import { PLANCHE3 } from "./planche3.mjs";
 /* ZIP 467 — bloc d'escalier du tribunal, importé pixel pour pixel. */
 import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
 /* 2026-09-25 (phase 4) — l'eau cuite au pixel (`eau.js`) : la tuile d'eau par
@@ -5161,6 +5165,56 @@ export function buildSprites() {
         let n = 1;
         while (x + n < d.w && r[x + n] === ch) n++;
         g.fillStyle = d.pal[r.charCodeAt(x) - 48];
+        g.fillRect(x, y, n, 1);
+        x += n;
+      }
+    }
+    return c;
+  }
+
+  /* ⚠️⚠️ 2026-09-29 (phase 7b) — LE REJOUEUR DE LA TROISIÈME PLANCHE. Une porte
+     de plus, pour la même raison que la seconde (une fonction à trois tables se
+     tromperait un jour de table en silence) — et deux différences, qui sont
+     tout le sujet :
+     · '~' est l'OMBRE que Gemini a peinte sous l'objet, violet foncé. On la
+       rejoue en ombre du jeu (le vert-noir translucide des ellipses de
+       `PLANCHE_PROPS`) : un violet opaque sous un banc sur l'herbe serait un
+       carré. Elle est CUITE dans le canevas, donc les décors de cette planche
+       rejoignent `PLANCHE_PROPS` (FermeGame.js), qui dit « déjà ombrés ».
+     · `off` : la lanterne ÉTEINTE, de jour. Le verre allumé est remplacé par le
+       verre éteint (`p3GlassOff`, le gris-bleu des lampadaires des
+       planches 1 et 2) ; le reste ne bouge pas d'un pixel, donc `litGlassOf`
+       retrouve le verre en comparant les deux (§ `S.lampGlass`). */
+  const P3_SHADOW = "rgba(20,26,16,0.30)";
+  /* Le verre allumé se reconnaît à sa COULEUR (jaune chaud et clair, cœur pâle),
+     pas à un index ni à un hexadécimal : la palette d'un sprite est
+     RE-QUANTIFIÉE à chaque réimport (les teintes du verre ont changé de nom en
+     changeant l'échelle), un tableau de couleurs nommées serait devenu faux sans
+     une erreur. Trois paliers de gris-bleu, ceux des lanternes de la planche 1. */
+  const P3_LAMPS = new Set(["lampRich", "lampPoor"]);
+  function p3GlassOff(hex) {
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    const warm = r >= 200 && g >= 150 && r - b >= 60;
+    const core = r >= 240 && g >= 235 && b >= 180 && r - b >= 30;
+    if (!warm && !core) return null;
+    const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+    return lum < 195 ? "#56646c" : lum < 225 ? "#6c7a82" : "#a3b4bb";
+  }
+  function planche3Sprite(name, opt = {}) {
+    const d = PLANCHE3[name];
+    if (!d) throw new Error("sprite de planche 3 inconnu : " + name);
+    if (opt.off && !P3_LAMPS.has(name)) throw new Error("planche 3 : pas de version éteinte pour " + name);
+    const [c, g] = cv(d.w, d.h);
+    for (let y = 0; y < d.h; y++) {
+      const r = d.rows[y];
+      let x = 0;
+      while (x < d.w) {
+        const ch = r[x];
+        if (ch === ".") { x++; continue; }
+        let n = 1;
+        while (x + n < d.w && r[x + n] === ch) n++;
+        if (ch === "~") g.fillStyle = P3_SHADOW;
+        else { const col = d.pal[r.charCodeAt(x) - 48]; g.fillStyle = (opt.off && p3GlassOff(col)) || col; }
         g.fillRect(x, y, n, 1);
         x += n;
       }
@@ -15453,7 +15507,31 @@ export function buildSprites() {
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
     if (!n) return null;
-    return { x: sx / n + 0.5, y: sy / n + 0.5, r: Math.max(2, Math.hypot(x1 - x0 + 1, y1 - y0 + 1) / 2) };
+    const one = { x: sx / n + 0.5, y: sy / n + 0.5, r: Math.max(2, Math.hypot(x1 - x0 + 1, y1 - y0 + 1) / 2) };
+    /* 2026-09-29 (phase 7b) — UN CANDÉLABRE A DEUX VERRES. Le centre de deux
+       lanternes tombe sur le fût, entre elles : un seul halo y serait posé sur du
+       fer. On sépare donc les verres par leurs COMPOSANTES CONNEXES (voisinage
+       à 8, un pixel de trou toléré) et, s'il y en a plusieurs, chacun est
+       déclaré (`list`) — les lecteurs de `x`/`y`/`r` (le halo, le reflet) ne
+       changent pas, ceux qui savent lire `list` l'utilisent. */
+    const seen = new Uint8Array(W * H), comps = [];
+    const isHit = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !seen[y * W + x] && (b
+      ? (a[(y * W + x) * 4] !== b[(y * W + x) * 4] || a[(y * W + x) * 4 + 1] !== b[(y * W + x) * 4 + 1] || a[(y * W + x) * 4 + 2] !== b[(y * W + x) * 4 + 2])
+      : (a[(y * W + x) * 4 + 3] > 200 && a[(y * W + x) * 4] > 200 && a[(y * W + x) * 4 + 1] > 150 && a[(y * W + x) * 4] - a[(y * W + x) * 4 + 2] > 90));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!isHit(x, y)) continue;
+      const st = [[x, y]]; seen[y * W + x] = 1;
+      let cn = 0, cx = 0, cy = 0, u0 = W, u1 = -1, v0 = H, v1 = -1;
+      while (st.length) {
+        const [px, py] = st.pop();
+        cn++; cx += px; cy += py;
+        if (px < u0) u0 = px; if (px > u1) u1 = px; if (py < v0) v0 = py; if (py > v1) v1 = py;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (isHit(px + dx, py + dy)) { seen[(py + dy) * W + px + dx] = 1; st.push([px + dx, py + dy]); }
+      }
+      comps.push({ x: cx / cn + 0.5, y: cy / cn + 0.5, r: Math.max(2, Math.hypot(u1 - u0 + 1, v1 - v0 + 1) / 2) });
+    }
+    if (comps.length > 1) one.list = comps;
+    return one;
   }
   // Rangée de moellons irréguliers (pierre) : rangs décalés, tons variés.
   function bStones(g, x, y, w, h, r, tones, bh) {
@@ -19176,6 +19254,16 @@ house: house(),
     townKiosk: townKioskSprite(),
     townGrave: townGraveSprite(),
     townPlanter: townPlanterSprite(),
+    /* 2026-09-29 (phase 7b) — LA TROISIÈME PLANCHE (voir `planche3Sprite`).
+       · `townProp3` : un dessin par nom d'art (le rendu le cherche par
+         `C.TOWN_PROP_ART[kind]`, une ligne pour les dix-neuf décors) ;
+       · la jardinière et l'urne ont leur ÉTÉ et leur HIVER (fleurs / terre nue) ;
+       · le lampadaire a son rang (`C.townLampArtAt`), allumé et éteint. */
+    townProp3: Object.fromEntries([...new Set([...C.TOWN_PLANCHE3_KINDS].map((k) => C.TOWN_PROP_ART[k]))].map((n) => [n, planche3Sprite(n)])),
+    townPlanter3: [planche3Sprite("planterSummer"), planche3Sprite("planterWinter")],
+    townUrn3: [planche3Sprite("urnSummer"), planche3Sprite("urnWinter")],
+    townLampRich: planche3Sprite("lampRich"), townLampRichOff: planche3Sprite("lampRich", { off: true }),
+    townLampPoor: planche3Sprite("lampPoor"), townLampPoorOff: planche3Sprite("lampPoor", { off: true }),
     townStreetSign: townStreetSignSprite(),
     townStatue: townStatueSprite(),
     townWell: townWellSprite(),
@@ -19295,6 +19383,8 @@ house: house(),
     townHangLamp: litGlassOf(S.townHangLamp, S.townHangLampOff),
     townOilLamp: litGlassOf(S.townOilLamp, S.townOilLampOff),
     lamp: litGlassOf(S.lamp, null),
+    townLampRich: litGlassOf(S.townLampRich, S.townLampRichOff),
+    townLampPoor: litGlassOf(S.townLampPoor, S.townLampPoorOff),
   };
   S.townHouseWindowGlow = townHouseWindowGlow();
   /* L'emprise DESSINÉE d'une maison de ville : la largeur de son mur au ras du

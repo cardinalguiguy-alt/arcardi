@@ -331,6 +331,42 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   canevas (falsifié : `FALSIFY=cadre`). ⚠️ Il ne voit ni la lumière de la scène ni les maisons (des
   pavés gris) : la neige se juge ensuite en jeu. `tools/build-snow-roofs.mjs` fabrique les calques des
   toits et sa planche (`tools/out/toits-neige.png`).
+- **`tools/verify-planche3.mjs` — 31 contrôles, 31/31 (2026-09-29 : la planche 3 dans la ville).**
+  Ce que le branchement n'a pas le droit de casser ou d'oublier : la CARTE (empreinte FNV du sol, des
+  arbres, des altitudes, des clôtures, des portails et des potagers, relevée sur le générateur d'avant :
+  tout se pose en passe finale, sans un tirage) ; la COHÉRENCE SOCIALE (boîte aux lettres selon le rang,
+  jamais le bois d'un modeste chez un riche ni la vasque d'un riche chez un modeste, chaque objet du cycle
+  posé au moins une fois) ; OÙ ILS TIENNENT (herbe libre, hors emprise, hors allée, solides, jamais sur un
+  arbre ; derrière une grille, rien devant le mur) ; les DESSINS (aux dimensions de la planche, la version
+  éteinte d'un lampadaire ne change que son verre — 23 et 15 pixels —, le candélabre a deux verres, un de
+  chaque côté du fût) ; la maison hantée (portail traversable, ronces jamais sur l'allée, aucune dalle sous
+  le portail). Falsifié sur trois sabotages (la grille, un cycle, la boîte aux lettres). ⚠️ Un compte exact
+  y est une empreinte, pas un compte de décors : ajouter un objet n'y change rien.
+- **`tools/verify-pluie.mjs` — 33 contrôles, 33/33 · `tools/render-pluie.mjs` — 22 contrôles + planches
+  (2026-09-29 : la pluie, phase 12b).** Le premier JOUE `pluie.js` (le sol mouillé est une pure fonction de la
+  météo des deux jours passés, lue à l'endroit ou à l'envers au bit près ; l'humidité monte, sèche par
+  saison, le soleil sèche plus vite qu'un ciel couvert ; les flaques ne se remplissent que sous une pluie
+  franche et sèchent à VITESSE CONSTANTE — mesuré : sept heures de jeu sous ciel d'automne ; la neige ne fait
+  pas de flaque). Le second peint de vrais morceaux de la carte (`tools/out/pluie-<lieu>.png`, cinq états) et
+  mesure ce que le premier ne voit pas : la part mouillée, l'ombre qui sèche en dernier, les flaques dans les
+  ornières et JAMAIS sur l'herbe, sur les joints d'un dallage avant le reste, le bord haut plus sombre que le
+  bord bas, les départs de l'eau qui coule seulement au pied d'un trottoir. ⚠️ **Sa mesure clé est née d'un
+  retour de Guillaume** (« les flaques ne doivent pas ressembler à des zones surélevées ») : « une flaque n'est
+  pas un aplat » — moins de 12 % de ses pixels ont un carré de 5 × 5 tout en eau (5 % mesurés ; 44 % avec le
+  premier jet, falsifié sur le VRAI défaut). Falsifié aussi sur trois sabotages de `verify-pluie` (une bruine qui
+  remplit, une flaque exponentielle, une saison sans effet). ⚠️ Ni l'un ni l'autre ne voit la lumière de la
+  scène, ni les halos des lampadaires, ni les ronds et l'eau qui coulent en mouvement : la pluie se juge en jeu.
+- **`tools/verify-jour.mjs` — 40 contrôles, 40/40 · `tools/render-fumee.mjs` — 5 contrôles + planche
+  (2026-09-29 : la durée du jour et les cheminées, phase 12c).** Le ciel de référence (lever 6 h, coucher 19 h)
+  redonne EXACTEMENT les cinq constantes d'avant ; le jour est plus court l'hiver (8 h) que l'automne (10,5),
+  le printemps (13), l'été (15,5) ; le lever et le coucher ne sautent jamais (672 heures réelles lues :
+  2 minutes de jeu au plus d'une heure à la suivante, y compris à la frontière de deux saisons) ; les lanternes
+  s'allument plus tôt l'hiver (14 h 50) que l'été (19 h 50) ; le feu des cheminées suit la saison, l'heure et le
+  temps, une rue ne fume jamais d'un bloc ; les bouffées se LISENT dans l'horloge (sans état, au plus 14 par
+  tuyau, elles montent, gonflent, pâlissent, penchent au vent) ; chaque bouche de tuyau est dans le cadre de
+  chaque version et au niveau du toit. Falsifié sur sept sabotages (une saison sans effet, un ciel qui
+  ignore les bornes, un saut à la frontière, une cheminée hors cadre, un vent sans effet…). `render-fumee`
+  peint la colonne sur un ciel de jour, couvert et de nuit, à trois vents (`tools/out/fumee.png`).
 - **`tools/verify-meteo.mjs` — 40 contrôles, 40/40 (2026-09-26 : la météo).** Il JOUE
   `components/ferme/meteo.js` sur 4 000 journées par saison : le temps est une PURE fonction (deux
   clients tirent le même) ; les SAISONS (au moins deux fois plus de jours de pluie à l'automne qu'en
