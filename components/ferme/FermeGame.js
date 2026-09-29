@@ -78,6 +78,7 @@ import * as WX from "./meteo";      // 2026-09-26 — la météo : épisodes qui
 import * as FU from "./fumee";      // 2026-09-29 (phase 12c) — les cheminées qui fument : le feu de la maison, les bouffées lues dans l'horloge
 import * as PL from "./pluie";      // 2026-09-29 (phase 12b) — la pluie : le sol mouillé, les flaques (pure fonction de la météo passée)
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
+import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute, le tapis au pied des arbres, ce qui vole au vent
 import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import { fstr } from "./fermeStrings";
@@ -428,6 +429,29 @@ function pondIceLayer(bake, x, y, ice, snow) {
     POND_ICE.set(R, L);
   }
   return { R, cv: L.cv, state: L.cell[(y - R.by0) * R.cw + (x - R.bx0)] };
+}
+/* 2026-09-30 — LES TEINTES DU TAPIS D'UNE ESSENCE : lues une fois dans sa couronne
+   d'automne (`FL.autumnPalette`), par essence et par taille. `null` pour un
+   persistant (il ne fait pas de tapis). */
+const LITTER_PAL = new Map();
+function litterPalette(S, tw, x, y, obj) {
+  const k = A.townTreeKind(tw, x, y, obj);
+  if (k === null || A.townTreeEvergreen(k)) return null;
+  const size = A.townTreeSize(tw, x, y, obj), key = k + "|" + size;
+  if (LITTER_PAL.has(key)) return LITTER_PAL.get(key);
+  let out = null;
+  try {
+    const r = A.townTreeImg(S, tw, x, y, "autumn", obj, 0);
+    if (r && r.img) {
+      const isCell = r.img.sx !== undefined, w = isCell ? r.img.w : r.img.width, h = isCell ? r.img.h : r.img.height;
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d");
+      if (isCell) g.drawImage(r.img.img, r.img.sx, r.img.sy, w, h, 0, 0, w, h); else g.drawImage(r.img, 0, 0);
+      out = { pal: FL.autumnPalette(g.getImageData(0, 0, w, h).data, w, h), w: r.m.w };
+    }
+  } catch (e) { out = null; }
+  LITTER_PAL.set(key, out);
+  return out;
 }
 function tallGrassTint(img, tone) {
   if (!tone || !img || !(img.naturalWidth || img.width)) return img;
@@ -1020,6 +1044,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
   const wetStepsRef = useRef(new Map());                 // 2026-09-29 (audit pluie) : la foulée de chaque marcheur, pour ses éclaboussures
   const snowDevRef = useRef({ depth: null, trees: null, ice: null });
+  /* 2026-09-30 — les feuilles mortes : l'avancée de la saison forcée au menu dev (locale,
+     `null` = la vraie), et les feuilles qui volent (locales, comme les flocons). */
+  const leafDevRef = useRef(null);
+  const [leafDevUi, setLeafDevUi] = useState(null);
+  const leafFlurryRef = useRef(null);
   const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
@@ -8380,6 +8409,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* 2026-09-29 — PAR LIEU (`place` : "town" par défaut, "farm" pour la ferme) : la
      neige tombe ensemble (meteo.js § 3 bis), mais une pluie d'un seul côté la fait
      fondre d'un seul côté. Le mémo garde le lieu dans sa clé. */
+  /* 2026-09-30 — L'AVANCÉE DE LA SAISON (0..1), pour les feuilles mortes : une pure
+     fonction de l'heure réelle (la saison dure `SEASON_REAL_MS`, comme `E.seasonAt`) —
+     les deux joueurs voient la même chute. Forcée au menu dev (locale). */
+  function seasonProgressAt(ms) {
+    if (leafDevRef.current != null) return leafDevRef.current;
+    const q = (ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS;
+    return q - Math.floor(q);
+  }
   function snowPackNow(place) {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
     const dev = snowDevRef.current, pl = place === "farm" ? "farm" : "town";
@@ -21022,6 +21059,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          dormante et la gelée du matin. */
       const snowPk = snowPackNow();
       const snowSeason = E.seasonOf().key;
+      const leafP = seasonProgressAt(Date.now());   // 2026-09-30 : l'avancée de la saison, pour la chute des feuilles
       roofSnowFrame = { house: roofSnowOf(snowPk.rh), cold: roofSnowOf(snowPk.rc) };
       charSnowAt = null; charSnowZone = null;
       groundSnowK = Math.max(0, Math.min(1, (snowPk.g - 0.3) / 1.5));
@@ -21589,7 +21627,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                  contexte, il contaminerait tout ce qui est dessiné ensuite. */
               const che2 = che && che.hp ? 1 - che.hp / C.TREE_HP : 0;
               if (che2 > 0) ctx.filter = `brightness(${(1 - che2 * 0.45).toFixed(2)})`;
-              if (!A.drawTownTree(ctx, sprites, tw, x, y, x * T + shakeDx, y * T, _se, o, now, tLoad)) ctx.drawImage(fallback, x * T - 8, (y + 1) * T - 48);
+              if (!A.drawTownTree(ctx, sprites, tw, x, y, x * T + shakeDx, y * T, _se, o, now, tLoad, _se === "autumn" ? A.townTreeFall(_se, leafP, x, y) : 0)) ctx.drawImage(fallback, x * T - 8, (y + 1) * T - 48);
               if (che2 > 0) {
                 ctx.filter = "none";
                 // ... et des copeaux au pied, qui disent où l'on tape.
@@ -24826,6 +24864,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-30 — LE TAPIS DE FEUILLES MORTES AU PIED DES FEUILLUS
+         ║ (`feuilles.js`). Au sol, donc AVANT tout ce qui se tient debout.
+         ╚══════════════════════════════════════════════════════════════════════
+         Il suit la chute (fin d'automne), brunit et se tasse l'hiver, s'efface
+         sous la neige (au-delà de 0,4 cm, fondu jusqu'à 1,6), et disparaît avant
+         le printemps. Jamais sur l'eau. Les feuilles ont chacune leur ordre
+         d'arrivée : le tapis s'épaissit feuille à feuille, il ne « tombe » pas. */
+      const leafSeason = snowSeason;
+      const leafSrc = [], leafLift = [];
+      if (leafSeason === "autumn" || leafSeason === "winter") {
+        const litCol = new Map();
+        const colOf = (pal, ci, brown, j) => {
+          const key = ci * 1000 + Math.round(brown * 10) * 10 + (j % 3);
+          let c = litCol.get(key);
+          if (!c) { const q = FL.leafColor(pal[ci], brown, j); c = `rgb(${q[0]},${q[1]},${q[2]})`; litCol.set(key, c); }
+          return c;
+        };
+        const brownK = FL.litterBrown(leafSeason, leafP);
+        const act = FL.fallActivity(leafSeason, leafP);
+        for (let y = y0 - 2; y <= yBot + 2; y++) for (let x = x0 - 3; x <= x1 + 3; x++) {
+          if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+          const i = y * tw.w + x, o = tw.objects[i];
+          if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+          const lp = litterPalette(sprites, tw, x, y, o);
+          if (!lp) continue;
+          const jit = ((EAU.waterHash(x * 7 + 3, y * 13 + 5) % 1000) / 1000 - 0.5) * 0.16;
+          const cx = x * T + 8, cy = (y + 1) * T - 3 - (tw.elev[i] || 0) * EP;
+          const rx = Math.max(6, Math.round(lp.w * 0.4)), ry = Math.max(3, Math.round(rx * 0.45));
+          // Les couronnes qui lâchent des feuilles (les feuilles qui volent, plus bas).
+          if (act > 0 && y >= y0 - 1 && y <= yBot + 1) {
+            const f = A.townTreeFall(leafSeason, leafP, x, y);
+            if (f < 1) leafSrc.push({ x: cx, y: cy - lp.w * 0.62, rx: lp.w * 0.3, ry: lp.w * 0.2, ground: cy, pal: lp.pal, rate: 0.35 * act * (1 - f * 0.6) * (lp.w / 48) });
+          }
+          const lvl = FL.litterLevel(leafSeason, leafP, jit);
+          if (lvl <= 0.01) continue;
+          let a = 1;
+          if (snowF) { const d = snowF.depthAt(cx, cy); a = 1 - Math.max(0, Math.min(1, (d - 0.4) / 1.2)); }
+          if (a <= 0.02) continue;
+          if (lvl > 0.3 && a > 0.8) leafLift.push({ x: cx, y: cy, pal: lp.pal });
+          const leaves = FL.litterLeaves(rx, ry, EAU.waterHash(x, y) % 24, lp.pal.length);
+          if (a < 1) ctx.globalAlpha = a;
+          for (const L of leaves) {
+            if (L.o >= lvl) continue;
+            const lx = cx + L.x, ly = cy + L.y, gx = (lx / T) | 0, gy = ((ly + (tw.elev[i] || 0) * EP) / T) | 0;
+            if (gx >= 0 && gy >= 0 && gx < tw.w && gy < tw.h && tw.ground[gy * tw.w + gx] === C.G_WATER) continue;
+            ctx.fillStyle = colOf(lp.pal, L.c, Math.min(1, brownK + L.d * 0.25), L.c + (L.x & 3));
+            ctx.fillRect(lx, ly, L.s === 2 ? 2 : 1, 1);
+          }
+          if (a < 1) ctx.globalAlpha = 1;
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -24835,6 +24925,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openLightFrame();   // 2026-09-25 (phase 3) : les dessins déclarent leurs bâtiments, calques de nuit et lampes peintes
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      /* 2026-09-30 — LES FEUILLES QUI TOMBENT ET QUI VOLENT (`FL.makeLeafFlurry`),
+         LOCALES : après le monde (une feuille passe devant tout), avant la lumière
+         (la nuit les assombrit comme le reste). Le vent des épisodes (`W.wind`) les
+         emporte ; en rafale il soulève le tapis. L'hiver sans neige, quelques feuilles
+         sèches roulent encore au vent. */
+      {
+        const Wl = wxFrame();
+        const fl = leafFlurryRef.current || (leafFlurryRef.current = FL.makeLeafFlurry());
+        const autumnL = leafSeason === "autumn", bareWinter = leafSeason === "winter" && !(snowPk.g > 0.3);
+        if (autumnL || bareWinter || fl.count()) {
+          const flyPal = leafLift.length ? leafLift[0].pal : leafSrc.length ? leafSrc[0].pal : null;
+          fl.step({
+            dt, wind: Wl.wind || 0, sources: autumnL ? leafSrc : [], lift: autumnL || bareWinter ? leafLift : [],
+            gust: Math.max(0, (Wl.wind || 0) - 0.35) * 1.6,
+            flyPal: autumnL || bareWinter ? (flyPal || [[214, 148, 52], [192, 104, 40], [160, 82, 38]]) : null,
+            flyRate: autumnL ? 1.2 + 2.4 * FL.leafFall("autumn", leafP, 0) : bareWinter ? 0.5 : 0,
+            view: { x0: x0 * T, x1: (x1 + 1) * T, y0: y0 * T, y1: (yBot + 1) * T },
+          });
+          fl.draw((lx, ly, w, h, c, a) => {
+            ctx.globalAlpha = a;
+            ctx.fillStyle = `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+            ctx.fillRect(lx, ly, w, h);
+          });
+          ctx.globalAlpha = 1;
+        }
+      }
       /* ⚠️ 2026-09-25 (phase 3) — LA LUMIÈRE PASSE ICI : après tout ce qui
          appartient au monde (la boucle triée), avant les NOMS et les BULLES,
          qui restent lisibles la nuit (ils passaient sous le voile). */
@@ -39428,6 +39544,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
                   {[null, 0, 0.5, 1.1, 4].map(v => (
                     <button key={"device-" + v} className={"ferme-dev-btn" + (snowDevUi.ice === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, ice: v }; setSnowDevUi(u => ({ ...u, ice: v })); }}>{L.devIce(v)}</button>
+                  ))}
+                </div>
+                {/* 2026-09-30 — LES FEUILLES MORTES : l'avancée de la saison, locale (`leafDevRef`, lue par `seasonProgressAt`). */}
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, 0.3, 0.6, 0.72, 0.84, 0.97].map(v => (
+                    <button key={"devleaf-" + v} className={"ferme-dev-btn" + (leafDevUi === v ? " on" : "")} onClick={() => { leafDevRef.current = v; setLeafDevUi(v); }}>{L.devLeaf(v)}</button>
                   ))}
                 </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
