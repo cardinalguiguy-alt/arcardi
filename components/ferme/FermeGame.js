@@ -995,6 +995,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const daySkyMemoRef = useRef({ at: 0, b: null });        // 2026-09-29 (phase 12c) : les bornes du ciel de la saison
   const wetFrameRef = useRef(null);                       // ce que la pluie sait du sol, cette image (les ronds des flaques)
   const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
+  const wetStepsRef = useRef(new Map());                 // 2026-09-29 (audit pluie) : la foulée de chaque marcheur, pour ses éclaboussures
   const snowDevRef = useRef({ depth: null, trees: null });
   const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
@@ -20824,7 +20825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ╚══════════════════════════════════════════════════════════════════ */
       const wetPk = wetPackNow();
       const wetSnowK = Math.max(0, Math.min(1, snowPk.g / 1.2));     // sous 1 cm de neige, le sol ne s'y voit presque plus
-      const wetP = { wet: wetPk.w * (1 - wetSnowK), pud: wetPk.p * (1 - wetSnowK), sky: PL.skyReflect(wxFrame().dark) };
+      const wetP = { wet: wetPk.w * (1 - wetSnowK), pud: wetPk.p * (1 - wetSnowK), run: PL.runOf(wxFrame()) * (1 - wetSnowK), sky: PL.skyReflect(wxFrame().dark) };
       let wetF = null;
       if (PL.wetActive(wetP)) {
         const sfw = snowF || townSnowField(tw);
@@ -20842,7 +20843,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          marque pas la chaussée dessous — une trace sur une case du pont a deux
          sols. ⚠️ Appelé dans la BOUCLE, jamais dans un `pushE` : la passe des
          reflets rejoue les dessins, et chaque pas y serait posé deux fois. */
+      /* 2026-09-29 (audit pluie, Guillaume : « les pieds du player / PNJ qui font de petites
+         éclaboussures ») — LES PIEDS DANS L'EAU : à chaque foulée, sous la pluie, une petite
+         gerbe au pied ; dans une flaque (même après la pluie), un rond en plus. Locales, comme
+         les empreintes dans la neige : rien ne circule. Rangées avec les plocs de la pluie
+         (`rainSplashRef`, dessinés par `drawWeatherVeil`, en px monde AU SOL PEINT — d'où
+         l'altitude retranchée). Pas sous la neige, pas pour les pattes (chats, oiseaux). */
+      const STRIDE = { boot: 7, child: 5, hoof: 9 };
+      const rainFall = PL.groundRain(wxFrame());
+      const rainStep = (id, kind, fx, fy, lvl) => {
+        const stride = STRIDE[kind];
+        if (!stride || (rainFall < 0.06 && !(wetF && wetP.pud > 0.05))) return;
+        const steps = wetStepsRef.current, gx = fx * T, gy = fy * T;
+        let w = steps.get(id);
+        if (!w) { steps.set(id, { x: gx, y: gy, acc: 0, side: 1, t: now }); return; }
+        const d = Math.hypot(gx - w.x, gy - w.y);
+        w.x = gx; w.y = gy; w.t = now;
+        if (d > 2 * T) { w.acc = 0; return; }
+        w.acc += d;
+        if (w.acc < stride) return;
+        w.acc = 0; w.side = -w.side;
+        if (snowF && snowF.depthAt(gx, gy) > 0.6) return;
+        const inPud = !!(wetF && wetP.pud > 0.05 && wetF.puddleAt(gx, gy));
+        if (!inPud && rainFall < 0.06) return;
+        const tx = Math.floor(fx), ty = Math.floor(fy);
+        const e = (lvl != null ? lvl : elAt(tx, ty)) * EP, t0 = performance.now();
+        const sp = rainSplashRef.current, x = Math.round(gx + w.side * 1.5), y = Math.round(gy - e);
+        if (sp.length < 900) sp.push({ x, y, t: t0, w: false, k: "f" });
+        if (inPud && sp.length < 900) sp.push({ x, y, t: t0, w: true, k: "r" });
+      };
+      if (wetStepsRef.current.size > 48) wetStepsRef.current.forEach((w, k2) => { if (now - w.t > 4000) wetStepsRef.current.delete(k2); });
       const snowWalk = (id, kind, fx, fy, lvl, k) => {
+        rainStep(id, kind, fx, fy, lvl);
         if (!snowF) return;
         const tx = Math.floor(fx), ty = Math.floor(fy);
         if (lvl != null && C.townOverpassCell(tx, ty) && lvl > elAt(tx, ty) + 0.3) return;
@@ -21355,11 +21387,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          verticale), en fondu à chaque bout de leur course — un éclat qui saute d'un bout à
          l'autre serait une boucle qui se voit. Seulement sous un sol trempé, et pas sous la
          neige. Position lue par la couche (`flowPoints`), jamais un tirage à chaque image. */
-      if (wetF && wetP.wet > 0.55) {
+      /* ⚠️ 2026-09-29 (audit) — l'eau ne coule plus dès que le sol est trempé (une averse
+         suffisait) : seulement pendant une forte pluie (`wetP.run`, `PL.runOf`). */
+      if (wetF && wetP.run > 0.05) {
         const tS = performance.now() / 1000, sky = wetP.sky;
         for (const [gx, gy, hh, horiz] of wetF.flowPoints()) {
           const ph = (tS * 0.42 * (0.7 + (hh & 7) / 10) + (hh >>> 8) / 4194304) % 1;
-          const a = Math.sin(Math.PI * ph) * 0.62 * Math.min(1, (wetP.wet - 0.55) * 4);
+          const a = Math.sin(Math.PI * ph) * 0.62 * wetP.run;
           if (a < 0.05) continue;
           const d = Math.round((ph - 0.5) * 14), e = elAt(gx >> 4, gy >> 4) * EP;
           ctx.fillStyle = `rgba(${Math.min(255, sky[0] + 40)},${Math.min(255, sky[1] + 40)},${Math.min(255, sky[2] + 40)},${a.toFixed(2)})`;
@@ -27906,7 +27940,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const pts = wfr.layer.ripplePoints();
             let nr = pts.length * 0.3 * k * dt * Math.min(1, wfr.pud * 1.5);
             while (pts.length && nr > 0) {
-              if (nr >= 1 || Math.random() < nr) { const q = pts[(Math.random() * pts.length) | 0]; sp.push({ x: q[0], y: q[1], t: now2, w: true, k: "r" }); }
+              /* ⚠️ 2026-09-29 (audit) — les points de la couche sont au SOL (pixels monde) ; le
+                 sol d'une case haute est peint `elev × TOWN_ELEV_PX` plus haut : le rond aussi. */
+              if (nr >= 1 || Math.random() < nr) {
+                const q = pts[(Math.random() * pts.length) | 0], qx = Math.floor(q[0] / T), qy = Math.floor(q[1] / T);
+                const qe = wgrid && qx >= 0 && qy >= 0 && qx < wgrid.w && qy < wgrid.h && wgrid.elev ? wgrid.elev[qy * wgrid.w + qx] * C.TOWN_ELEV_PX : 0;
+                sp.push({ x: q[0], y: q[1] - qe, t: now2, w: true, k: "r" });
+              }
               nr -= 1;
             }
           }
@@ -27947,6 +27987,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const RING = [[[0, 0]], [[-1, 0], [1, 0]], [[-2, 0], [2, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]],
                       [[-3, 0], [3, 0], [-2, -1], [2, -1], [-2, 1], [2, 1], [0, -1], [0, 1]]];
         const HOP = [0, 2, 3, 3, 2, 1, 0];
+        const FOOT = [[[-1, 0], [1, 0]], [[-2, -1], [2, -1]], [[-3, 0], [3, 0]]];
         const RING_MS = C.STORM_SPLASH_MS * 1.9;
         for (let i = sp.length - 1; i >= 0; i--) {
           const q = sp[i], age = now2 - q.t;
@@ -27956,6 +27997,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const fr = Math.min(3, Math.floor(age / (RING_MS / 4)));
             ctx.fillStyle = `rgba(${cr + 30},${cg + 30},${cb + 25},${(0.5 - fr * 0.1).toFixed(2)})`;
             for (const [ox, oy] of RING[fr]) pxW(q.x + ox, q.y + oy);
+          } else if (q.k === "f") {
+            /* 2026-09-29 (audit pluie) — la gerbe d'un pas : deux gouttes jetées de côté, qui
+               retombent. Plus petite et plus pâle qu'un ploc : on la voit sans la regarder. */
+            const fr = Math.min(2, Math.floor(age / (C.STORM_SPLASH_MS / 3)));
+            ctx.fillStyle = `rgba(${cr + 15},${cg + 15},${cb + 10},${(0.5 - fr * 0.14).toFixed(2)})`;
+            for (const [ox, oy] of FOOT[fr]) pxW(q.x + ox, q.y + oy);
           } else if (q.k === "h") {
             const fr = Math.min(HOP.length - 1, Math.floor(age / (C.HAIL_BOUNCE_MS / HOP.length)));
             ctx.fillStyle = `rgba(${Math.min(255, cr + 60)},${Math.min(255, cg + 55)},${Math.min(255, cb + 45)},0.9)`;

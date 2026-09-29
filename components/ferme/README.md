@@ -1,5 +1,32 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-29
 
+## 2026-09-29 (fin de nuit) — AUDIT DE LA PLUIE, CORRIGÉ
+
+Guillaume : « les flaques ne doivent pas être trop distrayantes, elles n'apparaissent qu'en cas de forte pluie ;
+si la pluie est fine, pas de flaques ni de torrent, juste les plocs, et les pieds du joueur / PNJ qui font de
+petites éclaboussures ». Audit vu en jeu (zoom 3, midi, pluie forcée, la même image avec et sans la couche
+mouillée), puis corrections :
+- **Seuil** : `PUD_MIN_RAIN` 0,18 → 0,5 — une averse (0,28 à 0,5) remplissait les ornières. L'eau qui coule au
+  caniveau suit `PL.runOf` (la pluie de l'image, 0 → 1 entre 0,5 et 0,8), plus l'humidité du sol (0,88 sous
+  une averse). `verify-pluie` §4 bis tient l'averse (aucune flaque, rien ne coule) et l'orage.
+- **Le caniveau était posé SUR la bordure** : il se lisait sur `aux` (distance au bord de la BANDE de rue), et
+  les 4 premiers pixels de la bande sont la bordure dessinée. Nouveau canal `gut` de la parcelle statique
+  (neige.js, lu par la pluie seule) : 255 sur la bordure, 1 + la distance à son pied, par côté, là où une
+  bordure est dessinée. Épaisseur écrite une fois : `C.TOWN_KERB_PX` (lue par `kerbW`, `ROAD_EDGE_KW`, `gut`).
+  Mesuré sur l'ancien code : 37 % de la bordure en flaque, 23 départs d'eau sur 23 sur la pierre levée.
+- **Le quai en bois de la gare** portait la grille de joints du dallage dessous (`drawStationTile` le peint
+  par-dessus le sol) : `wetCls` le lit comme un tablier.
+- **Le reflet de ciel des dalles**, tramé une case sur deux au bruit bleu, faisait « granité » : retiré.
+- **Les pieds** : une gerbe de deux gouttes à chaque foulée (bottes, enfants, sabots) sous la pluie, ou dans
+  une flaque même après ; un rond en plus dans une flaque. Locales, rangées avec les plocs (`rainStep`,
+  FermeGame.js ; branchées dans `snowWalk`, donc chez tous les marcheurs de la ville). Pas à la ferme.
+- **Les ronds des flaques** se posaient au sol non décalé de l'altitude (48 px par niveau) : corrigé, pas vu.
+- Bancs : `render-pluie` 24/24 (quatre contrôles neufs ou réécrits, tous rouges sur l'ancien `pluie.js` ;
+  l'ancien contrôle du caniveau tenait le DÉFAUT : il vérifiait l'eau sur `aux` ∈ [2, 3), la bordure),
+  `verify-pluie` 34/34 (falsifié : ancien seuil → l'averse fait p 0,51), `verify-neige` 17/17,
+  `render-neige` vert ; `no-undef` et bundle propres. **Reste** : filaments d'ornière clairs, dallages sans
+  vraie flaque — rares désormais (orage seulement).
+
 ## 2026-09-29 (nuit, suite) — LA PLANCHE 3 BRANCHÉE, LA PLUIE (12b), LE JOUR QUI CHANGE ET LA FUMÉE (12c)
 
 Guillaume : « fais 1 » (brancher la planche 3), puis « 12b et 12c ensuite » ; le café « Chez Juliette » et le

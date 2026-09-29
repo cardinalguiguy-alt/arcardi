@@ -4189,6 +4189,10 @@ export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (t
    PUREMENT OPTIQUE. La marche, l'A* piéton, l'A* du taxi et les collisions ne
    lisent que `elev`, jamais des pixels — `TOWN_STEP_MAX` est en unités
    d'altitude et ne bouge pas. Les 34 bancs ont été relancés après coup. */
+/* 2026-09-29 (audit pluie) — L'ÉPAISSEUR DE LA BORDURE D'UNE RUE, px. Écrite une fois : le dessin
+   (`kerbW`, `ROAD_EDGE_KW`, fermeArt.js) et la pluie (le pied de la bordure, `gut` de neige.js)
+   la lisent tous deux — recopiée, la pluie avait posé son caniveau sur la pierre levée. */
+export const TOWN_KERB_PX = 4;
 export const TOWN_ELEV_PX = 48;      // décalage vertical à l'écran, par unité d'altitude
 export const TOWN_STEP_MAX = 0.34;   // dénivelé franchissable EN MARCHANT (une marche vaut 0,25)
 /* Le SAUT depuis un rebord (Espace). Il ne sert qu'à DESCENDRE : on grimpe par

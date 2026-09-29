@@ -1137,7 +1137,7 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
    ⚠️ CUIT UNE FOIS : toutes les découpes dans UN atlas (une image, quelques
    milliers de cases de 16 px), au premier dessin de la carte. Rien par image.
    ══════════════════════════════════════════════════════════════════════════ */
-const ROAD_EDGE_KW = 4;                 // épaisseur de la bordure, px (= `kerbW`)
+const ROAD_EDGE_KW = C.TOWN_KERB_PX;    // épaisseur de la bordure, px (= `kerbW`)
 const ROAD_SMAX_K = 0.8;                // rayon d'adoucissement des carrefours, en cases
 const smax = (a, b, k) => {
   const h = Math.max(k - Math.abs(a - b), 0) / k;
@@ -18916,7 +18916,7 @@ export function buildSprites() {
     })(),
     townRoad: {
       sup: ROAD_SUP,
-      kerbW: 4,
+      kerbW: C.TOWN_KERB_PX,
       kerbTone: KERB_STONE,          // PHASE 7 : le profil de la bordure courbe (`roadEdgeCell`)
       asphalt: townAsphaltSurface(0x2b93),
       /* 2026-09-27 (phase 10) — quatre goudrons au même grain, l'un par bloc de

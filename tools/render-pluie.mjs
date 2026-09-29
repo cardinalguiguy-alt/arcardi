@@ -41,7 +41,7 @@ const STATES = [
   { name: "sec", wet: 0, pud: 0 },
   { name: "humide", wet: 0.5, pud: 0 },
   { name: "trempé, ornières", wet: 0.95, pud: 0.3 },
-  { name: "trempé, flaques", wet: 0.95, pud: 0.8 },
+  { name: "trempé, flaques", wet: 0.95, pud: 0.8, run: 1 },
   { name: "séchage", wet: 0.4, pud: 0.15 },
 ];
 const SKY = PL.skyReflect(0.6);
@@ -56,7 +56,7 @@ const layerEnv = { makeCanvas: env.makeCanvas, staticOf: (cx, cy) => field.stati
 
 function paint(P, state) {
   const layer = PL.makeWetLayer(tw, layerEnv);
-  layer.setParams({ wet: state.wet, pud: state.pud, sky: SKY });
+  layer.setParams({ wet: state.wet, pud: state.pud, run: state.run || 0, sky: SKY });
   layer.view(P.x, P.y, P.x + P.w - 1, P.y + P.h - 1);
   layer.update(1e9, () => 0);
   const W = P.w * T, H = P.h * T;
@@ -181,19 +181,58 @@ ok("l'herbe mouillée reste discrète (transparence ≤ 50 / 255)", sF.grassAlph
   ok("une flaque n'est pas un aplat : moins de 12 % de ses pixels ont un carré de 5 × 5 tout en eau (à 0,8)", pudPx > 5000 && solid / pudPx < 0.12, `${(100 * solid / Math.max(1, pudPx)).toFixed(1)} % de ${pudPx} pixels`);
 }
 {
-  // L'eau coule au caniveau : les départs sont sur le pied du trottoir, et seulement sous un sol trempé.
-  let bad = 0, n = 0, dry = 0;
+  /* L'eau coule au caniveau. ⚠️ 2026-09-29 (audit) — ce contrôle lisait « le pied du trottoir »
+     sur `aux` ∈ [2, 3), c'est-à-dire le premier pixel de la BANDE de rue — qui est la bordure
+     (`C.TOWN_KERB_PX`) : il tenait le défaut au lieu de le chercher (vu en jeu : le filet
+     courait sur la pierre levée). Il lit maintenant `gut` (neige.js) : 1 = le premier pixel de
+     chaussée contre la bordure. Et l'eau ne coule que sous une forte pluie (`run`), jamais sur
+     un sol simplement trempé par une averse. */
+  let bad = 0, n = 0, fine = 0;
   for (const st of statics) {
-    const r = render(st, { wet: 0.95, pud: 0.5, sky: SKY }).r;
+    const r = render(st, { wet: 0.95, pud: 0.5, run: 1, sky: SKY }).r;
     for (const [wx, wy] of r.flow) {
       n++;
-      const x = wx - st.cx * CHs, y = wy - st.cy * CHs, o = (y + 1) * SZ + (x + 1), ax = st.aux[o] / NG.Q_AUX;
-      if (st.cls[o] !== CL.STREET || ax < 2 || ax >= 3) bad++;
+      const x = wx - st.cx * CHs, y = wy - st.cy * CHs, o = (y + 1) * SZ + (x + 1);
+      if (st.cls[o] !== CL.STREET || st.gut[o] !== 1) bad++;
     }
-    dry += render(st, { wet: 0.4, pud: 0.5, sky: SKY }).r.flow.length;
+    fine += render(st, { wet: 0.95, pud: 0.5, run: 0, sky: SKY }).r.flow.length;
   }
-  ok("les départs de l'eau qui coule sont tous au pied d'un trottoir", n >= 10 && bad === 0, `${n} départs, ${bad} hors caniveau`);
-  ok("elle ne coule pas sous un sol simplement humide (< 0,55)", dry === 0, `${dry} départs`);
+  ok("les départs de l'eau qui coule sont tous au pied de la bordure, jamais sur elle", n >= 10 && bad === 0, `${n} départs, ${bad} hors du pied`);
+  ok("elle ne coule pas sous une pluie fine, même sur un sol trempé (run 0)", fine === 0, `${fine} départs`);
+}
+{
+  /* 2026-09-29 (audit) — RIEN NE STAGNE SUR LA BORDURE : à pleine flaque, aucun pixel de flaque
+     sur une pierre levée (`gut` 255), alors que le pied de la bordure en garde. Falsifié sur
+     l'ancien `pluie.js` (caniveau lu sur `aux`). */
+  let onKerb = 0, kerbPx = 0, atFoot = 0;
+  for (const st of statics) {
+    const { mask } = render(st, { wet: 0.95, pud: 1, run: 1, sky: SKY });
+    for (let y = 0; y < CHs; y++) for (let x = 0; x < CHs; x++) {
+      const o = (y + 1) * SZ + (x + 1);
+      if (st.cls[o] !== CL.STREET) continue;
+      if (st.gut[o] === 255) { kerbPx++; if (mask[y * CHs + x]) onKerb++; }
+      else if (st.gut[o] >= 1 && st.gut[o] <= 3 && mask[y * CHs + x]) atFoot++;
+    }
+  }
+  ok("aucune flaque sur la bordure ; le pied de la bordure en garde", kerbPx > 500 && onKerb === 0 && atFoot > 50, `${onKerb} px de flaque sur ${kerbPx} px de bordure, ${atFoot} au pied`);
+}
+{
+  /* 2026-09-29 (audit) — LE QUAI EN BOIS DE LA GARE (`C.TOWN_PLATFORM`) est peint par-dessus un
+     dallage : la pluie le lit comme un tablier (il fonce, il ne retient rien, pas de joints). */
+  const PF = C.TOWN_PLATFORM;
+  let pfPx = 0, pud = 0, notDeck = 0;
+  for (const st of statics) {
+    const { out, mask } = render(st, { wet: 0.95, pud: 1, run: 1, sky: SKY });
+    for (let y = 0; y < CHs; y++) for (let x = 0; x < CHs; x++) {
+      const tx = Math.floor((st.cx * CHs + x) / T), ty = Math.floor((st.cy * CHs + y) / T);
+      if (tx < PF.x || tx >= PF.x + PF.w || ty < PF.y || ty >= PF.y + PF.h) continue;
+      const q = (y * CHs + x) * 4;
+      pfPx++;
+      if (mask[y * CHs + x]) pud++;
+      if (out[q + 3] && !(out[q] === 30 && out[q + 1] === 20 && out[q + 2] === 16)) notDeck++;
+    }
+  }
+  ok("le quai de la gare mouille comme du bois : ni flaque ni joint de dallage", pfPx > 1000 && pud === 0 && notDeck === 0, `${pfPx} px de quai, ${pud} de flaque, ${notDeck} d'une autre matière`);
 }
 {
   // Le bord d'une flaque : sombre au nord-ouest, clair au sud-est (le banc lit les pixels rendus).

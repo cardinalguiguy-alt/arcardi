@@ -60,7 +60,10 @@ console.log("\n=== 2. une averse forcée, puis le séchage ===\n");
   ok("avant l'averse : sec", series[0] < 0.05, `w ${fx(series[0])}`);
   ok("l'humidité monte, jamais ne redescend, tant que la pluie monte", series.every((v, i) => i === 0 || v >= series[i - 1] - 1e-9) && series[4] > series[1] + 0.3, series.map((v) => fx(v)).join(" ≤ "));
   ok("sous une pluie franche : trempé (≥ 0,8)", at(14).w >= 0.8, `w ${fx(at(14).w)}`);
-  ok("les flaques se remplissent plus lentement que le sol ne se mouille", at(12).p < at(12).w && at(14).p > at(12).p && at(14).p > 0.5, `p ${fx(at(12).p)} puis ${fx(at(14).p)} (w ${fx(at(12).w)})`);
+  /* ⚠️ 2026-09-29 (audit) — « > 0,5 » est devenu « > 0,4 » : les flaques ne montent plus qu'au-delà
+     d'une pluie de 0,5 (règle de Guillaume, `PUD_MIN_RAIN`), et la « pluie » forcée (0,7) en
+     remplit moins qu'avant (0,48 après quatre heures). L'orage, lui, est tenu au § 4 bis. */
+  ok("les flaques se remplissent plus lentement que le sol ne se mouille", at(12).p < at(12).w && at(14).p > at(12).p && at(14).p > 0.4, `p ${fx(at(12).p)} puis ${fx(at(14).p)} (w ${fx(at(12).w)})`);
   ok("les flaques restent sous 1 (elles ne débordent pas)", at(14).p <= 1 && at(20).p <= 1);
   ok("le lendemain matin, le sol a passé la nuit : encore humide, encore des flaques (la nuit de 2 h à 6 h n'existe pas)", next(6.2).w > 0.6 && next(6.2).p > 0.3, `w ${fx(next(6.2).w)}, p ${fx(next(6.2).p)}`);
   const w0 = next(6.2).w, p0 = next(6.2).p;
@@ -99,9 +102,15 @@ console.log("\n=== 4 bis. les pas d'intégration, joués à la main ===\n");
   const drizzle = { w: 0, p: 0, since: 1e6 };
   for (let i = 0; i < 30; i++) PL.packStep(drizzle, W({ rain: 0.15, dark: 0.3 }), 0.1, 12, "autumn");
   ok("une bruine (0,15 de pluie) mouille le sol pendant trois heures sans former une flaque", drizzle.w > 0.5 && drizzle.p === 0, `w ${fx(drizzle.w)}, p ${fx(drizzle.p)}`);
+  /* ⚠️ 2026-09-29 (audit, règle de Guillaume) — « les flaques ne doivent apparaître qu'en cas de
+     forte pluie ; si la pluie est fine, pas de flaques ni de torrent ». Falsifié : avec l'ancien
+     seuil (0,18), l'averse forme p 0,5 et le premier contrôle rougit. */
+  const shower = { w: 0, p: 0, since: 1e6 };
+  for (let i = 0; i < 30; i++) PL.packStep(shower, W({ rain: 0.5, dark: 0.42 }), 0.1, 12, "autumn");
+  ok("une averse à sa crête (0,5) pendant trois heures : sol trempé, aucune flaque, aucun caniveau qui coule", shower.w > 0.8 && shower.p === 0 && PL.runOf(W({ rain: 0.5 })) === 0, `w ${fx(shower.w)}, p ${fx(shower.p)}, run ${fx(PL.runOf(W({ rain: 0.5 })))}`);
   const rain = { w: 0, p: 0, since: 1e6 };
-  for (let i = 0; i < 30; i++) PL.packStep(rain, W({ rain: 0.6, dark: 0.5 }), 0.1, 12, "autumn");
-  ok("une pluie (0,6) pendant trois heures forme des flaques", rain.p > 0.3, `p ${fx(rain.p)}`);
+  for (let i = 0; i < 30; i++) PL.packStep(rain, W({ rain: 0.9, dark: 0.9 }), 0.1, 12, "autumn");
+  ok("un orage (0,9) pendant trois heures forme des flaques, et le caniveau coule à plein", rain.p > 0.5 && PL.runOf(W({ rain: 0.9 })) > 0.9, `p ${fx(rain.p)}, run ${fx(PL.runOf(W({ rain: 0.9 })))}`);
   // La nuit (pas de soleil), trois heures de séchage à partir d'un sol trempé : la saison seule décide.
   const after = {};
   for (const season of ["winter", "autumn", "spring", "summer"]) {

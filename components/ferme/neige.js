@@ -379,6 +379,19 @@ export function buildChunkStatic(tw, cx, cy, env) {
   const cls = new Uint8Array(NP), recv = new Uint8Array(NP), shade = new Uint8Array(NP), aux = new Uint8Array(NP);
   const fine = new Int8Array(NP), und = new Int8Array(NP), lump = new Uint8Array(NP), rip = new Int8Array(NP);
   const cast = new Uint8Array(NP), ao = new Uint8Array(NP), deb = new Uint8Array(NP), pit = new Int8Array(NP), cov = new Uint8Array(NP);
+  /* 2026-09-29 (audit pluie) — LE CANIVEAU VU DEPUIS LA BORDURE, lu par `pluie.js` seul (la
+     neige ne le lit pas : ses congères gardent `aux`). `aux` mesure la distance au bord de la
+     BANDE de rue, et la bordure (`kerbW`, 4 px, fermeArt.js) occupe justement ces pixels-là :
+     la pluie posait son caniveau SUR la pierre levée — vu en jeu, le filet clair courait sur
+     le trottoir. `gut` : 0 ailleurs, 255 sur la bordure, 1 + la distance au pied de la bordure
+     (1 = le premier pixel de chaussée contre elle), par côté, et seulement là où une bordure
+     est dessinée (le voisin n'est pas dallé, même test que `drawTownRoadTile`). */
+  const gut = new Uint8Array(NP);
+  const pavedT = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return false;
+    const gg = tw.ground[y * W + x];
+    return gg === C.G_PATH || gg === C.G_PATH_STONE;
+  };
   const F = env.fields;
   const BN = blueNoise();
   const ox = cx * CH - 1, oy = cy * CH - 1;
@@ -435,6 +448,10 @@ export function buildChunkStatic(tw, cx, cy, env) {
         const edge = Math.min(rel, wPx - rel);
         ax = dt < 1.6 ? 1 : dt < 2.9 ? 0.5 : 0;
         if (edge < 5.9) ax = 2 + edge;
+        const ta = Math.floor(L.a / T), tb = Math.floor(L.b / T);
+        const kA = L.horiz ? !pavedT(x, ta - 1) : !pavedT(ta - 1, y), kB = L.horiz ? !pavedT(x, tb) : !pavedT(tb, y);
+        const dA = kA ? rel - C.TOWN_KERB_PX : 1e9, dB = kB ? (wPx - 1 - rel) - C.TOWN_KERB_PX : 1e9, dk = Math.min(dA, dB);
+        gut[py * SZ + px] = dk < 0 ? 255 : dk < 8 ? 1 + dk : 0;
       } else c = CL.SOFT;
     }
     else if (g === C.G_WATER) c = CL.GRASS;                // la rive gagnée par la berge
@@ -594,7 +611,7 @@ export function buildChunkStatic(tw, cx, cy, env) {
       }
     }
   }
-  return { cx, cy, cls, recv, shade, aux, fine, und, lump, rip, cast, ao, deb, pit, cov };
+  return { cx, cy, cls, recv, shade, aux, fine, und, lump, rip, cast, ao, deb, pit, cov, gut };
 }
 
 /* ── 6. LA PARCELLE : LE RENDU ─────────────────────────────────────────────

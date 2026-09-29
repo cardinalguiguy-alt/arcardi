@@ -36,7 +36,7 @@ végétal NEUF vient d'une PLANCHE GEMINI** (`refs/prompts-planche3.md`), plus a
   cinq modèles fument chez qui habite (`fumee.js`, sans état). ⚠️ Le GAMEPLAY ne bouge pas : `E.isNightTime` (lapins,
   loups de l'hôte) garde le ciel de référence ; la faune garde ses horaires en heures.
 - Bancs : les 61 verts (33 `verify-*`, 28 `render-*`), dont les cinq neufs `verify-planche3` 31,
-  `verify-pluie` 33, `render-pluie` 22, `verify-jour` 40, `render-fumee` 5, tous falsifiés ; `no-undef`, bundle,
+  `verify-pluie` 34, `render-pluie` 24 (après l'audit), `verify-jour` 40, `render-fumee` 5, tous falsifiés ; `no-undef`, bundle,
   `next build` verts. Vu en jeu : la place et la rue en pluie forcée (jour, nuit), les jardins de trois rangs, la
   maison hantée, le candélabre allumé, l'hiver de la place, la fumée à l'écran (faible à ce zoom). **Pas vu** : à
   deux clients, la fumée dans la lueur des fenêtres, l'été et le printemps sous la pluie, un vrai iPad.
@@ -45,6 +45,16 @@ végétal NEUF vient d'une PLANCHE GEMINI** (`refs/prompts-planche3.md`), plus a
   mouillé ; les plantes PEINTES des bitmaps ne fanent que sous la neige ; l'église n'a que des liserés ;
   `townHedgeAngle` (planche 2) est construit et posé nulle part ; la fumée est peinte AVANT le voile de nuit (plus
   sombre que le ciel, jamais éclairée par les fenêtres) ; la faune ne suit pas la durée du jour.
+- **Audit de la pluie, corrigé (2026-09-29, fin de nuit)** — ⚠️ **RÈGLE DE GUILLAUME : flaques et caniveau
+  qui coule SEULEMENT sous forte pluie ; pluie fine = sol qui fonce, plocs, éclaboussures aux pieds.**
+  `PUD_MIN_RAIN` 0,18 → 0,5 (l'averse n'en fait plus), caniveau lu sur `PL.runOf` (pluie > 0,5) et non plus sur
+  l'humidité ; caniveau au PIED de la bordure (`gut`, neige.js ; `C.TOWN_KERB_PX`, écrit une fois) ; quai de
+  la gare lu comme du bois (`wetCls`) ; semis de ciel des dalles retiré ; gerbe à chaque foulée sous la pluie
+  ou dans une flaque (`rainStep`, locale) ; ronds des flaques décalés de l'altitude. Vu en jeu sous l'orage :
+  bordure propre, quai en bois, place sans semis, une gerbe au pied. **Pas vu** : la gerbe en mouvement à
+  l'œil, l'averse en jeu (tenue par `verify-pluie`), les ronds en Haute-Ville. **Reste** (moins gênant
+  maintenant que les flaques sont rares) : les flaques d'ornière en filaments clairs, les dallages sans vraie
+  flaque (seulement la grille des joints).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
