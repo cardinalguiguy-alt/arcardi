@@ -37,6 +37,7 @@ import { townNoise, seasonOf } from "./fermeEngine.mjs";
 import { buildFaunaSprites } from "./fauneArt.mjs";
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures.mjs";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis.mjs";
+import * as FL from "./feuilles.mjs";   // 2026-09-30 — les feuilles mortes : la chute au pixel des couronnes d'automne
 import { treeSnowMix, CL as SNOW_CL } from "./neige.mjs";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures.mjs";
 
@@ -2471,6 +2472,56 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
   const ph = waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000;
   return { img: frames[TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + ph * 8) & 7]], m };
 }
+/* ⚠️ 2026-09-30 — LES COURONNES QUI SE DÉNUDENT (`feuilles.js`). Une image d'automne
+   (canevas ou cellule d'atlas) à la chute `step/FALL_STEPS`, ses pixels tombés rendus
+   transparents dans leur ordre fixe. En ATLAS PAR CRAN (pages de 1024², §10 : le
+   nombre de canevas) ; seuls les crans récents restent (les feuilles tombent en
+   quelques jours réels, un cran dure des dizaines de minutes). */
+function makeFallTrees() {
+  const levels = new Map();
+  let last = -1;
+  const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.imageSmoothingEnabled = false; return [c, g]; };
+  return {
+    get(src, step) {
+      if (!src) return null;
+      let L = levels.get(step);
+      if (!L) {
+        L = { pages: [], memo: new WeakMap() };
+        levels.set(step, L);
+        // On ne garde que les crans voisins du dernier demandé (un arbre en avance, un en retard).
+        if (levels.size > 5) for (const k of [...levels.keys()]) if (Math.abs(k - step) > 2) levels.delete(k);
+      }
+      last = step;
+      const hit = L.memo.get(src);
+      if (hit !== undefined) return hit;
+      let cell = null;
+      try {
+        const isCell = src.sx !== undefined;
+        const w = isCell ? src.w : src.width, h = isCell ? src.h : src.height;
+        const [tc, tg] = mk(w, h);
+        if (isCell) tg.drawImage(src.img, src.sx, src.sy, w, h, 0, 0, w, h); else tg.drawImage(src, 0, 0);
+        const id = tg.getImageData(0, 0, w, h);
+        id.data.set(FL.thinPixels(id.data, w, h, step / FL.FALL_STEPS));
+        tg.putImageData(id, 0, 0);
+        let pg = L.pages[L.pages.length - 1];
+        if (!pg || pg.x + w > 1024 && pg.y + pg.rowH + h > 1024) { const [c, g] = mk(1024, 1024); pg = { c, g, x: 0, y: 0, rowH: 0 }; L.pages.push(pg); }
+        if (pg.x + w > 1024) { pg.x = 0; pg.y += pg.rowH; pg.rowH = 0; }
+        pg.g.drawImage(tc, pg.x, pg.y);
+        cell = { img: pg.c, sx: pg.x, sy: pg.y, w, h };
+        pg.x += w; pg.rowH = Math.max(pg.rowH, h);
+      } catch (e) { cell = null; }
+      L.memo.set(src, cell);
+      return cell;
+    },
+    levels: () => levels.size,
+    last: () => last,
+  };
+}
+/* La chute d'un arbre (0..1) à l'avancée `p` de la saison : celle de la saison,
+   décalée de ±8 % par un hachage de sa case (une rue ne se dénude pas d'un bloc). */
+export function townTreeFall(seasonKey, p, x, y) {
+  return FL.leafFall(seasonKey, p, ((waterHash(x * 7 + 3, y * 13 + 5) % 1000) / 1000 - 0.5) * 0.16);
+}
 /* Le dessin complet, ancrage compris. ⚠️ L'ANCRAGE VIT ICI ET PAS CHEZ
    L'APPELANT : le gabarit est passé de 32×48 à 48×64 au 438, et depuis la
    phase 11 chaque taille a le sien (`m.w`, `m.base`) — un décalage écrit en dur
@@ -2482,7 +2533,32 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
    cède la place à l'ombre projetée sur la neige).
    L'hiver, l'arbre se dessine dans son état, et dans le suivant par-dessus
    pendant le fondu (`treeSnowMix`, seuils décalés d'un arbre à l'autre). */
-export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load) {
+export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load, fall) {
+  /* 2026-09-30 — L'AUTOMNE QUI SE DÉNUDE (`fall` : la chute de cet arbre, 0..1,
+     `townTreeFall`). L'arbre NU d'abord (l'atlas d'hiver, même pose de vent, sans
+     neige), puis la couronne d'automne dont les pixels tombés sont transparents.
+     Les persistants (conifères, mimosa) ne perdent rien. */
+  if (seasonKey === "autumn" && fall > 0 && S.townTreesFall && S.townTreesWinter) {
+    const k = townTreeKind(tw, x, y, obj);
+    if (k !== null && !townTreeEvergreen(k)) {
+      const r = townTreeImg(S, tw, x, y, "autumn", obj, now);
+      if (r && r.img) {
+        const set = S.townTrees;
+        const size = set[k] && (set[k].sizes || set[k].grand) ? townTreeSize(tw, x, y, obj) : "adult";
+        const fi = !now ? 1 : TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + (waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000) * 8) & 7];
+        const bare = S.townTreesWinter.get(k, size, 0, fi, false);
+        const dx = px + SPR_T / 2 - r.m.w / 2, dy = py + SPR_T - r.m.base;
+        if (bare) blitCell(ctx, bare, px + SPR_T / 2 - bare.m.w / 2, py + SPR_T - bare.m.base);
+        const step = FL.fallStep(fall);
+        if (step < FL.FALL_STEPS) {
+          const th = step === 0 ? null : S.townTreesFall.get(r.img, step);
+          if (th) blitCell(ctx, th, dx, dy);
+          else if (step === 0) { if (r.img.sx !== undefined) blitCell(ctx, r.img, dx, dy); else ctx.drawImage(r.img, dx, dy); }
+        }
+        return true;
+      }
+    }
+  }
   let mix = null;
   if (seasonKey === "winter" && load) {
     const k = townTreeKind(tw, x, y, obj);
@@ -19688,5 +19764,6 @@ house: house(),
   };
   /* 2026-09-28 (phase 12a) — les arbres d'hiver, fabriqués à leur premier affichage. */
   S.townTreesWinter = makeWinterTrees();
+  S.townTreesFall = makeFallTrees();   // 2026-09-30 — les couronnes d'automne qui se dénudent, par cran
   return S;
 }

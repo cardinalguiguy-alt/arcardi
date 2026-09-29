@@ -697,7 +697,7 @@ export function duckFixPose(d, t) {
   if (d.kind === "duck") {
     const landPose = DUCK_LAND_POSE_SET.has(d.pose);
     // Un canard qui se déplace à terre (routine ou écart de réaction) marche toujours.
-    if (d.land && (d.moving || !landPose)) d.pose = d.moving ? duckWalkPose(t || 0, d.id.length) : "stand";
+    if (d.land && (d.moving || !landPose)) d.pose = d.moving ? (d.slide ? "stand" : duckWalkPose(t || 0, d.id.length)) : "stand";   // 2026-09-30 : la glisse sur la glace garde les pattes immobiles
     else if (!d.land && landPose) d.pose = "swim";
   } else {
     // Un caneton qui dort à terre (`tinyS`/`youngS`) y reste couché ; à l'eau, il flotte.
@@ -795,13 +795,27 @@ export function faunaDucks(fw, env) {
         x = x + (wx - x) * g; y = y + (wy - y) * g;
         sliding = g > 0.02 && g < 0.98;
       }
-      const land = duckOnLand(fw, x, y);
+      /* 2026-09-30 — SUR LA GLACE (l'étang gelé, `env.iceAt`, la même règle que son
+         dessin) : le canard MARCHE là où il nageait, et glisse — un pas sur trois
+         environ, il file sans bouger les pattes. La glisse se lit sur le chemin
+         parcouru (`st.dist`, jamais `t` : §4, une cadence ne multiplie pas le temps
+         absolu). On ne broute pas sur la glace : on s'y tient ou on s'y couche. */
+      const onIce = !site.lake && !!env.iceAt && env.iceAt(x, y);
+      const land = duckOnLand(fw, x, y) || onIce;
       const moving = st.moving || sliding;
       let pose;
       let splash = -1;
+      let slide = false;
       if (land) {
         // À terre : la démarche en marchant, et au repos brouter, se tenir, se coucher — ou dormir.
-        if (kind === "duck") pose = moving ? duckWalkPose(t, mi) : asleep ? duckLandSleepPose(seed, t, spotKey(st.B)) : duckLandRestPose(seed, t);
+        if (onIce && kind === "duck" && moving) {
+          const u = (((st.dist || 0) * 0.45 + mi * 0.31) % 1 + 1) % 1;
+          slide = u > 0.62;
+          pose = slide ? "stand" : duckWalkPose(t, mi);
+        } else if (onIce && kind === "duck" && !asleep) {
+          const rp = duckLandRestPose(seed, t);
+          pose = rp === "graze" || rp === "graze2" ? "stand" : rp;
+        } else if (kind === "duck") pose = moving ? duckWalkPose(t, mi) : asleep ? duckLandSleepPose(seed, t, spotKey(st.B)) : duckLandRestPose(seed, t);
         else if (asleep && !moving) pose = kind + "S";
         else pose = kind + ((moving ? Math.floor(t * 5 + mi) : Math.floor(t * 0.8 + mi)) & 1 ? "W2" : "W");
       } else {
@@ -819,7 +833,7 @@ export function faunaDucks(fw, env) {
         }
       }
       out.push({ id, site: si, robe, kind, x, y, face: faceO || (st.hx < -0.05 ? -1 : st.hx > 0.05 ? 1 : (fh(seed, st.k, 3) & 1 ? 1 : -1)),
-                 moving, spd: sliding ? 0.3 : st.spd, pose, ring: splash, lake: !!site.lake, land });
+                 moving, spd: sliding ? 0.3 : st.spd, pose, ring: splash, lake: !!site.lake, land, ice: onIce, slide });
     });
   });
   return out;
@@ -1039,7 +1053,10 @@ const FISH_COLORS = ["bronze", "bronze", "koi", "ghost", "bronze", "koi"];
 export function faunaFish(fw, env) {
   const out = [];
   if (!fw) return out;
-  const t = env.t;
+  /* 2026-09-30 — SOUS LA GLACE : `env.fishT` est le temps des carpes, retardé du temps
+     passé sous la glace (le manteau, `iceLag`) — elles ralentissent quand l'étang
+     prend et se figent quand il est tout gelé. Sans glace, `fishT = t` au bit près. */
+  const t = env.fishT != null ? env.fishT : env.t;
   fw.fishSites.forEach((site, si) => {
     const n = site.key === "pondS" ? 4 : 3;
     for (let i = 0; i < n; i++) {
@@ -1335,7 +1352,7 @@ function springTo(o, tx, ty, dt, k, vmax) {
 }
 /* Les canards s'écartent en nageant d'un joueur qui s'approche de la rive ;
    ils viennent aux miettes tombées près de l'eau. Toujours dans l'eau. */
-export function faunaReactDucks(S, fw, ducks, threats, food, dt, t) {
+export function faunaReactDucks(S, fw, ducks, threats, food, dt, t, iceAt) {
   const M = S.ducks || (S.ducks = new Map());
   /* ⚠️ L'ESPACE VITAL : au repos contre une rive, l'écart des suiveurs se
      resserre (voir faunaDucks) et la famille s'EMPILAIT — cinq canards dans le
@@ -1384,7 +1401,10 @@ export function faunaReactDucks(S, fw, ducks, threats, food, dt, t) {
     const vx = o.ox - ox0;
     if (Math.abs(vx) > 0.004) d.face = vx > 0 ? 1 : -1;
     if (Math.hypot(o.ox - ox0, o.oy - oy0) > 0.006) d.moving = true;
-    d.land = duckOnLand(fw, d.x, d.y);
+    // 2026-09-30 : sur la glace (l'étang gelé), on est « à terre » (`iceAt`, la règle du dessin).
+    d.ice = !d.lake && !!iceAt && iceAt(d.x, d.y);
+    d.land = duckOnLand(fw, d.x, d.y) || d.ice;
+    if (!d.ice) d.slide = false;
     if (o.alarm > 0.35 && d.kind === "duck" && d.pose !== "sleep" && !d.land) d.pose = "alert";
     duckFixPose(d, t);
   });
