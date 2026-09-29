@@ -11,7 +11,9 @@ catalogue écrit à la main).
 
 1. Joindre, dans cet ordre, `refs/Code_Generated_Image.png` puis `refs/planche2.png`.
 2. Coller la BASE, puis la liste de la planche (A ou B) **dans le même message**.
-3. Enregistrer le résultat dans `refs/` : `planche3-jardins.png` (A), `planche3-place.png` (B).
+3. Enregistrer le résultat dans `refs/` : `planche3-jardins.jpg` (A), `planche3-place.jpg` (B). ⚠️ Gemini ne
+   livre que du JPG à Guillaume : `tools/import-planche3.mjs` le lit tel quel (conversion par `sips`).
+   ✅ Fait le 2026-09-29 : les deux planches sont là et importées (récit en tête de `components/ferme/README.md`).
 
 Si des objets se touchent : `Same sheet, but move the objects apart: at least one object-width of empty
 magenta between any two objects, nothing touching.`
@@ -44,11 +46,11 @@ Layout rules, very important:
 Draw these objects:
 ```
 
-## PLANCHE A — les jardins vécus (`planche3-jardins.png`)
+## PLANCHE A — les jardins vécus (`planche3-jardins.jpg`)
 
 ```
-0. SCALE REFERENCE: the plain wooden bench with three slats from the first reference sheet, redrawn
-   identically, same size, pixel for pixel.
+0. SCALE REFERENCE: the plain wooden bench from the first reference sheet (brown wood, with a backrest,
+   middle-left just under the willow tree), redrawn identically, same size, pixel for pixel.
 1. A neat woodpile of split firewood logs, about one and a half benches long, under a small lean-to roof
    of wooden shingles.
 2. A small loose woodpile without roof, with a chopping block and an axe stuck in it.
@@ -68,11 +70,11 @@ Draw these objects:
 15. A small wooden rabbit hutch on four legs, with a wire mesh door.
 ```
 
-## PLANCHE B — la place, les lampadaires, la maison hantée (`planche3-place.png`)
+## PLANCHE B — la place, les lampadaires, la maison hantée (`planche3-place.jpg`)
 
 ```
-0. SCALE REFERENCE: the black cast-iron street lamp from the second reference sheet, redrawn identically,
-   same size, pixel for pixel, lit.
+0. SCALE REFERENCE: the black cast-iron street lamp from the second reference sheet (top right corner),
+   redrawn identically, same size, pixel for pixel, lit.
 1. A large rectangular planter of carved light stone for a town square, about two benches long, overflowing
    with a lush mix of summer flowers (geraniums, lavender, white daisies) and trailing ivy.
 2. The same planter in winter: dark soil, one small clipped evergreen tuft in the middle, dry brown stems,
