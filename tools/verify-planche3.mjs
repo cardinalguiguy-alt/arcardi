@@ -159,5 +159,57 @@ const thorns = tw.props.filter((p) => ["bramble", "brambleSmall", "wildGrass"].i
 ok("les ronces et les herbes sèches bordent l'allée, jamais dessus", thorns.length >= 6 && thorns.every((p) => p.x !== doorX && p.x !== doorX + 1), `${thorns.length} touffes`);
 ok("les dalles ne passent pas sous le portail (aucun décor dans le corps d'un autre)", !tw.props.some((p) => p.kind === "flatStone" && p.ruin && gate && C.townPropCovers("ruinGate", gate.x, gate.y, p.x, p.y)));
 
+/* ─── 6. Les lampadaires au pixel d'écran (2026-10-02) ─────────────────────── */
+console.log("\n=== 6. les lampadaires posés au pixel d'écran : leur verre est celui du sprite natif ===\n");
+{
+  const { PNG } = await import("pngjs");
+  const fsm = await import("fs");
+  const readMip = (url) => PNG.sync.read(fsm.readFileSync(path.join(ROOT, "public", url.replace(/^\//, ""))));
+  /* Les pixels que l'allumage CHANGE entre l'image éteinte et l'allumée, rangés par verre :
+     chacun va au verre natif le plus proche (position × cran), s'il tombe dans son rayon élargi. */
+  function measure(b, z, glass, shift) {
+    const m = C.townBitmapMip(b, z), d0 = readMip(m.day), d1 = readMip(m.glow);
+    const near = glass.map(() => ({ n: 0, sx: 0, sy: 0 }));
+    let changed = 0, strays = 0;
+    for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+      const o = (y * m.w + x) * 4;
+      if (Math.abs(d0.data[o] - d1.data[o]) + Math.abs(d0.data[o + 1] - d1.data[o + 1]) + Math.abs(d0.data[o + 2] - d1.data[o + 2]) < 24) continue;
+      changed++;
+      let best = -1, bd = 1e9;
+      glass.forEach((g, i) => { const dd = Math.hypot(x + 0.5 - (g.x + shift) * z, y + 0.5 - g.y * z); if (dd < bd) { bd = dd; best = i; } });
+      if (bd > glass[best].r * z * 1.7) { strays++; continue; }
+      near[best].n++; near[best].sx += x + 0.5; near[best].sy += y + 0.5;
+    }
+    const worst = Math.max(...near.map((q, i) => q.n ? Math.hypot(q.sx / q.n / z - (glass[i].x + shift), q.sy / q.n / z - glass[i].y) : 99));
+    return { changed, strays, worst, m, d0 };
+  }
+  let worstAll = 0, strayAll = 0, minChanged = 1e9, shiftedWorst = 1e9;
+  for (const [rk, b] of Object.entries(C.TOWN_LAMP_BITMAPS)) {
+    const nat = P3[b.art], gl = S.lampGlass[b.art === "lampRich" ? "townLampRich" : "townLampPoor"];
+    const glass = gl.list || [gl];
+    for (const z of b.zooms) {
+      const r = measure(b, z, glass, 0);
+      worstAll = Math.max(worstAll, r.worst); strayAll = Math.max(strayAll, r.strays / Math.max(1, r.changed)); minChanged = Math.min(minChanged, r.changed);
+      shiftedWorst = Math.min(shiftedWorst, measure(b, z, glass, 3).worst);   // la même mesure, avec le cadre décalé de 3 px natifs
+      /* Le pied : la dernière rangée d'objet (alpha ≥ 200) tombe au pied natif, à un pixel natif près. */
+      let last = -1;
+      for (let y = r.m.h - 1; y >= 0 && last < 0; y--) for (let x = 0; x < r.m.w; x++) if (r.d0.data[(y * r.m.w + x) * 4 + 3] >= 200) { last = y; break; }
+      ok(`${rk} cran ${z} : le pied de l'image tombe sur le pied natif`, Math.abs((last + 1) - (nat.foot + 1) * z) <= z, `rangée ${last + 1} contre ${(nat.foot + 1) * z} px d'écran`);
+      /* Rien de dessiné sur le bord du cadre (le canevas découpe en silence, §4). */
+      let edge = 0;
+      for (let y = 0; y < r.m.h; y++) for (let x = 0; x < r.m.w; x++) if ((x === 0 || y === 0 || x === r.m.w - 1 || y === r.m.h - 1) && r.d0.data[(y * r.m.w + x) * 4 + 3] >= 200) edge++;
+      ok(`${rk} cran ${z} : aucun pixel d'objet sur le bord du cadre`, edge === 0, `${edge}`);
+    }
+  }
+  /* ⚠️ 1,25 et pas 1 : au cran 1, un pixel d'image EST un pixel natif, et le verre du candélabre y tient
+     en ~4 × 6 pixels — le centre du natif (échantillonné à 7,5 px de planche, ±0,5) et celui de l'image
+     (mesuré 1,11 au pire, 0,45 aux crans 2 à 5) ne peuvent pas y coïncider mieux. La falsification
+     ci-dessous (cadre décalé de 3) sort à 2,4 : la marge entre juste et faux est de 2×. */
+  ok("la lueur tombe sur le verre natif : à 1,25 pixel natif près, à chaque cran des deux lampadaires", worstAll <= 1.25, `écart maximal ${worstAll.toFixed(2)} px natifs`);
+  ok("allumer ne change que le verre (au plus 5 % des changements hors des verres : les bords ambre)", strayAll <= 0.05, `${(100 * strayAll).toFixed(1)} %`);
+  ok("le contrôle voit bien des pixels allumés (il ne peut pas réussir à vide)", minChanged >= 8, `au moins ${minChanged} pixels changés par cran`);
+  ok("FALSIFIÉ : avec le cadre décalé de 3 px natifs, la même mesure rougit", shiftedWorst > 1.5, `écart ${shiftedWorst.toFixed(2)} px natifs`);
+}
+
 console.log(`\n${fails ? "❌ " + fails + " contrôle(s) en échec sur " + checks : "✅ " + checks + "/" + checks + " contrôles passés."}`);
 process.exit(fails ? 1 : 0);

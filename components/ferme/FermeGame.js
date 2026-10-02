@@ -123,26 +123,26 @@ const ZOOM_LEVELS = [1, 2, 3, 4, 5];
    n'est pas encore téléchargé (on prend le cran chargé le plus proche). Alors,
    et seulement alors, le lissage est allumé. Hors transition : aucun.
    Rend `false` si aucune image n'est encore chargée (rien n'est dessiné). */
-function screenBitmapPick(SB, zoom) {
+function screenBitmapPick(SB, zoom, key = "day") {   // `key` : "glow" pour la lanterne ALLUMÉE d'un lampadaire (`drawScreenLamp`)
   const zs = SB.zooms;
   const zi = Math.round(zoom);
   const exact = Math.abs(zoom - zi) < 1e-3 && zs.includes(zi);
   const zWant = exact ? zi : Math.max(zs[0], Math.min(zs[zs.length - 1], Math.ceil(zoom - 1e-3)));
   const want = C.townBitmapMip(SB, zWant);
-  const img = loadBitmap(want.day); // le cran qu'on affiche
+  const img = loadBitmap(want[key]); // le cran qu'on affiche
   /* Pendant un fondu (zoom fractionnaire), le cran d'ARRIVÉE est l'un des deux
      crans entiers qui l'encadrent : on précharge aussi l'autre, sinon l'arrivée
      montre quelques images le cran voisin mis à l'échelle. Deux crans au plus,
      jamais les cinq. */
   if (!exact) {
     const zOther = Math.max(zs[0], Math.min(zs[zs.length - 1], Math.floor(zoom + 1e-3)));
-    if (zOther !== zWant) loadBitmap(C.townBitmapMip(SB, zOther).day);
+    if (zOther !== zWant) loadBitmap(C.townBitmapMip(SB, zOther)[key]);
   }
   if (img) return { mip: want, img, exact };
   // En attendant : le cran déjà chargé le plus proche (le plus grand à égalité).
   const order = zs.filter(z => z !== zWant).sort((a, b) => Math.abs(a - zWant) - Math.abs(b - zWant) || b - a);
   for (const z of order) {
-    const m = C.townBitmapMip(SB, z), im = peekBitmap(m.day);
+    const m = C.townBitmapMip(SB, z), im = peekBitmap(m[key]);
     if (im) return { mip: m, img: im, exact: false };
   }
   return null;
@@ -258,6 +258,38 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
      vitres, mais à sa propre force (sans cierges ni pièces). */
   const floodImg = mip.flood && nightA > 0.01 ? loadBitmap(mip.flood) : null;
   return { img, glowImg, glowParts, floodImg, left, top, dw, dh };
+}
+/* ⚠️ 2026-10-02 — UN LAMPADAIRE PAR RANG, POSÉ AU PIXEL D'ÉCRAN (`C.TOWN_LAMP_BITMAPS`,
+   `tools/build-lampadaires.mjs`). Même pose que `drawScreenExactBitmap` — le cran
+   du zoom courant, bord gauche et bas arrondis, aucun lissage hors fondu — mais
+   deux états au lieu d'un calque : `lit` choisit l'image allumée (`glow`) ou
+   éteinte (`day`). L'image recouvre EXACTEMENT le canevas du sprite natif, donc
+   `cxW` / `byW` sont ceux du sprite (centre, bord bas) et la lumière lue sur le
+   natif (`S.lampGlass`) tombe sur le verre. L'image de l'AUTRE état du même cran
+   est chargée aussi : une lampe s'allume d'un coup, et sans elle on verrait le
+   sprite natif, grossier, quelques images au crépuscule.
+   Rend `{ img, left, top, dw, dh, k }` (`k` : px d'écran par px d'art, l'épaisseur
+   que la neige doit prendre), `null` si rien n'est chargé — l'appelant dessine
+   alors le natif. ⚠️ Pas appelée pendant un REFLET (`reflecting`) : le miroir de
+   `eau.js` a son propre repère et floute ; il garde le natif. */
+function drawScreenLamp(ctx, SB, cxW, byW, lit) {
+  const M = ctx.getTransform();
+  const zoom = M.a / SB.grow;
+  screenBitmapPick(SB, zoom, lit ? "day" : "glow");
+  const pick = screenBitmapPick(SB, zoom, lit ? "glow" : "day");
+  if (!pick) return null;
+  const sx = M.a * cxW + M.c * byW + M.e, sy = M.b * cxW + M.d * byW + M.f;
+  const { mip, img, exact } = pick;
+  const dw = exact ? mip.w : SB.disp * SB.grow * zoom, dh = exact ? mip.h : SB.dispH * SB.grow * zoom;
+  const left = exact ? Math.round(sx - mip.w / 2) : sx - dw / 2;
+  const top = exact ? Math.round(sy) - mip.h : sy - dh;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = !exact;   // transitoire seulement (fondu de zoom, cran pas encore chargé)
+  if (!exact) ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, left, top, dw, dh);
+  ctx.restore();
+  return { img, left, top, dw, dh, k: exact ? mip.z : zoom };
 }
 /* 2026-09-27 — L'ENSEIGNE DE BARBIER DU SALON, QUI TOURNE. Le verre peint est
    recouvert, en px ÉCRAN (le salon est posé à 1:1, `drawScreenExactBitmap`),
@@ -20647,11 +20679,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        recouvre). ⚠️ Un canevas par (image, niveau) — une vingtaine de sortes de
        décor en tout, pas un par décor posé. */
     const snowCapMemo = new WeakMap();
-    function snowCapCanvas(img, lvl, bury) {
+    function snowCapCanvas(img, lvl, bury, scale) {   // `scale` : px d'image par pixel d'art (1 : un sprite natif ; voir `NG.snowCapPixels`)
       if (!img || !img.width) return null;
       let m = snowCapMemo.get(img);
       if (!m) { m = new Map(); snowCapMemo.set(img, m); }
-      const k = lvl * 10 + (bury | 0);
+      const k = lvl * 10 + (bury | 0) + (scale > 1 ? 1000 * Math.round(scale) : 0);
       if (m.has(k)) return m.get(k);
       let out = null;
       try {
@@ -20671,7 +20703,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         } else if (lvl >= 21) r = { w, h, pad: 0, px: NG.snowStairPixels(px, w, h, lvl - 20) };      // 21/22 : les girons du grand escalier
         else if (lvl >= 11) r = { w, h, pad: 0, px: NG.snowRoofPixels(px, w, h, lvl - 10, 0.55) };   // 11/12 : le toit d'un bâtiment dessiné en code
-        else r = NG.snowCapPixels(px, w, h, lvl, w * 31 + h, bury | 0);
+        else r = NG.snowCapPixels(px, w, h, lvl, w * 31 + h, bury | 0, scale > 1 ? scale : 1);
         out = document.createElement("canvas"); out.width = r.w; out.height = r.h;
         const og = out.getContext("2d"), id = og.createImageData(r.w, r.h);
         id.data.set(r.px); og.putImageData(id, 0, 0);
@@ -21157,15 +21189,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* Le chapeau de neige d'un décor à cette épaisseur : { list: [{ c, a }] } —
          deux niveaux (léger, épais) en fondu, plus le pied enfoui. `flat` : un
          décor couché au sol, que le manteau RECOUVRE (sa silhouette blanchit). */
-      const propSnowOverlay = (img, pr, flat) => {
+      const propSnowOverlay = (img, pr, flat, scale) => {   // `scale` : image posée au pixel d'écran (`drawScreenLamp`), px d'écran par pixel d'art
         const d = snowF.depthAt(pr.x * T + 8, pr.y * T + 8);
         if (d < 0.6) return null;
         const bury = Math.min(3, Math.floor(d / 7.4));
-        if (flat) return { list: [{ c: snowCapCanvas(img, 9, 0), a: Math.min(1, (d - 0.6) / 7) }] };
+        if (flat) return { list: [{ c: snowCapCanvas(img, 9, 0, scale), a: Math.min(1, (d - 0.6) / 7) }] };
         const k2 = Math.max(0, Math.min(1, (d - 3) / 5));
         const list = [];
-        if (k2 < 1) list.push({ c: snowCapCanvas(img, 1, bury), a: Math.min(1, (d - 0.6) / 1.5) * (1 - k2) });
-        if (k2 > 0) list.push({ c: snowCapCanvas(img, 2, bury), a: k2 });
+        if (k2 < 1) list.push({ c: snowCapCanvas(img, 1, bury, scale), a: Math.min(1, (d - 0.6) / 1.5) * (1 - k2) });
+        if (k2 > 0) list.push({ c: snowCapCanvas(img, 2, bury, scale), a: k2 });
         return { list };
       };
       const drawSnowOverlay = (ov, x, y) => {
@@ -23425,7 +23457,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            est couché au sol ou flotte (nénuphars, pas japonais, pierres plates,
            massifs) n'a pas de reflet à donner. */
         const reflX = EAU.WATER_FLAT_PROPS.has(pr.kind) ? null : pr.x;
+        /* 2026-10-02 — le candélabre et la lanterne sur potence sont posés AU PIXEL D'ÉCRAN
+           (`drawScreenLamp`, `C.TOWN_LAMP_BITMAPS`) ; le sprite natif `img` reste le repli
+           (image pas encore chargée) et ce que l'eau reflète. L'allumage est celui de
+           `townLampImg` : une seule lecture, la même pour les deux dessins. */
+        const lampSB = pr.kind === "lamp" ? C.TOWN_LAMP_BITMAPS[C.townLampArtAt(pr.x, pr.y)] : null;
+        const lampOn = lampSB ? townLampLit(pr) : false;
         pushE(by, elAt(pr.x, pr.y), () => {
+          if (lampSB && !reflecting) {
+            const lr = drawScreenLamp(ctx, lampSB, cxp, by, lampOn);
+            if (lr) {
+              const lov = snowF ? propSnowOverlay(lr.img, pr, false, lr.k) : null;
+              if (lov) {
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.imageSmoothingEnabled = false;
+                const sxk = lr.dw / lr.img.width, syk = lr.dh / lr.img.height;
+                for (const e of lov.list) {
+                  if (!e.c || e.a <= 0.01) continue;
+                  if (e.a < 1) ctx.globalAlpha = e.a;
+                  ctx.drawImage(e.c, lr.left, lr.top - e.c.pad * syk, e.c.width * sxk, e.c.height * syk);
+                  if (e.a < 1) ctx.globalAlpha = 1;
+                }
+                ctx.restore();
+              }
+              return;
+            }
+          }
           /* ⚠️⚠️ ZIP 439 — LES DÉCORS DE LA PLANCHE PORTENT DÉJÀ LEUR OMBRE, et
              la leur est DESSINÉE (une tache irrégulière qui épouse le pied de
              l'objet), pas une ellipse. En rajouter une par-dessus donne deux

@@ -1075,9 +1075,16 @@ export const WINTER_PROP_MODE = {
    un banc enneigé sur un sol enneigé se perdrait sans lui). Les bords
    s'arrondissent : une colonne isolée prend moins de neige que ses voisines.
    `lvl` : 1 léger, 2 épais. Rend { w, h, pad, px } (RGBA), `pad` rangées
-   ajoutées en haut. `bury` : les rangées du bas à enfouir (la neige au pied). */
-export function snowCapPixels(src, w, h, lvl, seed, bury) {
-  const pad = lvl >= 2 ? 3 : 2, H2 = h + pad;
+   ajoutées en haut. `bury` : les rangées du bas à enfouir (la neige au pied).
+   `k` (2026-10-02, les lampadaires « grille écran ») : combien de px de l'image
+   valent un PIXEL D'ART — 1 pour un sprite natif (le défaut : strictement
+   l'ancien dessin), 3 pour une image posée au pixel d'écran au cran 3. Les
+   épaisseurs (au-dessus, en dessous, enfouissement) sont des pixels d'ART, donc
+   multipliées par `k`, et le tirage de chaque colonne se fait par pixel d'ART
+   (`x / k`) : un grain d'un pixel d'écran serait du bruit, pas de la neige. */
+export function snowCapPixels(src, w, h, lvl, seed, bury, k = 1) {
+  const kk = Math.max(1, Math.round(k));
+  const pad = (lvl >= 2 ? 3 : 2) * kk, H2 = h + pad;
   const px = new Uint8ClampedArray(w * H2 * 4);
   const op = (x, y) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 96;
   const put = (x, y, c, a) => {
@@ -1087,18 +1094,43 @@ export function snowCapPixels(src, w, h, lvl, seed, bury) {
     px[q] = c[0]; px[q + 1] = c[1]; px[q + 2] = c[2]; px[q + 3] = a;
   };
   const S = SNOW_TONES;
-  const tops = [];
+  let tops = [];
+  const runOf = new Map();   // `kk` > 1 : la largeur du dessus (sa pente), qui borne aussi l'épaisseur de la neige
   for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (op(x, y) && !op(x, y - 1)) tops.push([x, y]);
+  /* À taille d'écran (`kk` > 1), chaque marche d'une silhouette en pente est un « dessus » d'un pixel :
+     le flanc du pied d'un candélabre se bordait d'un pointillé blanc (vu en jeu, 2026-10-02), alors que
+     la neige ne tient que sur du presque plat. Un dessus compte s'il fait au moins 1,2 pixel d'art de
+     large (la pente se lit dans la longueur de la marche : 1 px = 45° ; les sommets d'un bras courbe en ont 5 à 8
+     au cran 5, les flancs du pied 1 à 2 — mesuré sur l'image, un seuil à 2 pixels d'art effaçait toute la neige des bras). Sans effet sur un sprite natif
+     (`kk` = 1, où une marche d'un pixel EST un pixel d'art et le dessin reste celui d'avant). */
+  if (kk > 1) {
+    const isTop = new Uint8Array(w * h);
+    for (const [x, y] of tops) isTop[y * w + x] = 1;
+    tops = tops.filter(([x, y]) => {
+      let a = x, b = x;
+      while (a > 0 && isTop[y * w + a - 1]) a--;
+      while (b < w - 1 && isTop[y * w + b + 1]) b++;
+      runOf.set(y * w + x, b - a + 1);
+      return b - a + 1 >= Math.max(2, Math.round(kk * 1.2));
+    });
+  }
   const topSet = new Set(tops.map(([x, y]) => y * w + x));
   for (const [x, y] of tops) {
     const nL = topSet.has(y * w + x - 1) || topSet.has((y - 1) * w + x - 1) || topSet.has((y + 1) * w + x - 1);
     const nR = topSet.has(y * w + x + 1) || topSet.has((y - 1) * w + x + 1) || topSet.has((y + 1) * w + x + 1);
     const inner = nL && nR;
-    const jit = h32(x, y, seed) % 3;
-    const up = lvl >= 2 ? (inner ? (jit === 0 ? 1 : 2) : 1) : (inner && jit === 0 ? 1 : 0);
-    const down = lvl >= 2 ? 2 : 1;
-    for (let k = 1; k <= up; k++) put(x, y - k, k === up ? S[5] : S[4], 255);
-    for (let k = 0; k < down; k++) if (op(x, y + k)) put(x, y + k, k === 0 && !up ? S[5] : k === down - 1 ? S[2] : S[4], 255);
+    const jit = h32(kk === 1 ? x : Math.floor(x / kk), kk === 1 ? y : Math.floor(y / kk), seed) % 3;
+    let up = (lvl >= 2 ? (inner ? (jit === 0 ? 1 : 2) : 1) : (inner && jit === 0 ? 1 : 0)) * kk;
+    /* Une couche de neige n'est pas plus haute que la moitié de ce qui la porte est large : sur le sommet
+       d'un bras courbe de 6 px, dix pixels de neige faisaient un bloc blanc posé dessus (vu hors jeu, 2026-10-02). */
+    if (kk > 1) up = Math.min(up, Math.max(1, Math.round(runOf.get(y * w + x) * 0.5)));
+    let down = (lvl >= 2 ? 2 : 1) * kk;
+    /* À taille d'écran, la neige ne doit pas COUVRIR un objet fin : sur un bras de fer de 3 px, quatre pixels
+       de neige le blanchissaient entièrement, et sur un fond clair il disparaissait (vu en jeu, 2026-10-02). Elle
+       reste sur le dessus : au plus la moitié de la hauteur d'objet qui tient sous ce pixel. */
+    if (kk > 1) { let vr = 0; while (vr < down * 2 && op(x, y + vr)) vr++; down = Math.min(down, Math.max(1, vr >> 1)); }
+    for (let j = 1; j <= up; j++) put(x, y - j, j === up ? S[5] : S[4], 255);
+    for (let j = 0; j < down; j++) if (op(x, y + j)) put(x, y + j, j === 0 && !up ? S[5] : j === down - 1 ? S[2] : S[4], 255);
     /* Le cerne froid, au-dessus — LÉGER : à pleine force (premier jet), sur un sol
        blanc il se lisait comme un arc bleu qui flotte au-dessus de l'objet. */
     const cy = y - up - 1;
@@ -1106,11 +1138,20 @@ export function snowCapPixels(src, w, h, lvl, seed, bury) {
   }
   if (bury > 0) {
     // Le pied enfoui : les `bury` dernières rangées opaques de chaque colonne.
+    const bu = bury * kk, lows = new Int32Array(w).fill(-1);
+    let floor = -1;
     for (let x = 0; x < w; x++) {
-      let low = -1;
-      for (let y = h - 1; y >= 0; y--) if (op(x, y)) { low = y; break; }
+      for (let y = h - 1; y >= 0; y--) if (op(x, y)) { lows[x] = y; break; }
+      if (lows[x] > floor) floor = lows[x];
+    }
+    for (let x = 0; x < w; x++) {
+      const low = lows[x];
       if (low < 0) continue;
-      for (let k = 0; k < bury; k++) if (op(x, low - k)) put(x, low - k, k === bury - 1 ? S[4] : S[3], 255);
+      /* À taille d'écran, seules les colonnes qui touchent le SOL s'enfouissent : le bas d'une lanterne
+         suspendue est le point le plus bas de SA colonne, mais il n'est pas dans la neige (vu en jeu,
+         2026-10-02 : du blanc sous le verre). Le sprite natif garde sa règle (`kk` = 1). */
+      if (kk > 1 && low < floor - 2 * kk) continue;
+      for (let j = 0; j < bu; j++) if (op(x, low - j)) put(x, low - j, j === bu - 1 ? S[4] : S[3], 255);
     }
   }
   return { w, h: H2, pad, px };

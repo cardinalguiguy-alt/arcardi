@@ -1,4 +1,37 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-30
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-02
+
+## 2026-10-02 — LES LAMPADAIRES DE LA PLANCHE 3 SONT POSÉS AU PIXEL D'ÉCRAN, « COMME LES MAISONS »
+
+Le candélabre (riches) et la lanterne sur potence (modestes) étaient ramenés à la grille des gros pixels par
+`import-planche3.mjs` (médiane 3 × 3, pas 7,5) : Gemini les a peints sur ~420 px, le jeu en gardait 59, le fût
+tombait à 1 px et les lanternes s'empâtaient. Décision de Guillaume : une image PAR CRAN de zoom, 1 px d'image =
+1 px d'écran, comme les maisons.
+- **`C.TOWN_LAMP_BITMAPS`** (fermeConstants.js, `rich` / `poor`) : même format que `TOWN_BITMAPS` (`townBitmapMip`
+  rend URL et taille), au sens près — `day` est la lanterne ÉTEINTE, `glow` la ALLUMÉE : deux images entières, parce
+  qu'une lampe s'allume d'un coup (`LUM.lampLit`). `disp × dispH` = le canevas du sprite NATIF, ombre comprise :
+  l'image le recouvre exactement, donc la lumière lue sur le natif (`S.lampGlass`), le pied, le tri et la
+  collision ne bougent pas. Le natif reste le repli (image pas chargée) et ce que l'eau reflète.
+- **`tools/build-lampadaires.mjs`** les fabrique depuis la planche : détourage et cadre de l'import
+  (`tools/lib-planche3.mjs`, sorti de `import-planche3.mjs` : `classify`, `cutObject`, la boîte de chaque lampadaire,
+  UNE déclaration), détourage au PLEIN résolution puis Lanczos-3 de `lib-mip.mjs`. Trois soins appris sur la
+  planche : le liseré rose du JPEG déborde de 2-3 px (deux couches de plus retirées, mais jamais un contour SOMBRE :
+  il se pointille — on le désature) ; l'ombre de Gemini n'est gardée que sous le pied (la lueur violette des
+  lanternes, un peu plus sombre que le fond, dessinait des griffonnages le long du poteau) et nettoyée ; le verre
+  éteint (rampe gris-bleu des lanternes des planches 1 et 2) se reconnaît à sa chaleur ET sa clarté — le bout du
+  poteau modeste est chaud aussi, et virait au gris.
+- **`drawScreenLamp`** (FermeGame.js) : pose du cran courant (`screenBitmapPick(SB, zoom, key)`, `key` = l'état), les
+  deux états du cran chargés ensemble ; pas pendant un reflet. **La neige** (`NG.snowCapPixels`, `k`) lit les pixels
+  de l'image d'écran : épaisseurs et tirage en pixels d'ART (× `k`), un dessus doit faire ≥ 1,2 px d'art de large
+  (le flanc incliné du pied se bordait d'un pointillé), la couche n'est ni plus épaisse que la moitié de l'objet
+  qui la porte (un bras de 3 px disparaissait) ni plus haute que la moitié de sa largeur, l'enfouissement ne
+  touche que les colonnes du pied (pas le dessous des lanternes). `k` = 1 : l'ancien dessin, au bit près.
+- **Banc** : `verify-planche3` §6 (55/55) — le centre du verre allumé tombe à 1,25 px natif du verre du natif aux
+  cinq crans (0,45 aux crans 2-5, 1,11 au cran 1, où le verre tient en 4 × 6 px), le pied de l'image sur le pied
+  natif, aucun pixel d'objet sur le bord, allumer ne change que le verre (≤ 5 %) ; falsifié (cadre décalé de 3 :
+  2,4 px) et le défaut du premier jet (le bout du poteau changeait : 35 %). `verify-densite` couvre la table.
+  **Vu en jeu** : candélabre allumé de nuit, éteint de jour, sous la neige ; lanterne modeste sous la neige.
+  **Pas vu** : les crans 3 à 5 en jeu (la fenêtre de l'app ne dépassait pas le cran 2), le reflet dans l'eau
+  (natif, inchangé), un lampadaire à deux verres sous l'orage.
 
 ## 2026-09-30 (reprise) — LES FEUILLES TOMBENT PAR BOUQUETS, LE POMMIER GARDE SON TRONC CHAULÉ L'HIVER
 

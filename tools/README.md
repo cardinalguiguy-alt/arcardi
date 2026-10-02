@@ -340,7 +340,14 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   reconstruction (falsifié : 2 784 écarts) ; la fontaine de la ville absente du pré de la ferme ; un cratère
   chaud qui fond (et la neige qui revient) ; un arbre abattu qui n'abrite plus. ⚠️ Le faux canevas ignore
   `globalAlpha` dans `drawImage` : les chapeaux n'y sont posés que s'ils dominent.
-- **`tools/verify-planche3.mjs` — 31 contrôles, 31/31 (2026-09-29 : la planche 3 dans la ville).**
+- **`tools/build-lampadaires.mjs`** (2026-10-02) fabrique les images « grille écran » des deux lampadaires par rang
+  (`C.TOWN_LAMP_BITMAPS`, `public/town/lampadaire-*`) ; `tools/lib-planche3.mjs` porte la segmentation de
+  `import-planche3.mjs` (`classify`, `cutObject`) et la boîte de chaque lampadaire, pour que les deux scripts
+  ne divergent jamais. Se relance après tout changement de la planche ou de leur boîte (le script lève si le
+  cadre natif ne correspond plus à la table).
+- **`tools/verify-planche3.mjs` — 55 contrôles, 55/55 (2026-09-29 : la planche 3 dans la ville ; §6 au 2026-10-02 :
+  les lampadaires posés au pixel d'écran — leur verre tombe sur celui du natif, à 1,25 px natif près, aux cinq
+  crans ; le pied ; aucun pixel sur le bord ; falsifié par un cadre décalé de 3).** Le reste, avant §6 (31 contrôles) :
   Ce que le branchement n'a pas le droit de casser ou d'oublier : la CARTE (empreinte FNV du sol, des
   arbres, des altitudes, des clôtures, des portails et des potagers, relevée sur le générateur d'avant :
   tout se pose en passe finale, sans un tirage) ; la COHÉRENCE SOCIALE (boîte aux lettres selon le rang,

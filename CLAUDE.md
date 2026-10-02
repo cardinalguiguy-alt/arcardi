@@ -7,45 +7,39 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-30 (reprise) — LES FEUILLES TOMBENT PAR BOUQUETS ; action suivante : LES LAMPADAIRES
+### 2026-10-02 — LES LAMPADAIRES SONT AU PIXEL D'ÉCRAN ; action suivante : LES INTÉRIEURS (séance de conception)
 
-Retour de Guillaume sur la chute livrée le matin : « très très moche, on dirait que la forme générale de l'arbre est
-rongée, pas que les branches se dénudent ». **Refait, non commité** (arbre de travail, `main`) :
-- Les essences en code (chêne, érable, bouleau, pommier, cerisier, magnolia, toutes tailles) **redessinent leur
-  couronne par leurs bouquets** (`fallClumps`, mode `fall` de `townTreeSprite`) : fenêtres de chute décalées
-  autour de la couronne, bouquets qui rétrécissent puis glissent vers les pointes de l'arbre nu (`bareTree` rend
-  `tips`/`twigs`), grappes sur les rameaux qui se découvrent, dernières feuilles au bout des branches (~95 %),
-  ombre qui pâlit. Le saule par mèches (`FL.strandOrder`) ; le pommier de la planche par bouquets découpés
-  (`FL.clumpThin`) **et son HIVER a changé** (`appleWinter` : charpente dans sa boule, tronc chaulé et nichoir
-  gardés — c'était la dette « il change de tronc à la fin de la chute », soldée). Détail : README de
-  `components/ferme/` (en tête). Règle tirée : `DESSIN.md` (« un dessin fait de formes change par ses formes »).
-- Bancs : `verify-feuilles` 29/29 (§6 neuf, 7 contrôles, chacun falsifié ; chaque mesure rejoue le premier jet
-  et le voit rougir) ; les 64 `verify-*`/`render-*` verts ; `no-undef`, bundle. `verify-cycle` rougissait depuis
-  la livraison du matin (`L.s === 2` du tapis) : champ renommé `sz`. Planches `neige-*`/`pluie-rue` changées
-  (le pommier d'hiver et son ombre). **Vu en jeu** (verger au nord de la gare, 60/72/84 % de saison). **Pas vu** :
-  le vent qui fait bouger une couronne en chute, la neige sur le nouveau pommier en jeu. **Supabase : rien.**
-- ⚠️ **Dette connue** : les chênes de la ferme restent verts l'hiver (sprites du zip 232, pas d'arbre nu) ; la
-  mémoire de la glace est celle du manteau (4 jours) ; les herbes hautes restent six silhouettes répétées.
+**Livré, non commité** (arbre de travail, `main`) : le candélabre (riches) et la lanterne sur potence (modestes) de la
+planche 3 sont posés **une image par cran de zoom, 1 px d'image = 1 px d'écran, comme les maisons** — éteinte et
+allumée, ombre de Gemini rejouée, neige lue dans les pixels de l'image, natif gardé en repli et pour le reflet.
+Détail, trois soins de détourage et réglages de la neige : README de `components/ferme/` (en tête) ; fabrication :
+`tools/build-lampadaires.mjs` (+ `lib-planche3.mjs`, la segmentation de l'import, une seule boîte par lampadaire) ;
+table : `C.TOWN_LAMP_BITMAPS` ; pose : `drawScreenLamp` (FermeGame.js).
+- Bancs : les 64 `verify-*`/`render-*` verts ; `verify-planche3` 55/55 (§6 neuf : le verre de l'image tombe sur celui
+  du natif aux 5 crans, falsifié par un cadre décalé) ; `verify-densite` couvre la table ; `no-undef`, bundle.
+  **Vu en jeu** : candélabre allumé / éteint / sous la neige, lanterne modeste sous la neige.
+  **Pas vu** : les crans 3 à 5 (la fenêtre de l'app restait au cran 2), un candélabre sous l'orage.
+  **Supabase : rien.**
+- ⚠️ **Dette connue** : les chênes de la ferme restent verts l'hiver (sprites du zip 232) ; la mémoire de la glace est celle
+  du manteau (4 jours) ; les herbes hautes restent six silhouettes répétées ; la neige ne coiffe pas le toit des
+  lanternes du candélabre (leur dessus est en pente : les marches d'escalier du contour ne sont pas du « presque plat »).
 - ⚠️ Session cloud : le hook `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — c'est `node_modules`
   absent, pas les bancs (`npm ci`, puis relancer).
 
-### ⏭️ ACTION SUIVANTE — LES LAMPADAIRES DE LA PLANCHE 3, « COMME LES MAISONS » (tranché avec Guillaume)
+### ⏭️ ACTION SUIVANTE — LES INTÉRIEURS (phase 8), SÉANCE DE CONCEPTION À PART
 
-`lampRich` (candélabre) et `lampPoor` sont ramenés à la grille des gros pixels par `import-planche3.mjs` (médiane
-3 × 3, pas 7,5) : Gemini les a peints sur ~85 pixels de haut, le jeu en garde 56, le fût tombe à 1 px et les
-lanternes s'empâtent. Décision : les poser AU PIXEL D'ÉCRAN, une image par cran de zoom, depuis
-`refs/planche3-place.jpg` (1120,24,186×422 et 814,338,79×186), comme les maisons (`TOWN_BITMAPS`, `lib-mip.mjs`,
-détourage magenta de l'import) ; garder la lumière (`townLampArtAt`, halos), la neige (`snowCapCanvas`), les reflets.
-Si ça ne suffit pas : un prompt Gemini (Guillaume le colle lui-même). ⚠️ `sips` n'existe pas hors macOS : convertir
-le JPG autrement (PIL). Ensuite, sur la liste du jour : intérieurs (séance de conception : vue de dessus ou 3/4,
-pièces peintes ou assemblées, pièce pilote) et marché — **les prompts Gemini des herbes et du marché, Guillaume les
-fera dans une autre conversation.**
+§2 : **LISTER les décisions structurantes et ATTENDRE** — vue de dessus ou 3/4, pièces peintes (Gemini, prompts que
+Guillaume colle lui-même) ou assemblées, pièce pilote, qui entre (aucun résident n'entre dans un bâtiment : `res.zone`
+n'a que `farm` et `town`). Les sols d'intérieur existent pour le tribunal, la mairie, l'église. Puis le marché —
+**les prompts Gemini des herbes et du marché, Guillaume les fera dans une autre conversation.**
 **Restent de la feuille de route** : 13 (ombres portées à bord franc, fanions figés, fontaine), 14 (police pixel du
 monde), 8 (intérieurs) ; la ferme sans sol mouillé ; les commerces de la Grand-Rue (café « Chez Juliette »,
 restaurant : séance de conception à part, ligne 15 du tableau de `components/ferme/README.md`).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-02** : **les lampadaires au pixel d'écran** (la finesse du fût et des lanternes à chaque cran, le verre éteint de
+  jour — gris-bleu, barreaux ambre —, la neige : fine ligne sur les bras, mamelon au pied, poutre et poteau du modeste).
 - **Le 2026-09-30** : **la glace** (le rythme du gel — deux nuits froides —, la teinte, les fenêtres noires, la part
   de neige sur la glace), **la glisse des canards** (un pas sur trois environ), **les feuilles mortes** (la chute
   PAR BOUQUETS de la reprise, sa date — 50 → 92 % de l'automne —, le moment où il ne reste que des grappes ; la
@@ -320,6 +314,14 @@ coordonnées — et on teste la zone AVANT les distances.**
   seule une grandeur dérivée se compare à sa constante.* Même famille, même jour : baisser un seuil pour rendre
   une négociation plus facile la rend aussi facile au jeu qu'on ne voulait pas récompenser — **on mesure les deux
   joueurs** (l'ordinaire ET le tout-tiède) avant de choisir le levier.
+- ⚠️⚠️ **UN RÉGLAGE EN PIXELS D'ART NE SE LIT PAS SUR UNE IMAGE EN PIXELS D'ÉCRAN** (lampadaires, 2026-10-02). Le chapeau de
+  neige (`snowCapPixels`) compte en pixels d'ART : épaisseur de 2, tirage par colonne, « dessus » = tout pixel sans voisin
+  au-dessus. Rendu tel quel sur l'image d'écran, il blanchissait un bras de fer de 3 px, pointillait chaque marche d'un
+  flanc incliné et enfouissait le dessous d'une lanterne suspendue (point le plus bas de SA colonne). Chaque grandeur se
+  convertit (`k` px d'écran par pixel d'art), et ce que le sprite natif tenait par sa grossièreté (une marche = un pixel
+  d'art, donc rien) se recompte en largeur. *Poser une image plus fine sur un traitement lu dans ses pixels, c'est
+  réécrire ce traitement.* Et le cadre de l'image fine = le cadre du natif : tout ce qui est lu sur le natif (la lumière)
+  en dépend, un banc le mesure (centre du verre, falsifié par un décalage).
 - ⚠️⚠️ **UNE OPTION DE CATALOGUE QUE PERSONNE NE LIT EST UN MENSONGE DE DOCUMENTATION** (planche 3, 2026-09-29).
   `opt.step` figurait dans l'outil d'import, dans son en-tête et dans sa note (« se règle ici, par le champ
   `step` ») — et la découpe lisait la feuille échantillonnée au pas COMMUN : un objet à pas propre sortait
@@ -686,7 +688,7 @@ dépôt.
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte — et depuis le 2026-09-02 les **cinq maires** (`tools/out/maire-cinq.png`), avec le seul contrôle du dépôt qui mesure un RAPPORT entre deux morceaux (stature rendue contre stature écrite, tête contre carrure, pieds au parquet, quatorze mains à leur cible pour chacun des cinq corps). ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. ⚠️ **Depuis le 2026-09-02 il mesure aussi le CONTRAIRE** : que les vingt-huit cases de végétation basse ne refusent RIEN, par les quatre côtés, et qu'aucune ne soit solide pour une autre raison que son buisson. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
-| `components/ferme/planche.js` · `planche2.js` · `planche3.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` / `import-planche3.mjs` — les sprites des TROIS planches de Guillaume, en données (la 3e : jardins, place, lampadaires par rang, maison hantée ; JPG lus par `sips`, échelle par objet = son `step`, `'~'` = l'ombre de Gemini, branchée le 2026-09-29 par `planche3Sprite`). Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
+| `components/ferme/planche.js` · `planche2.js` · `planche3.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` / `import-planche3.mjs` — les sprites des TROIS planches de Guillaume, en données (la 3e : jardins, place, lampadaires par rang, maison hantée ; JPG lus par `sips`, échelle par objet = son `step`, `'~'` = l'ombre de Gemini, branchée le 2026-09-29 par `planche3Sprite`). ⚠️ **Les deux lampadaires par rang ont en plus leurs images « grille écran »** (2026-10-02, `C.TOWN_LAMP_BITMAPS`, `tools/build-lampadaires.mjs`, segmentation partagée `tools/lib-planche3.mjs`) : le sprite natif ne sert plus qu'au repli, au reflet et à la POSITION de la lumière — le cadre des deux doit rester identique. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure ET LA SAISON (`skyAt(t, bornes)`, phase 12c : `C.SUN_HOURS`, `skyBoundsOf`, sans bornes = le ciel de référence 6 h / 19 h) (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
 | `components/ferme/meteo.js` | **LA MÉTÉO (2026-09-26), pure** — ⚠️ **PAR LIEU depuis le 2026-09-29** (`placeOf(zone)`, `placeDayWeather` : la ville est la référence, la ferme en dérive un jour sur cinq, jamais pour la neige ; tout lecteur passe `place`, sans lieu = la ville) : épisodes par jour et par saison (`dayWeather`), huit canaux avec leur fenêtre dans la montée (`weatherAt`, `weatherAtMs`), forçage du menu dev qui commence à SON heure (`normalizeForce`), abri de la faune (`wetness`), éclairs et tonnerre (`boltOdds`, `flashGain`, `thunderFor`), prévision du matin (`forecast`). Le forçage et la saison forcée (`E.setForcedSeason`) passent par `applyForcedSky` (FermeGame.js) et par personne d'autre. Banc : `verify-meteo` |

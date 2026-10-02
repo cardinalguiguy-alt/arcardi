@@ -7263,6 +7263,37 @@ export const TOWN_PLANCHE3_KINDS = new Set(Object.keys(TOWN_PROP_ART).filter((k)
    pixel) ; seul le dessin et le halo le lisent. */
 export const TOWN_LAMP_ART = ["rich", null, "poor"];
 export const townLampArtAt = (x, y) => TOWN_LAMP_ART[townRankAt(x, y)];
+/* L'ombre que Gemini a peinte sous un objet de la planche 3, REJOUÉE en ombre du
+   jeu : le vert-noir translucide des ellipses de `PLANCHE_PROPS`. Lue par le
+   rejoueur du sprite natif (`planche3Sprite`, fermeArt.js) ET par la fabrication
+   des lampadaires « grille écran » (`tools/build-lampadaires.mjs`) — deux
+   copies, et la même ombre aurait deux teintes selon le cran (2026-10-02). */
+export const PLANCHE3_SHADOW = { rgb: [20, 26, 16], a: 0.30 };
+/* ⚠️ 2026-10-02 — LES LAMPADAIRES PAR RANG, POSÉS AU PIXEL D'ÉCRAN « COMME LES
+   MAISONS » (décision de Guillaume). Le sprite natif de la planche 3 est ramené à
+   la grille des gros pixels (médiane 3 × 3, pas 7,5) : Gemini a peint le
+   candélabre sur ~420 px, le jeu en garde 59, le fût tombe à 1 px et les lanternes
+   s'empâtent. Ici : une image PAR CRAN de zoom, fabriquée hors ligne depuis la
+   planche (`tools/build-lampadaires.mjs`, détourage et cadre de l'import) et
+   posée à 1 px d'image = 1 px d'écran (`drawScreenLamp`, FermeGame.js).
+   · MÊME FORMAT QUE `TOWN_BITMAPS` (`townBitmapMip` rend leurs URL et leur taille
+     d'écran), à une différence de sens : `day` est la lanterne ÉTEINTE, `glow`
+     la lanterne ALLUMÉE — deux images entières, pas un calque de nuit, parce
+     qu'une lampe s'allume d'un coup (`LUM.lampLit`) en changeant son verre.
+   · `disp` × `dispH` = la taille du sprite natif (le canevas entier, ombre
+     comprise) : l'image recouvre EXACTEMENT son rectangle. C'est ce qui garde
+     valides la place de la lumière et du reflet (`S.lampGlass`, lue sur le
+     natif), le pied, le tri et la collision — rien de la géométrie monde ne
+     change. Le sprite natif reste le repli tant qu'une image n'est pas chargée,
+     et le dessin que l'eau reflète. */
+export const TOWN_LAMP_BITMAPS = {
+  rich: { grid: "screen", day: "/town/lampadaire-riche-off", glow: "/town/lampadaire-riche-on", zooms: [1, 2, 3, 4, 5],
+          disp: PLANCHE3.lampRich.w, dispH: PLANCHE3.lampRich.h, grow: 1, smooth: false, art: "lampRich",
+          ref: "refs/planche3-place.jpg", build: "tools/build-lampadaires.mjs" },
+  poor: { grid: "screen", day: "/town/lampadaire-modeste-off", glow: "/town/lampadaire-modeste-on", zooms: [1, 2, 3, 4, 5],
+          disp: PLANCHE3.lampPoor.w, dispH: PLANCHE3.lampPoor.h, grow: 1, smooth: false, art: "lampPoor",
+          ref: "refs/planche3-place.jpg", build: "tools/build-lampadaires.mjs" },
+};
 /* L'emprise d'un décor, en cases, dans le repère du monde : le sprite est
    dessiné centré en x sur `pr.x` et POSÉ par le bas sur `pr.y + 1` (voir la
    boucle de rendu). Rendue en flottant — c'est l'appelant qui décide de son

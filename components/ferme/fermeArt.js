@@ -5484,7 +5484,7 @@ export function buildSprites() {
        verre éteint (`p3GlassOff`, le gris-bleu des lampadaires des
        planches 1 et 2) ; le reste ne bouge pas d'un pixel, donc `litGlassOf`
        retrouve le verre en comparant les deux (§ `S.lampGlass`). */
-  const P3_SHADOW = "rgba(20,26,16,0.30)";
+  const P3_SHADOW = `rgba(${C.PLANCHE3_SHADOW.rgb.join(",")},${C.PLANCHE3_SHADOW.a})`;   // 2026-10-02 : la teinte vit dans fermeConstants.js (les lampadaires « grille écran » la lisent aussi)
   /* Le verre allumé se reconnaît à sa COULEUR (jaune chaud et clair, cœur pâle),
      pas à un index ni à un hexadécimal : la palette d'un sprite est
      RE-QUANTIFIÉE à chaque réimport (les teintes du verre ont changé de nom en

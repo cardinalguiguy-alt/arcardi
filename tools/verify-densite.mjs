@@ -43,6 +43,7 @@
    Ça se juge à l'écran. Il ne voit pas non plus les échelles des PERSONNAGES
    (enfants, perron du tribunal) : hors champ par décision du 2026-09-25.
    ========================================================================== */
+import { pathToFileURL } from "url";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -97,9 +98,9 @@ title("1. tout bitmap passe par la table");
       calls.push({ f, arg });
     }
   }
-  /* `want.day` / `mip.glow` : les deux appels de `screenBitmapPick` /
+  /* `want[key]` (ex-`want.day`, 2026-10-02 : `key` = l'état éteint / allumé d'un lampadaire) / `mip.glow` : les deux appels de `screenBitmapPick` /
      `drawScreenExactBitmap` (FermeGame.js), dont l'URL sort de `townBitmapMip`. */
-  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|mip\.glow|mip\.flood|mip\.snowL|mip\.snowH|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée ; `mip.snowL/H`, la neige des toits (phase 12a)
+  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|want\[key\]|C\.townBitmapMip\(SB, \w+\)\[key\]|mip\.glow|mip\.flood|mip\.snowL|mip\.snowH|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée ; `mip.snowL/H`, la neige des toits (phase 12a)
   const grassTpl = "`/town/${variant}.png`";
   const stray = calls.filter(c => !tableRef.test(c.arg) && c.arg !== grassTpl);
   /* « Un banc qui compte des occurrences doit publier combien il en a LUES »
@@ -109,7 +110,7 @@ title("1. tout bitmap passe par la table");
      exige donc les appels NOMMÉS, ce qui prouve à la fois que le motif lit bien
      le source et que les trois chemins de chargement existent. */
   const args = calls.map(c => c.arg);
-  ok(args.includes("want.day") && args.includes("mip.glow") && args.includes(grassTpl),
+  ok(args.includes("want[key]") && args.includes("mip.glow") && args.includes(grassTpl),
      "appels à loadBitmap lus, dont les trois attendus", `${calls.length} appel(s) : ${args.join(" · ")}`);
   ok(stray.length === 0, "aucun loadBitmap avec une URL écrite en dur",
      stray.length ? stray.map(c => `${c.f}: ${c.arg}`).join(" · ") : "0");
@@ -175,6 +176,29 @@ title("2. les PNG déclarés existent, à la taille annoncée");
   }
 }
 
+/* 2026-10-02 — LES LAMPADAIRES « GRILLE ÉCRAN » (`C.TOWN_LAMP_BITMAPS`) : une image
+   éteinte (`day`) et une allumée (`glow`) PAR CRAN, à la taille d'écran exacte que
+   `townBitmapMip` leur assigne ; et leur taille MONDE est celle du sprite natif de
+   la planche 3 (le canevas entier) — c'est ce qui garde la lumière lue sur le natif
+   sur le verre de l'image. */
+const LB = C.TOWN_LAMP_BITMAPS;
+ok(LB && Object.keys(LB).length === 2, "la table TOWN_LAMP_BITMAPS existe (un candélabre, une lanterne sur potence)", LB ? Object.keys(LB).join(", ") : "absente");
+{
+  const P3 = (await import(pathToFileURL(path.join(ROOT, "components", "ferme", "planche3.js")).href)).PLANCHE3;
+  for (const [k, b] of Object.entries(LB)) {
+    const nat = P3[b.art];
+    ok(nat && b.disp === nat.w && b.dispH === nat.h && b.grow === 1 && !b.smooth && b.grid === "screen",
+       `lampadaire ${k} : le cadre monde est celui du sprite natif ${b.art}`, nat ? `${b.disp}×${b.dispH} pour ${nat.w}×${nat.h}` : "sprite natif absent");
+    for (const z of b.zooms) {
+      const m = C.townBitmapMip(b, z);
+      for (const [url, nm] of [[m.day, "éteint"], [m.glow, "allumé"]]) {
+        const f = pub(url), here = fs.existsSync(f), sz = here ? pngSize(f) : null;
+        ok(here && sz.w === m.w && sz.h === m.h, `lampadaire ${k} cran ${z} : ${nm} à ${m.w}×${m.h} px d'écran`, sz ? `PNG ${sz.w}×${sz.h}` : "absent");
+      }
+    }
+  }
+}
+
 /* ⚠️ AUCUN PNG ORPHELIN DANS `public/town/`. Le jour où un monument change de
    fabrication (phase 1 : une image de 384 px → cinq crans), l'ancienne image
    reste sur le disque, téléchargeable, et plus personne ne sait qu'elle ne sert
@@ -185,6 +209,7 @@ title("2. les PNG déclarés existent, à la taille annoncée");
     if (b.grid === "screen") for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); if (m.glow) refd.add(m.glow); if (m.flood) refd.add(m.flood); if (m.snowL) refd.add(m.snowL); if (m.snowH) refd.add(m.snowH); }
     else if (!b.prefix) { if (b.day) refd.add(b.day); if (b.glow) refd.add(b.glow); }
   }
+  for (const b of Object.values(C.TOWN_LAMP_BITMAPS)) for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); refd.add(m.glow); }
   const dir = path.join(ROOT, "public", "town");
   const all = fs.readdirSync(dir).filter(n => n.endsWith(".png"));
   const orphans = all.filter(n => !refd.has("/town/" + n) && !Object.values(T).some(b => b.prefix && ("/town/" + n).startsWith(b.prefix)));
@@ -223,6 +248,12 @@ title("3. un px source = un nombre entier de px d'art, sans lissage");
       if (good) conform.push(k);
     }
   }
+  for (const [k, b] of Object.entries(C.TOWN_LAMP_BITMAPS)) {
+    const missing = gameZooms.filter(z => !b.zooms.includes(z));
+    ok(missing.length === 0 && !b.smooth, `lampadaire ${k} : une image par cran de zoom, sans lissage`, missing.length ? `crans manquants : ${missing.join(", ")}` : `crans ${b.zooms.join(", ")}`);
+  }
+  ok(/function drawScreenLamp\(/.test(fg) && /drawScreenLamp\(ctx, lampSB,/.test(fg) && !/drawScreenLamp[^\n]*imageSmoothingEnabled\s*=\s*true/.test(fg),
+     "le lampadaire « 1 px d'image = 1 px d'écran » existe et est appelé par la file de dessin");
   for (const k of Object.keys(EN_ATTENTE)) ok(k in T, `l'entrée en attente « ${k} » existe dans la table`);
   console.log(`\n  conformes : ${conform.join(", ") || "aucun"}`);
   console.log(`  EN ATTENTE (${pending.length}) : ${pending.join(" · ") || "aucun — la phase 1 est finie"}`);
