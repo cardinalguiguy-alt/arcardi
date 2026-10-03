@@ -836,6 +836,14 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   par un générateur semé le temps des deux chapitres de simulation — et **le remet en place
   après**, un stub global laissé en vie contaminant tout ce qui suit. Résultat : 3 arrivées, le
   même nombre à chaque lancement.
+- **`tools/render-plan.mjs` — 9 contrôles, 9/9 (2026-10-03).** Le PLAN ILLUSTRÉ de Valley Town (`planVille.js`,
+  la carte ouverte). Il construit le plan par `buildTownPlan` — la fonction même que `drawTownMap` appelle — et écrit
+  `plan-ville.png` (1792 × 1344) + quatre gros plans (place, haute-ville, lac, marché). Contrôles : la taille suit la
+  ville, aucun pixel transparent, **un toit par maison du catalogue** (`C.townAllHouses`, 42 au jour de l'écriture,
+  jamais un nombre recopié), les civiques tous présents, peu de remises génériques (8), le milieu de chaque toit
+  de la couleur de son toit (falsifié : sans le dessin des toits, 42 maisons sur 42 tombent), la ligne médiane de
+  l'artère, toute case d'eau libre bleue. ⚠️ Faux canvas : pas de texte (la lettre N de la rose des vents n'y est pas).
+  ⚠️ **Il ne juge pas le DESSIN** — un plan joli ou laid passe pareil ; c'est le PNG qui se regarde, et le jeu.
 - **`tools/render-rues.mjs` — 28 contrôles, 28/28 (434).** Le revêtement des rues de Valley
   Town : les trois pavés de 4×4 tuiles assemblés sur six tuiles de côté, puis **quatre fenêtres
   de la VRAIE carte** (l'artère, un carrefour, le cimetière, le bord de l'esplanade) peintes

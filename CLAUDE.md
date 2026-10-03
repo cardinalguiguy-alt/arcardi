@@ -11,24 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-03 — LE CONTEXTE A ÉTÉ ALLÉGÉ (noyau + `docs/` + routeur) ; rien du jeu n'a bougé
+### 2026-10-03 (soir) — LA CARTE OUVERTE DE VALLEY TOWN EST UN PLAN ILLUSTRÉ (non commité)
 
-**Livré, non commité** : `CLAUDE.md` passe de 1 661 lignes (~47 k tokens relus à chaque session) à un NOYAU de ~340 lignes ;
-le reste est dans `docs/` (table au §5 à 13), **SANS PERTE** (chaque ligne de l'ancien fichier retrouvée, mesuré AVANT le remplacement du bloc REPRISE ; seul
-l'en-tête a été réécrit). Nouveaux : le **ROUTEUR** (tâche → fichiers → bancs), les **titres** des 60 pièges du §4 (déclencheurs, récits dans
-`docs/PIEGES.md`), `tools/doc-index.mjs` (plage `début-fin` d'une fonction ou d'une section : lire une plage, pas « autour »),
-`tools/verify-docs.mjs` (noyau ≤ 350 l., routeur vrai, titres ↔ récits ; falsifié 4 fois). Neutre pour Codex : fichiers ordinaires,
-`AGENTS.md` inchangé. **Supabase : rien.**
-⚠️ **À JUGER EN VRAIE SÉANCE** : le routeur est écrit de mémoire du dépôt, pas éprouvé. Si une tâche a lu trop (ou raté) un fichier,
-**corriger la ligne du routeur**, pas contourner. Un piège que le titre n'a pas fait « sonner » = un titre à réécrire.
-
-### 2026-10-02 — LES LAMPADAIRES SONT AU PIXEL D'ÉCRAN (commité, `c067d98`)
-
-Candélabre (riches) et lanterne sur potence (modestes) de la planche 3 : une image par cran de zoom, 1 px d'image = 1 px d'écran,
-éteinte et allumée, neige lue dans les pixels. Détail : README de `components/ferme/` (en tête) ; fabrication
-`tools/build-lampadaires.mjs` ; pose `drawScreenLamp` (FermeGame.js). **Pas vu** : les crans 3 à 5, un candélabre sous l'orage.
-⚠️ **Dette** : chênes de la ferme verts l'hiver ; mémoire de la glace = celle du manteau (4 jours) ; herbes hautes = six
-silhouettes répétées ; la neige ne coiffe pas le toit des lanternes du candélabre.
+`components/ferme/planVille.js` (nouveau) rend la ville à 8 px par case, UNE fois : revêtements au grain, relief, eau, berges,
+ligne médiane du goudron, haies, ombres, **chaque bâtiment avec son toit**, arbres en couronnes, rose des vents. Tout dérivé du
+monde et des constantes. `FermeGame.js` : `buildTownMinimapBase` l'appelle, `drawTownMap` le met à l'échelle une fois et
+l'affiche à 1:1. Décidé avec Guillaume : carte OUVERTE seulement, procédural, bâtiments individuels. **Pas fait** (non retenu) :
+parchemin, zoom/déplacement, noms de rues et de quartiers, légende. Banc `tools/render-plan.mjs` (9/9, falsifié) ; **vu en jeu**
+à deux tailles de fenêtre. **Pas vu** : mobile, plan chargé de joueurs et de résidents. **Supabase : rien.**
+⚠️ **À JUGER** (`docs/A-JUGER.md`) : le dessin du plan, le halo sombre autour de la terrasse. Dette : la teinte d'un toit vient du
+quartier, pas du modèle choisi avec R.
+⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : si une tâche a lu trop ou raté un fichier, corriger la ligne
+du routeur, pas contourner ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire.
+Lampadaires au pixel d'écran (`c067d98`, README ferme en tête) : **pas vu** les crans 3 à 5 ni un candélabre sous l'orage.
+⚠️ Dette : chênes de la ferme verts l'hiver ; mémoire de la glace = celle du manteau ; herbes hautes = six silhouettes répétées.
 ⚠️ Session cloud : `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — c'est `node_modules` absent (`npm ci`).
 
 ### ⏭️ ACTION SUIVANTE — LES INTÉRIEURS (phase 8), SÉANCE DE CONCEPTION À PART
@@ -72,6 +68,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Météo, saisons | `components/ferme/meteo.js` | `verify-meteo` |
+| Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
 | Eau, reflets, berges, parc | `components/ferme/eau.js` ; README ferme §18-§20 | `render-eau`, `render-rive`, `render-parc` |
 | Faune (colverts, chats, lucioles) | `components/ferme/faune.js`, `fauneArt.js` | `verify-faune` |
 | Maisons, façades, image Gemini à intégrer | `docs/IMAGES-ET-BLENDER.md` (d'abord « Notes qui restent vraies »), `fermeConstants.js` (`TOWN_HOUSE_MODELS`, `TOWN_SHOP_MODELS`), `tools/build-maison-sprites.mjs` | `verify-vallee`, `verify-densite`, `verify-compo` |

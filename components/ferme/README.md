@@ -1,4 +1,27 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-02
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
+
+## 2026-10-03 — LA CARTE OUVERTE DE VALLEY TOWN DEVIENT UN PLAN ILLUSTRÉ
+
+Demande : « une map plus belle et détaillée de VT ». Décisions de Guillaume en séance : **la carte OUVERTE seulement** (pas de
+minimap), **un plan procédural** (pas une peinture Gemini : il reste vrai quand la ville bouge), **les bâtiments un par un**.
+Pas retenus, donc pas faits : parchemin, zoom/déplacement, noms de rues et de quartiers, légende et filtres.
+- **`planVille.js`** (nouveau) : `buildTownPlan(tw)` rend la ville à `PLAN_S = 8` px par case (1792 × 1344), UNE fois.
+  Sol au pixel (grain par revêtement : pavés, briques, dalles, goudron ; relief éclairé du nord-ouest ; eau à profondeur et
+  rides), berges, bordures de chaussée, ligne médiane pointillée du goudron, rambardes de pont, haies et clôtures en traits,
+  ombres portées, **chaque bâtiment avec son toit** (deux pentes, faîtage, cheminée, porte ; croupe pour le tribunal et la
+  mairie, clocher pour l'église, auvent pour les commerces, toit crevé pour la ruine), arbres en couronnes, petit décor,
+  fontaine, rose des vents. **Tout se dérive du monde et des constantes** (`townAllHouses`, `townHouseFoot`, `TOWN_COURT`…) ;
+  les « remises » sont les composantes de cases pleines que rien de connu ne couvre.
+- **`FermeGame.js`** : `buildTownMinimapBase` appelle le plan ; `drawTownMap` le rééchantillonne UNE fois à la taille d'écran
+  (`townMinimapScaledRef`, plus de `drawImage` à fort rapport à chaque image), calcule la taille en largeur ET en hauteur (le
+  CSS rétrécissait le canevas, en `image-rendering: pixelated`, c'est maintenant `auto` en ville), pastilles claires sous les
+  emojis des repères. Le fond de la ferme, le plan du tribunal, le GPS, les joueurs et les résidents : inchangés.
+- **Banc : `tools/render-plan.mjs`** (9 contrôles, falsifié une fois). **Vu en jeu** (fenêtre 800 × 600 puis 1440 × 900),
+  lancé via `fake-supabase` + une page jetable, supprimée. **Pas vu** : le plan sous un autre cran de fenêtre (mobile), avec
+  des résidents et des joueurs nombreux, ni le clic GPS sur le nouveau plan (le gestionnaire n'a pas changé).
+- ⚠️ **Dettes** : le MODÈLE exact d'une maison (choisi par R) ne se lit pas dans la ville générée — la teinte du toit vient du
+  quartier ; les toits des remises sont génériques (8) ; le halo sombre autour de la terrasse de la haute-ville est un peu
+  fort ; la lettre N de la rose des vents n'est vue qu'en jeu.
 
 ## 2026-10-02 — LES LAMPADAIRES DE LA PLANCHE 3 SONT POSÉS AU PIXEL D'ÉCRAN, « COMME LES MAISONS »
 

@@ -8,6 +8,9 @@
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-03** : **le plan illustré de Valley Town** (carte ouverte) — le dessin des toits (teinte par quartier, cheminée, porte), la
+  ligne médiane de l'avenue, les berges, le relief et son halo sombre autour de la terrasse, les pastilles des repères, la taille d'affichage
+  (largeur ET hauteur de fenêtre). Pas retenus à ce stade : zoom, noms de rues, légende, parchemin.
 - **Le 2026-10-02** : **les lampadaires au pixel d'écran** (la finesse du fût et des lanternes à chaque cran, le verre éteint de
   jour — gris-bleu, barreaux ambre —, la neige : fine ligne sur les bras, mamelon au pied, poutre et poteau du modeste).
 - **Le 2026-09-30** : **la glace** (le rythme du gel — deux nuits froides —, la teinte, les fenêtres noires, la part

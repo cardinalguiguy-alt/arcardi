@@ -81,6 +81,7 @@ import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le 
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute, le tapis au pied des arbres, ce qui vole au vent
 import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
+import { buildTownPlan } from "./planVille";   // 2026-10-03 — le plan illustré de Valley Town (carte ouverte) : toits, berges, relief, arbres
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -1498,6 +1499,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // jamais) — voir buildTownMinimapBase. Le tribunal, lui, se dessine en PLAN
   // et n'a donc aucune image à garder.
   const townMinimapImgRef = useRef(null);
+  const townMinimapScaledRef = useRef(null);   // 2026-10-03 : le plan réduit à la taille de l'écran, voir drawTownMap
   /* Zip 425 — LE SAUT DEPUIS UN REBORD, en Valley Town uniquement.
      ⚠️ UN `ref` ET NON UN `state` : il est lu et écrit à chaque image par la
      boucle de jeu, qui vit dans une closure à dépendances vides. Un state
@@ -28825,50 +28827,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        passe pas partout — on éclaircit donc chaque case selon son altitude.
        ══════════════════════════════════════════════════════════════════════ */
     function buildTownMinimapBase(tw) {
-      const c = document.createElement("canvas"); c.width = tw.w; c.height = tw.h;
-      const g = c.getContext("2d");
-      const im = g.createImageData(tw.w, tw.h);
-      for (let i = 0; i < tw.w * tw.h; i++) {
-        const gr = tw.ground[i], o = tw.objects[i];
-        let col = [92, 158, 78];                                   // herbe
-        if (gr === C.G_TOWN_LAWN) col = [76, 140, 66];
-        /* ZIP 434 — LA CARTE MONTRE LE REVÊTEMENT. Ce n'est pas de la
-           coquetterie : avec toutes les rues de la même couleur de terre, la
-           carte ne disait pas par où l'on TRAVERSE la ville. Le ruban
-           anthracite de la grande artère est maintenant lisible d'un coup
-           d'œil, et c'est exactement ce qu'on demande à un plan. */
-        else if (gr === C.G_PATH) {
-          const rd = tw.road ? tw.road[i] : C.TR_NONE;
-          col = rd === C.TR_ASPHALT ? [66, 68, 74] : rd === C.TR_COBBLE ? [140, 139, 146] : rd === C.TR_BRICK ? [150, 84, 66] : [156, 122, 84];
-        }
-        else if (gr === C.G_PATH_STONE) col = [176, 174, 168];
-        else if (gr === C.G_TOWN_STAIR) col = [200, 196, 186];
-        else if (gr === C.G_WATER) col = [58, 123, 200];
-        else if (gr === C.G_BRIDGE) col = [140, 100, 60];
-        if (o === C.O_TREE || o === C.O_TREE2) col = [42, 100, 40];
-        if (tw.hedge && tw.hedge[i]) col = [null, [46, 108, 44], [58, 60, 66], [226, 222, 208], [118, 98, 76], [150, 146, 130]][tw.hedge[i]] || [46, 108, 44];   // 7b : la carte montre la matière de la clôture
-        // Tout ce qui bloque et n'est ni arbre ni haie est bâti : une seule
-        // teinte chaude pour les maisons, les monuments et le mobilier — la
-        // carte doit se lire d'un coup d'œil, pas se déchiffrer.
-        if (tw.solid[i] && gr !== C.G_WATER && o !== C.O_TREE && o !== C.O_TREE2 && !(tw.hedge && tw.hedge[i])) col = [168, 96, 76];
-        const e = tw.elev ? tw.elev[i] : 0;
-        if (e > 0.01) { const k = 1 + Math.min(0.30, e * 0.15); col = [Math.min(255, col[0] * k), Math.min(255, col[1] * k), Math.min(255, col[2] * k)]; }
-        im.data.set([col[0] | 0, col[1] | 0, col[2] | 0, 255], i * 4);
-      }
-      g.putImageData(im, 0, 0);
+      /* 2026-10-03 — LE PLAN EST ILLUSTRÉ (`planVille.js`), plus un pixel par case.
+         ⚠️ Les anciennes remarques de cette fonction restent vraies et sont
+         tenues par le nouveau dessin : le revêtement des rues se lit (zip 434),
+         le relief se lit (zip 426), et ce qui bloque sans être arbre ni haie est
+         un bâtiment. `townMinimapScaledRef` garde la version à la taille de
+         l'écran : un plan de 1792 × 1344 px ne se rééchantillonne pas soixante
+         fois par seconde. */
+      const c = buildTownPlan(tw);
       townMinimapImgRef.current = c;
+      townMinimapScaledRef.current = null;
       return c;
     }
     function drawTownMap() {
       const mc = mapCanvasRef.current; if (!mc) return;
       const tw = townWorldRef.current; if (!tw) return;
       const base = townMinimapImgRef.current || buildTownMinimapBase(tw);
-      const g = mc.getContext("2d"); g.imageSmoothingEnabled = false;
-      const maxW = Math.min(window.innerWidth * 0.86, 900), scale = maxW / tw.w;
+      const g = mc.getContext("2d");
+      /* La taille d'affichage tient dans la fenêtre EN LARGEUR ET EN HAUTEUR :
+         le CSS borne la hauteur (`max-height`), et un canevas que le CSS
+         rétrécit est rééchantillonné par le navigateur, sans lissage de qualité.
+         On calcule donc la taille finale ici, et le canevas est affiché à 1:1. */
+      const fitW = Math.min(window.innerWidth * 0.88, 1240), fitH = window.innerHeight * 0.94 - 140;
+      const scale = Math.max(1.5, Math.min(fitW / tw.w, fitH / tw.h));
       const dispW = Math.round(tw.w * scale), dispH = Math.round(tw.h * scale);
       if (mc.width !== dispW || mc.height !== dispH) { mc.width = dispW; mc.height = dispH; }
+      let sc = townMinimapScaledRef.current;
+      if (!sc || sc.width !== dispW || sc.height !== dispH) {
+        sc = document.createElement("canvas"); sc.width = dispW; sc.height = dispH;
+        const sg = sc.getContext("2d"); sg.imageSmoothingEnabled = true; sg.imageSmoothingQuality = "high";
+        // Réduction en deux temps au-delà d'un facteur 2 : un seul `drawImage` à fort rapport sous-échantillonne.
+        let src = base;
+        while (src.width / 2 > dispW) {
+          const h2 = document.createElement("canvas"); h2.width = Math.ceil(src.width / 2); h2.height = Math.ceil(src.height / 2);
+          const hg = h2.getContext("2d"); hg.imageSmoothingEnabled = true; hg.imageSmoothingQuality = "high"; hg.drawImage(src, 0, 0, h2.width, h2.height); src = h2;
+        }
+        sg.drawImage(src, 0, 0, dispW, dispH);
+        townMinimapScaledRef.current = sc;
+      }
       g.clearRect(0, 0, dispW, dispH);
-      g.drawImage(base, 0, 0, tw.w, tw.h, 0, 0, dispW, dispH);
+      g.drawImage(sc, 0, 0);
       /* LES REPÈRES. ⚠️ CHACUN EST DÉRIVÉ DE SA CONSTANTE, jamais d'un couple
          de nombres recopié : la ville a déjà bougé deux fois (425, 426) et une
          carte qui garde les anciens noms au bon endroit est pire qu'une carte
@@ -28897,9 +28895,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tags = [];   // 2026-09-25 : peintes à la fin — voir mapTag
       for (const [mx, my, emo, label] of marks) {
         const px = mx * scale, py = my * scale;
-        g.font = "11px monospace";
+        // Une pastille claire sous l'emoji : sur un plan peint, l'emoji seul se perdait dans le décor.
+        g.fillStyle = "rgba(0,0,0,0.35)"; g.beginPath(); g.arc(px + 0.8, py + 1.2, 10, 0, 7); g.fill();
+        g.fillStyle = "rgba(252,246,226,0.96)"; g.beginPath(); g.arc(px, py, 9.5, 0, 7); g.fill();
+        g.strokeStyle = "#5a4230"; g.lineWidth = 1.6; g.beginPath(); g.arc(px, py, 9.5, 0, 7); g.stroke();
+        g.fillStyle = "#000"; g.font = "11px monospace";
         g.fillText(emo, px, py + 4);
-        mapTag(tags, "place:" + label, label, "#ffeec8", px, py - 7, 2);
+        mapTag(tags, "place:" + label, label, "#ffeec8", px, py - 13, 2);
       }
       /* Zip 427 — LES RÉSIDENTS EN VILLE, sur le plan. ⚠️ MÊME FILTRE DE ZONE
          QUE LES JOUEURS, et pour la même raison exactement : afficher les
@@ -39812,7 +39814,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 n'existe pour personne. Une mécanique qu'on ne peut découvrir
                 que si on nous l'a dite n'existe pas (leçon des plaques du
                 tribunal, 426). */}
-            <canvas ref={mapCanvasRef} className="ferme-map-canvas" style={{ cursor: "crosshair" }} onClick={onMapClick} />
+            <canvas ref={mapCanvasRef} className="ferme-map-canvas" style={{ cursor: "crosshair", imageRendering: (meRef.current && meRef.current.zone === "town") ? "auto" : undefined }} onClick={onMapClick} />
             <div className="ferme-map-close">🧭 {L.gpsHint} &nbsp;·&nbsp; {L.mapClose}</div>
             <button className="ferme-btn" style={{ marginTop: 8 }} onClick={() => setMapOpen(false)}>✕</button>
           </div>
