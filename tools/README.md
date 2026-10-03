@@ -1807,6 +1807,22 @@ là que la séance à l'écran a corrigé le banc, pas l'inverse : voir §30.4 d
 
 ---
 
+## `doc-index.mjs` — LIRE UNE PLAGE EXACTE, PAS « LARGEMENT AUTOUR » (2026-10-03)
+
+Pas un banc : un outil de lecture, lancé à la main (`node tools/doc-index.mjs <fichier.md|.js> [motif]`). Sur un `.js` il rend
+`début-fin` de chaque fonction, flèche, table de haut niveau et bandeau (`FermeGame.js` : ~1 060 entrées, 0,05 s) ; sur un `.md`,
+les titres avec leur plage. Il existe parce que le coût d'une tâche sur ce dépôt était de grep un symbole puis de lire large
+faute de savoir où il finit. ⚠️ Rien n'est généré dans le dépôt : un index versionné vieillirait (§14.2, leçon n°2).
+La fin d'une fonction se trouve par l'indentation (première accolade fermante à la même colonne) ; vérifié sur `townFindPath`
+(8919-9050) et `drawScreenLamp` (275-293).
+
+## `verify-docs.mjs` — LE NOYAU RESTE COURT, LE ROUTEUR RESTE VRAI (2026-10-03, 8 contrôles)
+
+Tient le découpage de `CLAUDE.md` en noyau + `docs/` : plafond de 350 lignes pour le noyau, existence de tout fichier, dossier ou
+banc cité par le routeur (84 références lues), égalité entre les titres de pièges du noyau et les récits de `docs/PIEGES.md`
+(60 récits, 62 titres lus avec les deux phrases du préambule), `AGENTS.md` toujours un simple renvoi. **Falsifié le jour même** :
+un chemin cassé, un titre altéré, un récit sans titre, un noyau de 375 lignes — les quatre le font rougir.
+
 ## `hook-bancs.sh` — LE FILET, ET IL N'EST PAS UN BANC
 
 ⚠️⚠️ **CE N'EST PAS UN BANC DE PLUS : C'EST CE QUI LANCE LES VINGT AUTRES.** Appelé par le HARNAIS
