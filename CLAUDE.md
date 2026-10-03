@@ -11,31 +11,33 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-03 (soir) — LA CARTE OUVERTE DE VALLEY TOWN EST UN PLAN ILLUSTRÉ (non commité)
+### 2026-10-03 (nuit) — LOT GEMINI PRÉPARÉ : SOLS DE VT « MÊME PLAN, PLUS NET » + ARBRES À SQUELETTE UNIQUE (rien d'intégré)
 
-`components/ferme/planVille.js` (nouveau) rend la ville à 8 px par case, UNE fois : revêtements au grain, relief, eau, berges,
-ligne médiane du goudron, haies, ombres, **chaque bâtiment avec son toit**, arbres en couronnes, rose des vents. Tout dérivé du
-monde et des constantes. `FermeGame.js` : `buildTownMinimapBase` l'appelle, `drawTownMap` le met à l'échelle une fois et
-l'affiche à 1:1. Décidé avec Guillaume : carte OUVERTE seulement, procédural, bâtiments individuels. **Pas fait** (non retenu) :
-parchemin, zoom/déplacement, noms de rues et de quartiers, légende. Banc `tools/render-plan.mjs` (9/9, falsifié) ; **vu en jeu**
-à deux tailles de fenêtre. **Pas vu** : mobile, plan chargé de joueurs et de résidents. **Supabase : rien.**
-⚠️ **À JUGER** (`docs/A-JUGER.md`) : le dessin du plan, le halo sombre autour de la terrasse. Dette : la teinte d'un toit vient du
-quartier, pas du modèle choisi avec R.
-⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : si une tâche a lu trop ou raté un fichier, corriger la ligne
-du routeur, pas contourner ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire.
-Lampadaires au pixel d'écran (`c067d98`, README ferme en tête) : **pas vu** les crans 3 à 5 ni un candélabre sous l'orage.
+Guillaume : le réseau de rues et de chemins de VT est bon, **seul manque le niveau de détail/netteté du pavement et de l'herbe** (au niveau
+des maisons peintes) ; et **les arbres dégarnis d'automne ne sont pas à la hauteur**. Réponse : **`refs/lot-gemini/`** (non commité) —
+`00-LISEZ-MOI.md` (méthode, captures à prendre, nommage), `A` sols VT, `B` arbres VT+ferme, `C` objets VT, `D` bâtiments VT, `E` ferme,
+plus `sols-ref/` et `arbres-ref/` EXPORTÉS du jeu (tuiles et arbres actuels agrandis, à joindre comme références). Guillaume produit les
+images chez Gemini (usage ample ; le quota Claude se rétablit le 2026-10-04 à 15 h). **Aucun code, aucun jeu modifié ; Supabase : rien.**
+Décidé : les sols se REPEIGNENT en gardant le plan de la tuile (pluie, neige, flaques dérivées de la peinture sèche, jamais une
+version « mouillée » à peindre) ; les arbres = TROIS images du MÊME arbre (feuillu / mi-chute / nu) au squelette identique, que le jeu
+fond par bouquets. **Ouvertes** (`00-LISEZ-MOI.md` §5) : ferme en pixel art ou peinte (E suppose pixel) ; intérieurs ; café/restaurant ;
+tailles d'arbres dérivées par échelle. La carte ouverte (plan illustré, `planVille.js`) est livrée (`ed138b9`), **à juger** (`docs/A-JUGER.md`).
+⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : une tâche qui a lu trop ou raté un fichier = corriger la ligne du
+routeur ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire. Lampadaires au pixel d'écran : **pas vu** les crans 3 à 5.
 ⚠️ Dette : chênes de la ferme verts l'hiver ; mémoire de la glace = celle du manteau ; herbes hautes = six silhouettes répétées.
-⚠️ Session cloud : `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — c'est `node_modules` absent (`npm ci`).
+⚠️ Session cloud : `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — `node_modules` absent (`npm ci`). Ce soir il a aussi
+annoncé `verify-densite` rouge : **non relancé, cause inconnue** (arbre propre au départ de la session).
 
-### ⏭️ ACTION SUIVANTE — LES INTÉRIEURS (phase 8), SÉANCE DE CONCEPTION À PART
+### ⏭️ ACTION SUIVANTE — INTÉGRER LE LOT GEMINI, UNE FAMILLE À LA FOIS
 
-§2 : **LISTER les décisions structurantes et ATTENDRE** — vue de dessus ou 3/4, pièces peintes (Gemini, prompts que
-Guillaume colle lui-même) ou assemblées, pièce pilote, qui entre (aucun résident n'entre dans un bâtiment : `res.zone`
-n'a que `farm` et `town`). Les sols d'intérieur existent pour le tribunal, la mairie, l'église. Puis le marché —
-**les prompts Gemini des herbes et du marché, Guillaume les fera dans une autre conversation.**
-**Restent de la feuille de route** : 13 (ombres portées à bord franc, fanions figés, fontaine), 14 (police pixel du
-monde), 8 (intérieurs) ; la ferme sans sol mouillé ; les commerces de la Grand-Rue (café « Chez Juliette »,
-restaurant : séance de conception à part, ligne 15 du tableau de `components/ferme/README.md`).
+À chaque retour d'images : **UNE famille**, la mesurer (taille, bouclage des tuiles comme `render-rues`, écart de teinte/valeur avec
+l'actuel, squelette identique d'un état d'arbre à l'autre), fabriquer une image par cran de zoom (`tools/lib-mip.mjs`, modèle
+`build-lampadaires.mjs`), brancher derrière un repli (l'ancien dessin), relancer les bancs, **JUGER EN JEU**. D'abord `dallage_civique`
+(il valide la méthode), puis `goudron`, `herbe` ; arbres : chêne, érable, bouleau. **Les scripts de fabrication restent à écrire.**
+**Restent de la feuille de route** : 13 (ombres portées à bord franc, fanions figés, fontaine), 14 (police pixel du monde), 8 (intérieurs :
+séance de conception à part, §2 — LISTER les décisions et ATTENDRE ; aucun résident n'entre dans un bâtiment, `res.zone` n'a que `farm` et
+`town`) ; la ferme sans sol mouillé ; café « Chez Juliette » et restaurant (ligne 15 du tableau de `components/ferme/README.md`).
+
 
 → **Jugements humains en attente** (« Toujours ouvert — livré, jamais jugé ») : `docs/A-JUGER.md`. À lire pour « reprends le
 travail » ou pour choisir un chantier, pas pour une tâche de code ciblée. **Notes d'intégration d'image et commerces de la
@@ -69,6 +71,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Météo, saisons | `components/ferme/meteo.js` | `verify-meteo` |
 | Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
+| Sols de VT (pavements, herbe), arbres, intégrer une image Gemini de sol ou d'arbre | `refs/lot-gemini/00-LISEZ-MOI.md`, puis `refs/lot-gemini/A-sols-vt.md` ou `refs/lot-gemini/B-arbres.md` ; `tools/lib-mip.mjs`, `tools/build-lampadaires.mjs` (le modèle) | `render-rues`, `render-arbres`, `verify-densite` |
 | Eau, reflets, berges, parc | `components/ferme/eau.js` ; README ferme §18-§20 | `render-eau`, `render-rive`, `render-parc` |
 | Faune (colverts, chats, lucioles) | `components/ferme/faune.js`, `fauneArt.js` | `verify-faune` |
 | Maisons, façades, image Gemini à intégrer | `docs/IMAGES-ET-BLENDER.md` (d'abord « Notes qui restent vraies »), `fermeConstants.js` (`TOWN_HOUSE_MODELS`, `TOWN_SHOP_MODELS`), `tools/build-maison-sprites.mjs` | `verify-vallee`, `verify-densite`, `verify-compo` |
