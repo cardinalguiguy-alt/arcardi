@@ -5091,6 +5091,9 @@ export const FERME_STR = {
     devSeasonBtn: (k) => ({ spring: "🌸 Printemps", summer: "☀️ Été", autumn: "🍂 Automne", winter: "❄️ Hiver" }[k] || "🔄 Saison réelle"),
     devWeatherChat: (who, k) => k ? `🛠️ ${who} a commandé la météo du jour : ${({ clear: "beau temps", overcast: "ciel couvert", shower: "averse", rain: "pluie", storm: "orage", dryStorm: "orage sec", hail: "grêle", snowLight: "neige fine", snow: "neige", snowHeavy: "tempête de neige" })[k]}.` : `🛠️ ${who} a rendu la météo à sa rotation.`,
     devSeasonChat: (who, k) => k ? `🛠️ ${who} a forcé la saison : ${({ spring: "printemps", summer: "été", autumn: "automne", winter: "hiver" })[k]}.` : `🛠️ ${who} a rétabli la vraie saison.`,
+    // AUDIT 2026-10 (FIX-004) — l'interrupteur du prototype de dallage civique haute résolution (solHD.js).
+    devCivicHdSection: "Dallage civique (prototype, sur cet écran)",
+    devCivicHdBtn: (on) => on ? "🪨 Haute résolution" : "🧱 Ancien dessin",
     devSnowSection: "Neige (sur cet écran)",
     devSnowHint: "LOCAL, pour juger : impose l'épaisseur au sol et l'état des arbres sur cet écran seulement (les autres joueurs gardent la neige de la météo). « Météo » rend la main au manteau calculé.",
     devSnowDepth: (v) => (v == null ? "🔄 Météo" : v === 0 ? "∅ Pas de neige" : `❄️ ${String(v).replace(".", ",")} cm`),
@@ -6824,6 +6827,9 @@ export const FERME_STR = {
     devSeasonBtn: (k) => ({ spring: "🌸 Spring", summer: "☀️ Summer", autumn: "🍂 Autumn", winter: "❄️ Winter" }[k] || "🔄 Real season"),
     devWeatherChat: (who, k) => k ? `🛠️ ${who} ordered today's weather: ${({ clear: "clear skies", overcast: "overcast", shower: "shower", rain: "rain", storm: "storm", dryStorm: "dry storm", hail: "hail", snowLight: "light snow", snow: "snow", snowHeavy: "snowstorm" })[k]}.` : `🛠️ ${who} returned the weather to its rotation.`,
     devSeasonChat: (who, k) => k ? `🛠️ ${who} forced the season: ${k}.` : `🛠️ ${who} restored the real season.`,
+    // AUDIT 2026-10 (FIX-004) — the switch of the high-resolution civic paving prototype (solHD.js).
+    devCivicHdSection: "Civic paving (prototype, on this screen)",
+    devCivicHdBtn: (on) => on ? "🪨 High resolution" : "🧱 Old drawing",
     devSnowSection: "Snow (on this screen)",
     devSnowHint: "LOCAL, for judging: forces the ground depth and the state of the trees on this screen only (other players keep the weather's snow). \"Weather\" hands back to the computed snowpack.",
     devSnowDepth: (v) => (v == null ? "🔄 Weather" : v === 0 ? "∅ No snow" : `❄️ ${v} cm`),

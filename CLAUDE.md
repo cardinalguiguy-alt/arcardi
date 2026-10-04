@@ -320,6 +320,7 @@ Tout « §N » cité dans le code, les README et les bancs reste valable : on le
 | 10 | vérification : bancs, jouer en local, automatisation du navigateur, « ce qui n'existe pas » | `docs/VERIFICATION.md` |
 | 13 · REPRISE « Toujours ouvert » | ce qui attend un jugement humain | `docs/A-JUGER.md` |
 | 14 | maintenir ce fichier (règles et leçons complètes) | `docs/ENTRETIEN.md` |
+| — | audit 2026-10 : graphismes (ferme, ville, intérieurs), fluidité à deux, corrections FIX-… | `docs/AUDIT-2026-10.md` |
 
 ## 14. Maintenir ce fichier — RÉSUMÉ (règles et leçons complètes : `docs/ENTRETIEN.md`, à lire en fin de livraison)
 

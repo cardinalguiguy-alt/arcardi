@@ -37,6 +37,7 @@ import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis";
+import { drawCivicHDTile, drawCivicHDBorder } from "./solHD";   // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute au pixel des couronnes d'automne
 import { treeSnowMix, CL as SNOW_CL } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
@@ -1459,7 +1460,10 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
      et sur la place, la rosace de pavés autour de la fontaine. */
   const fam = townPavingFamily(x, y);
   const atlas = fam === "market" && RS.setts ? RS.setts : fam === "terrace" && RS.flagTerrace ? RS.flagTerrace : RS.flag;
-  ctx.drawImage(atlas, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  // AUDIT 2026-10 (FIX-004) : le dallage civique en haute résolution, si l'interrupteur est mis
+  // (`civicHD.on`, solHD.js) ; sinon — ou faute de canevas — l'ancienne tuile, au bit près.
+  if (!(fam === "civic" && atlas === RS.flag && drawCivicHDTile(ctx, RS.flag, x, y, px, py, T)))
+    ctx.drawImage(atlas, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
   if (fam === "civic" && RS.fountainRose) {
     const R = FTN_ROSE_R, fcx = (C.TOWN_FOUNTAIN.x + 1) * T, fcy = (C.TOWN_FOUNTAIN.y + 1) * T;
     const sx = x * T - (fcx - R), sy = y * T - (fcy - R);
@@ -1481,20 +1485,26 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
     if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
     return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE || ftn(xx, yy);
   };
+  // AUDIT 2026-10 (FIX-004) : sur le dallage civique, la pierre de bord en haute résolution (solHD.js,
+  // `drawCivicHDBorder`) si l'interrupteur est mis et les bandes prêtes ; sinon l'ancien aplat, inchangé.
+  const sides = { n: !st4(x, y - 1), s: !st4(x, y + 1), w: !st4(x - 1, y), e: !st4(x + 1, y) };
+  const hdBorder = fam === "civic" && (sides.n || sides.s || sides.w || sides.e) && drawCivicHDBorder(ctx, RS.flag, x, y, px, py, T, sides, 3);
+  if (!hdBorder) {
   ctx.fillStyle = "#cfcabb";
-  if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
-  if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
-  if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
-  if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
+  if (sides.n) ctx.fillRect(px, py, T, 3);
+  if (sides.s) ctx.fillRect(px, py + T - 3, T, 3);
+  if (sides.w) ctx.fillRect(px, py, 3, T);
+  if (sides.e) ctx.fillRect(px + T - 3, py, 3, T);
   /* ⚠️ LA PIERRE DE BORD REÇOIT SON PROPRE GRAIN, sinon on remplace un damier
      par un ruban lisse tout autour de la place — le liseré d'autocollant que
      l'écume de l'eau a coûté au 435. Deux pixels d'usure par case suffisent. */
   const h = ((x * 2654435761) ^ (y * 40503)) >>> 0;
   ctx.fillStyle = "rgba(120,116,108,0.35)";
-  if (!st4(x, y - 1)) ctx.fillRect(px + (h % 12), py + 1 + ((h >>> 4) % 2), 2, 1);
-  if (!st4(x, y + 1)) ctx.fillRect(px + ((h >>> 8) % 12), py + T - 2, 2, 1);
+  if (sides.n) ctx.fillRect(px + (h % 12), py + 1 + ((h >>> 4) % 2), 2, 1);
+  if (sides.s) ctx.fillRect(px + ((h >>> 8) % 12), py + T - 2, 2, 1);
   ctx.fillStyle = "rgba(70,66,60,0.22)";
-  if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 1, T, 1);
+  if (sides.s) ctx.fillRect(px, py + T - 1, T, 1);
+  }
   // 2026-09-25 (phase 4) : un sentier meuble voisin déborde sur la pierre de bord.
   if (S.townSoftPaths && tw.road) softSpill(ctx, tw, townSoftField(tw), x, y, px, py, 3);
   return true;
@@ -13642,7 +13652,16 @@ export function buildSprites() {
     for (let i = 0; i < 8; i++) { cxs.push(cxs[i] + CW[i]); rys.push(rys[i] + RW[i]); }
     const span = (arr, sz, a, n) => { let t = 0; for (let k = 0; k < n; k++) t += sz[(a + k) % 8]; return t; };
     const L = opusLayout(r, 8, [[3, 2, 5], [2, 3, 4], [2, 2, 6], [4, 2, 2], [3, 3, 2], [2, 1, 2], [1, 2, 2], [1, 1, 1]]);
-    for (const st of L) cutStone(g, r, cxs[st.cx], rys[st.cy], span(cxs, CW, st.cx, st.w) - 1, span(rys, RW, st.cy, st.h) - 1, PAL_CIVIC, "#a3a19a");
+    /* AUDIT 2026-10 (FIX-004) : les pierres sont PUBLIÉES sur le canevas (`c.stones`, en px d'art,
+       sur le tore de 64) pour le prototype haute résolution (`solHD.js`) — il garde ce plan au pixel
+       près. Aucun tirage de plus : la tuile d'art reste identique au bit près. */
+    const stones = [];
+    for (const st of L) {
+      const sx = cxs[st.cx], sy = rys[st.cy], sw = span(cxs, CW, st.cx, st.w) - 1, sh = span(rys, RW, st.cy, st.h) - 1;
+      cutStone(g, r, sx, sy, sw, sh, PAL_CIVIC, "#a3a19a");
+      stones.push({ x: sx, y: sy, w: sw, h: sh });
+    }
+    c.stones = stones;
     // Un peu de mousse dans les joints au sud des pierres.
     for (let i = 0; i < 18; i++) { const k = (r() * 8) | 0; wrap2(g, (r() * ROAD_N) | 0, rys[k] + RW[k] - 1, 2 + ((r() * 3) | 0), 1, "#6b7355"); }
     return c;

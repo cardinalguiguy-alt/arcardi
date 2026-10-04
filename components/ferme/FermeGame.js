@@ -81,6 +81,7 @@ import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le 
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute, le tapis au pied des arbres, ce qui vole au vent
 import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
+import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
 import { buildTownPlan } from "./planVille";   // 2026-10-03 — le plan illustré de Valley Town (carte ouverte) : toits, berges, relief, arbres
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -344,6 +345,33 @@ function drawPaintedGrounding(ctx, baseL, baseR, byW, depth) {
     });
   }
   ctx.restore();
+}
+/* AUDIT 2026-10 (FIX-002) — LES BÂTIMENTS DE LA FERME POSENT COMME CEUX DE LA VILLE.
+   La maison et la grange gardaient le modèle du zip 277 (`drawBuildingShadowConnected`
+   + `drawBuildingFooting`) : une ellipse lisse de 77 × 26 px monde qui débordait de 12 px
+   sur la cour en terre, et une seconde ellipse sombre peinte PAR-DESSUS le pied du mur —
+   le bas de la porte d'entrée était barré d'une bande sombre, au point d'apparition de
+   chaque partie. La ville a remplacé ce modèle le 2026-09-27 (`drawPaintedGrounding`,
+   jugé « très propre ») : même physique (lumière d'en haut, pas de soleil), en paliers
+   au gros pixel, SOUS le sprite. Les bords du mur se LISENT sur l'image (rangée du pied,
+   premier et dernier pixel opaque) plutôt que d'être recopiés : la maison a trois paliers
+   et la grange trois tailles. Cache par image (les sprites ne changent pas). */
+const opaqueSpanCache = new WeakMap();
+function spriteRowSpan(img, row) {
+  let m = opaqueSpanCache.get(img);
+  if (!m) { m = new Map(); opaqueSpanCache.set(img, m); }
+  const r = Math.max(0, Math.min(img.height - 1, Math.round(row)));
+  if (m.has(r)) return m.get(r);
+  let span = null;
+  try {
+    const d = img.getContext("2d").getImageData(0, r, img.width, 1).data;
+    let L = -1, R = -1;
+    for (let x = 0; x < img.width; x++) if (d[x * 4 + 3] > 128) { if (L < 0) L = x; R = x; }
+    if (L >= 0) span = [L, R + 1];
+  } catch (e) { /* image non lisible : repli sur la largeur entière */ }
+  if (!span) span = [0, img.width];
+  m.set(r, span);
+  return span;
 }
 /* Le pont tel que l'eau le reflète (voir le reflet de l'`archBridge`) : le sprite
    entier, dont les rangées du HAUT — celles qui tombent le plus loin dans le
@@ -682,14 +710,36 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
 // `houseShadowGy`/`barnShadowGy` aux points d'appel), donc l'ellipse tombe
 // bien sous le mur et seul un fin trait dépasse à sa base, exactement comme
 // sous un personnage.
+/* ⚠️⚠️ AUDIT 2026-10 (FIX-003) — UNE OMBRE AU SOL EMPRUNTE LE GROS PIXEL DU MONDE.
+   Vu en jeu au cran 3-4 : sous chaque personnage, lampadaire, objet, oiseau, animal,
+   l'ombre était un `ctx.ellipse` LISSE — un bord dégradé sur moins d'un pixel d'art,
+   au milieu d'un monde peint en blocs de 3 à 5 px d'écran. C'est la règle de
+   DESSIN.md (« un dessin qui se peint par-dessus le monde doit emprunter son gros
+   pixel », 448) que personne n'avait appliquée aux ombres.
+   L'ellipse se décrit dans l'espace où on la peint (même fichier, 448) : on balaie les
+   RANGÉES d'arrivée, une par pixel monde, et on calcule leur demi-largeur au centre de
+   la rangée ; bords arrondis au pixel monde. Un seul `fillRect` par rangée : aucune
+   rangée ne se recouvre, donc un remplissage translucide garde son alpha partout. Même
+   aire, même centre, même couleur que l'ellipse qu'elle remplace.
+   ⚠️ Pendant un fondu de zoom (échelle non entière) les rangées tombent sur des
+   demi-pixels d'écran : le grouillement déjà accepté du fondu, rien de plus. */
+function fillPixEllipse(ctx, cx, cy, rx, ry) {
+  if (!(rx > 0) || !(ry > 0)) return;
+  const y0 = Math.round(cy - ry), y1 = Math.round(cy + ry);
+  for (let y = y0; y < y1; y++) {
+    const t = (y + 0.5 - cy) / ry;
+    if (t <= -1 || t >= 1) continue;
+    const hw = rx * Math.sqrt(1 - t * t);
+    const L = Math.round(cx - hw), R = Math.round(cx + hw);
+    if (R > L) ctx.fillRect(L, y, R - L, 1);
+  }
+}
 function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
   ctx.save();
   ctx.fillStyle = groundSnowK > 0.5 ? "rgba(30,46,94,0.28)" : "rgba(0,0,0,0.25)";
-  ctx.beginPath();
   const rx = Math.max(10, halfW * 0.8);
   const ry = Math.max(3, rx / 3);
-  ctx.ellipse(cx, groundY, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillPixEllipse(ctx, cx, groundY, rx, ry);   // FIX-003 (était `ctx.ellipse`, lisse)
   ctx.restore();
 }
 /* 2026-09-28 (phase 12a) — LE SOL EST-IL ENNEIGÉ (0..1) ? Posé par la boucle de
@@ -700,13 +750,9 @@ let groundSnowK = 0;
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
   ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,96,0.30)" : "rgba(35,26,16,0.30)";
-  ctx.beginPath();
-  ctx.ellipse(cx, groundY - 1, Math.max(5, halfW * 0.8), 3, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillPixEllipse(ctx, cx, groundY - 1, Math.max(5, halfW * 0.8), 3);      // FIX-003
   ctx.fillStyle = groundSnowK > 0.5 ? "rgba(52,70,116,0.2)" : "rgba(60,42,24,0.22)";
-  ctx.beginPath();
-  ctx.ellipse(cx, groundY + 1, Math.max(6, halfW * 0.7), 2.2, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillPixEllipse(ctx, cx, groundY + 1, Math.max(6, halfW * 0.7), 2.2);    // FIX-003
   ctx.restore();
 }
 
@@ -1968,6 +2014,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
   const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, star: Q.newStar() });
   const invRef = useRef(null);
+  // AUDIT 2026-10 (FIX-004) — l'état affiché de l'interrupteur du dallage civique haute résolution (menu dev, local).
+  const [civicHdUi, setCivicHdUi] = useState(() => HD.civicHD.on);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
   const keysRef = useRef({});
@@ -2637,6 +2685,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setMounted(true);
     spritesRef.current = buildSprites();
     setSpritesReady(true);
+    // AUDIT 2026-10 (FIX-004) : le dallage civique haute résolution se fabrique par tranches dès maintenant
+    // (solHD.js) — prêt bien avant qu'on arrive sur la place ; l'ancienne tuile en attendant.
+    HD.civicHDPrewarm(spritesRef.current.townRoad && spritesRef.current.townRoad.flag);
     /* 2026-09-25 (phase 4) — LA CARTE DE LA VILLE EST TIRÉE ICI, AU CHARGEMENT
        (≈ 70 ms, noyés dans celui des sprites) et plus au premier pas en ville :
        l'eau cuite au pixel (`eau.js`) peut alors cuire par tranches pendant
@@ -16854,8 +16905,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (sc) ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, x * T, y * T, T, T);
       };
 
+      /* ⚠️⚠️ AUDIT 2026-10 (FIX-001) — LA COUTURE DU FONDU DE ZOOM, À LA FERME.
+         Vue en jeu : à chaque changement de cran, pendant ~0,6 s, un QUADRILLAGE
+         d'un pixel d'écran couvre tout le pré (une ligne par case, contraste
+         jusqu'à 76 sur 765 au cran 1,74). C'est exactement le « trait vert » de
+         la ville (phase 2, note dans `drawTownFrame`) : à échelle non entière, le
+         bord d'une case tombe sur un demi-pixel d'écran, le navigateur le lisse
+         même `imageSmoothingEnabled` coupé, et le fond transparaît. La parade
+         n'avait été posée que sur le sol de la VILLE ; la ferme reçoit la même :
+         pendant un fondu seulement, chaque case reçoit sa propre transformation,
+         calée sur des pixels d'écran entiers, et la transformation commune est
+         rendue juste après la boucle. À échelle entière, rien ne change au pixel.
+         ⚠️ PIÈGE DE MESURE : la couture n'existe que sur le canevas ACCÉLÉRÉ. Après
+         quelques `getImageData`, Chrome repasse le canevas en rendu logiciel et
+         elle DISPARAÎT — on croit le défaut réglé. Se juge sur un chargement frais,
+         une seule relecture (docs/AUDIT-2026-10.md, FIX-001). */
+      const zmFracF = Math.abs(zmF - Math.round(zmF)) > 1e-6;
+      const camSxF = Math.round(cam.x * zmF), camSyF = Math.round(cam.y * zmF);
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = idxOf(x, y), g = w.ground[i];
+        if (zmFracF) {
+          const px = x * T, py = y * T;
+          const L = Math.round(px * zmF) - camSxF, R = Math.round((px + T) * zmF) - camSxF;
+          const Tp = Math.round(py * zmF) - camSyF, B = Math.round((py + T) * zmF) - camSyF;
+          const sx = (R - L) / T, sy = (B - Tp) / T;
+          ctx.setTransform(sx, 0, 0, sy, L - px * sx, Tp - py * sy);
+        }
         let img;
         if (g === C.G_GRASS) img = sprites.grass[(x * 7 + y * 13) % 3];
         else if (g === C.G_TILLED) img = sprites.tilled;
@@ -17041,6 +17116,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      if (zmFracF) ctx.setTransform(zmF, 0, 0, zmF, -camSxF, -camSyF);   // FIX-001 : la transformation commune, rendue
 
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 454 — LE SILLON, DANS LE PRÉ NORD DE LA FERME.
@@ -17234,10 +17310,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // donc même correction de `groundY` pour que l'ombre ET le footing
         // tombent sous le bas VISUEL du mur, pas sous le bas du canevas.
         const houseShadowGy = houseGroundY - 8;
-        drawBuildingShadowConnected(ctx, houseCx, houseShadowGy, img.width / 2);
+        // AUDIT 2026-10 (FIX-002) : l'ombre de contact de la ville, sous le mur — plus d'ellipse
+        // lisse ni de bande sombre sur la porte (voir `spriteRowSpan`). `houseCx` reste pour la barre de travaux.
+        const hSpan = spriteRowSpan(img, img.height - 8 - 1);
+        drawPaintedGrounding(ctx, C.HOUSE.x * T + hSpan[0], C.HOUSE.x * T + hSpan[1], houseShadowGy, C.HOUSE.h * T * 0.6);
         ctx.drawImage(img, C.HOUSE.x * T, houseGroundY - 96);
         if (fSnowF) farmRoofSnow(fSnowPk, img, C.HOUSE.x * T, houseGroundY - 96);   // 2026-09-29 : la neige du toit
-        drawBuildingFooting(ctx, houseCx, houseShadowGy, img.width / 2);
         if (hh.upgradeUntil > Date.now()) {
           const pal = C.HOUSE_LEVELS[hh.level - 1];
           const total = pal ? pal.durationMs : 1;
@@ -17293,10 +17371,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const BARN_SHADOW_PAD = [12, 12, 4.5];
             const barnGy = (bs.y + 1) * T + 4, barnCx = bs.x * T - spr.width / 2 + 8 + spr.width / 2;
             const barnShadowGy = barnGy - (BARN_SHADOW_PAD[barnNow.level - 1] || 0);
-            drawBuildingShadowConnected(ctx, barnCx, barnShadowGy, spr.width / 2);
+            // AUDIT 2026-10 (FIX-002) : même ombre de contact que la maison (voir `spriteRowSpan`).
+            const bL = bs.x * T - spr.width / 2 + 8, bSpan = spriteRowSpan(spr, spr.height - (barnGy - barnShadowGy) - 1);
+            drawPaintedGrounding(ctx, bL + bSpan[0], bL + bSpan[1], barnShadowGy, spr.height * 0.35);
             ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);
             if (fSnowF) farmRoofSnow(fSnowPk, spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);   // 2026-09-29
-            drawBuildingFooting(ctx, barnCx, barnShadowGy, spr.width / 2);
           } else {
             ctx.font = "14px monospace"; ctx.textAlign = "center";
             ctx.fillText("🛖", bs.x * T + 8, bs.y * T + 4 + Math.sin(now / 300) * 1.5);
@@ -18045,7 +18124,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (g.sitting) {
               // Pose assise dédiée (sprite gregSeated) + ombre, aligné comme drawCharacter.
               const px = Math.round(gx * T), py = Math.round(gy * T);
-              ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, 6, C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill();
+              ctx.fillStyle = "rgba(0,0,0,0.25)"; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, 6, C.CHAR_SHADOW_RY);   // FIX-003
               ctx.drawImage(sprites.gregSeated, px, py - 8);
               ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
               ctx.fillStyle = "#00000090"; ctx.fillText("Greg", px + 8 + 1, py - 10 + 1);
@@ -22168,9 +22247,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Ombre au sol : deux disques, pour un bord qui s'éteint au lieu de
           // s'arrêter net.
           ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.22)" : "rgba(20,26,16,0.22)";
-          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 27, 7, 0, 0, 7); ctx.fill();
+          fillPixEllipse(ctx, fCx, fBy - 4, 27, 7);   // FIX-003
           ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.11)" : "rgba(20,26,16,0.11)";
-          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 31, 9, 0, 0, 7); ctx.fill();
+          fillPixEllipse(ctx, fCx, fBy - 4, 31, 9);   // FIX-003
           // Un anneau d'ondulation qui s'éteint en s'élargissant — réutilisé
           // pour le remous du jet et pour l'arrivée du débordement.
           const ripple = (rx0, ry0, period, n, maxR, squashY, baseA) => {
@@ -22411,9 +22490,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
-            ctx.beginPath();
-            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
-            ctx.fill();
+            fillPixEllipse(ctx, shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02));   // FIX-003
           }
           ctx.restore();
           /* ⚠️ LES PIGEONS QUI TOURNENT AUTOUR DES FLÈCHES (demande de
@@ -22708,9 +22785,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
-            ctx.beginPath();
-            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
-            ctx.fill();
+            fillPixEllipse(ctx, shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02));   // FIX-003
           }
           ctx.restore();
           // 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran, une image par
@@ -22833,9 +22908,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
-            ctx.beginPath();
-            ctx.ellipse(shx, footY - 3, bodyW * (0.46 - k * 0.07), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
-            ctx.fill();
+            fillPixEllipse(ctx, shx, footY - 3, bodyW * (0.46 - k * 0.07), dh * (0.10 - k * 0.02));   // FIX-003
           }
           ctx.restore();
           /* 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran. L'ancrage est le
@@ -23184,7 +23257,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const by = (pr.y + 1) * T;
         pushE(by, elAt(pr.x, pr.y), () => {
           ctx.fillStyle = "rgba(20,26,16,0.22)";
-          ctx.beginPath(); ctx.ellipse(pr.x * T + T / 2, by - 2, 9, 3.5, 0, 0, 7); ctx.fill();
+          fillPixEllipse(ctx, pr.x * T + T / 2, by - 2, 9, 3.5);   // FIX-003
           ctx.drawImage(im, left ? 0 : half, 0, half, im.height, dx, by - im.height, half, im.height);
           /* Le nom, sur la moitié DROITE seulement.
              ⚠️⚠️ ET C'EST BIEN LA DROITE, PAS LA GAUCHE — vu en jeu, l'enseigne
@@ -23493,7 +23566,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              nomme pas en jouant mais qui fait dire « ça fait sale ». */
           if (!PLANCHE_PROPS.has(pr.kind) && !(pr.kind === "lamp" && C.townLampArtAt(pr.x, pr.y))) {
             ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.24)" : "rgba(20,26,16,0.22)";   // bleue sur la neige (phase 12a)
-            ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
+            fillPixEllipse(ctx, cxp, by - 2, img.width * 0.28, 3.5);   // FIX-003
           }
           /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LE FRISSON EST UN CISAILLEMENT ANCRÉ AU
              PIED, PAS UNE ROTATION. Une plante pousse dans le sol : sa base ne
@@ -24213,7 +24286,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 const k2 = Math.max(0.28, 1 - bb.alt / C.BIRD_ALT_MAX);
                 ctx.globalAlpha = 0.26 * k2 * bb.a;
                 ctx.fillStyle = groundSnowK > 0.5 ? "#1c2c5c" : "#1a1a1a";
-                ctx.beginPath(); ctx.ellipse(gx, gy, 4.5 * k2, 1.8 * k2, 0, 0, 7); ctx.fill();
+                fillPixEllipse(ctx, gx, gy, 4.5 * k2, 1.8 * k2);   // FIX-003
                 ctx.globalAlpha = 1;
               }
               // Guillaume 2026-08 : les pigeons et colombes mangeaient trop de
@@ -24528,7 +24601,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.globalAlpha = alpha === undefined ? 1 : alpha;
         }
         ctx.fillStyle = "rgba(0,0,0,0.24)";
-        ctx.beginPath(); ctx.ellipse(tx2.x * T, tx2.y * T - 1, im.width * 0.40, 2.4, 0, 0, 7); ctx.fill();
+        fillPixEllipse(ctx, tx2.x * T, tx2.y * T - 1, im.width * 0.40, 2.4);   // FIX-003
         if (flip) { ctx.save(); ctx.translate(px2 + im.width, py2); ctx.scale(-1, 1); ctx.drawImage(im, 0, 0); ctx.restore(); }
         else ctx.drawImage(im, px2, py2);
         if (alpha !== undefined) ctx.globalAlpha = 1;
@@ -25715,7 +25788,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         draws.push({ y: by, fn: () => {
           if (!TILED) {
             ctx.fillStyle = "rgba(20,16,12,0.22)";
-            ctx.beginPath(); ctx.ellipse(cxp, by - 1, img.width * 0.30, 2.5, 0, 0, 7); ctx.fill();
+            fillPixEllipse(ctx, cxp, by - 1, img.width * 0.30, 2.5);   // FIX-003
           }
           ctx.drawImage(img, Math.round(cxp - img.width / 2), by - img.height);
           /* ⚠️⚠️ ZIP 439 — LE PORTRAIT OFFICIEL PORTE LE NOM DU MAIRE ÉLU, et il
@@ -26396,9 +26469,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.save();
         ctx.globalAlpha = C.PET_SHADOW_ALPHA;
         ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.ellipse(dxp + dw / 2, f2.y * T - 2 + 16 - 1, Math.max(1, shR), Math.max(0.6, shR * 0.42), 0, 0, Math.PI * 2);
-        ctx.fill();
+        fillPixEllipse(ctx, dxp + dw / 2, f2.y * T - 2 + 16 - 1, Math.max(1, shR), Math.max(0.6, shR * 0.42));   // FIX-003
         ctx.restore();
         /* ⚠️ HORS-ZIP 2026-09-02 — `img` EST UNE CASE D'ATLAS (`{img,sx,sy,w,h}`),
            PLUS UN CANEVAS AUTONOME (CLAUDE.md §10, 468 canevas retenus par
@@ -26576,10 +26647,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // visuellement l'objet de son ombre.
       const shrink = Math.max(0.35, 1 - pos.altitude / 90);
       ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(gx, gy, 19 * shrink, 9 * shrink, 0, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(20, 20, 15, ${0.32 * shrink})`;
-      ctx.fill();
+      fillPixEllipse(ctx, gx, gy, 19 * shrink, 9 * shrink);   // FIX-003
       ctx.restore();
       if (!sprite) { balloonGlowRef.current = null; return; }
       // Repère = HAUT du panier (sprite.anchorY), décalé vers le haut par
@@ -27770,7 +27839,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          reflète), et les pieds s'enfoncent (un bourrelet, plus bas). */
       /* 2026-09-29 — la neige de la carte QU'ON REGARDE (la ville ou, depuis ce jour, la ferme). */
       const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === charSnowZone && !inBoat ? charSnowAt(p) : 0;
-      if (!swimmingHere) { ctx.fillStyle = snowFeet > 1 ? "rgba(36,54,104,0.32)" : "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill(); }
+      if (!swimmingHere) { ctx.fillStyle = snowFeet > 1 ? "rgba(36,54,104,0.32)" : "rgba(0,0,0,0.25)"; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY); }   // FIX-003
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
          encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
@@ -39584,6 +39653,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
                   {[null, "spring", "summer", "autumn", "winter"].map(k => (
                     <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => sendReq({ kind: "devSky", season: k })}>{L.devSeasonBtn(k)}</button>
+                  ))}
+                </div>
+                {/* AUDIT 2026-10 (FIX-004) — LE DALLAGE CIVIQUE HAUTE RÉSOLUTION, LOCAL (`HD.civicHD.on`) :
+                    pour comparer le prototype à l'ancien dessin au même endroit, sans recharger. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devCivicHdSection}</div>
+                <div className="ferme-dev-grid">
+                  {[true, false].map(v => (
+                    <button key={"devcivic-" + v} className={"ferme-dev-btn" + (civicHdUi === v ? " on" : "")} onClick={() => { HD.civicHD.on = v; setCivicHdUi(v); }}>{L.devCivicHdBtn(v)}</button>
                   ))}
                 </div>
                 {/* 2026-09-28 (phase 12a) — LA NEIGE, LOCALE (`snowDevRef`, lu par `snowPackNow`). */}
