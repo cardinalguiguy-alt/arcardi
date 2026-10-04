@@ -14,6 +14,52 @@ d'écran. **Petites planches de 4 à 6 objets** (une planche de dix ferait des o
 
 **L'échelle** : 1 case ≈ 1,18 m ; un habitant mesure 1,70 m (23 px d'art). Chaque ligne donne la TAILLE RÉELLE ; je convertis.
 
+## C0 — LES OBJETS DE JARDIN ET DE PLACE DÉJÀ EN JEU : LES MÊMES, BEAUCOUP PLUS DÉTAILLÉS (P1 — verdict du 2026-10-04)
+
+Votre verdict : « les objets de jardin ne sont pas assez détaillés ». **Cause** : ils viennent des planches `refs/planche3-jardins.jpg` et `refs/planche3-place.jpg`, des pixel arts à GROS BLOCS
+(8 à 12 px image par pixel de jeu : une boîte aux lettres = 11 × 20 pixels de jeu). Les poser au pixel d'écran, comme les lampadaires, **n'y ajouterait aucun détail : il faut les REPEINDRE**, au niveau des
+maisons. Même méthode que les sols : on garde le dessin (forme, couleurs, proportions), on ajoute la matière. Les deux bancs écartés (« très bien comme ils sont ») et les lampadaires (déjà faits) n'y sont pas.
+
+**Six feuilles de référence sont prêtes dans `objets-ref/`** (découpes propres de vos planches : objets séparés, fond magenta) :
+| Feuille (fichier `objets-ref/jardin-…png`) | Objets |
+|---|---|
+| `J1-bois-linge` | abri à bûches sous auvent ; tas de bûches avec billot et hache ; corde à linge (drap, chemise, torchon) |
+| `J2-boites-brouette-tonneau` | boîte aux lettres en tôle ; boîte rouge en bois peint ; boîte verte en fonte sur pilier ; brouette et pelle ; tonneau de chêne et arrosoir |
+| `J3-table-bain-pots-balancoire-clapier` | table de jardin en fer forgé et ses deux chaises ; bain d'oiseaux ; pots d'herbes aromatiques ; clapier ; balançoire en bois |
+| `J4-jardinieres-vases-place` | jardinière de pierre en été et en hiver ; vase de pierre en été et en hiver |
+| `J5-ronces` | grand buisson de ronces ; petit buisson ; haie basse de ronces |
+| `J6-grille-hautes-herbes` | grille en fer rouillée entre deux piliers de pierre fendus ; touffe de hautes herbes sauvages et de chardons |
+
+**Références à joindre, DANS CET ORDRE** (une conversation neuve par feuille) : 1. `objets-ref/jardin-<feuille>.png` ; 2. `public/town/maison-s1-simple-day-z5.png` (le niveau de détail à atteindre, rien d'autre) ;
+3. (facultatif) `captures/cap-vt-12-jardin.png` (ce que le jeu montre aujourd'hui).
+
+### PROMPT — repeindre une feuille (à coller tel quel, puis la ligne « THE SHEET CONTAINS » de la feuille dans le même message)
+```
+Image 1 is a reference sheet of garden objects for a 2D village game, drawn at low detail in chunky pixel art. Image 2 is a finished painted house of the same game: use it ONLY as the target level of detail, sharpness, material richness and painting style.
+
+TASK: repaint EVERY object of image 1 with far more detail and sharpness. Keep each object's design, shape, proportions and main colours, its exact viewpoint, and the arrangement on the sheet: same positions, same relative sizes, same spacing. This is a detail-and-sharpness upgrade, NOT a redesign: do not change what an object is, do not add objects, do not remove objects, do not change the viewpoint, do not change any object's silhouette proportions (width to height) by more than a few percent.
+
+ADD real material detail at the finesse of image 2: wood grain, splits, knots, nail heads; metal wear, rust, rivets, hinges, latches, handles; rope and fabric fibres, stitching; stone texture, moss, lichen; leaves with veins; paint chips; soft self-shading; crisp clean edges. Painted pixel-art finesse (small deliberate brush texture). Not a photograph, not a smooth vector, no blur, no JPEG-like noise.
+
+KEEP: flat, uniform, pure magenta #FF00FF background; no ground, no grass, no cast shadow on the ground (the game adds its own), no text, no letters, no labels, no frames; every object complete and uncropped, nothing touching, the same spacing between objects as in image 1; no magenta or saturated pink on the objects themselves; daylight from the upper left.
+Output the largest resolution you can, with the same arrangement and the same aspect ratio as image 1.
+
+THE SHEET CONTAINS:
+```
+- **J1** : `a roofed firewood shelter full of split logs; a loose pile of split logs with a chopping block and an axe stuck in it; a clothesline between two wooden posts with a white sheet, a blue shirt and a striped towel.`
+- **J2** : `a dented grey tin mailbox with a red flag on a wooden stake; a painted red wooden mailbox with a small slanted roof on a post; a dark green cast-iron mailbox on an ornate iron pillar with brass details; a wooden wheelbarrow with a spade leaning against it; an oak rain barrel with iron hoops and a zinc watering can beside it.`
+- **J3** : `a small round wrought-iron garden table with two matching chairs, painted white; a stone birdbath on a carved pedestal with a little water; a group of three terracotta pots with herbs (rosemary, basil, a small bay tree); a small wooden rabbit hutch on four legs with a wire mesh door; a wooden garden swing under an A-frame.`
+- **J4** : `a large rectangular planter of carved light stone overflowing with summer flowers (geraniums, lavender, white daisies) and trailing ivy; the same planter in winter, dark soil with a small clipped evergreen tuft and dry brown stems; a tall classical stone urn on a square pedestal with red geraniums and trailing ivy; the same urn in winter with soil and a small evergreen tuft.`
+- **J5** : `a tangled bramble thicket with arching thorny canes and a few dark berries; a smaller bramble clump; a long low overgrown bramble hedge-row.`
+- **J6** : `an abandoned wrought-iron garden gate between two cracked stone pillars, flaking black paint, orange rust, one leaf hanging open on a broken hinge, a little ivy; a clump of tall dry wild grasses and thistles.`
+
+**Corrections prêtes à coller** : un objet a changé de dessin → `Redo it. Keep every object exactly as designed in image 1: same shape, same parts, same colours, same viewpoint. Only the level of detail changes.` ;
+la disposition a bougé → `Redo it with every object at the same position and the same relative size as in image 1.` ; trop photo → la correction n° 6 de `00-LISEZ-MOI.md`.
+**Enregistrer sous** `refs/lot-gemini/objets/jardin-<feuille>-a.png` (et `-b`). Je découpe objet par objet (fond magenta), je mesure le rapport largeur/hauteur contre l'ancien sprite (l'emprise ne doit pas
+changer), puis une image par cran de zoom, posée au pixel d'écran comme les lampadaires, derrière un repli sur l'ancien dessin.
+**Suite (P2)** : les objets des planches 1 et 2 (bancs de bois et de pierre, bacs à fleurs, bonsaï, pot rose, haies, lavande, buisson doré, fleurs, nénuphars, roseaux, lanterne suspendue, lampe à huile…) — même méthode ;
+je prépare leurs découpes quand J1 à J6 auront réussi.
+
 ## PROMPT MAÎTRE — planche d'objets (à coller tel quel, puis la liste de la planche dans le même message)
 
 ```

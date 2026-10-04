@@ -6,6 +6,20 @@
 
 ---
 
+### Jugé le 2026-10-04 — À REFAIRE (verdict de Guillaume, en jouant)
+
+« La netteté des maisons est super, mais les sols et les objets de jardin ne sont pas assez détaillés. » (Avant : « le réseau de chemins et de rues est super, le
+seul souci est le niveau de détail. ») Un seul verdict, deux familles — et **les arbres dégarnis d'automne « ne sont pas au niveau de [ses] attentes »** :
+- **Les sols de Valley Town** (goudron, pavés, dallages, briques, gravier, terre, herbe) : tuiles de 64 px d'art (4 × 4 cases) dessinées en code et agrandies par le zoom ; à côté
+  des maisons posées au pixel d'écran, elles manquent de détail et de netteté. Le TRACÉ des rues et des chemins est bon : on n'y touche pas. Les « petits bugs » du pavage : **à nommer par Guillaume**
+  (ou à chercher en jeu) — rien n'est listé.
+- **Les objets de jardin et de place** (planche 3 : bûches, linge, boîtes aux lettres, brouette, tonneau, table, bain d'oiseaux, pots, balançoire, clapier, jardinières, vases, ronces, grille, hautes herbes ;
+  puis les objets des planches 1 et 2 : bancs, bacs, bonsaï, haies…). Ils viennent de planches Gemini en **pixel art à GROS BLOCS** (8 à 12 px image par pixel de jeu) : **les reconstruire au pixel d'écran,
+  comme les lampadaires, ne leur donnerait aucun détail — il faut les REPEINDRE.** Seuls les deux lampadaires de la planche 3, peints plus fin, échappent à ce constat (`c067d98`).
+- **Les arbres dégarnis d'automne** : la chute « ronge » la couronne parce que l'arbre n'a pas de charpente cachée sous ses feuilles (`bareTree`, `makeFallTrees`, `fermeArt.js`).
+- **Chantier** : `refs/lot-gemini/` — A (sols repeints, plan conservé), B (arbres : feuillu / mi-chute / nu au squelette identique), C0 (objets de jardin à repeindre depuis `objets-ref/`).
+  **Ouvert** : sols en images Gemini, en PROCÉDURAL (possible ; prototype proposé sur le dallage civique), ou panachés selon le revêtement. **Rien n'est codé ni intégré.**
+
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
 - **Le 2026-10-03** : **le plan illustré de Valley Town** (carte ouverte) — le dessin des toits (teinte par quartier, cheminée, porte), la

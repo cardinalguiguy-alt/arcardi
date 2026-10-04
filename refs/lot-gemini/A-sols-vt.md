@@ -5,6 +5,13 @@ pavement et de l'herbe, au niveau des maisons peintes. Donc : on REPEINT les tui
 leur plan, au lieu de les remplacer. La pluie, la neige, les flaques et les feuilles se dérivent ensuite de ces peintures
 (jamais d'image « mouillée » à peindre).
 
+## Option PROCÉDURALE (réponse du 2026-10-04 — à décider, rien d'engagé)
+Possible, et plus sûre sur le plan : on garde le générateur actuel pour le PLAN (`townAsphaltSurface`, `townPavingFamily`… : où va chaque pierre), on le rend à ~256 px par case, on ajoute une
+passe de détail (bords de joints irréguliers, pierres bombées avec carte de hauteur, grain minéral, éclats, usure, relief nord-ouest), puis réduction Lanczos à chaque cran. **Pour** : même plan et bouclage
+garantis, la carte de hauteur sert aux flaques et à la neige, aucune génération. **Contre** : un style « rendu 3D » à côté de maisons peintes (à pousser vers le pixel art peint : tons limités, joints cernés),
+et la plomberie — atlas de sol par cran posé à 1:1, météo, neige, glace, feuilles qui lisent la nouvelle résolution — qui est la MÊME avec des images Gemini. **Proposition** : prototype sur le dallage civique,
+comparé côte à côte avec la version Gemini ci-dessous ; choix surface par surface (pavages à plan strict : procédural plausible ; herbe, terre, gravier : à départager). **Continuez les générations Gemini en attendant.**
+
 Une tuile = 64 × 64 px d'art = **4 × 4 cases**. Les images de référence sont dans `sols-ref/` (la tuile du jeu agrandie 16×
 sans lissage : `<nom>-1x1-x16.png` ; la même répétée 2 × 2 : `<nom>-2x2-x8.png`).
 

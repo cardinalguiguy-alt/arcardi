@@ -1,5 +1,24 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-04 — VERDICT DE GUILLAUME : MAISONS NETTES, SOLS ET OBJETS DE JARDIN PAS ASSEZ DÉTAILLÉS (rien de codé)
+
+Guillaume, en jouant : « le réseau de chemins et de rues est super, le seul souci est le niveau de détail », puis « la netteté des maisons est super, mais les sols et les objets de jardin
+sont pas assez détaillés », et « les arbres dégarnis d'automne sont pas au niveau de mes attentes ». **Pourquoi** (lu dans le code, pas mesuré en jeu) :
+- Maisons, commerces, monuments et lampadaires sont posés **au pixel d'écran** (une image par cran de zoom, réduite d'une peinture d'environ 1 000 px : `lib-mip.mjs`, `townBitmapMip`).
+- Le **sol** est dessiné case par case en pixels d'ART (tuile de 64 px = 4 × 4 cases : `townAsphaltSurface`, `townPavingFamily`, `townGrassSurface`… ; boucle de rendu `FermeGame.js` ~21200)
+  puis agrandi par le zoom : au cran 5, un pixel d'art fait 5 × 5 px d'écran. Au zoom par défaut de la ville (2) une case fait 32 px : le gain vient d'une image maître riche réduite, pas de pixels en plus.
+- Les **objets de jardin** (`planche3.js` : une boîte aux lettres fait 11 × 20 px de jeu) viennent de planches Gemini en pixel art à GROS BLOCS (8 à 12 px image par pixel de jeu ; la source de la boîte
+  en a 86 × 158). **Les poser au pixel d'écran n'ajoute aucun détail : il faut les repeindre.** Seuls les lampadaires, peints plus fin, étaient dans ce cas favorable.
+- Les **arbres** nus sont `bareTree` (procédural) : pas de squelette sous le feuillage, la chute ronge la couronne.
+**Décidé** : le lot `refs/lot-gemini/` — `A` sols repeints en gardant le plan (la pluie, la neige, les flaques se DÉRIVENT de la peinture sèche), `B` arbres en trois images du même arbre au squelette
+identique (feuillu / mi-chute / nu), `C0` six feuilles d'objets de jardin à repeindre depuis des découpes propres de la planche (`objets-ref/`), puis `C` à `E`. Guillaume produit les images chez Gemini.
+**Option procédurale pour les sols** (question de Guillaume, 2026-10-04) : possible et plus sûre sur le plan — le générateur actuel garde le PLAN, rendu à ~256 px par case, plus une passe de détail
+(joints irréguliers, pierres bombées avec carte de hauteur, grain, éclats, relief nord-ouest), puis réduction Lanczos à chaque cran ; la carte de hauteur nourrirait les flaques (`pluie.js` lit déjà « le creux
+d'un pixel »). Risque : un style « rendu 3D » à côté des maisons peintes. La plomberie (atlas de sol par cran posé à 1:1, météo qui lit la nouvelle résolution) est la MÊME avec des images Gemini.
+Prototype proposé : le dallage civique, comparé côte à côte avec sa version Gemini ; choix surface par surface.
+**Pas fait** : aucun code, aucune image intégrée ; les « petits bugs » du pavage ne sont pas nommés ; aucune des pistes n'a été vue en jeu. **Supabase : rien.**
+⚠️ `verify-densite` est rouge sur UN contrôle depuis `ed138b9` (le plan de la carte) : deux `imageSmoothingEnabled = true` littéraux, `FermeGame.js` 28858 et 28863 — antérieur à ce lot, non corrigé.
+
 ## 2026-10-03 — LA CARTE OUVERTE DE VALLEY TOWN DEVIENT UN PLAN ILLUSTRÉ
 
 Demande : « une map plus belle et détaillée de VT ». Décisions de Guillaume en séance : **la carte OUVERTE seulement** (pas de

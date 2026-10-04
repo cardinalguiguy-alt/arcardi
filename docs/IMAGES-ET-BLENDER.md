@@ -36,6 +36,11 @@ phases 1-5, météo, 6c, 6a, 10 et les commerces en vraie séance.
 `S.townSalon` sont encore fabriquées au chargement sans plus être dessinées — `verify-lumiere` lit les
 fenêtres des premières, `render-echelle`/`render-tribunal` mesurent les deux autres ; les retirer demande
 de réécrire ces sections de banc.
+⚠️ **NETTETÉ — ce qui est posé au pixel d'écran et ce qui ne l'est pas** (verdict de Guillaume, 2026-10-04 : « la netteté des maisons est super, mais les sols et les objets de jardin ne sont pas assez
+détaillés »). Au pixel d'écran : maisons, commerces, monuments, lampadaires (`townBitmapMip`, `TOWN_LAMP_BITMAPS`). À la grille des pixels d'art : les sols (tuiles de 64 px) et tous les autres objets
+des planches 1 à 3 (`planche*.js`). **LEÇON : une image haute résolution qu'on ramène à la grille du jeu devient floue à côté des maisons — mais une image qui est DÉJÀ un pixel art à gros blocs
+(les planches 1 à 3, 8 à 12 px image par pixel de jeu) ne s'améliore PAS par un meilleur rééchantillonnage : il faut la repeindre.** Avant de proposer « le même procédé que les lampadaires »,
+ouvrir la planche source et regarder si elle contient le détail. Chantier : `refs/lot-gemini/` (A sols, C0 objets de jardin).
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
 

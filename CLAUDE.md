@@ -11,26 +11,24 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-03 (nuit) — LOT GEMINI PRÉPARÉ : SOLS DE VT « MÊME PLAN, PLUS NET » + ARBRES À SQUELETTE UNIQUE (rien d'intégré)
+### 2026-10-04 — VERDICT : MAISONS NETTES, SOLS ET OBJETS DE JARDIN PAS ASSEZ DÉTAILLÉS ; LOT GEMINI PRÉPARÉ (rien d'intégré)
 
-Guillaume : le réseau de rues et de chemins de VT est bon, **seul manque le niveau de détail/netteté du pavement et de l'herbe** (au niveau
-des maisons peintes) ; et **les arbres dégarnis d'automne ne sont pas à la hauteur**. Réponse : **`refs/lot-gemini/`** (non commité) —
-`00-LISEZ-MOI.md` (méthode, captures à prendre, nommage), `A` sols VT, `B` arbres VT+ferme, `C` objets VT, `D` bâtiments VT, `E` ferme,
-plus `sols-ref/` et `arbres-ref/` EXPORTÉS du jeu (tuiles et arbres actuels agrandis, à joindre comme références). Guillaume produit les
-images chez Gemini (usage ample ; le quota Claude se rétablit le 2026-10-04 à 15 h). **Aucun code, aucun jeu modifié ; Supabase : rien.**
-Décidé : les sols se REPEIGNENT en gardant le plan de la tuile (pluie, neige, flaques dérivées de la peinture sèche, jamais une
-version « mouillée » à peindre) ; les arbres = TROIS images du MÊME arbre (feuillu / mi-chute / nu) au squelette identique, que le jeu
-fond par bouquets. **Ouvertes** (`00-LISEZ-MOI.md` §5) : ferme en pixel art ou peinte (E suppose pixel) ; intérieurs ; café/restaurant ;
-tailles d'arbres dérivées par échelle. La carte ouverte (plan illustré, `planVille.js`) est livrée (`ed138b9`), **à juger** (`docs/A-JUGER.md`).
-⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : une tâche qui a lu trop ou raté un fichier = corriger la ligne du
-routeur ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire. Lampadaires au pixel d'écran : **pas vu** les crans 3 à 5.
+Guillaume : le réseau de rues et de chemins de VT est bon ; « la netteté des maisons est super, mais **les sols et les objets de jardin ne sont pas assez détaillés** », et **les arbres dégarnis d'automne ne sont
+pas au niveau**. Cause (lue dans le code) : maisons, monuments et lampadaires sont posés au pixel d'écran ; les sols sont des tuiles de 64 px d'art agrandies ; les objets de jardin viennent de planches Gemini en pixel art
+à GROS BLOCS — les repasser au pixel d'écran n'y ajoute rien, **il faut les repeindre**. Récit et décisions : README ferme (journal 2026-10-04), `docs/A-JUGER.md` (« Jugé le 2026-10-04 »), leçon dans `docs/IMAGES-ET-BLENDER.md`.
+Réponse : **`refs/lot-gemini/`** (non commité) — `00-LISEZ-MOI.md` (méthode, captures, nommage), `A` sols VT, `B` arbres VT+ferme, `C` objets (dont **C0 : les objets de jardin déjà en jeu à repeindre**, six feuilles dans `objets-ref/`),
+`D` bâtiments VT, `E` ferme ; `sols-ref/` et `arbres-ref/` exportés du jeu. Guillaume produit les images chez Gemini (usage ample). **Aucun code ni jeu modifié ; Supabase : rien.**
+Décidé : sols repeints en gardant le plan de la tuile (pluie, neige, flaques dérivées de la peinture sèche, jamais une version « mouillée » à peindre) ; arbres = TROIS images du MÊME arbre (feuillu / mi-chute / nu) au squelette identique, fondues
+par bouquets. **Ouvertes** : sols en Gemini, en PROCÉDURAL (possible : plan conservé + passe de détail + carte de hauteur ; prototype proposé sur le dallage civique) ou panachés ; les « petits bugs » du pavage (à nommer par Guillaume
+ou à chercher en jeu) ; ferme en pixel art ou peinte (E suppose pixel) ; intérieurs ; café/restaurant ; tailles d'arbres dérivées par échelle. La carte ouverte (plan illustré, `planVille.js`) est livrée (`ed138b9`), **à juger**.
+⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : une tâche qui a lu trop ou raté un fichier = corriger la ligne du routeur ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire. Lampadaires au pixel d'écran : **pas vu** les crans 3 à 5.
 ⚠️ Dette : chênes de la ferme verts l'hiver ; mémoire de la glace = celle du manteau ; herbes hautes = six silhouettes répétées.
-⚠️ Session cloud : `hook-bancs.sh` annonce « BANCS ROUGES » dans un conteneur neuf — `node_modules` absent (`npm ci`). Ce soir il a aussi
-annoncé `verify-densite` rouge : **non relancé, cause inconnue** (arbre propre au départ de la session).
+⚠️ `hook-bancs.sh` : en conteneur neuf il annonce « BANCS ROUGES » faute de `node_modules` (`npm ci`). Ici `verify-densite` est rouge sur UN contrôle réel : deux `imageSmoothingEnabled = true` littéraux (`FermeGame.js` 28858 et 28863, le plan
+de la carte, `ed138b9`) — antérieur au lot, non corrigé (lissage voulu à tolérer dans le banc, ou à réécrire : à trancher).
 
 ### ⏭️ ACTION SUIVANTE — INTÉGRER LE LOT GEMINI, UNE FAMILLE À LA FOIS
 
-À chaque retour d'images : **UNE famille**, la mesurer (taille, bouclage des tuiles comme `render-rues`, écart de teinte/valeur avec
+**D'abord demander à Guillaume les « petits bugs » du pavage et son choix sols Gemini / procédural.** Puis, à chaque retour d'images : **UNE famille**, la mesurer (taille, bouclage des tuiles comme `render-rues`, écart de teinte/valeur avec
 l'actuel, squelette identique d'un état d'arbre à l'autre), fabriquer une image par cran de zoom (`tools/lib-mip.mjs`, modèle
 `build-lampadaires.mjs`), brancher derrière un repli (l'ancien dessin), relancer les bancs, **JUGER EN JEU**. D'abord `dallage_civique`
 (il valide la méthode), puis `goudron`, `herbe` ; arbres : chêne, érable, bouleau. **Les scripts de fabrication restent à écrire.**

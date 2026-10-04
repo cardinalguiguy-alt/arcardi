@@ -7,18 +7,19 @@ une image par cran de zoom, poser à 1 px d'image = 1 px d'écran, juger EN JEU 
 |---|---|---|---|
 | `A-sols-vt.md` | pavements, goudron, herbe, gravier, terre de Valley Town (+ bordures, rosace, ponton, anti-répétition) | 14 + 8 images | **P1** |
 | `B-arbres.md` | arbres de VT ET de la ferme : été, printemps, automne, MI-CHUTE, NU ; feuilles tombantes | 7 espèces × 5 états + 14 | **P1** (nu, mi-chute, automne d'abord ; chêne, érable, bouleau en premier) |
-| `C-objets-vt.md` | marché, fontaine, mobilier, terrasse, herbes hautes, massifs, roseaux, arbustes, pierres, quai | ~34 images | P2 |
+| `C-objets-vt.md` § **C0** | **les objets de jardin et de place DÉJÀ en jeu, à repeindre** (planche 3 : bûches, linge, boîtes aux lettres, brouette, tonneau, table, bain d'oiseaux, pots, balançoire, clapier, jardinières, vases, ronces, grille) | 6 feuilles | **P1** |
+| `C-objets-vt.md` (reste) | marché, fontaine, mobilier, terrasse, herbes hautes, massifs, roseaux, arbustes, pierres, quai | ~34 images | P2 |
 | `D-batiments-vt.md` | maisons larges (renvoie à `refs/prompts-maisons.md`), gare, café, restaurant, intérieurs | 9 images + séance de conception | P3 |
 | `E-ferme-vf.md` | chêne de la ferme en 5 états (P1), cultures, vergers, icônes (pixel art) | ~15 planches | P3 (arbres : P1) |
 
-**Dans ce dossier, déjà prêts** : `sols-ref/` (les 9 tuiles de sol de VT du jeu, agrandies, en 1 × 1 et 2 × 2) et `arbres-ref/` (les 15
-essences × 3 saisons du jeu, une image par arbre, 768 × 1024). Générés depuis le code du jeu par un script jetable : je peux les régénérer.
+**Dans ce dossier, déjà prêts** : `sols-ref/` (les 9 tuiles de sol de VT du jeu, agrandies, en 1 × 1 et 2 × 2) `arbres-ref/` (les 15
+essences × 3 saisons du jeu, une image par arbre, 768 × 1024) et `objets-ref/` (six découpes propres de la planche 3 pour C0 : objets séparés, fond magenta). Générés depuis le code du jeu par un script jetable : je peux les régénérer.
 **À créer par vous** : `captures/` (§2 ci-dessous), puis un dossier par famille (`sols/`, `arbres/<espèce>/`, `objets/`, `ferme/`).
 
-⚠️ **Deux demandes de vous priment sur tout le reste** : (1) le niveau de netteté du sol de VT (A) ; (2) les arbres dégarnis
-d'automne (B) — le défaut n'est pas la couleur, c'est que l'arbre « se ronge » au lieu de se dénuder. La parade de B : trois
-images du MÊME arbre (feuillu d'automne / à moitié dégarni / nu) qui partagent le même squelette au pixel près ; le jeu les
-fond par bouquets, et la forme ne change jamais — seules les feuilles partent.
+⚠️ **Verdicts de vous (2026-10-04) qui priment sur tout le reste** : (1) « la netteté des maisons est super, mais **les sols et les objets de jardin ne sont pas assez détaillés** » → A (sols) et
+**C0 (objets de jardin)** ; (2) **les arbres dégarnis d'automne** ne sont pas au niveau → B. Le défaut des arbres n'est pas la couleur : l'arbre « se ronge » au lieu de se dénuder. La parade de B : trois
+images du MÊME arbre (feuillu d'automne / à moitié dégarni / nu) qui partagent le même squelette au pixel près ; le jeu les fond par bouquets, et la forme ne change jamais — seules les feuilles partent.
+Le réseau de rues et de chemins est BON : rien ici ne touche au tracé.
 
 ---
 
@@ -68,6 +69,7 @@ références pour Gemini (l'échelle et la caméra réelles du jeu) et pour moi 
 | `cap-vt-09-arbres-michute.png` | les mêmes en pleine chute — **ne PAS joindre à Gemini : c'est le contre-exemple, pour moi** | automne (fin) | B (mon analyse) |
 | `cap-vt-10-verger-parc.png` | pommier, cerisier, magnolia | printemps | B |
 | `cap-vt-11-grande-rue.png` | la Grand-Rue, un commerce en façade avec son trottoir | été | D (café, restaurant) |
+| `cap-vt-12-jardin.png` | un jardin de maison tel que le jeu le montre : boîte aux lettres, tas de bois, brouette, tonneau, table, clapier… (**le niveau de détail actuel**, pour moi et pour Gemini) | été | C0 |
 | `cap-vf-01-ferme-large.png` | vue large de la ferme | été | E |
 | `cap-vf-02-champs.png` | des champs avec le plus de cultures et de stades possible | été | E |
 | `cap-vf-03-arbres-ferme-{ete,automne,michute,hiver}.png` | les chênes et pins de la ferme, quatre saisons (4 fichiers) | — | B, E |
@@ -100,3 +102,5 @@ compte avec ce que je n'ai PAS vu. Rien n'est commité sans vous.
    si cela ne tient pas à l'œil, je demanderai des images propres — après avoir vu.
 5. **L'herbe** : repeinte comme tuile pleine, avec les plaques (sec / luxuriant) dérivées par teinte — ou trois tuiles
    peintes. `A-sols-vt.md` demande les trois, vous garderez ce que je saurai fondre.
+6. **Sols : images Gemini, PROCÉDURAL, ou panaché** (voir `A-sols-vt.md`, « Option procédurale ») — prototype proposé sur le dallage civique, comparé côte à côte avec la version Gemini.
+7. **Les « petits bugs » du pavage** : à me nommer (capture) ou à chercher en jeu ; aucun n'est listé aujourd'hui.
