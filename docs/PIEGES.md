@@ -187,6 +187,14 @@ dépôt.
   dans la même fonction étaient mortes dès l'instant où on en a besoin. Trouvé en jouant une vraie
   partie jusqu'au bout, jamais au banc — aucun banc n'appelle cette fonction, ils appellent les
   résolveurs directement.
+- ⚠️⚠️ **UN DESSIN POSÉ PAR-DESSUS LE SOL N'EXISTE PAS POUR LA MÉTÉO TANT QU'IL NE PUBLIE PAS SES
+  CREUX** (payé deux fois : le quai en bois de la gare, 2026-09-29 ; la rosace de la fontaine, 2026-10-04).
+  La pluie et la neige lisent le sol par la carte et l'atlas de la case (`townSnowEnv.jointAt`, `wetCls`) :
+  un calque peint au-dessus (planches, rosace) se fait traverser par les joints et les flaques du sol
+  qu'il cache — la grille des grandes dalles à travers la rosace, des flaques sur un quai en bois. Tout
+  calque de sol neuf publie ce que la météo lit (ses joints : `c.joints`, comme l'opus publie `c.stones`)
+  ou se déclare d'une autre classe. Ça ne se voit qu'en jeu, sous l'orage : aucun banc ne compare le
+  dessin sec et le dessin mouillé.
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN

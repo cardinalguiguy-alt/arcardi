@@ -1440,8 +1440,52 @@ const PAVE_CIVIC = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT].map((b) => ({ x: b
   PAVE_CIVIC[0].h = Math.max(PAVE_CIVIC[0].h, L.y + L.h - C.TOWN_CHURCH.y);
 }
 const inR = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-export function townPavingFamily(x, y) {
+/* ⚠️⚠️ 2026-10-04 — UNE ZONE PAVÉE D'UN SEUL TENANT N'A QU'UNE FAMILLE. Les
+   rectangles ci-dessus ne sont plus que des GRAINES : toute la zone de dalles
+   contiguës (4-voisinage, les deux cases de la fontaine comprises) qui en touche
+   une est civique, de bout en bout. Avant, la famille se lisait case par case
+   dans le rectangle, et le parvis réel du tribunal débordait du sien : un U de
+   140 cases de grès des terrasses accolé au dallage civique (haute résolution
+   depuis FIX-004), coupé en ligne droite au milieu d'un sol de niveau — et 50
+   cases du même genre à l'est du parvis de l'église. Retour de Guillaume :
+   « deux textures dans la même zone ; l'ancienne ailleurs, jamais contiguë ».
+   Le grès reste aux zones qui ne touchent aucun monument (Haute-Ville, gare,
+   quais, belvédère) ; le marché garde son rectangle (zone à part, mesuré).
+   ⚠️ La carte doit être passée (`tw`) : sans elle, l'ancien découpage au
+   rectangle (aucun appelant du dépôt ne l'omet). Calculé une fois par carte. */
+const paveZoneMemo = new WeakMap();
+function townPavingZones(tw) {
+  let z = paveZoneMemo.get(tw);
+  if (z) return z;
+  const W = tw.w, H = tw.h, F = C.TOWN_FOUNTAIN;
+  const paved = (x, y) => x >= 0 && y >= 0 && x < W && y < H
+    && (tw.ground[y * W + x] === C.G_PATH_STONE || (x >= F.x && x < F.x + 2 && y >= F.y && y < F.y + 2));
+  z = new Uint8Array(W * H);   // 0 : pas une dalle ; 1 : civique ; 2 : terrasse
+  const seen = new Uint8Array(W * H);
+  for (let i0 = 0; i0 < W * H; i0++) {
+    if (seen[i0] || !paved(i0 % W, (i0 / W) | 0)) continue;
+    const cells = [], stack = [i0];
+    let civic = false;
+    seen[i0] = 1;
+    while (stack.length) {
+      const i = stack.pop(), x = i % W, y = (i / W) | 0;
+      cells.push(i);
+      if (inR(C.TOWN_PLAZA, x, y) || PAVE_CIVIC.some((r) => inR(r, x, y))) civic = true;
+      for (const [u, v] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (paved(u, v) && !seen[v * W + u]) { seen[v * W + u] = 1; stack.push(v * W + u); }
+      }
+    }
+    for (const i of cells) z[i] = civic ? 1 : 2;
+  }
+  paveZoneMemo.set(tw, z);
+  return z;
+}
+export function townPavingFamily(x, y, tw) {
   if (inR(C.TOWN_MARKET, x, y)) return "market";
+  if (tw && tw.ground && x >= 0 && y >= 0 && x < tw.w && y < tw.h) {
+    const f = townPavingZones(tw)[y * tw.w + x];
+    if (f) return f === 1 ? "civic" : "terrace";
+  }
   if (inR(C.TOWN_PLAZA, x, y) || PAVE_CIVIC.some((r) => inR(r, x, y))) return "civic";
   return "terrace";
 }
@@ -1458,7 +1502,7 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
   /* 2026-09-27 (phase 10) — LA FAMILLE DU LIEU (`townPavingFamily`) : l'opus
      civique, les pavés en éventail du marché, les dalles de grès des terrasses ;
      et sur la place, la rosace de pavés autour de la fontaine. */
-  const fam = townPavingFamily(x, y);
+  const fam = townPavingFamily(x, y, tw);
   const atlas = fam === "market" && RS.setts ? RS.setts : fam === "terrace" && RS.flagTerrace ? RS.flagTerrace : RS.flag;
   // AUDIT 2026-10 (FIX-004) : le dallage civique en haute résolution, si l'interrupteur est mis
   // (`civicHD.on`, solHD.js) ; sinon — ou faute de canevas — l'ancienne tuile, au bit près.
@@ -2691,6 +2735,8 @@ export function townSnowEnv(tw, S, waterAt) {
   const stairV = lumOf(ST && ST.stair && ST.stair.v), stairH = lumOf(ST && ST.stair && ST.stair.h);
   const flags = { civic: lumOf(RS && RS.flag), terrace: lumOf((RS && RS.flagTerrace) || (RS && RS.flag)), market: lumOf((RS && RS.setts) || (RS && RS.flag)) };
   const supS = (ST && ST.sup) || 4, supR = (RS && RS.sup) || 4;
+  const roseJ = RS && RS.fountainRose && RS.fountainRose.joints;
+  const roseX0 = (C.TOWN_FOUNTAIN.x + 1) * SPR_T - FTN_ROSE_R, roseY0 = (C.TOWN_FOUNTAIN.y + 1) * SPR_T - FTN_ROSE_R;
   const lumAt = (A2, ax, ay) => (A2 ? A2.L[(ay % A2.h) * A2.w + (ax % A2.w)] : 128);
   const tall = (i) => tw.solid[i] && tw.ground[i] !== C.G_WATER && tw.objects[i] !== C.O_TREE && tw.objects[i] !== C.O_TREE2 && !(tw.soft && tw.soft[i]);
   const propTiles = new Set((tw.props || []).map((p) => p.y * tw.w + p.x));
@@ -2713,7 +2759,15 @@ export function townSnowEnv(tw, S, waterAt) {
     },
     /* Un joint : nettement plus sombre que la pierre autour. */
     jointAt: (x, y, lx, ly) => {
-      const At = flags[townPavingFamily(x, y)] || flags.civic;
+      // 2026-10-04 : dans le disque de la rosace, SES joints (`townFountainRose`, `c.joints`), pas ceux de l'opus dessous.
+      if (roseJ) {
+        const u = x * SPR_T + lx - roseX0, v = y * SPR_T + ly - roseY0;
+        if (u >= 0 && v >= 0 && u < 2 * FTN_ROSE_R && v < 2 * FTN_ROSE_R) {
+          const k = roseJ[v * 2 * FTN_ROSE_R + u];
+          if (k) return k === 2 ? 1 : 0;
+        }
+      }
+      const At = flags[townPavingFamily(x, y, tw)] || flags.civic;
       if (!At) return 0;
       return lumAt(At, (x % supR) * SPR_T + lx, (y % supR) * SPR_T + ly) < At.mean - 18 ? 1 : 0;
     },
@@ -14072,30 +14126,48 @@ export function buildSprites() {
   /* LA ROSACE DE LA FONTAINE : des anneaux de pavés clairs autour de la vasque,
      jusqu'à `FTN_ROSE_R` px, cerclés d'un anneau de pierres de bordure plus
      sombres. Transparente hors du cercle : elle se pose PAR-DESSUS l'opus.
-     Son centre est le centre de la fontaine (2×2 cases). */
+     Son centre est le centre de la fontaine (2×2 cases).
+     ⚠️ 2026-10-04 — LES COULEURS (demande de Guillaume : « un jeu de couleurs
+     propre et approprié », sans changer le dessin). Avant : sept gris neutres
+     proches de l'opus (le disque ne se détachait pas de la place) et des joints
+     gris foncé (#6a6863, 80 de clarté sous la pierre) qui quadrillaient tout —
+     un disque terne et sale. Maintenant : une PIERRE BLONDE claire et chaude,
+     cousine du calcaire de la vasque (`plazaFountainHi`), six tons serrés ; des
+     joints de mortier chaud à 45 de clarté sous la pierre ; une bordure plus
+     sombre de la même famille, qui cadre. Écartés sur planche : le sable franc
+     (vannerie à côté de l'opus gris), des anneaux ocre ou basalte (une cible). */
   function townFountainRose() {
     const R = FTN_ROSE_R, N = 2 * R;
     const [c, g] = cv(N, N);
     const RH = 5, SW = 6;
-    const BODY = ["#c2c0b7", "#b9b7af", "#c8c6bd", "#b3b1a9", "#bebcb3", "#c5c3ba", "#afada5"];
+    const BODY = ["#d9cfbd", "#d4c9b6", "#ddd3c2", "#d1c6b2", "#d7cdba", "#dad1bf"];
+    /* ⚠️ 2026-10-04 — LES JOINTS DE LA ROSACE SONT PUBLIÉS (`c.joints` : 0 hors du
+       disque, 1 la pierre, 2 le joint), comme l'opus publie ses pierres. La pluie
+       et la neige lisent les creux du sol par `townSnowEnv.jointAt`, qui ne
+       connaissait que l'opus : sous l'orage, les flaques traçaient la grille des
+       grandes dalles À TRAVERS la rosace (vu en jeu, plus net sur la pierre blonde). */
+    const joints = new Uint8Array(N * N);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const dx = x + 0.5 - R, dy = y + 0.5 - R, d = Math.hypot(dx, dy);
       if (d > R) continue;
       const a = Math.atan2(dy, dx);
       if (d > R - 5) {                                                               // l'anneau de bordure
         const n = Math.round(2 * Math.PI * (R - 2.5) / 9), t = ((a + Math.PI) / (2 * Math.PI)) * n, ft = t - Math.floor(t);
-        P(g, x, y, 1, 1, ft < 0.12 || d > R - 1 ? "#6d6b66" : d > R - 2 ? "#8b8983" : ft < 0.3 ? "#b0aea6" : "#9d9b94");
+        joints[y * N + x] = ft < 0.12 || d > R - 1 ? 2 : 1;
+        P(g, x, y, 1, 1, ft < 0.12 || d > R - 1 ? "#706555" : d > R - 2 ? "#8e826e" : ft < 0.3 ? "#c6baa5" : "#a89b86");
         continue;
       }
       const ring = Math.floor(d / RH), fr = d / RH - ring;
       const n = Math.max(4, Math.round(2 * Math.PI * (ring + 0.5) * RH / SW));
       const t = ((a + Math.PI) / (2 * Math.PI)) * n + (ring % 2) * 0.5, sIdx = Math.floor(t), ft = t - sIdx;
       let col = BODY[(((ring * 131 + sIdx * 17) >>> 0) % BODY.length)];
-      if (fr < 0.2 || ft < 0.14) col = "#6a6863";
-      else if (fr > 0.8 || ft > 0.9) col = hexShift(col, -16);
-      else if (fr < 0.36) col = hexShift(col, 10);
+      joints[y * N + x] = fr < 0.2 || ft < 0.14 ? 2 : 1;
+      if (fr < 0.2 || ft < 0.14) col = "#aa9d89";
+      else if (fr > 0.8 || ft > 0.9) col = hexShift(col, -11);
+      else if (fr < 0.36) col = hexShift(col, 7);
       P(g, x, y, 1, 1, col);
     }
+    c.joints = joints;
     return c;
   }
 

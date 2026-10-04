@@ -119,12 +119,31 @@ title("1. tout bitmap passe par la table");
   ok(hardGrow === 0, "aucun `const GROW = <nombre>` dans FermeGame.js", `${hardGrow} trouvé(s)`);
   /* Le lissage : un seul endroit a le droit d'écrire `true`, et c'est la
      table (`SB.smooth`). Un `= true` littéral est une exception invisible. */
-  let smoothTrue = 0;
+  /* 2026-10-04 — DES EXCEPTIONS NOMMÉES, donc visibles : la carte ouverte
+     (`drawTownMap`, `ed138b9`) RÉDUIT un plan illustré de 8 px par case à la
+     taille de la fenêtre — une réduction, pas un sprite du monde agrandi : le
+     lissage de qualité y est ce qu'il faut. Chaque exception est une ligne EXACTE
+     du source ; un `= true` écrit ailleurs reste rouge, et une exception qui ne
+     se trouve plus dans le source est signalée (périmée, à retirer d'ici). */
+  const SMOOTH_OK = [
+    ["FermeGame.js", 'sg.imageSmoothingEnabled = true; sg.imageSmoothingQuality = "high";'],
+    ["FermeGame.js", 'hg.imageSmoothingEnabled = true; hg.imageSmoothingQuality = "high"; hg.drawImage(src, 0, 0, h2.width, h2.height);'],
+  ];
+  let smoothTrue = 0, smoothOk = 0;
+  const staleOk = [];
   for (const f of fs.readdirSync(dir).filter(n => n.endsWith(".js"))) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
-    smoothTrue += [...src.matchAll(/imageSmoothingEnabled\s*=\s*true/g)].length;
+    let n = [...src.matchAll(/imageSmoothingEnabled\s*=\s*true/g)].length;
+    for (const [ff, line] of SMOOTH_OK) {
+      if (ff !== f) continue;
+      const k = src.split(line).length - 1;
+      if (k === 0) staleOk.push(`${ff}: ${line.slice(0, 40)}…`);
+      n -= k; smoothOk += k;
+    }
+    smoothTrue += n;
   }
-  ok(smoothTrue === 0, "aucun `imageSmoothingEnabled = true` littéral", `${smoothTrue} trouvé(s)`);
+  ok(smoothTrue === 0, "aucun `imageSmoothingEnabled = true` littéral hors exceptions nommées", `${smoothTrue} trouvé(s) · ${smoothOk} exception(s) nommée(s)`);
+  ok(staleOk.length === 0, "aucune exception de lissage périmée", staleOk.join(" · ") || "0");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */

@@ -352,6 +352,27 @@ console.log("\n=== la ligne blanche ===\n");
   ok(edge === 0 && flat === 0, "aucune bordure ni aplat gris sous la vasque", `${edge} px de bordure · ${flat} px d'aplat`);
 }
 
+/* ═══════════════ 2026-10-04 — UNE ZONE PAVÉE, UNE SEULE FAMILLE DE DALLAGE ═══
+   Le parvis du tribunal débordait du rectangle civique : un U de grès des
+   terrasses accolé au dallage civique, coupé en ligne droite sur un sol de niveau.
+   On exige : aucune paire de dalles VOISINES de familles différentes, et le
+   parvis du tribunal (sa rangée sud) bien civique. ⚠️ Falsifié en rappelant
+   `townPavingFamily` sans la carte (l'ancien découpage) : 42 paires, rangée 68 en grès. */
+{
+  const fam = (x, y) => A.townPavingFamily(x, y, tw);
+  const paved = (x, y) => x >= 0 && y >= 0 && x < tw.w && y < tw.h && tw.ground[y * tw.w + x] === C.G_PATH_STONE;
+  let mixed = 0;
+  for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
+    if (!paved(x, y)) continue;
+    if (paved(x + 1, y) && fam(x + 1, y) !== fam(x, y)) mixed++;
+    if (paved(x, y + 1) && fam(x, y + 1) !== fam(x, y)) mixed++;
+  }
+  ok(mixed === 0, "aucune zone pavée ne mêle deux familles de dallage", `${mixed} paire(s) de dalles voisines de familles différentes`);
+  const Ct = C.TOWN_COURT, cx = Ct.x + (Ct.w >> 1);
+  let yS = Ct.y + Ct.h; while (paved(cx, yS + 1)) yS++;
+  ok(fam(cx, yS) === "civic", "le parvis du tribunal est civique jusqu'à sa dernière rangée", `rangée ${yS} : ${fam(cx, yS)}`);
+}
+
 console.log("\nImages : tools/out/rues-surfaces.png, rues-artere.png, rues-carrefour.png, rues-cimetiere.png, rues-esplanade.png");
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC\n` : "\nTout est bon.\n");
 process.exit(fail ? 1 : 0);

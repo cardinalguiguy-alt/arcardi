@@ -1,5 +1,31 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-04 (soir) — LE PARVIS DU TRIBUNAL D'UN SEUL DALLAGE, LA ROSACE EN PIERRE BLONDE
+
+Deux demandes de Guillaume, dans l'ordre.
+- **Le dallage autour du tribunal** (« deux textures dans la même zone ; l'ancienne ailleurs, jamais contiguë ») : `townPavingFamily` décidait la famille
+  CASE PAR CASE dans un rectangle par monument (`PAVE_CIVIC`) ; le parvis réel du tribunal en débordait — un U de 140 cases de grès des terrasses accolé
+  au dallage civique (haute résolution, FIX-004), coupé en ligne droite sur un sol de niveau ; et 50 cases de grès, la cour du Salon de coiffure, reliées au parvis de l'église par deux cases cachées derrière
+  les arcs-boutants.
+  Maintenant **une zone pavée d'un seul tenant n'a qu'une famille** : les rectangles sont des graines, toute la zone contiguë qui en touche une est civique
+  (`townPavingZones`, mémoïsé par carte ; la carte est passée à `townPavingFamily` par ses deux appelants, le dessin et `townSnowEnv`). Le grès reste aux
+  zones qui ne touchent aucun monument (Haute-Ville, gare, quais, belvédère) ; le marché est une zone à part. Mesuré sur la carte : 12 zones, aucune mixte.
+  ⚠️ **Conséquence visible à juger** : la cour du Salon passe en dallage civique (elle touche le parvis de l'église).
+- **La rosace de la fontaine** (« juste un jeu de couleurs propre et approprié » — le dessin ne change pas) : sept gris neutres proches de l'opus et des
+  joints gris foncé → **une pierre blonde** claire et chaude, cousine du calcaire de la vasque, des joints de mortier chaud adoucis (45 de clarté sous la
+  pierre au lieu de 80), une bordure plus sombre de la même famille. Trois palettes essayées sur planche puis deux en jeu : le sable franc (32 % de
+  saturation en jeu contre 13 % au dallage : de la vannerie) et les anneaux ocre ou basalte (une cible) écartés ; retenue à 28 %.
+- **La pluie et la neige sur la rosace** (vu en jeu en la jugeant, non demandé) : elles lisent les creux du sol par `townSnowEnv.jointAt`, qui ne
+  connaissait que l'opus — sous l'orage, les flaques traçaient la grille des grandes dalles À TRAVERS la rosace. La rosace publie son masque de joints
+  (`c.joints`, comme l'opus publie ses pierres) et `jointAt` le lit dans son disque : l'eau suit les anneaux.
+- **Bancs** : `render-rues` (+2 contrôles : aucune paire de dalles voisines de familles différentes ; le parvis du tribunal civique jusqu'à sa dernière
+  rangée — falsifiés : 42 paires et la rangée 68 en grès avec l'ancien découpage), `verify-densite` **revenu au vert** (les deux `imageSmoothingEnabled =
+  true` de la carte ouverte, une réduction légitime, deviennent des EXCEPTIONS NOMMÉES ligne à ligne dans le banc ; falsifié une fois), `verify-pluie`
+  34/34, `render-pluie` 24/24, `verify-neige` 17/17, `render-glace` 20/20, `verify-vallee` 279/279, `render-neige`, `render-neige-ferme`,
+  `verify-collision`, `verify-compo`, `render-eau`, `render-parc`, `verify-docs` verts. `verify-portee` rouge sur la seule page jetable `app/audit-tmp`.
+- **Vu en jeu** (un client) : le parvis du tribunal (bords ouest et sud) au cran 2, la cour du Salon ; la rosace à 11 h, 15 h sous la pluie, 18 h trempée,
+  21 h 30. **Pas vu** : la rosace sous un manteau de neige (automne : la neige ne tient pas). **Supabase : rien.**
+
 ## 2026-10-04 — VERDICT DE GUILLAUME : MAISONS NETTES, SOLS ET OBJETS DE JARDIN PAS ASSEZ DÉTAILLÉS (rien de codé)
 
 Guillaume, en jouant : « le réseau de chemins et de rues est super, le seul souci est le niveau de détail », puis « la netteté des maisons est super, mais les sols et les objets de jardin
@@ -17,7 +43,6 @@ identique (feuillu / mi-chute / nu), `C0` six feuilles d'objets de jardin à rep
 d'un pixel »). Risque : un style « rendu 3D » à côté des maisons peintes. La plomberie (atlas de sol par cran posé à 1:1, météo qui lit la nouvelle résolution) est la MÊME avec des images Gemini.
 Prototype proposé : le dallage civique, comparé côte à côte avec sa version Gemini ; choix surface par surface.
 **Pas fait** : aucun code, aucune image intégrée ; les « petits bugs » du pavage ne sont pas nommés ; aucune des pistes n'a été vue en jeu. **Supabase : rien.**
-⚠️ `verify-densite` est rouge sur UN contrôle depuis `ed138b9` (le plan de la carte) : deux `imageSmoothingEnabled = true` littéraux, `FermeGame.js` 28858 et 28863 — antérieur à ce lot, non corrigé.
 
 ## 2026-10-03 — LA CARTE OUVERTE DE VALLEY TOWN DEVIENT UN PLAN ILLUSTRÉ
 

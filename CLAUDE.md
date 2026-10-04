@@ -11,24 +11,21 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-04 (nuit) — QUÊTE AU MENU DEV, MÉDAILLES, BOUSCULADES, POUSSIÈRE, FONTAINE, TABLEAU — LIVRÉS, NON COMMITÉS
+### 2026-10-04 (soir) — PARVIS DU TRIBUNAL D'UN SEUL DALLAGE, ROSACE EN PIERRE BLONDE — LIVRÉS, NON COMMITÉS
 
-Fait et vu en jeu (un client, `audit-tmp`) : **frise de la quête** au menu dev (`Q.STAR_DEV_STEPS`/`devStarTo`, « aller à » une étape,
-signe le maire — ligne rouge du 444 levée par Guillaume) ; **médailles** (`medailles.js`, `shared.medals`, menu 🏅 du HUD, « Rejouer »
-garde la médaille et le ×2 d'Eduardo) ; **bousculades** (`residentBumpHold`, `RESIDENT_TEMPERS`, arrêt diffusé dans `residentStops.b`) ;
-**poussière** (`poussiere.js`, terre battue, sable dont la plage cuite `EAU.bakedSandAt`, labour sec) ; **fontaine** au pixel d'écran
-(`plazaFountainHi`, rideau, mascarons, pièces) ; **tableau des nouvelles** (`gazette.js` : gazette du jour, petites annonces tirées,
-`shared.board`, `townNewsBoardHi`). Bancs : `verify-quete` 954/954, `verify-jalons` 135, `verify-maire` 139, `verify-vallee` 279,
-`render-eau`, `verify-collision`, `verify-strings`, `verify-docs` verts. **Supabase : rien** (trois champs de plus dans le JSON de `ferme_saves`).
-⚠️ **Pas vu** : les bousculades et la livraison d'annonce côté INVITÉ (deux clients) ; la poussière à la ferme ; la fontaine la nuit.
-⚠️ `app/audit-tmp/page.js` (indices de hooks désormais relatifs à `sharedRef`) et `app/api/audit-cap/route.js` toujours commités : **à supprimer avant déploiement**.
+Fait et vu en jeu (un client, `audit-tmp`) : **famille de dallage par ZONE PAVÉE CONTIGUË** (`townPavingZones`, `townPavingFamily(x, y, tw)`,
+fermeArt.js) — plus de grès accolé au dallage civique autour du tribunal ; ⚠️ la cour du Salon de coiffure, reliée au parvis de l'église, passe en
+civique (à juger). **Rosace** recolorée en pierre blonde (`townFountainRose`, dessin inchangé) ; elle publie ses joints (`c.joints`), lus par la
+pluie et la neige. `verify-densite` revenu au vert (exceptions de lissage NOMMÉES dans le banc). Récit et chiffres : README de la ferme, journal
+du 2026-10-04 (soir). **Supabase : rien.** ⚠️ **Pas vu** : la rosace sous un manteau de neige ; et, du lot précédent (2026-10-04 nuit, quête,
+médailles, bousculades, poussière, fontaine, tableau) : bousculades et annonces côté INVITÉ, poussière à la ferme, fontaine la nuit.
+⚠️ `app/audit-tmp/page.js` et `app/api/audit-cap/route.js` toujours commités (`verify-portee` rouge à cause d'eux) : **à supprimer avant déploiement**.
+⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js — avertissement de compilation Next ; sans effet sur la pose).
 
-### ⏭️ ACTION SUIVANTE — TROIS DEMANDES DE GUILLAUME EN ATTENTE, DANS CET ORDRE
+### ⏭️ ACTION SUIVANTE — LE CHANTIER CLASSIQUE
 
-(1) **Dallage autour du tribunal** : deux textures (ancienne/nouvelle) accolées dans la même zone — garder l'ancienne ailleurs, jamais
-contiguë (`solHD.js`, interrupteur FIX-004). (2) **Rosace de la fontaine** : orangé pâle, motifs « calçada » de Lisbonne
-(`FTN_ROSE_R`, `townFountainRose`, fermeArt.js). (3) **Étoile reine** : branches trop rondes. Ensuite : faire juger la frise, la fontaine,
-le tableau ; puis la séance de conception des intérieurs (audit partie 2) et l'audit partie 3.
+(1) **Étoile reine** : branches trop rondes (demande de Guillaume en attente). Puis faire juger (`docs/A-JUGER.md`, en tête) la rosace, le parvis,
+la frise de la quête, la fontaine, le tableau ; puis la séance de conception des intérieurs (audit partie 2) et l'audit partie 3.
 
 → **Jugements humains en attente** (« Toujours ouvert — livré, jamais jugé ») : `docs/A-JUGER.md`. À lire pour « reprends le
 travail » ou pour choisir un chantier, pas pour une tâche de code ciblée. **Notes d'intégration d'image et commerces de la
@@ -257,6 +254,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE CASE À DEUX SOLS (un pont qu'on passe dessus ET dessous) : `elev` y reste le SOL, et le niveau d'un marcheur se DÉDUIT de son pas précédent
 - UNE TRANSITION QUI SE VOIT SE FAIT PAR UN ORDRE AU PIXEL OU PAR UNE DURÉE, JAMAIS PAR UN SEUIL COMMUN
 - UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL COUPE, LE JOUR OÙ « FINI » GAGNE UNE SUITE
+- UN DESSIN POSÉ PAR-DESSUS LE SOL N'EXISTE PAS POUR LA MÉTÉO TANT QU'IL NE PUBLIE PAS SES CREUX
 
 **JavaScript / three.js / canevas**
 

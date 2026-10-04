@@ -22,6 +22,11 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-04 (soir)** : **la rosace en pierre blonde** (teinte, saturation — 28 % en jeu contre 13 % au dallage —, joints adoucis, bordure ;
+  l'eau qui suit ses anneaux sous la pluie) ; **le parvis du tribunal d'un seul dallage** et **la cour du Salon de coiffure passée en dallage
+  civique** (elle touche le parvis de l'église : conséquence de la règle « une zone, une famille »).
+- **Le 2026-10-04 (nuit)** : la frise de la quête au menu dev, les médailles, les bousculades, la poussière, la fontaine au pixel d'écran, le
+  tableau des nouvelles (gazette, petites annonces). Pas vus : bousculades et annonces côté invité, poussière à la ferme, fontaine la nuit.
 - **Le 2026-10-03** : **le plan illustré de Valley Town** (carte ouverte) — le dessin des toits (teinte par quartier, cheminée, porte), la
   ligne médiane de l'avenue, les berges, le relief et son halo sombre autour de la terrasse, les pastilles des repères, la taille d'affichage
   (largeur ET hauteur de fenêtre). Pas retenus à ce stade : zoom, noms de rues, légende, parchemin.
