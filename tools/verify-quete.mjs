@@ -48,6 +48,8 @@ copy("fermeEngine");
 copy("quete");
 copy("maire");
 copy("fermeStrings");   // §9 : chaque clé que le jeu lit doit exister
+copy("medailles");     // 2026-10-04 — les médailles de la ferme (hors de `star`)
+copy("gazette");       // 2026-10-04 — le tableau des nouvelles (gazette, petites annonces)
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
@@ -4980,6 +4982,116 @@ section("13. LE VANDALE (AUTORITÉ 2026-09-12) — LA RÉVÉLATION, PUIS LA FUIT
        after !== "kerguelenBack" && after !== "vandalChaseTown" && after !== "vandalChaseFarm" && after !== "vandalEscaped",
        after);
   }
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-04 — LA FRISE DU MENU DEV ET LES MÉDAILLES.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ « POSER, MIGRER, RELIRE » (piège du §4) : chaque étape est demandée depuis une
+   quête vierge, l'état passe par `migrateStar` comme sur le réseau, PUIS on relit
+   — sans ce détour, une étape qui écrirait un champ que la migration ignore
+   paraîtrait juste ici et s'effacerait en jeu. */
+section("La frise du menu dev (« aller à » une étape) et les médailles");
+{
+  const S = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+  const MDm = await import(pathToFileURL(path.join(tmp, "medailles.js")).href);
+  const T0 = 1_800_000_000_000;
+  const steps = Q.STAR_DEV_STEPS;
+  const bad = [];
+  for (let k = 0; k < steps.length; k++) {
+    const st = steps[k];
+    const r = Q.devStarTo(Q.newStar(), st.key, T0, "p1", ["p1"]);
+    const e = Q.migrateStar(JSON.parse(JSON.stringify(r.star)));
+    const missing = steps.slice(0, k).filter(s => !s.done(e)).map(s => s.key);
+    const want = !!st.scene || st.key === "done";
+    if (missing.length || st.done(e) !== want) bad.push(st.key + (missing.length ? " (manque " + missing + ")" : " (elle-même " + st.done(e) + ")"));
+  }
+  ok("⚠️⚠️ chaque étape, demandée depuis zéro et MIGRÉE, laisse toutes les précédentes faites et elle-même à jouer (les scènes : jouées)",
+     !bad.length, bad.join(", "));
+  {
+    const e = Q.migrateStar(JSON.parse(JSON.stringify(Q.devStarTo(Q.newStar(), "done", T0, "p1", ["p1"]).star)));
+    ok("⚠️ « Quest complete » : la quête est gagnée, la fin est due tout de suite, rien n'est plus à faire",
+       Q.starQuestComplete(e) && !!e.doneAt && Q.starFinaleEndDue(e, T0) && Q.starDevStepAt(e) === -1);
+    ok("⚠️ … et le vandale a déjà fui (sa course ne repart pas à chaque clic)",
+       Q.vandalPhase(e, T0) === "gone", Q.vandalPhase(e, T0));
+  }
+  {
+    const a = Q.devStarTo(Q.newStar(), "queen", T0, "p1", ["p1"]).star;
+    const b = Q.devStarTo(a, "plans", T0 + 5, "p1", ["p1"]);
+    ok("⚠️ revenir à une étape faite repart d'une quête neuve, puis avance jusqu'à elle",
+       b.reset && !Q.starFallen(b.star) && Q.STAR_DEV_STEPS[1].done(b.star) && !Q.STAR_DEV_STEPS[2].done(b.star));
+  }
+  {
+    // La coque, détruite par le saccage, reste une étape FAITE (voir sa note).
+    const e = Q.devStarTo(Q.newStar(), "budget", T0, "p1", ["p1"]).star;
+    ok("⚠️⚠️ après le saccage, la coque reste « faite » et le budget attend son audience (rendez-vous « budget » posé)",
+       Q.STAR_DEV_STEPS[3].done(e) && Q.starShipWrecked(e) && !MA.mayorBudgetSigned(e) && MA.mayorApptTopic(e) === "budget");
+  }
+  const actKeys = Q.STAR_DEV_ACTS.flatMap(([, keys]) => keys);
+  ok("⚠️ les actes du menu couvrent EXACTEMENT la frise, dans le même ordre (une étape ajoutée ne disparaît pas du menu)",
+     actKeys.join() === Q.STAR_DEV_STEP_KEYS.join(), actKeys.length + " / " + Q.STAR_DEV_STEP_KEYS.length);
+  // ⚠️ SANS LE REPLI : `step(k)` rend `k` pour une clé inconnue (piège du stub menteur).
+  const dev = S.FERME_STR.en.star.dev;
+  const noLabel = Q.STAR_DEV_STEP_KEYS.filter(k => dev.step(k) === k);
+  const noAct = Q.STAR_DEV_ACTS.map(([a]) => a).filter(a => dev.act(a) === a);
+  ok("chaque étape et chaque acte a son libellé (vérifié sans le repli)", !noLabel.length && !noAct.length, noLabel.concat(noAct).join(", "));
+  // Les médailles : poser, migrer, relire.
+  const m = {};
+  const r1 = MDm.awardMedal(m, "star", 1000, ["Hote", "Amie"], 4);
+  const back = MDm.migrateMedals(JSON.parse(JSON.stringify(m)));
+  ok("⚠️⚠️ une médaille posée survit à sa migration, champ par champ",
+     r1.first && back.star && back.star.at === 1000 && back.star.n === 1 && back.star.day === 4 && back.star.by.join() === "Hote,Amie");
+  ok("la même fin ne compte jamais deux fois ; une fin rejouée compte une fois de plus",
+     MDm.awardMedal(back, "star", 1000, [], 4).already && MDm.awardMedal(back, "star", 2000, [], 5).again && back.star.n === 2 && back.star.at === 1000);
+  ok("une quête inconnue ne donne rien", !MDm.awardMedal({}, "nope", 1, [], 1).ok);
+  ok("⚠️ le navire d'Eduardo reste gagné après « rejouer » (la médaille le garde)",
+     Q.starVoyageMaxQty(Q.newStar(), true) === C.VOYAGE_MAX_QTY * C.VOYAGER_SHIP_LIMIT_K && Q.starVoyageMaxQty(Q.newStar(), false) === C.VOYAGE_MAX_QTY);
+  for (const lg of ["fr", "en"]) {
+    const md = S.FERME_STR[lg].medals;
+    const need = ["hudTip", "title", "sub", "hidden", "stateNone", "stateRunning", "stateReplay", "replay", "replayConfirm", "wonToast", "wonChat", "close"];
+    const lacks = need.filter(k => typeof md[k] !== "string" || !md[k]);
+    const names = MDm.MEDAL_IDS.filter(id => !md.name[id] || !md.nameEarly[id]);
+    ok(`les textes des médailles existent (${lg})`, !lacks.length && !names.length, lacks.concat(names).join(", "));
+  }
+}
+
+/* 2026-10-04 — LE TABLEAU DES NOUVELLES : des annonces TIRÉES (les mêmes chez
+   tout le monde), un sac qui se vide juste, et chaque clé de gazette écrite dans
+   les deux langues SANS repli. */
+section("Le tableau des nouvelles : gazette et petites annonces");
+{
+  const S = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+  const GZm = await import(pathToFileURL(path.join(tmp, "gazette.js")).href);
+  const rids = [0, 3, 16, 28];
+  let same = true, counts = [0, 0, 0], badQty = 0;
+  for (let d = 1; d <= 300; d++) {
+    const a = GZm.boardAdsOfDay(42, d, rids), b = GZm.boardAdsOfDay(42, d, [...rids].reverse());
+    if (JSON.stringify(a) !== JSON.stringify(b)) same = false;
+    counts[a.length]++;
+    for (const ad of a) { const g = GZm.adGood(ad.good); if (!g || ad.qty < g.min || ad.qty > g.max || ad.reward <= 0) badQty++; }
+  }
+  ok("⚠️ les annonces du jour sont les mêmes chez tout le monde (l'ordre des résidents n'y fait rien)", same);
+  ok("« parfois » : des jours sans, des jours à une, quelques jours à deux", counts[0] > 60 && counts[1] > 100 && counts[2] > 20, counts.join(" / "));
+  ok("quantités dans les bornes de leur bien, récompense positive", badQty === 0, String(badQty));
+  ok("sans résident, aucune annonce", GZm.boardAdsOfDay(42, 5, []).length === 0);
+  const inv = { crops: [0, 5, 0, 0], products: [3, 0, 0, 0, 0], fish: [2, 0, 4], wood: 10, stone: 0 };
+  ok("le sac se compte juste (le poisson : toutes espèces)", GZm.adHave(inv, "fish") === 6 && GZm.adHave(inv, "crop1") === 5);
+  ok("retirer 5 poissons vide d'abord l'espèce la plus nombreuse", GZm.adTake(inv, "fish", 5) && inv.fish.join() === "0,0,1");
+  ok("il en manque : rien n'est retiré", !GZm.adTake(inv, "egg", 4) && inv.products[0] === 3);
+  const bd = GZm.migrateBoard(JSON.parse(JSON.stringify({ day: 7, done: { "d7-0": "Hote", "x": "y" } })), 7);
+  ok("⚠️ une annonce honorée survit à sa migration ; un autre jour repart vide",
+     bd.done["d7-0"] === "Hote" && !bd.done.x && Object.keys(GZm.migrateBoard({ day: 7, done: { "d7-0": "Hote" } }, 8).done).length === 0);
+  for (const lg of ["fr", "en"]) {
+    const G = S.FERME_STR[lg].gazette;
+    const noHead = GZm.GAZETTE_HEAD_KEYS.filter(k => !G.head[k]);
+    const noBrief = GZm.GAZETTE_BRIEF_KEYS.filter(k => !G.brief[k]);
+    const noGood = GZm.AD_GOODS.filter(g => G.adGood(g.key, 3) === "3 ×").map(g => g.key);
+    ok(`chaque une, brève et bien de la gazette a son texte (${lg}, sans repli)`, !noHead.length && !noBrief.length && !noGood.length,
+       noHead.concat(noBrief, noGood).join(", "));
+  }
+  // la gazette ne parle pas d'étoile avant l'avis (consigne de QUETE.md)
+  const early = GZm.gazetteOfDay({ seed: 1, day: 3, quest: { yardOffer: true } });
+  ok("avant l'avis, la une parle du port, pas du ciel", early.head.key === "yardOffer");
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

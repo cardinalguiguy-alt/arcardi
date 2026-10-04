@@ -594,7 +594,11 @@ export function starShipGone(e, voyagerAway) {
    il a son propre navire (la quête achevée) : c'est la raison qu'il donne pour
    vouloir le chantier (`L.star.yard.eduHook`). ⚠️ LUE PAR L'HÔTE (qui borne la
    commande) ET PAR LE PANNEAU (qui grise le « + ») : une seule écriture. */
-export function starVoyageMaxQty(e) { return C.VOYAGE_MAX_QTY * (starDone(e) ? C.VOYAGER_SHIP_LIMIT_K : 1); }
+/* 2026-10-04 — `earned` : la médaille de la quête (`MD.medalHas`, lue par
+   l'appelant — ce fichier ne connaît pas `shared.medals`). Rejouer la quête
+   remet `star` à neuf ; le navire d'Eduardo, lui, a déjà été gagné une fois, et
+   un succès « qu'on ne perd pas » ne doit pas lui reprendre ses cales. */
+export function starVoyageMaxQty(e, earned) { return C.VOYAGE_MAX_QTY * (starDone(e) || earned ? C.VOYAGER_SHIP_LIMIT_K : 1); }
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 454 — LES PLANS. « ON NE CONSTRUIT PAS UN BATEAU EN LE REGARDANT. »
@@ -5712,3 +5716,170 @@ export function devStar(e, op, now, who) {
   }
   return { ok: false };
 }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-04 — LA FRISE : UNE LIGNE PAR ÉVÉNEMENT, ET CLIQUER UNE LIGNE VALIDE
+   ║ TOUT CE QUI LA PRÉCÈDE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : « mettons de l'ordre dans le menu dev. Que toutes les
+   étapes de la quête puissent être avancées par les commandes du menu dev.
+   Cliquer sur un événement de la quête doit valider tout ce qui précède. »
+   Les vingt et un boutons de `STAR_DEV_OPS` ne couvraient pas la trame entière
+   (rien pour la septième réanimée, le budget, la convocation, le baptême,
+   l'inauguration) et se lisaient comme une liste d'outils, pas comme un récit.
+   ⚠️⚠️⚠️ LA LIGNE ROUGE DU 444 EST LEVÉE, PAR DÉCISION DE GUILLAUME (2026-10-04) :
+   la frise SIGNE le maire (chantier, puis budget) quand une étape postérieure est
+   demandée. Les audiences restent jouables : cliquer la ligne de l'audience pose
+   le rendez-vous dû maintenant et s'arrête AVANT la signature.
+   ⚠️⚠️ LA SÉMANTIQUE EST « ALLER À » : après un clic sur la ligne k, les lignes
+   0..k−1 sont faites et la ligne k reste À JOUER (son décor est posé : bourse,
+   plat, fiole, rendez-vous, bois livré…). Si la ligne k est déjà faite, la quête
+   repart d'un objet NEUF (`newStar`) puis avance — c'est ce qui permet de rejouer
+   une étape vingt fois sans repartir à la main (même raison que « Play scene »).
+   Deux exceptions, parce qu'elles SONT des scènes : la pluie (`fall`) et le
+   météore (`townFall`) se jouent au clic (la ligne est faite, la scène part).
+   La dernière ligne, `done`, n'a rien à jouer : elle valide tout, et la
+   cinématique finale part toute seule (`starFinaleEndDue`).
+   ⚠️ AUCUNE ÉTAPE NE RECOPIE UNE RÈGLE : chacune écrit avec les résolveurs ou les
+   briques du menu (`devYard`, `devTownFall`, `resolveStarFound`…). Une condition
+   recopiée à côté du prédicat qui la nomme a déjà divergé (§4 de CLAUDE.md) —
+   c'est pourquoi `done` est TOUJOURS un prédicat exporté de ce fichier ou de
+   `maire.js`, jamais un champ lu à la main.
+   ⚠️ L'ORDRE DE LA TABLE EST CELUI DU JEU, et `verify-quete` le tient : chaque
+   ligne, demandée depuis une quête vierge, doit laisser toutes les précédentes
+   faites et elle-même à faire. */
+function devSign(e, t, topic) {
+  MA.migrateMayor(e);
+  const rec = topic === "budget" ? e.mayor.budget : e.mayor;
+  if (rec.ok) return;
+  rec.ok = t; rec.by = DEV_BY; rec.grade = "good";
+  rec.tries = Math.max(1, rec.tries | 0);
+  e.mayor.trust = Math.max(e.mayor.trust | 0, 2);
+  e.mayor.appt = null; e.mayor.block = 0; e.mayor.sour = 0; e.mayor.retry = 0;
+}
+function devAppt(e, who, t, topic) {
+  MA.migrateMayor(e);
+  e.mayor.block = 0; e.mayor.sour = 0;
+  e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t, topic,
+                   mood: MA.mayorPickMood(Math.random, false, false) };
+}
+/* La fin d'une scène de vandale DÉJÀ JOUÉE : la fuite est une fonction pure de
+   `now − e.vandal.at` (`vandalPhase`). Antidatée de toute sa durée, elle est
+   « gone » — sinon chaque clic au-delà ferait repartir la course dans la ville. */
+const DEV_VANDAL_DONE_MS = C.VANDAL_TOWN_MS + C.VANDAL_GAP_MS + C.VANDAL_FARM_MS + C.VANDAL_ESCAPED_MS + 1000;
+const DEV_FARM_DIGS = STAR_FARM_IMPACTS.filter(s => s.content !== "star").map(s => s.id);
+const devFound = (id) => (e) => starHas(e, id);
+/* `make(e, x)` : rendre l'étape FAITE. `prep(e, x)` : poser son décor quand c'est
+   elle qu'on va jouer (facultatif). `x = { who, t, ids, res }` — `res` recueille
+   ce que l'appelant doit faire hors de `e` (`grantLure`, `unbreakRod`, `scene`). */
+export const STAR_DEV_STEPS = [
+  { key: "yard", done: starYardAccepted,
+    make: (e, x) => { if (!starYardStarted(e) || !starYardAccepted(e)) e.yard = { at: x.t, by: DEV_BY }; } },
+  { key: "mayor", done: MA.mayorSigned,
+    make: (e, x) => devSign(e, x.t, "yard"),
+    prep: (e, x) => devAppt(e, x.who, x.t, "yard") },
+  { key: "plans", done: starPlanReady,
+    make: (e, x) => {
+      if (!starPlanAsked(e)) e.plan = { at: x.t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: DEV_BY, done: x.t };
+      else if (!starPlanReady(e)) e.plan.done = x.t;
+    } },
+  /* ⚠️ « FAITE » SURVIT AU SACCAGE : le vandale détruit la coque (`woodLive`,
+     dérivé de `starSabotageAt`), et `starYardBuilt` redevient faux — sans ce `||`,
+     toute étape postérieure aux trois sœurs du cratère se relisait « coque à
+     faire » et la frise reposait du bois daté AVANT le saccage, donc détruit. */
+  { key: "hull", done: (e) => starYardBuilt(e) || starRebuildGate(e),
+    make: (e, x) => { for (const k of STAR_YARD_KEYS) if (!starTimberDone(e, k)) e.wood[k] = { at: x.t, readyAt: x.t, done: true, ready: false, by: DEV_BY }; },
+    // Le bois livré, pas monté : c'est le marteau qui reste à jouer (« deliver », 478).
+    prep: (e, x) => { for (const k of STAR_YARD_KEYS) if (!starTimberDone(e, k)) e.wood[k] = { at: x.t, readyAt: x.t, done: false, ready: true, by: DEV_BY }; } },
+  { key: "warn", done: starWarned,
+    // Antidatée d'un tampon entier quand on va au-delà (même raison que `devRain`, 455).
+    make: (e, x) => { if (!starWarned(e)) e.warn = { at: x.t - C.STAR_WARN_FLOOR_MS - 1000, by: DEV_BY }; } },
+  { key: "fall", done: starFallen, scene: "fall",
+    make: (e, x) => { if (!e.fall) e.fall = x.t; } },
+  { key: "digs", done: (e) => DEV_FARM_DIGS.every(id => starHas(e, id)),
+    make: (e, x) => { for (const id of DEV_FARM_DIGS) resolveStarFound(e, id, DEV_BY, x.t); } },
+  { key: "blue", done: devFound("farmStarBlue"),
+    make: (e, x) => resolveStarFound(e, "farmStarBlue", DEV_BY, x.t),
+    prep: (e, x) => { resolveStarDig(e, "farmStarBlue", DEV_BY, x.t); resolveStarCandy(e, String(x.who || ""), STAR_CANDY_PRICE, x.t); } },
+  { key: "rose", done: devFound("farmStarRose"),
+    make: (e, x) => resolveStarFound(e, "farmStarRose", DEV_BY, x.t),
+    prep: (e, x) => { resolveStarDig(e, "farmStarRose", DEV_BY, x.t); e.dish = { by: "", at: x.t - STAR_DISH_COOK_MS, phase: "cook", from: "" }; } },
+  { key: "white", done: devFound("farmStarWhite"),
+    make: (e, x) => resolveStarFound(e, "farmStarWhite", DEV_BY, x.t),
+    prep: (e, x) => { resolveStarDig(e, "farmStarWhite", DEV_BY, x.t); x.res.grantLure = true; } },
+  { key: "townFall", done: starTownFallen, scene: "townFall",
+    // Faite en passant : le cratère est déjà froid (`devTownFall`). Jouée : il brûle, comme en vrai.
+    make: (e, x) => { if (x.target) resolveStarTownFall(e, x.t); else devTownFall(e, x.t); } },
+  { key: "queen", done: devFound("crater"),
+    make: (e, x) => resolveStarFound(e, "crater", DEV_BY, x.t),
+    prep: (e, x) => { resolveStarCandy(e, String(x.who || ""), STAR_QUEEN_PRICE, x.t); } },
+  { key: "shy", done: devFound("townShy"), make: (e, x) => resolveStarFound(e, "townShy", DEV_BY, x.t) },
+  { key: "green", done: devFound("townGreen"), make: (e, x) => resolveStarFound(e, "townGreen", DEV_BY, x.t) },
+  { key: "vandal", done: starHullRepaired,
+    make: (e, x) => { if (resolveVandalReveal(e, x.t).ok && e.vandal) e.vandal.at = x.t - DEV_VANDAL_DONE_MS; } },
+  { key: "budget", done: MA.mayorBudgetSigned,
+    make: (e, x) => devSign(e, x.t, "budget"),
+    prep: (e, x) => devAppt(e, x.who, x.t, "budget") },
+  { key: "evilSeen", done: starEvilFound,
+    make: (e, x) => resolveStarEvilFound(e, x.t),
+    prep: (e, x) => { x.res.unbreakRod = true; } },
+  { key: "evilHaul", done: starEvilRescued,
+    make: (e, x) => resolveStarEvilRescue(e, x.t),
+    prep: (e, x) => { x.res.unbreakRod = true; } },
+  { key: "evilRevive", done: devFound(STAR_EVIL_ID), make: (e, x) => resolveStarFound(e, STAR_EVIL_ID, DEV_BY, x.t) },
+  /* ⚠️ LA RECONSTRUCTION EST DATÉE `t + 1`, APRÈS LE SACCAGE (`woodLive` détruit
+     toute commande antérieure OU ÉGALE à `starSabotageAt`) — même raison que `all`. */
+  { key: "rebuild", done: starShipComplete,
+    make: (e, x) => { for (const k of STAR_SHIP_KEYS) if (!starTimberDone(e, k)) e.wood[k] = { at: x.t + 1, readyAt: x.t + 1, done: true, ready: false, by: DEV_BY }; },
+    prep: (e, x) => { for (const k of STAR_SHIP_KEYS) if (!starTimberDone(e, k)) e.wood[k] = { at: x.t + 1, readyAt: x.t + 1, done: false, ready: true, by: DEV_BY }; } },
+  /* La convocation exige `doneAt` : le don se fait ici, avec les joueurs du salon
+     (`x.ids`, fournis par l'hôte) — `resolveStarGift` est idempotent. Jouée, elle
+     rend `summon` : l'appelant annonce la convocation comme le jeu le fait. */
+  { key: "agree", done: starFinaleAgreed,
+    make: (e, x) => { resolveStarGift(e, x.ids, x.t); resolveStarFinaleAgree(e, DEV_BY, x.t); },
+    prep: (e, x) => { if (resolveStarGift(e, x.ids, x.t).ok) x.res.summon = true; } },
+  { key: "baptism", done: starFinaleBaptized, make: (e, x) => resolveStarBaptize(e, DEV_BY, x.t) },
+  /* Faite en passant, l'inauguration est antidatée jusqu'au départ de la
+     cinématique finale : la fête ne se rejoue pas, la fin part tout de suite. */
+  { key: "inaug", done: starFinaleInaugurated,
+    make: (e, x) => { if (resolveStarFinaleInaugurate(e, DEV_BY, x.t).ok && e.finale) e.finale.inaugAt = x.t - STAR_FINALE_END_AT_MS - 1000; } },
+  // La quête achevée : rien à jouer, la ligne est faite quand tout l'est.
+  { key: "done", done: (e) => starFinaleInaugurated(e) },
+];
+export const STAR_DEV_STEP_KEYS = STAR_DEV_STEPS.map(s => s.key);
+/* L'étape courante : la première qui n'est pas faite (−1 : tout est fait). */
+export function starDevStepAt(e) {
+  for (let i = 0; i < STAR_DEV_STEPS.length - 1; i++) if (!STAR_DEV_STEPS[i].done(e)) return i;
+  return -1;
+}
+export function devStarTo(e, key, now, who, ids) {
+  const t = now || Date.now();
+  const k = STAR_DEV_STEP_KEYS.indexOf(key);
+  if (k < 0) return { ok: false };
+  const step = STAR_DEV_STEPS[k];
+  const last = k === STAR_DEV_STEPS.length - 1;
+  // « Aller à » une étape déjà faite (ou dépassée) : on repart d'un objet neuf.
+  let reset = false;
+  if (!last && STAR_DEV_STEPS.slice(k).some(s => s.done(e))) { e = newStar(); reset = true; }
+  const res = {};
+  const x = { who, t, ids: ids || [], res, target: false };
+  for (let i = 0; i < k; i++) if (!STAR_DEV_STEPS[i].done(e) && STAR_DEV_STEPS[i].make) STAR_DEV_STEPS[i].make(e, x);
+  x.target = true;
+  if (step.scene) { step.make(e, x); res.scene = step.scene; }
+  else if (step.prep) step.prep(e, x);
+  starAdvance(e);
+  return { star: e, ok: true, reset, ...res };
+}
+/* Les actes de la frise, pour l'affichage seulement : une ligne de titre au-dessus
+   de chaque groupe. ⚠️ Ils ne portent AUCUNE logique et le banc vérifie qu'ils
+   couvrent `STAR_DEV_STEPS` exactement, dans le même ordre — sans quoi une étape
+   ajoutée à la table disparaîtrait du menu sans rien dire. */
+export const STAR_DEV_ACTS = [
+  ["yard", ["yard", "mayor", "plans", "hull"]],
+  ["rain", ["warn", "fall"]],
+  ["farm", ["digs", "blue", "rose", "white"]],
+  ["town", ["townFall", "queen", "shy", "green"]],
+  ["wreck", ["vandal", "budget"]],
+  ["evil", ["evilSeen", "evilHaul", "evilRevive"]],
+  ["end", ["rebuild", "agree", "baptism", "inaug", "done"]],
+];

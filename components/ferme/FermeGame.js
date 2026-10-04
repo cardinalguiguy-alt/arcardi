@@ -48,6 +48,8 @@ import * as Q from "./quete";
    `maire.js`, vue 3D dans `MaireScene.js` : ce fichier ne fait que la porte et
    l'arbitrage. Voir l'en-tête de `maire.js` pour le contrat réseau. */
 import * as MR from "./maire";
+import * as MD from "./medailles";
+import * as GZ from "./gazette";      // 2026-10-04 — le tableau des nouvelles : gazette du jour et petites annonces   // 2026-10-04 — les médailles de la ferme (une par quête achevée), hors de `star` pour survivre à « rejouer »
 import { MayorAudience, MayorWatch, MayorFinale, mayorCtxOf } from "./MaireScene";
 /* ⚠️ LOT E — LA SCIE DE TRISTAN. Même découpage que l'audience : la mécanique
    pure est dans `scierie.js` (l'hôte la REJOUE, il ne croit pas le client), la
@@ -79,6 +81,7 @@ import * as FU from "./fumee";      // 2026-09-29 (phase 12c) — les cheminées
 import * as PL from "./pluie";      // 2026-09-29 (phase 12b) — la pluie : le sol mouillé, les flaques (pure fonction de la météo passée)
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute, le tapis au pied des arbres, ce qui vole au vent
+import * as PO from "./poussiere"; // 2026-10-04 — la poussière soulevée par les pieds (terre battue, sable, labour sec), locale
 import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
@@ -1115,6 +1118,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      (épaisseur et charge des arbres imposées sur CET écran, pour juger). */
   const snowFieldRef = useRef(null);
   const snowWalkersRef = useRef(null);
+  const dustRef = useRef({});
+  const boardLookRef = useRef({ t: 0, v: null });   // 2026-10-04 — ce que montre le tableau des nouvelles (relu chaque seconde)                 // 2026-10-04 — zone -> PO.makeDust() : une file par carte, la poussière ne traverse pas le train
   const farmSnowFieldRef = useRef(null);   // 2026-09-29 : la neige de la ferme ({ w, f, g, o, walkers })
   const snowPackMemoRef = useRef({ at: 0, pack: null, key: "" });
   const wetPackMemoRef = useRef({ at: 0, pack: null });   // 2026-09-29 (phase 12b)
@@ -1175,6 +1180,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false); // zip 2026-08 : roue "paramètres" (maison/puits/carte/personnel/perso/quitter)
+  const [medalsOpen, setMedalsOpen] = useState(false); // 2026-10-04 : l'écran des médailles de la ferme
   const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
   const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [priceBoardOpen, setPriceBoardOpen] = useState(false); // zip 438 : le tableau des cours, à la mairie
@@ -1699,6 +1705,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      serait un champ à réconcilier (§3), et le persister côté ferme voudrait dire
      qu'un joueur qui arrive après la chute ne la verrait JAMAIS parce qu'un
      autre l'a vue pour lui. */
+  const resBumpRef = useRef(new Map());              // 2026-10-04 — rid -> { at, kind, line, dir } : la réaction en cours (datée À LA RÉCEPTION chez l'invité)
+  const resBumpContactRef = useRef(new Map());       // 2026-10-04 — HÔTE : "rid:pid" -> { touch, n, last } — les coups d'épaule
+  const starDevSkipRef = useRef(null);               // 2026-10-04 — { until, kinds } : les scènes que la frise du menu dev a « passées » (voir la frise)
   const starScenePendRef = useRef(null);             // { key, ch, at } — la scène en attente d'être VISIBLE
   const starCardPendRef = useRef(null);              // zip 458 — { key } — la carte de chapitre en attente d'un écran libre
   /* ⚠️ ZIP 459 — L'ÉLAN N'EST PLUS UNE DATE, C'EST UN ÉTAT. Le 458 gardait « jusqu'à
@@ -2877,6 +2886,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            il est simplement ignoré et disparaît à la première écriture — ce sont
            deux histoires différentes, pas deux versions de la même. */
         star: Q.migrateStar(saved && saved.star),
+        // 2026-10-04 — les médailles : même chemin que `wardrobe`, AUCUNE migration Supabase (voir medailles.js).
+        medals: MD.migrateMedals(saved && saved.medals),
+        board: GZ.migrateBoard(saved && saved.board),   // 2026-10-04 — les annonces honorées du jour (gazette.js)
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
@@ -3035,6 +3047,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     broadcastChat("⭐", L.star.chat.done);
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LA MÉDAILLE DE LA FERME, QUAND LA FIN A ÉTÉ VUE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ PAS À L'INAUGURATION, APRÈS LA CINÉMATIQUE : un toast « médaille » posé
+     sur la fête (ou sur le texte blanc de la Brebis) couperait la seule scène du
+     jeu qui doit se regarder sans interface. L'échéance se DÉDUIT de
+     `e.finale.inaugAt` (déjà diffusé) + le départ de la fin + sa durée — aucun
+     champ de plus, et le battement d'hôte la relit chaque seconde.
+     ⚠️ IDEMPOTENTE PAR DATE DE FIN (`MD.awardMedal`) : une partie rejouée compte
+     une fois de plus, jamais deux fois la même. Un seul `apply` quand elle tombe.
+     ⚠️ Le menu dev (« Quest complete ») passe par ICI aussi : sans ça, l'écran
+     des médailles ne se jugerait qu'au bout d'une heure de quête (§9). */
+  function hostAwardStarMedal(e, now) {
+    if (!isHost || !e || !Q.starFinaleInaugurated(e)) return;
+    if (now - e.finale.inaugAt < Q.STAR_FINALE_END_AT_MS + Q.STAR_END_MS) return;
+    const s = sharedRef.current;
+    if (!s.medals) s.medals = {};
+    const names = [meRef.current && meRef.current.name];
+    if (playersRef.current) for (const rp of playersRef.current.values()) names.push(rp && rp.name);
+    const r = MD.awardMedal(s.medals, "star", e.finale.inaugAt, names, s.day);
+    if (!r.ok || r.already) return;
+    dirtyRef.current = true;
+    hostSend({ type: "broadcast", event: "apply", payload: { medals: s.medals } });
+    broadcastGlobalToast(r.first ? L.medals.wonToast : L.medals.againToast(s.medals.star.n));
+    broadcastChat("\u{1F3C5}", r.first ? L.medals.wonChat : L.medals.againChat(s.medals.star.n));
+    persistFnRef.current && persistFnRef.current();
+  }
+
   function buildMinimapBase() {
     const w = worldRef.current; if (!w) return;
     const c = document.createElement("canvas"); c.width = w.w; c.height = w.h;
@@ -3122,6 +3162,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       townChop: payload.townChop || {}, // zip 426
       wardrobe: payload.wardrobe || {},  // zip 427
       star: Q.migrateStar(payload.star), // zip 444
+      medals: MD.migrateMedals(payload.medals), // 2026-10-04
+      board: GZ.migrateBoard(payload.board),    // 2026-10-04
     };
     // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
@@ -3751,6 +3793,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // chemin à lui finirait par ne pas être sauvegardé le jour où l'on touche
       // à l'autre (leçon des vergers, 398).
       star: s.star || Q.newStar(),
+      // 2026-10-04 — les médailles, hors de `star` : « rejouer » remet `star` à neuf, jamais elles.
+      medals: s.medals || {},
+      board: s.board || null,   // 2026-10-04 — les petites annonces honorées aujourd'hui
       // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
@@ -4613,6 +4658,80 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       dirtyRef.current = true;
       out.star = s2.star;
       broadcastChat("⚓", L.star.yard.chat(f.name || "?"));
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ╔═════════════════════════════════════════════════════════════════════════
+       ║ 2026-10-04 — LA FRISE DE LA QUÊTE (menu dev) : « ALLER À » UNE ÉTAPE.
+       ╚═════════════════════════════════════════════════════════════════════════
+       Même famille que `devStar` juste en dessous, et mêmes devoirs d'appelant :
+       `Q.devStarTo` ne touche jamais à `f` (la fiole, la canne), il le DIT. Il
+       reçoit les joueurs du salon parce que l'étape « convocation » fait le don
+       (`resolveStarGift`), qui les inscrit. Voir l'en-tête de `STAR_DEV_STEPS`. */
+    /* 2026-10-04 — UNE PETITE ANNONCE HONORÉE (gazette.js). L'hôte relit les annonces
+       du jour (tirées, jamais reçues), vérifie le sac de celui qui livre, retire, paie
+       la caisse commune. Une annonce ne s'honore qu'une fois, par le premier arrivé. */
+    if (req.kind === "boardDeliver") {
+      const s2 = sharedRef.current;
+      s2.board = GZ.migrateBoard(s2.board, s2.day);
+      const r = GZ.resolveBoardDeliver(s2.board, boardAdsNow(), String(req.adId || ""), f.inv, f.name);   // ⚠️ `adId`, jamais `id` : sendReq écrase `id` par celui du joueur
+      if (!r.ok) {
+        out.toast = { id: f.id, key: "raw", n: r.why === "taken" ? L.gazette.adTakenToast(r.by) : L.gazette.adShortToast };
+        hostFlushOut(out, f, null);
+        return;
+      }
+      const ad = r.ad;
+      if (!GZ.adTake(f.inv, ad.good, ad.qty)) { hostFlushOut(out, f, null); return; }
+      s2.board.done[ad.id] = String(f.name || "?").slice(0, 24);
+      s2.money += ad.reward;
+      s2.totalEarned = (s2.totalEarned || 0) + ad.reward;
+      out.state = shareState();
+      out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      out.board = s2.board;
+      dirtyRef.current = true;
+      broadcastChat("\u{1F4CC}", L.gazette.adDoneChat(f.name, rosterOf(ad.rid).name, L.gazette.adGood(ad.good, ad.qty), ad.reward));
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    if (req.kind === "devStarTo") {
+      const s2 = sharedRef.current;
+      const r = Q.devStarTo(Q.migrateStar(s2.star), String(req.step || ""), Date.now(), f.id, starRoomPlayerIds());
+      if (!r.ok) { hostFlushOut(out, f, null); return; }
+      s2.star = r.star;
+      out.star = s2.star;
+      if (r.grantLure) {
+        f.inv.starLure = (f.inv.starLure || 0) + 1;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      }
+      if (r.unbreakRod) {
+        f.evilRodArmedAt = 0;
+        out.farmer = out.farmer || { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.farmer.evilRodArmedAt = 0;
+      }
+      if (r.scene) out.starScene = { key: r.scene };
+      if (r.summon) announceFinaleSummon();
+      dirtyRef.current = true;
+      broadcastChat("🛠️", L.star.devChat(f.name, L.star.dev.step(req.step)));
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ╔═════════════════════════════════════════════════════════════════════════
+       ║ 2026-10-04 — REJOUER LA QUÊTE « POUR LE FUN, SANS PERDRE LE SUCCÈS ».
+       ╚═════════════════════════════════════════════════════════════════════════
+       ⚠️ SEULEMENT AVEC LA MÉDAILLE : c'est l'écran des médailles qui l'offre, et
+       l'hôte relit la condition au lieu de croire le bouton (§3, l'hôte arbitre).
+       La quête repart d'un objet NEUF (`Q.newStar`, le geste de « Wipe it ») ;
+       `shared.medals` n'est pas touché — c'est toute la raison de son module. */
+    if (req.kind === "starReplay") {
+      const s2 = sharedRef.current;
+      if (!MD.medalHas(s2.medals, "star")) { hostFlushOut(out, f, null); return; }
+      s2.star = Q.newStar();
+      out.star = s2.star;
+      dirtyRef.current = true;
+      broadcastGlobalToast(L.medals.replayToast(f.name));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -7727,7 +7846,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const line of order) {
         const good = C.WORLD_GOODS.find(g => g.key === (line && line.key));
         if (!good) continue;
-        const qty = Math.max(0, Math.min(Q.starVoyageMaxQty(s.star), (line.qty | 0)));   // 2026-09-13 — doublée avec son navire
+        const qty = Math.max(0, Math.min(Q.starVoyageMaxQty(s.star, MD.medalHas(s.medals, "star")), (line.qty | 0)));   // 2026-09-13 — doublée avec son navire
         if (qty <= 0) continue;
         cost += C.worldGoodUnitCost(good) * qty;
         maxDays = Math.max(maxDays, (C.VOYAGE_TIERS[good.tier] || C.VOYAGE_TIERS.proche).days);
@@ -8615,7 +8734,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        totalité : la fusionner aurait voulu dire décider quoi faire d'un éclat
        présent chez l'un et absent chez l'autre, c'est-à-dire inventer une
        réconciliation pour un état qui n'en a pas besoin (§3). */
-    if (p.star) { sharedRef.current.star = Q.migrateStar(p.star); setStarTick(t => t + 1); }
+    if (p.star) {
+      sharedRef.current.star = Q.migrateStar(p.star); setStarTick(t => t + 1);
+      /* 2026-10-04 — APRÈS UN SAUT DE LA FRISE (menu dev), ON RELIT L'ÉTAT, PAS
+         L'HISTOIRE : `starWatch` compare l'état à son instantané précédent et
+         annoncerait chaque transition franchie d'un coup (pièces du navire,
+         chapitres, « Objectif : la septième »…), en cascade. Effacer l'instantané
+         le fait repartir comme pour un joueur qui rejoint en cours de quête. */
+      const sk = starDevSkipRef.current;
+      if (sk && sk.rewatch && Date.now() < sk.until) { starWatchRef.current = null; sk.rewatch = false; }
+    }
+    // 2026-10-04 — les médailles arrivent entières, comme la quête (l'hôte fait autorité).
+    if (p.medals) { sharedRef.current.medals = MD.migrateMedals(p.medals); setStarTick(t => t + 1); }
+    if (p.board) { sharedRef.current.board = GZ.migrateBoard(p.board); setStarTick(t => t + 1); }
     /* ⚠️⚠️ LA SCÈNE EST DATÉE À LA RÉCEPTION, PAS À L'ÉMISSION, ET C'EST LE §3
        MOT POUR MOT. L'hôte dit « la chute a lieu » ; chaque client démarre SA
        chronologie à SA propre horloge, au moment où il l'apprend. Transporter
@@ -8911,6 +9042,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         r.meetTone = rs.t || null; r.meetWith = rs.m;
         r.sitOn = rs.s ? { x: rs.s[0], y: rs.s[1] } : null;
         r.seat = rs.s && rs.s.length > 2 ? rs.s[2] : 0;   // zip 429
+        /* 2026-10-04 — la bousculade arrive avec l'arrêt : [caractère, réplique].
+           ⚠️ DATÉE À LA RÉCEPTION (§3), comme les trajets. */
+        if (Array.isArray(rs.b)) { resBumpRef.current.set(r.rid, { at: Date.now(), kind: C.RESIDENT_TEMPER_BY_CODE[rs.b[0] | 0] || "patient", line: rs.b[1] | 0, dir: rs.d | 0, resumed: true }); r.moving = false; }
       }
     }
     if (p.visitorSim && !isHost) {
@@ -9492,6 +9626,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             hostSend({ type: "broadcast", event: "apply", payload: { star: e0 } });
             persistFnRef.current && persistFnRef.current();
           }
+          hostAwardStarMedal(e0, nowT);   // 2026-10-04 — la médaille, une fois la fin vue
         }
       }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
@@ -13757,6 +13892,117 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LES BOUSCULADES (voir RESIDENT_TEMPERS, fermeConstants.js).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CHEZ L'HÔTE, ET C'EST LA RAISON DE `starNerveHalt` (456) : le pas des
+     résidents est simulé par l'hôte et diffusé ; un arrêt décidé chez l'invité
+     ferait glisser un personnage immobile. L'hôte voit toutes les positions des
+     joueurs (elles circulent déjà) : il compte les contacts, décide, et UN SEUL
+     message part par réaction — l'arrêt groupé qui partait déjà
+     (`residentStops`), avec deux nombres de plus (`b`) et la direction (`d`).
+     ⚠️ UN CONTACT EST UNE ENTRÉE, PAS UNE DURÉE : on compte le passage de « loin »
+     à « touché », avec une hystérésis (`RES_BUMP_RELEASE`) — sinon un joueur
+     arrêté contre un résident le « bousculerait » soixante fois par seconde.
+     ⚠️ LA RÉACTION N'EST PAS RANGÉE SUR `res` : `station` part en JSON entier,
+     et une date d'hôte posée sur le résident arriverait chez l'invité, qui la
+     comparerait à SA montre (§3). Elle vit dans `resBumpRef`, datée chez chacun.
+     Rend `true` tant que le résident doit rester planté. */
+  function residentBumpHold(res, ro, now) {
+    const B = resBumpRef.current;
+    const b = B.get(res.rid);
+    if (b && now - b.at < C.RES_BUMP_MS) { res.moving = false; return true; }
+    if (b && !b.resumed) {
+      /* Il repart : l'invité a reçu un ARRÊT, il faut lui renvoyer la suite du
+         chemin. En ville, ce qui reste de l'itinéraire ; à la ferme, oublier le
+         dernier trajet émis suffit (l'émetteur le renverra depuis ici). */
+      b.resumed = true;
+      if (resZone(res) === "town" && res.townPath && res.townPath.length) queueTownResidentPath(res, res.townPath);
+      else res._pathSentFor = null;
+    }
+    if (!Number.isFinite(res.x) || !Number.isFinite(res.y)) return false;
+    // Assis, en pleine activité ou dans une scène : on ne bouscule pas quelqu'un qui ne marche pas.
+    if (res.hidden || res.act || res.sitOn || res.storming || res.tjReact) return false;
+    const zone = resZone(res);
+    const players = [];
+    const m = meRef.current;
+    if (m) players.push([m.id, m]);
+    for (const [pid, p] of playersRef.current) players.push([pid, p]);
+    const CT = resBumpContactRef.current;
+    for (const [pid, p] of players) {
+      if (!p || (p.zone || "farm") !== zone || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      const d = Math.hypot(p.x - res.x, p.y - res.y);
+      const key = res.rid + ":" + pid;
+      let c = CT.get(key);
+      if (!c) { c = { touch: false, n: 0, last: 0 }; CT.set(key, c); }
+      if (c.touch) { if (d > C.RES_BUMP_RELEASE) c.touch = false; continue; }
+      if (d >= C.RES_BUMP_R) continue;
+      c.touch = true;
+      if (now - c.last > C.RES_BUMP_FORGET_MS) c.n = 0;
+      c.n++; c.last = now;
+      const temper = C.residentTemper(res.rid), T = C.RESIDENT_TEMPERS[temper];
+      if (c.n < T.after || (b && now - b.at < C.RES_BUMP_MS + C.RES_BUMP_COOLDOWN_MS)) continue;
+      c.n = 0;
+      const pool = (L.resBump && L.resBump[temper]) || [];
+      const line = Math.floor(Math.random() * Math.max(1, pool.length));
+      const dir = Q.starNerveFace(p.x - res.x, p.y - res.y);
+      res.dir = dir; res.moving = false;
+      B.set(res.rid, { at: now, kind: temper, line, dir });
+      queueResidentStop(res);
+      const e = resStopQueueRef.current[resStopQueueRef.current.length - 1];
+      if (e && e.rid === res.rid) { e.d = dir; e.b = [T.code, line]; }
+      return true;
+    }
+    return false;
+  }
+  /* Ce que le DESSIN lit, chez tout le monde : la réaction en cours, ou rien.
+     Datée chez chacun (`at` local), jamais comparée à l'horloge de l'hôte. */
+  function residentBumpNow(rid) {
+    const b = resBumpRef.current.get(rid);
+    if (!b || Date.now() - b.at >= C.RES_BUMP_MS) return null;
+    const pool = (L.resBump && L.resBump[b.kind]) || [];
+    return { dir: b.dir, say: pool[b.line % Math.max(1, pool.length)] || null };
+  }
+
+  /* 2026-10-04 — LE TABLEAU DES NOUVELLES (gazette.js). Les annonces du jour et le
+     petit état que la gazette met en mots : tout se DÉDUIT de l'état partagé,
+     chez chacun, à l'ouverture du panneau (et pour le dessin du tableau). */
+  function boardAdsNow() {
+    const s = sharedRef.current;
+    const res = (s.station && s.station.residents) || [];
+    return GZ.boardAdsOfDay(s.seed, s.day, res.map(r => r.rid));
+  }
+  function gazetteWorldNow() {
+    const s = sharedRef.current, e = Q.migrateStar(s.star), day = s.day | 0;
+    const res = (s.station && s.station.residents) || [];
+    const voy = res.find(r => C.VISITOR_ROSTER[r.rid] && C.VISITOR_ROSTER[r.rid].skill === "voyager");
+    const nc = res.find(r => (r.sinceDay | 0) > 1 && (r.sinceDay | 0) >= day - 1);
+    const medal = (s.medals || {}).star || null;
+    return {
+      seed: s.seed, day,
+      quest: {
+        finale: Q.starDone(e) && !Q.starFinaleInaugurated(e),
+        wreck: Q.starShipWrecked(e) && !MR.mayorBudgetSigned(e),
+        townFall: Q.starTownFallen(e) && !Q.starHas(e, "crater"),
+        fallen: Q.starFallen(e) && !Q.starTownFallen(e),
+        warned: Q.starWarning(e),
+        yardTaken: Q.starYardAccepted(e) && !Q.starWarned(e),
+        yardBy: (e.yard && e.yard.by) || "",
+        yardOffer: Q.starYardOffer(e, s.day, starGateCtxNow()),
+      },
+      electionToday: E.isElectionDay(day), mayorKey: E.mayorOf(day).key, nextElection: E.mayorNextElection(day),
+      newcomer: nc ? rosterOf(nc.rid).name : null,
+      tomorrow: WX.forecast(day + 1, E.seasonAt(s.dayStartAt).key, "town"),
+      voyagerAway: !!(voy && voy.trip && voy.trip.phase === "away"),
+      inTown: res.filter(r => resZone(r) === "town").length,
+      candles: s.churchCandles | 0,
+      medal, medalDay: medal ? medal.day : null,
+      ads: boardAdsNow().length,
+    };
+  }
+
+  function dustFor(zone) { return dustRef.current[zone] || (dustRef.current[zone] = PO.makeDust()); }
+
   function updateResidents(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, st = s.station;
@@ -13781,6 +14027,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          traitement que la mission d'Eduardo, juste en dessous). */
       if (resZone(res) === "town") {
         const tw = townWorldNow();
+        // 2026-10-04 — bousculé, il s'arrête et se retourne (voir residentBumpHold).
+        if (residentBumpHold(res, ro, now)) continue;
         // zip 456 — voir `starNerveHalt` : à portée de parole, il s'arrête.
         if (starNerveHalt("town", res.rid, res.x, res.y)) res.moving = false;
         else if (tw) townResidentRoam(res, tw, now, dt, ro, residents);
@@ -13857,6 +14105,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ne s'applique PAS à un déplacement scripté (`storming`, `tjReact`) : une
          bagarre qui s'interrompt parce qu'un joueur passe à trois cases serait un
          arrêt qui casse une scène au lieu d'en jouer une. */
+      else if (!res.hidden && !res.storming && !res.tjReact && residentBumpHold(res, ro, now)) res.moving = false;   // 2026-10-04 — les bousculades
       else if (!res.hidden && !res.storming && !res.tjReact && starNerveHalt("farm", res.rid, res.x, res.y)) res.moving = false;
       else if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       // Chantier "Super Tristan" : indépendant de la temporisation normale
@@ -15037,7 +15286,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
-  const setDraftQty = (key, qty) => setVoyagerDraft(d => ({ ...d, [key]: Math.max(0, Math.min(Q.starVoyageMaxQty(sharedRef.current.star), qty | 0)) }));
+  const setDraftQty = (key, qty) => setVoyagerDraft(d => ({ ...d, [key]: Math.max(0, Math.min(Q.starVoyageMaxQty(sharedRef.current.star, MD.medalHas(sharedRef.current.medals, "star")), qty | 0)) }));
   const voyagerDraftLines = () => C.WORLD_GOODS.map(g => ({ key: g.key, qty: voyagerDraft[g.key] | 0 })).filter(l => l.qty > 0);
   const voyagerDraftCost = () => voyagerDraftLines().reduce((sum, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return sum + (g ? C.worldGoodUnitCost(g) * l.qty : 0); }, 0);
   const voyagerDraftDays = () => voyagerDraftLines().reduce((mx, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return g ? Math.max(mx, (C.VOYAGE_TIERS[g.tier] || C.VOYAGE_TIERS.proche).days) : mx; }, 0);
@@ -16532,7 +16781,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `starUiOpenRef` tant qu'il est ouvert), ni congé anticipé. Échap ferme
          déjà tout le reste de l'interface ; l'overlay n'avait simplement jamais
          été ajouté à cette liste alors qu'il en compte pour `uiOpen`. */
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); setStarFind(null); /* zip 392, 476 */
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); setMedalsOpen(false); setStarFind(null); /* zip 392, 476 */
         // 2026-09-04 : abandonner le halage rend la main tout de suite — jamais
         // gagnant (pas de req), la progression locale est simplement perdue.
         if (evilHaulRef.current && evilHaulRef.current.phase !== "won") { evilHaulRef.current = null; setEvilHaulActive(false); }
@@ -17254,6 +17503,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         for (const wf of (sharedRef.current.wolves || [])) if (!wf.deadUntil) walk("w:" + wf.id, "paw", wf.x + 0.1, wf.y + 0.7);
         for (const rb of (sharedRef.current.rabbits || [])) walk("rb:" + rb.id, "paw", rb.x, rb.y + 0.5);
         if (fwk.size() > 80) fwk.prune(now, 10000);
+      }
+      /* 2026-10-04 — LA POUSSIÈRE SOUS LES PIEDS (poussiere.js) : le sable des berges
+         et la terre labourée SÈCHE. Le chemin de la maison est dallé, il ne fume pas.
+         Rien quand il pleut, quand le sol est mouillé ou sous la neige. Les résidents
+         posent la leur dans leur boucle, plus bas (`farmDustStep`). */
+      const farmDustMute = PL.groundRain(wxFrame()) > 0.06 || wetPackNow().w > 0.2;
+      const farmDustGround = (gx, gy) => {
+        const x = Math.floor(gx / T), y = Math.floor(gy / T);
+        if (x < 0 || y < 0 || x >= w.w || y >= w.h) return null;
+        const g = w.ground[y * w.w + x];
+        return g === C.G_SAND ? "sand" : g === C.G_TILLED ? "soil" : null;
+      };
+      const farmDustStep = (id, kind, fx, fy) => dustFor("farm").step(id, kind, fx * T, fy * T, 0, performance.now(), farmDustGround,
+        farmDustMute || (!!fSnowF && fSnowF.depthAt(fx * T, fy * T) > 0.6));
+      {
+        if (!m.sleeping && !m.sitOn) farmDustStep("me", isRidingId(me.id) ? "hoof" : "boot", C.footX(m.x), C.footY(m.y));
+        for (const p of playersRef.current.values()) if (!p.zone || p.zone === "farm") farmDustStep("p:" + p.id, isRidingId(p.id) ? "hoof" : "boot", C.footX(p.x), C.footY(p.y));
+        (sharedRef.current.horses || []).forEach((h, hi) => { if (!h.rider && typeof h.x === "number") farmDustStep("h:" + hi, "hoof", h.x + 0.5, h.y + 0.9); });
+        const dF = dustFor("farm"), dNow = performance.now();
+        dF.prune(dNow);
+        for (const pf of dF.puffs()) draws.push({ y: pf.y + PO.DUST_SORT_AHEAD, fn: () => PO.drawDustPuff(ctx, pf, performance.now()) });
       }
 
       // Zip 367 : `tt` est maintenant declaree avant la boucle de tuiles
@@ -18502,6 +18772,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const rx = rp.x, ry = rp.y;
           // 2026-09-29 — ses pas dans la neige de la ferme (Eduardo à cheval : des sabots).
           if (fSnowRec) fSnowRec.walkers.step("r:" + res.rid, ro.skill === "voyager" ? "hoof" : "boot", C.footX(rx) * T, C.footY(ry) * T, now, fSnowF, 1);
+          farmDustStep("r:" + res.rid, ro.skill === "voyager" ? "hoof" : "boot", C.footX(rx), C.footY(ry));   // 2026-10-04 — sa poussière
           // Chantier "mouvement fluide" : côté invité, dir/moving/animT
           // viennent désormais du trajet rejoué localement (rp), plus fluides
           // qu'une simple retransmission de l'état brut de l'hôte (~1,33 Hz).
@@ -18563,8 +18834,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                overrides sur la même grandeur se classent, ils ne s'additionnent
                pas — le §4 (« une grandeur de dessin, une de rang, une de
                collision ») dans sa version la plus petite. */
-            const resNerve = turnAwayDir != null ? null : starNerveDirOf("farm", res.rid, rx, ry);
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (resNerve != null ? resNerve : resDir), moving: resNerve != null ? false : resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
+            /* 2026-10-04 — bousculé : il se tourne vers vous et ne marche plus.
+               Il passe devant le tic nerveux, derrière le dos tourné de la scène. */
+            const resBump = turnAwayDir != null ? null : residentBumpNow(res.rid);
+            const resNerve = turnAwayDir != null || resBump ? null : starNerveDirOf("farm", res.rid, rx, ry);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : resBump ? resBump.dir : (resNerve != null ? resNerve : resDir), moving: resNerve != null || resBump ? false : resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && resDir === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
             // fumigateur pendant sa phase de travail (même condition que la
@@ -18650,7 +18924,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                s'approche. UNE seule question posée à `starNpcEmote`, qui vit au
                niveau du composant — trois copies dans trois boucles auraient fini
                par ne pas répondre la même chose (piège n°1, troisième visage). */
-            const resEmote = starNpcEmote("farm", res.rid, rx, ry);
+            if (resBump && resBump.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resBump.say, true);
+            const resEmote = resBump ? null : starNpcEmote("farm", res.rid, rx, ry);
             if (resEmote && resEmote.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resEmote.say, false);
             else if (resEmote) bubbleQueue.push({ cx: Math.round(rx * T) + 8, by: Math.round(ry * T) - 18, emote: resEmote });
             /* zip 459 — L'OUVRAGE DE TRISTAN. ⚠️ Il PASSE DEVANT sa réplique de
@@ -18658,7 +18933,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                arbres toute la journée » pendant qu'il scie la quille du navire
                serait deux bulles qui se contredisent, et la faute du 456 sur les
                neuf bulles empilées. */
-            const resWork = resEmote ? null : starWorkBubble(res.rid);
+            const resWork = resEmote || resBump ? null : starWorkBubble(res.rid);
             if (resWork && resWork.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resWork.say, true);
             else if (resWork) bubbleQueue.push({ cx: Math.round(rx * T) + 8, by: Math.round(ry * T) - 18, work: resWork });
             // Bulle métier quand le joueur local est à proximité (zip 299).
@@ -18668,7 +18943,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // pleine réaction de foule (tjReact) commente déjà (voir plus
             // haut) : pas de double bulle.
             const mm = meRef.current;
-            if (talkLines && talkLines.length && !res.tjReact && !resEmote && !resWork && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
+            if (talkLines && talkLines.length && !res.tjReact && !resEmote && !resWork && !resBump && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
               // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
               // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
@@ -21260,8 +21535,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (inPud && sp.length < 900) sp.push({ x, y, t: t0, w: true, k: "r" });
       };
       if (wetStepsRef.current.size > 48) wetStepsRef.current.forEach((w, k2) => { if (now - w.t > 4000) wetStepsRef.current.delete(k2); });
+      /* 2026-10-04 — LA POUSSIÈRE SOUS LES PIEDS (poussiere.js) : la terre battue
+         (`G_PATH` peint sans revêtement, `road` = TR_NONE — le champ de foire, les
+         allées, les parvis) et le sable des plages. Muette sous la pluie, sur sol
+         mouillé, sous la neige, et pour qui marche SUR le pont du grand escalier. */
+      const townDustMute = rainFall > 0.06 || wetP.wet > 0.2;
+      const townDustGround = (gx, gy) => {
+        const x = Math.floor(gx / T), y = Math.floor(gy / T);
+        if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return null;
+        const i = y * tw.w + x, g = tw.ground[i];
+        if (g === C.G_SAND) return "sand";
+        if (g === C.G_PATH && !(tw.road && tw.road[i])) return "earth";
+        // La plage du lac n'a pas de type de sol : elle n'existe que dans la cuisson de l'eau.
+        const bk = EAU.townWaterBakeReady(tw);
+        return bk && EAU.bakedSandAt(bk, gx, gy) ? "sand" : null;
+      };
+      const dustWalk = (id, kind, fx, fy, lvl) => {
+        const tx = Math.floor(fx), ty = Math.floor(fy);
+        const base = elAt(tx, ty), lv = lvl != null ? lvl : base;
+        const muted = townDustMute || (!!snowF && snowF.depthAt(fx * T, fy * T) > 0.6)
+          || (lvl != null && C.townOverpassCell(tx, ty) && lvl > base + 0.3);
+        dustFor("town").step(id, kind, fx * T, fy * T, lv, performance.now(), townDustGround, muted);
+      };
       const snowWalk = (id, kind, fx, fy, lvl, k) => {
         rainStep(id, kind, fx, fy, lvl);
+        dustWalk(id, kind, fx, fy, lvl);
         if (!snowF) return;
         const tx = Math.floor(fx), ty = Math.floor(fy);
         if (lvl != null && C.townOverpassCell(tx, ty) && lvl > elAt(tx, ty) + 0.3) return;
@@ -22244,6 +22542,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const im = sprites.plazaFountain;
           const FG = sprites.fountainGeo, WR = sprites.waterRamp;
           const wob = 0.5 + Math.sin(now / 900) * 0.5;
+          /* 2026-10-04 — LA PIERRE AU PIXEL D'ÉCRAN (`sprites.plazaFountainHi`, un canevas
+             par cran de zoom). Même pose que les lampadaires (`drawScreenLamp`) : au cran
+             exact, bord arrondi et aucun lissage ; pendant un fondu de zoom, le cran
+             au-dessus réduit avec lissage. Le reflet garde le sprite natif (le miroir
+             d'`eau.js` a son propre repère). `snow` : les niveaux de neige à coiffer. */
+          const drawStone = (snowLv) => {
+            const M = ctx.getTransform();
+            if (reflecting || !sprites.plazaFountainHi || Math.abs(M.b) > 1e-6 || Math.abs(M.c) > 1e-6) {
+              ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
+              for (const [lv, a] of snowLv || []) {
+                const cv = lv && a > 0.01 ? snowCapCanvas(im, lv, 0) : null;
+                if (cv) { ctx.globalAlpha = a; ctx.drawImage(cv, fCx - im.width / 2, fBy - im.height - cv.pad); ctx.globalAlpha = 1; }
+              }
+              return;
+            }
+            const zf = M.a, zi = Math.round(zf), exact = Math.abs(zf - zi) < 0.02;
+            const z = exact ? zi : Math.ceil(zf);
+            const hi = sprites.plazaFountainHi(z);
+            const sx = M.a * (fCx - im.width / 2) + M.e, sy = M.d * (fBy - im.height) + M.f;
+            const k = zf / z;
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.imageSmoothingEnabled = !exact;
+            if (!exact) ctx.imageSmoothingQuality = "high";
+            const put = (cvs, padPx) => exact ? ctx.drawImage(cvs, Math.round(sx), Math.round(sy) - padPx)
+                                               : ctx.drawImage(cvs, sx, sy - padPx * k, cvs.width * k, cvs.height * k);
+            put(hi, 0);
+            for (const [lv, a] of snowLv || []) {
+              const cv = lv && a > 0.01 ? snowCapCanvas(hi, lv, 0, z) : null;
+              if (cv) { ctx.globalAlpha = a; put(cv, cv.pad); ctx.globalAlpha = 1; }
+            }
+            ctx.restore();
+          };
           // Ombre au sol : deux disques, pour un bord qui s'éteint au lieu de
           // s'arrêter net.
           ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.22)" : "rgba(20,26,16,0.22)";
@@ -22274,7 +22605,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             { wy: fBy - FG.basinY, rx: FG.basinRX, ry: FG.basinRY, bands: [WR[2], WR[6], WR[10], WR[13]] },
             { wy: fBy - FG.bowlY, rx: FG.bowlRX, ry: FG.bowlRY, bands: [WR[0], WR[2], WR[4], WR[6]] },
           ];
-          const spillY0 = fBy - FG.bowlY + FG.bowlRY * 1.1, spillY1 = fBy - FG.basinY - FG.basinRY * 0.15;
           /* 2026-09-28 (phase 12a) — L'HIVER, LA FONTAINE EST COUPÉE ET PRISE PAR LA
              GLACE : les deux bassins gelés (un blanc bleuté, deux fêlures, la
              neige qui tient sur la glace par plaques), la margelle coiffée, des
@@ -22301,17 +22631,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 }
               }
             }
-            ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
             const fm = NG.depthSnowMix(Math.max(fdep, 0.9), 0.5);
-            for (const [lv, a] of [[fm.a, 1], [fm.b, fm.k]]) {
-              const cv = lv && a > 0.01 ? snowCapCanvas(im, lv, 0) : null;
-              if (cv) { ctx.globalAlpha = a; ctx.drawImage(cv, fCx - im.width / 2, fBy - im.height - cv.pad); ctx.globalAlpha = 1; }
-            }
-            // Les stalactites, là où l'eau débordait.
-            for (const sgn of [-1, 1]) {
-              const sx = Math.round(fCx + sgn * FG.spillX);
-              ctx.fillStyle = "rgba(226,238,250,0.95)"; ctx.fillRect(sx, Math.round(spillY0), 1, 4);
-              ctx.fillStyle = "rgba(190,212,236,0.9)"; ctx.fillRect(sx + sgn, Math.round(spillY0), 1, 2);
+            drawStone([[fm.a, 1], [fm.b, fm.k]]);
+            // Les stalactites, tout le long du rebord de la vasque, là où l'eau débordait.
+            for (let i = 0; i < 7; i++) {
+              const th = Math.PI * (0.16 + i * 0.113), R = FG.bowlOutRX;
+              const sx = fCx + Math.cos(th) * R, sy = fBy - FG.bowlY + Math.sin(th) * R * 0.42 + 0.6;
+              const len = 1.5 + ((i * 5) % 3) * 0.9;
+              ctx.fillStyle = "rgba(226,238,250,0.95)"; ctx.fillRect(sx - 0.3, sy, 0.7, len);
+              ctx.fillStyle = "rgba(190,212,236,0.9)"; ctx.fillRect(sx + 0.4, sy, 0.35, len * 0.5);
             }
             return;
           }
@@ -22329,27 +22657,72 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.ellipse(fCx - b.rx * 0.30 + drift, b.wy - b.ry * 0.36, b.rx * 0.26, b.ry * 0.22, -0.4, 0, 7);
             ctx.fill();
           }
+          /* 2026-10-04 — LES PIÈCES AU FOND (on y fait des vœux : `townWish`). Fixes,
+             sous l'eau claire du bord, chacune avec un éclat qui passe de temps en
+             temps — jamais toutes à la fois. Fonction pure du temps, comme le reste. */
+          {
+            const bwy = fBy - FG.basinY;
+            for (let i = 0; i < 11; i++) {
+              const a = i * 2.39996 + 0.7, r = 0.42 + ((i * 37) % 11) / 11 * 0.45;
+              const xx = fCx + Math.cos(a) * FG.basinRX * r, yy = bwy + Math.sin(a) * FG.basinRY * r;
+              if (Math.abs(xx - fCx) < FG.plinthRX + 1 && Math.abs(yy - bwy - 1) < 3) continue;   // sous le socle : invisibles
+              ctx.fillStyle = i % 3 === 0 ? "rgba(184,115,64,0.75)" : "rgba(222,186,92,0.78)";
+              ctx.fillRect(xx - 0.75, yy - 0.4, 1.5, 0.8);
+              const gl = Math.sin(now / 430 + i * 1.71);
+              if (gl > 0.92) { ctx.fillStyle = `rgba(255,252,230,${((gl - 0.92) / 0.08).toFixed(3)})`; ctx.fillRect(xx - 0.3, yy - 0.7, 0.6, 0.6); }
+            }
+          }
           // Le remous permanent là où le jet retombe dans la vasque haute...
           ripple(fCx, fBy - FG.bowlY, 950, 3, FG.bowlRX * 0.85, FG.bowlRY / FG.bowlRX, 0.45);
-          // ...et l'arrivée du débordement dans le bassin bas, aux deux mêmes
-          // points que le filet tombant plus bas (dessiné après la pierre :
-          // il tombe dans l'air, à côté de la colonne, pas dans l'eau).
-          for (const sgn of [-1, 1]) ripple(fCx + sgn * FG.spillX, spillY1, 1100, 2, 6, FG.basinRY / FG.basinRX, 0.4);
+          /* ...et le RIDEAU qui déborde de la vasque (2026-10-04) : l'eau tombe de TOUT
+             le rebord avant, pas de deux becs — une vasque pleine déborde partout.
+             Chaque filet tombe à la verticale de son point du rebord jusqu'au plan
+             d'eau du bassin, à la même distance de l'axe : sa longueur est donc la
+             même pour tous (bowlY − basinY), et son pied, le point du bassin juste
+             dessous en perspective. */
+          const CURTAIN = [];
+          /* ⚠️ VU EN JEU : treize filets pleins couvraient toute la coquille — on ne
+             voyait plus que du blanc là où devaient se lire les godrons. Sept fils
+             d'un pixel, clairsemés : l'eau se lit par ses intervalles. */
+          for (let i = 0; i < 7; i++) {
+            const th = Math.PI * (0.14 + i * 0.12), R = FG.bowlOutRX;
+            CURTAIN.push({ x: fCx + Math.cos(th) * R, y0: fBy - FG.bowlY + Math.sin(th) * R * 0.42 + 0.4, ph: (i * 0.383) % 1, i });
+          }
+          const fallLen = FG.bowlY - FG.basinY - 0.4;
+          for (const st of CURTAIN) if (st.i % 2 === 0) ripple(st.x, st.y0 + fallLen, 900 + st.i * 37, 2, 3.2, FG.basinRY / FG.basinRX, 0.32);
+          // Les deux mascarons crachent chacun un filet en arc : départ, sommet, chute.
+          const spouts = [-1, 1].map(sgn => ({ sgn, mx: fCx + sgn * FG.spoutX, my: fBy - FG.basinY - 3.4 + FG.spoutDY + 0.3 }));
+          const arcAt = (sp, t) => [sp.mx + sp.sgn * 7.5 * t, sp.my - 2.6 * t + 5.4 * t * t + 1.2 * t];
+          for (const sp of spouts) { const [lx, ly] = arcAt(sp, 1); ripple(lx, ly, 820, 2, 3.4, FG.basinRY / FG.basinRX, 0.38); }
 
-          ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
+          drawStone(null);
 
-          // Le FILET DE DÉBORDEMENT : il tombe dans l'air, entre la colonne
-          // (trop étroite pour porter ces deux points) et le bassin bas —
-          // c'est la seule chose qui relie visuellement les deux vasques.
-          for (const sgn of [-1, 1]) {
-            const sx = fCx + sgn * FG.spillX;
-            const flow = ((now / 480) + (sgn > 0 ? 0.5 : 0)) % 1;
-            ctx.strokeStyle = "rgba(224,241,255,0.5)";
-            ctx.lineWidth = 1.4;
-            ctx.beginPath(); ctx.moveTo(sx, spillY0); ctx.lineTo(sx, spillY1); ctx.stroke();
-            const gy = spillY0 + (spillY1 - spillY0) * flow;
-            ctx.fillStyle = "rgba(255,255,255,0.55)";
-            ctx.fillRect(sx - 0.5, gy - 1.5, 1, 3);
+          {
+            const onePx = 1 / Math.max(1, ctx.getTransform().a);
+            for (const st of CURTAIN) {
+              // le filet : un trait d'un pixel d'écran, plus dense en haut (l'eau colle au rebord)
+              ctx.fillStyle = "rgba(214,236,250,0.26)";
+              ctx.fillRect(st.x, st.y0, onePx, fallLen);
+              ctx.fillStyle = "rgba(240,250,255,0.55)";
+              ctx.fillRect(st.x - onePx * 0.5, st.y0, onePx * 2, 0.8);
+              // une goutte claire qui descend le long du fil, en accélérant
+              const f = ((now / 560) + st.ph) % 1, gy = st.y0 + fallLen * f * f;
+              ctx.fillStyle = `rgba(255,255,255,${(0.6 * (1 - f * 0.5)).toFixed(3)})`;
+              ctx.fillRect(st.x - onePx * 0.5, gy - 0.5, onePx * 2, 1);
+            }
+            // les deux filets des mascarons : une suite de perles qui glissent sur la parabole
+            for (const sp of spouts) {
+              for (let k = 0; k <= 16; k++) {
+                const t = k / 16, [xx, yy] = arcAt(sp, t);
+                ctx.fillStyle = "rgba(214,236,250,0.34)";
+                ctx.fillRect(xx - onePx * 0.5, yy - onePx * 0.5, onePx * 1.5, onePx * 1.5);
+              }
+              for (let d = 0; d < 2; d++) {
+                const t = ((now / 700) + d / 2 + (sp.sgn > 0 ? 0.17 : 0)) % 1, [xx, yy] = arcAt(sp, t);
+                ctx.fillStyle = "rgba(255,255,255,0.7)";
+                ctx.fillRect(xx - onePx, yy - onePx, onePx * 2, onePx * 2);
+              }
+            }
           }
 
           /* ---- LE JET ET LES GOUTTES : `peak`, la hauteur de la crête
@@ -23539,6 +23912,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const lampSB = pr.kind === "lamp" ? C.TOWN_LAMP_BITMAPS[C.townLampArtAt(pr.x, pr.y)] : null;
         const lampOn = lampSB ? townLampLit(pr) : false;
         pushE(by, elAt(pr.x, pr.y), () => {
+          /* 2026-10-04 — LE TABLEAU DES NOUVELLES AU PIXEL D'ÉCRAN (`sprites.townNewsBoardHi`),
+             qui montre ce qu'il porte aujourd'hui : les annonces encore à prendre, l'avis
+             officiel de la quête, la médaille de la ferme. Variante relue une fois par
+             seconde (`boardLookRef`) : elle se déduit de l'état, elle ne circule pas. */
+          if (pr.kind === "newsBoard" && !reflecting && sprites.townNewsBoardHi) {
+            const M = ctx.getTransform();
+            if (Math.abs(M.b) < 1e-6 && Math.abs(M.c) < 1e-6) {
+              const bl = boardLookRef.current, tNow = performance.now();
+              if (!bl.v || tNow - bl.t > 1000) {
+                const s0 = sharedRef.current, e0 = Q.migrateStar(s0.star), bd = GZ.migrateBoard(s0.board, s0.day), gc = starGateCtxNow();
+                bl.v = { ads: boardAdsNow().filter(a => !bd.done[a.id]).length,
+                         notice: Q.starWarning(e0) || !!Q.starYardOffer(e0, s0.day, gc) || !!Q.starWarnOffer(e0, s0.day, gc),
+                         medal: MD.medalHas(s0.medals, "star") };
+                bl.t = tNow;
+              }
+              ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.24)" : "rgba(20,26,16,0.22)";
+              fillPixEllipse(ctx, cxp, by - 2, img.width * 0.28, 3.5);
+              const zf = M.a, zi = Math.round(zf), exact = Math.abs(zf - zi) < 0.02, z = exact ? zi : Math.ceil(zf);
+              const hi = sprites.townNewsBoardHi(z, bl.v);
+              const sx = M.a * (cxp - img.width / 2) + M.e, sy = M.d * (by - img.height) + M.f, k = zf / z;
+              ctx.save();
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              ctx.imageSmoothingEnabled = !exact;
+              if (exact) ctx.drawImage(hi, Math.round(sx), Math.round(sy));
+              else { ctx.imageSmoothingQuality = "high"; ctx.drawImage(hi, sx, sy, hi.width * k, hi.height * k); }
+              ctx.restore();
+              if (snowOver) drawSnowOverlay(snowOver, cxp - img.width / 2, by - img.height);
+              return;
+            }
+          }
           if (lampSB && !reflecting) {
             const lr = drawScreenLamp(ctx, lampSB, cxp, by, lampOn);
             if (lr) {
@@ -24148,17 +24551,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                assise a sa propre orientation et un `dir` imposé la ferait pivoter
                sur son banc. Il garde le « ! », il perd le tic — ce qui est très
                exactement ce qu'un inquiet assis fait. */
-            const tNerve = sitting ? null : starNerveDirOf("town", res.rid, dx2, dy2);
-            drawCharacter(charOf({ x: dx2, y: dy2, dir: tNerve != null ? tNerve : rDir, moving: tNerve != null ? false : rMoving, animT: rAnim, sit: sitting, injuredUntil: res.injuredUntil }), false);
+            const tBump = sitting ? null : residentBumpNow(res.rid);   // 2026-10-04 — les bousculades
+            const tNerve = sitting || tBump ? null : starNerveDirOf("town", res.rid, dx2, dy2);
+            drawCharacter(charOf({ x: dx2, y: dy2, dir: tBump ? tBump.dir : tNerve != null ? tNerve : rDir, moving: tNerve != null || tBump ? false : rMoving, animT: rAnim, sit: sitting, injuredUntil: res.injuredUntil }), false);
             const by0 = Math.round(dy2 * T) - 18 - pe * C.TOWN_ELEV_PX - pLift;
             /* ⚠️ ZIP 455 — LE TAMPON D'ANNONCE : le « ! », ou la phrase si on
                s'approche. UNE seule question posée à `starNpcEmote`, qui vit au
                niveau du composant — trois copies dans trois boucles auraient fini
                par ne pas répondre la même chose (piège n°1, troisième visage). */
-            const em = starNpcEmote("town", res.rid, dx2, dy2);
+            if (tBump && tBump.say) queueTownBubble(Math.round(dx2 * T) + 8, by0, tBump.say, true);
+            const em = tBump ? null : starNpcEmote("town", res.rid, dx2, dy2);
             if (em && em.say) queueTownBubble(Math.round(dx2 * T) + 8, by0, em.say, false);
             else if (em && !reflecting) townBubbles.push({ cx: Math.round(dx2 * T) + 8, by: by0, emote: em });
-            const line = em ? null : townActLine(res);
+            const line = em || tBump ? null : townActLine(res);
             if (line) queueTownBubble(Math.round(dx2 * T) + 8, by0, line, res.act === "talk");
           }, pLift, Math.floor(dx2 + 0.5));   // 2026-09-25 (phase 4) : un habitant se reflète aussi
         }
@@ -24669,6 +25074,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          verrait juste un taxi avec une tête qui sort du capot. */
       if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, Math.floor(m.x + 0.5));
       if (!inCar && !m.sleeping && !jpv.active && !m.sitOn) snowWalk("me", "boot", C.footX(m.x), C.footY(m.y), myE);
+      // 2026-10-04 — les bouffées de poussière, en file de tri (voir poussiere.js).
+      {
+        const dT = dustFor("town"), dNow = performance.now();
+        dT.prune(dNow);
+        for (const pf of dT.puffs()) pushE(pf.y + PO.DUST_SORT_AHEAD, pf.lvl, () => PO.drawDustPuff(ctx, pf, performance.now()));
+      }
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 456 — LA POSTURE DU CRATÈRE SE VOIT ENFIN.
          ╚══════════════════════════════════════════════════════════════════════
@@ -31597,6 +32008,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        CARTE mise en attente avant la pluie (l'annonce, la signature du maire) restait
        bloquée jusqu'à la chute. Ce qui a besoin de la chute, c'est de la RATTRAPER. */
     if (e && Q.starFallen(e) && !starScenePendRef.current && !starSceneRef.current) {
+      /* 2026-10-04 — la frise du menu dev a « passé » ces scènes : marquées vues,
+         jamais jouées (voir la frise, plus bas). Fenêtre de dix secondes : la
+         marque ne doit pas avaler une vraie chute plus tard. */
+      const skip = starDevSkipRef.current;
+      if (skip && Date.now() < skip.until) {
+        for (const kind of skip.kinds) {
+          const at = kind === "townFall" ? e.townFall : e.fall;
+          if (at && starFallSeen(kind) !== at) { starMarkFallSeen(kind); skip.kinds = skip.kinds.filter(k => k !== kind); }
+        }
+      } else if (skip) starDevSkipRef.current = null;
       if (!Q.starDone(e)) {
         if (zone === "town" && Q.starTownFallen(e) && starFallSeen("townFall") !== e.townFall) starQueueScene("townFall");
         else if (zone === "farm" && starFallSeen("fall") !== e.fall) starQueueScene("fall");
@@ -35159,7 +35580,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
         <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(); /* 2026-09-26 : sans argument — il lui passait le numéro de jour, qu'elle ignorait */ const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
+        {/* 2026-10-04 — les médailles : une ligne cliquable, visible d'emblée dès
+            qu'une médaille est gagnée (c'est un trophée, on le montre), sinon
+            rangée avec le reste au survol. */}
+        {(() => {
+          const n = MD.medalCount(sharedRef.current.medals);
+          const row = (
+            <div className="row ferme-hud-res ferme-hud-medals" title={L.medals.hudTip} onClick={() => setMedalsOpen(true)}>
+              🏅 <span>{n}/{MD.MEDAL_IDS.length}</span>
+            </div>
+          );
+          return n > 0 ? row : null;
+        })()}
         <div className="ferme-hud-extra">
+          {MD.medalCount(sharedRef.current.medals) === 0 && (
+            <div className="row ferme-hud-res ferme-hud-medals" title={L.medals.hudTip} onClick={() => setMedalsOpen(true)}>
+              🏅 <span>0/{MD.MEDAL_IDS.length}</span>
+            </div>
+          )}
           <div className="row ferme-hud-barn">🛖 {L.barnHudLine(barn ? barn.level : 0, C.BARN_LEVELS.length, E.barnAnimalCap(barn ? barn.level : 0))}</div>
           <div className="row ferme-hud-res" title={L.woodResTip} onClick={() => setCraftMenuOpen(o => o === "wood" ? null : "wood")}>
             <Sprite img={spritesReady ? spritesRef.current.icons.wood : null} w={16} h={16} /> <span>{myInv ? myInv.wood : 0}</span>
@@ -35897,8 +36335,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <h2>{L.voyagerOrderTitle}</h2>
             <div className="ferme-hint">{L.voyagerOrderHint}</div>
             {/* 2026-09-13 — la récompense qu'Eduardo annonçait, dite là où elle sert. */}
-            {Q.starDone(sharedRef.current.star) && (
-              <div className="ferme-hint">{L.star.yard.eduShipLimit(Q.starVoyageMaxQty(sharedRef.current.star))}</div>
+            {(Q.starDone(sharedRef.current.star) || MD.medalHas(sharedRef.current.medals, "star")) && (
+              <div className="ferme-hint">{L.star.yard.eduShipLimit(Q.starVoyageMaxQty(sharedRef.current.star, MD.medalHas(sharedRef.current.medals, "star")))}</div>
             )}
             {C.WORLD_GOODS.map(g => {
               const qty = voyagerDraft[g.key] | 0;
@@ -35913,7 +36351,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button onClick={() => setDraftQty(g.key, qty - 1)} disabled={qty <= 0}>−</button>
                     <span style={{ minWidth: 22, textAlign: "center" }}>{qty}</span>
-                    <button onClick={() => setDraftQty(g.key, qty + 1)} disabled={qty >= Q.starVoyageMaxQty(sharedRef.current.star)}>+</button>
+                    <button onClick={() => setDraftQty(g.key, qty + 1)} disabled={qty >= Q.starVoyageMaxQty(sharedRef.current.star, MD.medalHas(sharedRef.current.medals, "star"))}>+</button>
                   </div>
                 </div>
               );
@@ -39443,6 +39881,57 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setNewsBoardOpen(false)}>✕</button>
               <h2>{L.newsBoardTitle}</h2>
               <div className="ferme-hint">{L.newsBoardSub}</div>
+              {/* ╔═══════════════════════════════════════════════════════════
+                  ║ 2026-10-04 — LA GAZETTE DU JOUR ET LES PETITES ANNONCES.
+                  ╚═══════════════════════════════════════════════════════════
+                  Tout est recomposé ici, chez chacun, depuis l'état partagé
+                  (gazette.js) : une une, des brèves, et les annonces tirées du
+                  jour. Seul « Livrer » envoie quelque chose — à l'hôte, qui
+                  tranche. */}
+              {(() => {
+                const gw = gazetteWorldNow(), gz = GZ.gazetteOfDay(gw), G = L.gazette;
+                const seasonName = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[E.seasonOf().key] || "";
+                const hd = G.head[gz.head.key];
+                const hv = typeof hd === "function" ? hd(...(gz.head.args || []), gz.head.key === "election" ? L.candName(gw.mayorKey) : undefined) : hd;
+                const brief = (b) => {
+                  const fn = G.brief[b.key];
+                  if (b.key === "mayor") return fn(L.candName(b.args[0]), b.args[1]);
+                  return typeof fn === "function" ? fn(...(b.args || [])) : fn;
+                };
+                const ads = boardAdsNow(), bd = GZ.migrateBoard(sharedRef.current.board, sharedRef.current.day);
+                const inv = myInv || {};
+                return (
+                  <div className="ferme-gazette">
+                    <div className="ferme-gazette-mast">{G.masthead}</div>
+                    <div className="ferme-gazette-date">{G.dateLine(gz.day, seasonName)}</div>
+                    <div className="ferme-gazette-head">{hv[0]}</div>
+                    <div className="ferme-gazette-lead">{hv[1]}</div>
+                    <ul className="ferme-gazette-briefs">
+                      {gz.briefs.map((b, i) => <li key={"gzb" + i}>{brief(b)}</li>)}
+                    </ul>
+                    <div className="ferme-gazette-ads-title">📌 {G.adsTitle}</div>
+                    {!ads.length && <div className="ferme-hint">{G.adsNone}</div>}
+                    {ads.map(ad => {
+                      const ro = rosterOf(ad.rid), have = GZ.adHave(inv, ad.good), by = bd.done[ad.id];
+                      const good = G.adGood(ad.good, ad.qty);
+                      return (
+                        <div key={ad.id} className={"ferme-gazette-ad" + (by ? " taken" : "")}>
+                          <div className="ad-text">{G.adLine(ro.name, good, G.adWhy(ad.good, ad.why))}</div>
+                          <div className="ad-meta">
+                            <b>{G.adReward(ad.reward)}</b> · {by ? G.adTakenBy(by) : G.adExpires}
+                            {!by && <> · {G.adHave(Math.min(have, ad.qty), ad.qty)}</>}
+                          </div>
+                          {!by && (
+                            <button className="ferme-btn" disabled={have < ad.qty}
+                                    title={have < ad.qty ? G.adShort : ""}
+                                    onClick={() => sendReq({ kind: "boardDeliver", adId: ad.id })}>{G.adDeliver}</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               {/* ╔══════════════════════════════════════════════════════════════
                   ║ ZIP 455 — IL PORTE L'AVIS DE L'OBSERVATOIRE, ET SEULEMENT LUI.
                   ╚══════════════════════════════════════════════════════════════
@@ -39542,6 +40031,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-hint">• {L.newsBoardSalon}</div>
               <div className="ferme-hint">• {L.newsBoardCourt}</div>
               <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setNewsBoardOpen(false)}>{L.newsBoardClose}</button></div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ╔══════════════════════════════════════════════════════════════════
+          ║ 2026-10-04 — L'ÉCRAN DES MÉDAILLES DE LA FERME.
+          ╚══════════════════════════════════════════════════════════════════
+          Une ligne par quête du catalogue (`MD.MEDAL_QUESTS`) : l'insigne, son
+          nom, quand et par qui elle a été gagnée — et « rejouer », qui ne
+          s'offre qu'une fois la médaille acquise (l'hôte relit la condition).
+          ⚠️ AUCUN SPOIL : avant l'avis de l'observatoire, la quête s'appelle
+          « le chantier naval » ; avant même le chantier, elle est « à venir ». */}
+      {medalsOpen && (() => {
+        const sh = sharedRef.current, e = Q.migrateStar(sh.star), medals = sh.medals || {};
+        const fmtDate = (ms) => { try { return new Date(ms).toLocaleDateString(lang === "en" ? "en-GB" : "fr-FR", { day: "numeric", month: "long", year: "numeric" }); } catch (err) { return ""; } };
+        return (
+          <div className="ferme-modal open" onClick={() => setMedalsOpen(false)}>
+            <div className="panel ferme-modal-panel ferme-medals-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setMedalsOpen(false)}>✕</button>
+              <h2>{L.medals.title}</h2>
+              <div className="ferme-hint">{L.medals.sub}</div>
+              {MD.MEDAL_QUESTS.map(def => {
+                const m = medals[def.id];
+                const earned = !!m;
+                const started = Q.starYardStarted(e) || Q.starWarned(e) || Q.starFallen(e);
+                const name = earned || Q.starWarned(e) || Q.starFallen(e) ? L.medals.name[def.id]
+                  : started ? L.medals.nameEarly[def.id] : L.medals.hidden;
+                const running = started && !Q.starFinaleInaugurated(e);
+                return (
+                  <div key={"medal-" + def.id} className={"ferme-medal-row" + (earned ? " earned" : "")}>
+                    <MedalBadge def={def} earned={earned} px={3} />
+                    <div className="info">
+                      <b>{name}</b>
+                      {earned ? (
+                        <>
+                          <span>{L.medals.wonOn(m.day || "?", fmtDate(m.at))}</span>
+                          {m.by && m.by.length > 0 && <span>{L.medals.wonBy(m.by.join(", "))}</span>}
+                          {m.n > 1 && <span>{L.medals.times(m.n)}</span>}
+                          {running && <span>{L.medals.stateReplay}</span>}
+                          <button className="ferme-btn" style={{ marginTop: 8 }}
+                                  onClick={() => { if (window.confirm(L.medals.replayConfirm)) { sendReq({ kind: "starReplay" }); setMedalsOpen(false); } }}>
+                            {L.medals.replay}
+                          </button>
+                        </>
+                      ) : (
+                        <span>{started ? L.medals.stateRunning : L.medals.stateNone}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setMedalsOpen(false)}>{L.medals.close}</button></div>
             </div>
           </div>
         );
@@ -39732,8 +40273,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           : (MR.mayorSigned(e) || Q.starPlanAsked(e)) ? L.star.dev.phaseYard(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)
                           : L.star.dev.notStarted}
                       </div>
+                      {/* ╔══════════════════════════════════════════════════════
+                          ║ 2026-10-04 — LA FRISE. Une ligne par événement, dans
+                          ║ l'ordre du jeu ; cliquer « va à » l'événement : tout ce
+                          ║ qui précède est validé, lui reste à jouer (voir
+                          ║ `STAR_DEV_STEPS`, quete.js). Les vingt et un boutons
+                          ║ d'outils (`STAR_DEV_OPS`) quittent le menu : la frise
+                          ║ couvre tout ce qu'ils faisaient, plus la fin.
+                          ╚══════════════════════════════════════════════════════
+                          ⚠️ LES SCÈNES DÉJÀ PASSÉES NE REPARTENT PAS : aller au-delà
+                          de la pluie réécrit `e.fall`, et la pompe rejouerait la
+                          chute à chaque clic (la marque « vue » est datée par la
+                          chute elle-même). `starDevSkipRef` les marque vues chez
+                          celui qui a cliqué — « Replay a scene » reste là pour les
+                          revoir. */}
+                      {(() => {
+                        const at = Q.starDevStepAt(e);
+                        const idx = (k) => Q.STAR_DEV_STEP_KEYS.indexOf(k);
+                        const go = (key) => {
+                          const k = idx(key);
+                          starDevSkipRef.current = { until: Date.now() + 10000, rewatch: true,
+                            kinds: ["fall", "townFall"].filter(sc => k > idx(sc)) };
+                          sendReq({ kind: "devStarTo", step: key });
+                          setDevMenuOpen(false);
+                        };
+                        return Q.STAR_DEV_ACTS.map(([act, keys]) => (
+                          <div key={"devact-" + act} className="ferme-dev-act">
+                            <div className="ferme-dev-act-title">{L.star.dev.act(act)}</div>
+                            {keys.map(key => {
+                              const k = idx(key), st = Q.STAR_DEV_STEPS[k];
+                              const done = key === "done" ? at < 0 : st.done(e);
+                              const now = k === at;
+                              return (
+                                <button key={"devstep-" + key}
+                                        className={"ferme-dev-step" + (done ? " done" : "") + (now ? " now" : "")}
+                                        title={L.star.dev.stepTip(key)}
+                                        onClick={() => go(key)}>
+                                  <span className="mark">{done ? "✓" : now ? "▶" : "·"}</span>
+                                  <span className="lbl">{L.star.dev.step(key)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ));
+                      })()}
+                      <div className="ferme-dev-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.toolsLabel}</div>
                       <div className="ferme-dev-grid">
-                        {Q.STAR_DEV_OPS.map(op => (
+                        {["reset", "appt", "unslam"].map(op => (
                           <button key={"devstar-" + op} className="ferme-dev-btn"
                                   onClick={() => { sendReq({ kind: "devStar", op }); setDevMenuOpen(false); }}>
                             {L.star.dev.op(op)}
@@ -39983,6 +40569,20 @@ function MarketOnly({ label }) {
       color: "rgba(255,238,200,0.75)", fontSize: 11, fontWeight: 700,
     }}>{label}</span>
   );
+}
+
+/* 2026-10-04 — l'insigne de l'écran des médailles (`A.drawQuestMedal`). Déclaré
+   au niveau du MODULE, jamais dans le rendu de `FermeGame` : un composant déclaré
+   dans le rendu d'un autre est un type neuf à chaque rendu (§4 de CLAUDE.md). */
+function MedalBadge({ def, earned, px = 3 }) {
+  const ref = useCallback((node) => {
+    if (!node) return;
+    node.width = A.MEDAL_ART_W * px; node.height = A.MEDAL_ART_H * px;
+    const g = node.getContext("2d"); g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, node.width, node.height);
+    A.drawQuestMedal(g, 0, 0, px, def, earned);
+  }, [def, earned, px]);
+  return <canvas ref={ref} className="ferme-medal-badge" style={{ width: A.MEDAL_ART_W * px, height: A.MEDAL_ART_H * px }} />;
 }
 
 function Sprite({ img, w = 32, h = 32, sx, sy }) {

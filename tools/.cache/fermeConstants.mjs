@@ -9042,3 +9042,38 @@ export const SAW_LOG_MAX = 220;           // traits transportés dans la `req` �
    ⚠️ Ici la borne est DANS `sawTick` : quel que soit l'appelant, la manche
    s'arrête au même pas. Il n'y a plus rien à tenir d'accord. */
 export const SAW_MAX_TICKS = SAW_HZ * 180;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-04 — LES BOUSCULADES : UN RÉSIDENT QU'ON BOUSCULE S'ARRÊTE ET RÉPOND.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : « quand on entre en collision avec des résidents une ou
+   deux fois en fonction de leur caractère, qu'ils s'arrêtent de marcher et se
+   tournent vers nous pour râler. Sauf certains qui seront gentils et
+   s'excuseront. »
+   ⚠️ LE CARACTÈRE SE LIT DANS CE QU'ON SAIT DÉJÀ D'EUX (mémoire : « une raison de
+   PNJ se tire de ce qu'il fait déjà ») : Rosalie est aigrie, René bougon, les
+   `edgy` veillent la nuit ou pistent les loups, les `rich` comptent l'or, Carla a
+   « un goût exigeant », Gustave tient l'horloge de la gare. Les doux soignent,
+   cuisinent, plantent. Tout le reste est PATIENT : il encaisse un premier coup
+   d'épaule et râle au second.
+   ⚠️ AUCUN CHAMP SAUVEGARDÉ : la table est une constante, le compte des coups vit
+   chez l'hôte le temps d'une soirée. */
+export const RESIDENT_TEMPER_GRUMPY = [16, 25, 4, 11, 17, 3, 20, 30, 7];   // Rosalie, René, Odile, Firmin, Edgar, Bastien, Philomène, Carla, Gustave
+export const RESIDENT_TEMPER_KIND = [28, 8, 12, 10, 14, 24, 6, 22, 15];    // Chloé, Perrine, Capucine, Sidonie, Lucille, Zélie, Ines, Berthe, Anselme
+/* `after` : au combientième coup il réagit. `code` voyage dans l'arrêt (0, 1, 2). */
+export const RESIDENT_TEMPERS = {
+  grumpy:  { after: 1, code: 0 },
+  patient: { after: 2, code: 1 },
+  kind:    { after: 1, code: 2 },
+};
+export const RESIDENT_TEMPER_BY_CODE = ["grumpy", "patient", "kind"];
+export function residentTemper(rid) {
+  if (RESIDENT_TEMPER_GRUMPY.includes(rid)) return "grumpy";
+  if (RESIDENT_TEMPER_KIND.includes(rid)) return "kind";
+  return "patient";
+}
+export const RES_BUMP_R = 0.55;             // en cases, d'un pied à l'autre : en dessous, on se touche
+export const RES_BUMP_RELEASE = 0.85;       // ⚠️ hystérésis : il faut s'écarter VRAIMENT pour qu'un nouveau contact compte
+export const RES_BUMP_MS = 2800;            // il reste planté, tourné vers vous, le temps de sa phrase
+export const RES_BUMP_FORGET_MS = 25000;    // un premier coup d'épaule s'oublie au bout de ce temps
+export const RES_BUMP_COOLDOWN_MS = 5000;   // après une réaction, il ne repart pas en colère au pas suivant

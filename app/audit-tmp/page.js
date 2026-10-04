@@ -27,15 +27,18 @@ function installHelpers() {
   window.__fgFind = () => { const c = window.__main(); const k = Object.keys(c).find((k) => k.startsWith("__reactFiber")); let f = c[k]; while (f) { if (f.type && f.type.name === "FermeGame") return (window.__fg = f); f = f.return; } return null; };
   // Heure de jeu forcée (VERIFICATION.md : le jeu lit Date.now ; 800 ms réelles = 1 min de jeu).
   const rn = Date.now.bind(Date); window.__toff = 0; Date.now = () => rn() + window.__toff;
-  window.__setHour = (H) => { const sh = window.__hook(306).current; const target = sh.dayStartAt + (H * 60 - 360) / 1200 * 960000; window.__toff = target - rn(); return window.__toff; };
+  window.__setHour = (H) => { const sh = window.__hook(310).current; const target = sh.dayStartAt + (H * 60 - 360) / 1200 * 960000; window.__toff = target - rn(); return window.__toff; };
   window.__join = () => { const b = [...document.querySelectorAll("button")].find((x) => /Rejoindre la ferme/.test(x.textContent)); if (b) b.click(); return !!b; };
   window.__ensureJoined = async () => { for (let i = 0; i < 40; i++) { const big = window.__main(); if (big && big.width > 200) { await window.__sleep(1500); window.__fg = null; window.__fgFind(); return true; } window.__join(); await window.__sleep(700); } return false; };
   window.__devMenu = async (open) => { const isOpen = !!document.querySelector(".ferme-dev-btn"); if (isOpen !== open) { window.dispatchEvent(new KeyboardEvent("keydown", { code: open ? "KeyX" : "Escape", key: open ? "x" : "Escape", metaKey: open, shiftKey: open, bubbles: true })); await window.__sleep(400); } };
   window.__btn = async (label) => { await window.__devMenu(true); const b = [...document.querySelectorAll(".ferme-dev-btn")].find((x) => x.textContent.trim() === label); if (b) b.click(); await window.__sleep(300); await window.__devMenu(false); return !!b; };
-  window.__waitZoom = async () => { for (let i = 0; i < 30; i++) { const v = window.__hook(298).current.v; if (Math.abs(v - Math.round(v)) < 1e-9) { await window.__sleep(150); if (window.__hook(298).current.v === v) return v; } await window.__sleep(100); } return -1; };
-  window.__tp = (key) => { window.__hook(302).current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + key }; };
-  window.__scene = async (tp, x, y, zoom, hour, name, extra) => { if (tp) { window.__tp(tp); await window.__sleep(3300); } const m = window.__hook(303).current; if (x != null) { m.x = x; m.y = y; m.dir = 0; m.moving = false; } window.__hook(300).current = zoom; window.__setHour(hour); await window.__sleep(1800); if (extra) await extra(); window.__paused = true; await window.__sleep(50); const r = await window.__cap(name, false); window.__paused = false; return r; };
-  window.__hook = (i) => { let h = (window.__fg || window.__fgFind()).memoizedState; for (let j = 0; j < i; j++) h = h.next; return h.memoizedState; };
+  window.__waitZoom = async () => { for (let i = 0; i < 30; i++) { const v = window.__hook(302).current.v; if (Math.abs(v - Math.round(v)) < 1e-9) { await window.__sleep(150); if (window.__hook(302).current.v === v) return v; } await window.__sleep(100); } return -1; };
+  window.__tp = (key) => { window.__hook(306).current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + key }; };
+  window.__scene = async (tp, x, y, zoom, hour, name, extra) => { if (tp) { window.__tp(tp); await window.__sleep(3300); } const m = window.__hook(307).current; if (x != null) { m.x = x; m.y = y; m.dir = 0; m.moving = false; } window.__hook(304).current = zoom; window.__setHour(hour); await window.__sleep(1800); if (extra) await extra(); window.__paused = true; await window.__sleep(50); const r = await window.__cap(name, false); window.__paused = false; return r; };
+  // Les indices ci-dessus sont relatifs à `sharedRef` (310 au 2026-10-04) : retrouvé à chaque appel, un hook ajouté plus haut ne décale plus rien.
+  window.__hookRaw = (i) => { let h = (window.__fg || window.__fgFind()).memoizedState; for (let j = 0; j < i; j++) h = h.next; return h.memoizedState; };
+  window.__sharedIdx = () => { let h = (window.__fg || window.__fgFind()).memoizedState, i = 0; while (h) { const v = h.memoizedState; if (v && v.current && typeof v.current === "object" && "seed" in v.current && "star" in v.current) return i; i++; h = h.next; } return 310; };
+  window.__hook = (i) => window.__hookRaw(i - 310 + window.__sharedIdx());
 }
 
 export default function AuditTmpPage() {

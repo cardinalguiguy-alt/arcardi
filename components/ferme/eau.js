@@ -584,6 +584,11 @@ function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
   const WD = wim.data, BD = bim.data;
   const put = (D, i, c, a) => { const o = i * 4; D[o] = c[0]; D[o + 1] = c[1]; D[o + 2] = c[2]; D[o + 3] = a == null ? 255 : a; };
   const lvl = new Uint8Array(N).fill(255);
+  /* 2026-10-04 — LE SABLE SEC, AU PIXEL : là où la berge est peinte en sable sec ou
+     humide (pas mouillé, pas vase). Lu par la poussière sous les pieds
+     (`bakedSandAt`, poussiere.js) — la plage de la ville n'a pas de type de sol
+     à elle, elle n'existe QUE dans cette cuisson. */
+  const sandM = new Uint8Array(N);
   const vAt = (xx, yy) => { if (xx < 0 || yy < 0 || xx >= RW || yy >= RH) return -1; const j = yy * RW + xx; return wet[j] ? v[j] : -1; };
   const softDry = (xx, yy) => { if (xx < 0 || yy < 0 || xx >= RW || yy >= RH) return false; const c = cls[yy * RW + xx]; return c === 1 || c === 0; };
   const K_SLOPE = isPond ? 5.5 : 3.2;         // la pente du fond, en paliers par unité de gradient
@@ -756,6 +761,7 @@ function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
     const sandy = s > 0.02 && (s >= 0.98 || (waterHash(wx * 5 + 2, wy * 3 + 7) % 1000) / 1000 < s);
     let col = null;
     if (sandy) {
+      if (d >= 2.5 && d < 20) sandM[i] = 1;
       if (d < 2.5) col = SAND_WET[h % SAND_WET.length];
       else if (d < 7) col = SAND_DAMP[h % SAND_DAMP.length];
       else if (d < 20) col = (p < 0.02) ? PEB[h % PEB.length] : SAND_DRY[h % SAND_DRY.length];
@@ -847,7 +853,7 @@ function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
   }
   return {
     isPond, bx0, by0, cw, ch, ox, oy, RW, RH,
-    water: wc, bank: bc, lvl, full, depthCell, cellTop, faceH, swellOK, dsh,
+    water: wc, bank: bc, lvl, sandM, full, depthCell, cellTop, faceH, swellOK, dsh,
   };
 }
 
@@ -888,6 +894,15 @@ export function bakedLevelAt(bake, wx, wy) {
   if (xx < 0 || yy < 0 || xx >= R.RW || yy >= R.RH) return -1;
   const l = R.lvl[yy * R.RW + xx];
   return l === 255 ? -1 : l;
+}
+/* 2026-10-04 — le pixel du monde est-il du sable (sec ou humide) de la berge ? */
+export function bakedSandAt(bake, wx, wy) {
+  const x = (wx / T) | 0, y = (wy / T) | 0;
+  const R = bakeRegionAt(bake, x, y);
+  if (!R || !R.sandM) return false;
+  const xx = (wx | 0) - R.ox, yy = (wy | 0) - R.oy;
+  if (xx < 0 || yy < 0 || xx >= R.RW || yy >= R.RH) return false;
+  return R.sandM[yy * R.RW + xx] === 1;
 }
 export const WATER_LEVELS = N_LEV;
 

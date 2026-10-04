@@ -7654,6 +7654,109 @@ export function buildSprites() {
     P(g, 0, 8, 36, 2, "#2f5a2c");
     return c;
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LE TABLEAU DES NOUVELLES AU PIXEL D'ÉCRAN, ET IL DIT CE QU'IL
+     ║ PORTE. Guillaume : « un meilleur niveau de détail ».
+     ╚═════════════════════════════════════════════════════════════════════════
+     Même gabarit que le natif (36 × 44 px d'art, ancré au pied), même méthode que
+     la fontaine (`plazaFountainHi`) : des formes assemblées, au pixel d'écran.
+     ⚠️ LE TABLEAU EST UN AFFICHAGE, DONC IL MONTRE LE JOUR : `v.ads` cartes
+     d'annonce épinglées (0 à 2, celles de la gazette), `v.notice` un avis officiel
+     au cachet de cire rouge quand la mairie ou l'observatoire a quelque chose à
+     dire (la quête), `v.medal` la médaille de la ferme épinglée au cadre. Un canevas
+     par cran de zoom et par variante, mis en cache. */
+  const BOARD_HI = new Map();
+  function townNewsBoardHi(zIn, v) {
+    const z = Math.max(1, Math.min(8, Math.round(zIn)));
+    const ads = Math.max(0, Math.min(2, (v && v.ads) | 0)), notice = !!(v && v.notice), medal = !!(v && v.medal);
+    const key = z + ":" + ads + ":" + (notice ? 1 : 0) + ":" + (medal ? 1 : 0);
+    if (BOARD_HI.has(key)) return BOARD_HI.get(key);
+    const W = 36, H = 44;
+    const [c, g] = cv(W * z, H * z);
+    const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))); };
+    const px1 = (x, y, col) => { g.fillStyle = col; g.fillRect(Math.round(x * z), Math.round(y * z), 1, 1); };
+    const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const WD = ["#3a2616", "#4f3420", "#66452a", "#7d5634", "#946842", "#ab7d52"];
+    // ── les deux pieds : du bois veiné, plus sombre à droite (l'ombre), sur deux pierres
+    for (const x0 of [5.5, 27.5]) {
+      R(x0, 32, 3, 11.5, WD[2]); R(x0, 32, 1, 11.5, WD[4]); R(x0 + 2.2, 32, 0.8, 11.5, WD[1]);
+      for (let k = 0; k < 6; k++) px1(x0 + 0.6 + hash(x0, k) * 1.8, 33 + k * 1.8, WD[1]);
+      R(x0 - 0.8, 42.6, 4.6, 1.4, "#8d887f"); R(x0 - 0.8, 42.6, 4.6, 0.4, "#b3aea2");
+    }
+    // ── le cadre : quatre planches biseautées, clouées aux angles
+    R(1.5, 8.5, 33, 26, WD[2]);
+    R(1.5, 8.5, 33, 0.6, WD[5]); R(1.5, 8.5, 0.6, 26, WD[4]);
+    R(1.5, 33.9, 33, 0.6, WD[0]); R(33.9, 8.5, 0.6, 26, WD[1]);
+    for (let k = 0; k < 12; k++) px1(2 + hash(k, 3) * 32, 9.2 + hash(k, 4) * 0.8, WD[1]);       // le fil du bois
+    for (const [x, y] of [[2.4, 9.4], [32.9, 9.4], [2.4, 32.9], [32.9, 32.9]]) { R(x, y, 0.7, 0.7, "#2a2a2a"); px1(x, y, "#9a9a9a"); }
+    // ── le liège : un fond chaud, moucheté
+    R(4, 11, 28, 21.5, "#c8a06a");
+    for (let k = 0; k < 140; k++) px1(4.2 + hash(k, 7) * 27.6, 11.2 + hash(k, 8) * 21.1, hash(k, 9) < 0.5 ? "#b48a56" : "#d8b47e");
+    R(4, 11, 28, 0.5, "#8f6c43");                                                                 // l'ombre du cadre sur le liège
+    // une punaise, avec son ombre : tête ronde de laiton ou de couleur
+    const pin = (x, y, col) => { R(x + 0.35, y + 0.35, 0.8, 0.8, "rgba(40,24,8,0.35)"); R(x - 0.1, y - 0.1, 0.9, 0.9, col); px1(x, y, "#ffffff"); };
+    // ── la gazette du jour : grande feuille, titre noir, filet double, illustration, colonnes
+    const gx = 5.2, gy = 12.3, gw = 13.2, gh = 15.8;
+    R(gx + 0.5, gy + 0.5, gw, gh, "rgba(40,24,8,0.28)");
+    R(gx, gy, gw, gh, "#f3ecd8");
+    R(gx + 0.8, gy + 0.9, gw - 1.6, 1.6, "#2b241b");                                             // le titre
+    R(gx + 0.8, gy + 2.9, gw - 1.6, 0.25, "#2b241b"); R(gx + 0.8, gy + 3.35, gw - 1.6, 0.25, "#2b241b");
+    R(gx + 0.8, gy + 4.1, gw * 0.62, 0.7, "#4d4436");                                             // la manchette
+    R(gx + 0.8, gy + 5.3, 5.2, 4, "#b9b1a0"); R(gx + 1.1, gy + 7.2, 4.6, 1.8, "#8e8676"); R(gx + 3.6, gy + 5.8, 1.2, 1.2, "#e9e2cf");   // la gravure : un paysage, un soleil
+    for (let k = 0; k < 6; k++) R(gx + 6.6, gy + 5.4 + k * 0.75, gw - 7.5, 0.3, "#8a8272");      // la colonne de texte
+    for (let k = 0; k < 6; k++) R(gx + 0.8, gy + 9.9 + k * 0.85, gw - 1.6 - (k === 5 ? 4 : 0), 0.3, "#8a8272");
+    pin(gx + gw / 2, gy + 0.3, "#c9a227");
+    // ── les petites annonces : cartes de couleur à languettes (on en arrache le numéro)
+    const cards = [{ x: 20.2, y: 12.6, col: "#fff2a8", sh: "#d8c56e" }, { x: 26.4, y: 13.4, col: "#dff0c8", sh: "#a8c37f" }];
+    for (let i = 0; i < 2; i++) {
+      const cd = cards[i];
+      if (i >= ads) { pin(cd.x + 2.4, cd.y + 0.3, "#9a9a9a"); continue; }                         // la punaise restée, sans rien : la place d'une annonce
+      R(cd.x + 0.4, cd.y + 0.5, 5, 6.6, "rgba(40,24,8,0.25)");
+      R(cd.x, cd.y, 5, 5, cd.col);
+      R(cd.x + 0.7, cd.y + 1, 3.6, 0.45, "#5a4a2a"); R(cd.x + 0.7, cd.y + 2, 3.2, 0.3, "#8a7a52"); R(cd.x + 0.7, cd.y + 2.8, 2.6, 0.3, "#8a7a52");
+      for (let k = 0; k < 4; k++) { R(cd.x + 0.15 + k * 1.22, cd.y + 5, 1, 2, cd.col); R(cd.x + 0.15 + k * 1.22 + 0.95, cd.y + 5, 0.27, 2, cd.sh); }   // les languettes
+      pin(cd.x + 2.4, cd.y + 0.3, i ? "#3b78c4" : "#c43b3b");
+    }
+    // ── en bas à droite : l'avis officiel scellé (la quête), ou l'horaire du train
+    if (notice) {
+      R(20.6, 22.4, 10.6, 9, "rgba(40,24,8,0.28)");
+      R(20.1, 21.8, 10.6, 9, "#efe0b8"); R(20.1, 21.8, 10.6, 0.5, "#d9c690");
+      R(21, 22.9, 8.8, 1, "#7a1f1f");                                                             // « AVIS » en rouge
+      for (let k = 0; k < 4; k++) R(21, 24.6 + k * 0.9, 8.8 - (k === 3 ? 3 : 0), 0.3, "#7d6f52");
+      R(26.6, 27.9, 2.4, 2.4, "#a52222"); R(26.6, 27.9, 2.4, 0.6, "#d24a4a"); px1(27.6, 28.9, "#6e1414");   // le cachet de cire
+      R(27.2, 30.2, 0.6, 1.4, "#a52222"); R(28.2, 30.2, 0.6, 1.1, "#8a1a1a");                      // ses deux rubans
+      pin(25.4, 22.1, "#c9a227");
+    } else {
+      R(21.1, 22.9, 9, 7.4, "rgba(40,24,8,0.25)");
+      R(20.6, 22.4, 9, 7.4, "#e4ecf2");
+      R(21.3, 23.1, 7.6, 0.9, "#2f4a66");
+      for (let k = 0; k < 5; k++) { R(21.3, 24.8 + k * 0.95, 2.2, 0.35, "#5d7186"); R(24.3, 24.8 + k * 0.95, 4.6, 0.35, "#9aa8b6"); }
+      pin(25.1, 22.7, "#c43b3b");
+    }
+    // un crayon pendu à une ficelle, sur le côté : on écrit ici
+    R(33.4, 14, 0.2, 9, "#d8d0c0"); R(33.1, 23, 0.8, 3.4, "#e0b33a"); R(33.1, 26.4, 0.8, 0.6, "#e8c6a0"); px1(33.5, 27, "#333");
+    // ── la médaille de la ferme, épinglée au cadre (gagnée une fois, elle reste)
+    if (medal) {
+      R(29.6, 9.2, 0.9, 2.2, "#1d2f6b"); R(30.5, 9.2, 0.9, 2.2, "#f2d36b"); R(31.4, 9.2, 0.9, 2.2, "#1d2f6b");
+      R(29.9, 11.1, 2.1, 2.1, "#d9a531"); R(29.9, 11.1, 1, 1, "#ffe390"); px1(30.9, 12.1, "#8a5a12");
+    }
+    // ── le toit : bardeaux en rangs décalés, faîtage, débord ombré
+    const roofCol = ["#2f5a2c", "#3e6f3a", "#4f8448", "#639159", "#7aa66d"];
+    for (let row = 0; row < 4; row++) {
+      const y = 0.8 + row * 2.1, half = 4 + row * 4.6;
+      for (let x = 18 - half; x < 18 + half; x += 2.2) {
+        const xi = x + (row % 2) * 1.1;
+        if (xi < 0 || xi > 34.4) continue;
+        const lit = xi < 18 ? 3 : 1;
+        R(xi, y, 2.1, 2.1, roofCol[lit + (hash(row, Math.round(xi)) < 0.3 ? 1 : 0)]);
+        R(xi, y + 1.8, 2.1, 0.3, roofCol[0]);
+      }
+    }
+    R(16.6, 0, 2.8, 1.2, "#5a3a22"); R(16.6, 0, 2.8, 0.4, "#8a5a34");                             // le faîtage
+    R(0, 8.6, 36, 1.1, roofCol[0]); R(0, 9.7, 36, 0.6, "rgba(20,14,6,0.35)");                     // la planche de rive, l'ombre du débord
+    BOARD_HI.set(key, c);
+    return c;
+  }
   /* 2026-09-28 (soir) — L'ANCIEN BUIS SUR TIGE DE LA PLACE (trois disques sur un
      bâton, dans un bac), restauré tel quel depuis 5969306 derrière
      `C.TOWN_BUIS_LEGACY` (fermeConstants.js) ; construit seulement si l'interrupteur
@@ -7695,7 +7798,14 @@ export function buildSprites() {
      FICHIER (la tache de calcaire, statique) ET drawTownFrame (le filet
      animé) — la même règle que basinY/bowlY juste au-dessus : une seule
      source, jamais deux cotes qui pourraient un jour ne plus s'accorder. */
-  const FOUNTAIN_GEO = { basinY: 16, basinRX: 19, basinRY: 8, bowlY: 27, bowlRX: 8, bowlRY: 3.5, jetY: 39, spillX: 9 };
+  /* 2026-10-04 — la fontaine au pixel d'écran (`plazaFountainHi`) ajoute ses cotes
+     ICI : la marche (`step*`), le bassin (`rimRX`, `wallH`, `innerWallH`), le socle
+     du pied et ses mascarons (`plinthRX`, `spoutX`, `spoutDY` — lus aussi par
+     drawTownFrame pour les filets), le rebord de la vasque (`bowlOutRX` — le rideau
+     d'eau tombe de là). */
+  const FOUNTAIN_GEO = { basinY: 16, basinRX: 19, basinRY: 8, bowlY: 28.5, bowlRX: 8.4, bowlRY: 3.6, jetY: 41, spillX: 9,
+    stepY: 31.2, stepRX: 26.6, stepH: 1.7, rimRX: 24.2, wallH: 4.2, innerWallH: 1.6,
+    plinthRX: 5.2, spoutX: 3.6, spoutDY: 4.2, bowlOutRX: 10.6, bowlDepth: 3.6 };
   /* ⚠️⚠️ ZIP 429 — LA FONTAINE A ÉTÉ RABAISSÉE, ET C'EST UNE MESURE. Elle
      faisait 54 px peints pour un personnage de 23, soit **2,35 fois sa taille** ;
      une fontaine de place, vasque haute comprise, fait environ 1,6 fois un
@@ -7770,6 +7880,228 @@ export function buildSprites() {
     g.fillStyle = SL; g.beginPath(); g.arc(cx, H - F.jetY, 4, 0, 7); g.fill();
     g.fillStyle = SD; g.beginPath(); g.arc(cx + 1, H - F.jetY + 1, 2, 0, 7); g.fill();
     return c;
+  }
+
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LA FONTAINE AU PIXEL D'ÉCRAN. Guillaume : « la fontaine est
+     ║ encore un peu cheap, détaille un peu plus ».
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️ CE QUI LA RENDAIT « CHEAP » N'ÉTAIT PAS LE NOMBRE DE DÉTAILS, C'ÉTAIT LE
+     GRAIN : des anneaux d'ellipses lissés, au gros pixel d'art, à côté d'un
+     lampadaire peint au pixel d'écran — le même défaut que l'audit a nommé pour
+     les intérieurs (AUDIT-2026-10, partie 2). Elle est donc reconstruite ICI, à la
+     résolution de l'écran (`z` px d'écran par px d'art, un canevas par cran de
+     zoom, mis en cache), par des FORMES ASSEMBLÉES (DESSIN.md) :
+       · une marche et un bassin OCTOGONAUX, chaque pan ombré selon sa normale
+         (lumière du haut à gauche, comme tout le projet) et creusé d'un panneau
+         mouluré ; une margelle en pierres de taille, jointes aux angles ;
+       · la paroi intérieure du bassin, visible au fond au-dessus de l'eau (sans
+         elle, l'eau semble posée PAR-DESSUS la pierre) ;
+       · un balustre tourné, une vasque en coquille à godrons, une coupelle et un
+         bouton d'où sort le jet ;
+       · deux mascarons de lion sur le socle, d'où partent deux filets (animés
+         par `drawTownFrame`, comme tout ce qui bouge).
+     ⚠️ LA GÉOMÉTRIE RESTE `FOUNTAIN_GEO` : l'eau, le jet, le rideau et les
+     filets sont peints par `drawTownFrame` aux MÊMES cotes. Toute cote nouvelle
+     entre dans la table (le §8), jamais recopiée.
+     ⚠️ AUCUN LISSAGE : chaque forme est remplie par balayage, rangée par rangée,
+     au pixel d'écran (`span`) — un `ellipse()` lissé redonnerait le flou qu'on
+     corrige. Le sprite natif (`plazaFountainSprite`) reste pour les reflets. */
+  const FOUNTAIN_HI = new Map();
+  // Le mascaron de lion, au demi-pixel d'art : crinière, face éclairée, yeux, gueule.
+  const LION_MAP = [".aaaaa.", "aabbbaa", "abcbcba", "abbbbba", "aabddaa", ".abddba", "..aaa.."];
+  const LION_COL = { a: "#46685a", b: "#86ad97", c: "#22312b", d: "#18221e" };
+  function plazaFountainHi(zIn) {
+    const z = Math.max(1, Math.min(8, Math.round(zIn)));
+    if (FOUNTAIN_HI.has(z)) return FOUNTAIN_HI.get(z);
+    const W = 56, H = 44, F = FOUNTAIN_GEO, cx = W / 2;
+    const [c, g] = cv(W * z, H * z);
+    /* Neuf tons de pierre, du plus sombre au plus clair (calcaire blond). ⚠️ Le
+       premier jet tirait tout vers le haut de la rampe : une pierre pâle, sans
+       creux, qu'on lisait comme du plâtre. Ce qui fait la PIERRE, c'est l'écart
+       entre le dessus (au soleil) et les pans (à l'ombre). */
+    const ST = ["#3e3a34", "#56514a", "#6d685f", "#858076", "#9c978b", "#b3aea0", "#c8c3b4", "#dbd6c7", "#ece8da"];
+    const tone = (k) => ST[Math.max(0, Math.min(ST.length - 1, Math.round(k)))];
+    const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const dot = (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))); };
+    // Remplissage d'un polygone CONVEXE par balayage, au pixel d'écran.
+    const fillPoly = (pts, col) => {
+      g.fillStyle = col;
+      let y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+      for (let py = Math.floor(y0 * z); py < Math.ceil(y1 * z); py++) {
+        const y = (py + 0.5) / z;
+        let L = Infinity, R = -Infinity;
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length];
+          if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) {
+            const x = a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]);
+            L = Math.min(L, x); R = Math.max(R, x);
+          }
+        }
+        if (R > L) { const l = Math.round(L * z), r = Math.round(R * z); if (r > l) g.fillRect(l, py, r - l, 1); }
+      }
+    };
+    const span = (ecx, ecy, rx, ry, col, onlyBack) => {
+      g.fillStyle = col;
+      for (let py = Math.floor((ecy - ry) * z); py < Math.ceil((ecy + ry) * z); py++) {
+        const y = (py + 0.5) / z, t = (y - ecy) / ry;
+        if (t <= -1 || t >= 1 || (onlyBack && t > 0)) continue;
+        const hw = rx * Math.sqrt(1 - t * t);
+        const l = Math.round((ecx - hw) * z), r = Math.round((ecx + hw) * z);
+        if (r > l) g.fillRect(l, py, r - l, 1);
+      }
+    };
+    const cut = (ecx, ecy, rx, ry) => { g.globalCompositeOperation = "destination-out"; span(ecx, ecy, rx, ry, "#000"); g.globalCompositeOperation = "source-over"; };
+    const oct = (ocx, ocy, rx, ry) => Array.from({ length: 8 }, (_, i) => { const a = Math.PI / 8 + i * Math.PI / 4; return [ocx + rx * Math.cos(a), ocy + ry * Math.sin(a)]; });
+    /* Un prisme octogonal : les pans qui regardent l'écran, puis le dessus. La
+       normale d'un pan (en plan) donne sa lumière — à gauche il prend le jour, à
+       droite il est dans l'ombre : des crans, jamais un dégradé. */
+    const prism = (ocx, ocyTop, rx, ry, h, topK, panel) => {
+      const T0 = oct(ocx, ocyTop, rx, ry);
+      for (let i = 0; i < 8; i++) {
+        const a = T0[i], b = T0[(i + 1) % 8];
+        const m = Math.PI / 8 + (i + 0.5) * Math.PI / 4;
+        if (Math.sin(m) <= 0.05) continue;                         // pan du fond : caché
+        const base = 3.1 - Math.cos(m) * 1.9;                      // gauche 4,9 · face 3,1 · droite 1,3
+        fillPoly([a, b, [b[0], b[1] + h], [a[0], a[1] + h]], tone(base));
+        fillPoly([[a[0], a[1] + h - 0.5], [b[0], b[1] + h - 0.5], [b[0], b[1] + h], [a[0], a[1] + h]], tone(base - 1.5));
+        fillPoly([a, b, [b[0], b[1] + 0.4], [a[0], a[1] + 0.4]], tone(base + 2.4));   // l'arête qui accroche la lumière
+        if (panel && h > 2.5) {
+          // Le panneau mouluré : un creux — ombre portée en haut, lumière sur le rebord bas.
+          const u0 = 0.18, u1 = 0.82, v0 = 0.3, v1 = 0.76;
+          const P = (u, v) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u + h * v];
+          fillPoly([P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)], tone(base - 0.9));
+          fillPoly([P(u0, v0), P(u1, v0), P(u1, v0 + 0.13), P(u0, v0 + 0.13)], tone(base - 2));
+          fillPoly([P(u0, v1 - 0.1), P(u1, v1 - 0.1), P(u1, v1), P(u0, v1)], tone(base + 1.3));
+          // la rosace au centre du panneau
+          const pc = P(0.5, (v0 + v1) / 2 + 0.03);
+          dot(pc[0] - 0.4, pc[1] - 0.35, tone(base + 1.6), 0.8, 0.7);
+          dot(pc[0] - 0.1, pc[1] - 0.05, tone(base - 1.6), 0.4, 0.35);
+        }
+        if (h > 2.5 && hash(i, 7) < 0.7) {
+          // une coulure verdâtre sous la margelle, une touffe de mousse au pied
+          const u = 0.12 + hash(i, 9) * 0.76, xx = a[0] + (b[0] - a[0]) * u, yy = a[1] + (b[1] - a[1]) * u;
+          g.fillStyle = "rgba(48,62,44,0.38)";
+          g.fillRect(Math.round(xx * z), Math.round((yy + 0.4) * z), Math.max(1, Math.round(z * 0.45)), Math.round((h * (0.4 + hash(i, 13) * 0.45)) * z));
+          dot(xx - 0.5, yy + h - 0.6, "#4f6a3a", 1.3, 0.5);
+          dot(xx - 0.2, yy + h - 0.9, "#6f8a4c", 0.5, 0.35);
+        }
+      }
+      fillPoly(T0, tone(topK));
+      return T0;
+    };
+    // ── 1. LA MARCHE, débordante, et l'ombre de contact du bassin posé dessus.
+    const by = H - F.basinY - 0.5;                                   // le dessus de la margelle
+    const stepTop = prism(cx, F.stepY, F.stepRX, F.stepRX * 0.4, F.stepH, 6.3, false);
+    for (let i = 0; i < 8; i++) {                                     // joints des dalles de la marche, aux angles
+      const p = stepTop[i]; if (Math.sin(Math.PI / 8 + i * Math.PI / 4) < -0.3) continue;
+      const q = [cx + (p[0] - cx) * 0.9, F.stepY + (p[1] - F.stepY) * 0.9];
+      const n = Math.max(2, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) * z));
+      for (let s2 = 0; s2 <= n; s2++) dot(p[0] + (q[0] - p[0]) * s2 / n, p[1] + (q[1] - p[1]) * s2 / n, tone(4.2), 1 / z, 1 / z);
+    }
+    span(cx, by + F.wallH + 0.6, F.rimRX + 0.6, F.rimRX * 0.42 + 0.5, "rgba(40,34,26,0.30)");   // l'ombre du bassin sur la marche
+    // ── 2. LE BASSIN.
+    const top = prism(cx, by, F.rimRX, F.rimRX * 0.42, F.wallH, 6.8, true);
+    // la margelle : pierres de taille jointes aux angles et au milieu des pans
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8;
+      const xi = cx + Math.cos(a) * (F.basinRX + 0.9), yi = by + Math.sin(a) * (F.basinRY + 0.5);
+      const k = i % 2 ? 1 : 0.924;
+      const xo = cx + Math.cos(a) * F.rimRX * k, yo = by + Math.sin(a) * F.rimRX * 0.42 * k;
+      const n = Math.max(2, Math.round(Math.hypot(xo - xi, yo - yi) * z));
+      for (let s2 = 0; s2 <= n; s2++) dot(xi + (xo - xi) * s2 / n, yi + (yo - yi) * s2 / n, tone(4.6), 1 / z, 1 / z);
+    }
+    for (let k = 0; k < 34; k++) {                                    // éclats, lichens, usure — fixes et rares
+      const a = hash(k, 3) * Math.PI * 2, r = hash(k, 5);
+      const rr = F.basinRX + 1.2 + r * (F.rimRX - F.basinRX - 1.8);
+      const col = hash(k, 11) < 0.3 ? "#a9ad82" : hash(k, 11) < 0.62 ? tone(5.4) : tone(8);
+      dot(cx + Math.cos(a) * rr, by + Math.sin(a) * rr * 0.42, col, 1 / z * Math.ceil(z / 2), 1 / z * Math.ceil(z / 2));
+    }
+    // le bord intérieur, arrondi par l'usure : un liseré clair, puis l'arête qui plonge
+    span(cx, by, F.basinRX + 0.8, F.basinRY + 0.45, tone(7.6), true);
+    // ── 3. L'EAU : on découpe, puis on repeint la PAROI INTÉRIEURE du fond, mouillée.
+    cut(cx, H - F.basinY, F.basinRX, F.basinRY);
+    span(cx, H - F.basinY, F.basinRX, F.basinRY, tone(1.6), true);
+    span(cx, H - F.basinY - 0.25, F.basinRX - 0.3, F.basinRY - 0.2, tone(2.6), true);
+    cut(cx, H - F.basinY + F.innerWallH, F.basinRX - 0.5, F.basinRY - 0.25);
+    // ── 4. LE SOCLE DU PIED, DANS L'EAU, et ses deux MASCARONS.
+    const py0 = H - F.basinY - 3.4;
+    prism(cx, py0, F.plinthRX, F.plinthRX * 0.42, 3.8, 6.2, false);
+    for (const sgn of [-1, 1]) {
+      const mx = cx + sgn * F.spoutX, my = py0 + F.spoutDY;
+      const u = 0.42;                                                  // un demi-pixel d'art par case de la carte
+      LION_MAP.forEach((row, j) => { for (let i2 = 0; i2 < row.length; i2++) { const ch = row[i2]; if (ch !== ".") dot(mx - 1.5 + i2 * u, my - 1.7 + j * u, LION_COL[ch], u, u); } });
+    }
+    span(cx, py0 + 3.8 + F.plinthRX * 0.42 * 0.92, F.plinthRX + 0.5, 0.5, "rgba(226,240,246,0.72)");   // la ligne d'eau au pied
+    // ── 5. LE BALUSTRE TOURNÉ : un profil, ombré en colonnes (lumière à gauche).
+    const lathe = (yTop, yBot, rOf, base) => {
+      for (let pyy = Math.floor(yTop * z); pyy < Math.ceil(yBot * z); pyy++) {
+        const y = (pyy + 0.5) / z, t = (y - yTop) / (yBot - yTop);
+        const r = rOf(t); if (r <= 0) continue;
+        const l = Math.round((cx - r) * z), rr = Math.round((cx + r) * z);
+        for (let xx = l; xx < rr; xx++) {
+          const uu = ((xx + 0.5) / z - cx) / r;
+          const lit = -uu * 1.1 + Math.sqrt(Math.max(0, 1 - uu * uu)) * 0.6;
+          g.fillStyle = tone(base + lit * 2.4);
+          g.fillRect(xx, pyy, 1, 1);
+        }
+      }
+    };
+    const bowlY = H - F.bowlY;
+    const bowlBot = bowlY + F.bowlDepth;                               // le bas de la coquille, là où le balustre la porte
+    lathe(bowlBot - 0.6, py0 + 0.3, (t) => {
+      if (t < 0.1) return 2.3;                                         // anneau haut
+      if (t < 0.28) return 1.4 + (t - 0.1) * 2.2;                      // gorge
+      if (t < 0.74) return 1.8 + Math.sin((t - 0.28) / 0.46 * Math.PI) * 1.15;   // panse
+      if (t < 0.86) return 1.5;                                        // gorge
+      return 2.7;                                                      // base
+    }, 4);
+    // les anneaux du balustre : une arête claire au-dessus, une ombre dessous
+    for (const t of [0.1, 0.86]) {
+      const y = bowlBot - 0.6 + t * (py0 + 0.3 - bowlBot + 0.6);
+      dot(cx - 2.3, y, tone(7.4), 4.6, 0.3); dot(cx - 2.3, y + 0.3, tone(2.4), 4.6, 0.25);
+    }
+    /* ── 6. LA VASQUE EN COQUILLE. Le dessous est une SURFACE PROJETÉE (rayon et
+       creux selon la distance au bord), pas un profil d'écran : vue de trois
+       quarts, une coquille ne montre qu'un croissant sous son rebord avant, et
+       c'est dans ce croissant que vivent les godrons. Premier jet : un profil
+       d'écran, entièrement recouvert par le rebord — la vasque n'avait pas de
+       dessous. Ordre : du pied vers le bord, le bord recouvre. */
+    {
+      const R = F.bowlOutRX, rs = 2.2, D = F.bowlDepth, NG = 12;
+      const step = 0.5 / z;
+      for (let sI = 1; sI >= 0; sI -= 0.02) {
+        const r = rs + (R - rs) * (1 - sI) ** 0.7, d = D * (1 - (1 - sI) ** 2);
+        for (let ph = 0.02; ph < Math.PI - 0.02; ph += step / Math.max(1, r)) {
+          const x = cx + r * Math.cos(ph), y = bowlY + r * 0.42 * Math.sin(ph) + d;
+          const gI = Math.floor(ph / Math.PI * NG), gu = ph / Math.PI * NG - gI;   // le godron, et où on est dedans
+          const lit = -Math.cos(ph) * 1.6 + (gu < 0.35 ? 1.1 : gu > 0.8 ? -1.2 : 0);
+          g.fillStyle = tone(3 + lit - sI * 0.8);
+          g.fillRect(Math.round(x * z), Math.round(y * z), 1, 1);
+        }
+      }
+    }
+    // le rebord : une épaisseur ombrée, le dessus clair, l'arête avant éclairée, festonnée
+    span(cx, bowlY + 0.5, F.bowlOutRX, F.bowlOutRX * 0.42, tone(3.6));
+    span(cx, bowlY, F.bowlOutRX, F.bowlOutRX * 0.42, tone(6.6));
+    for (let k = 0; k < 12; k++) {
+      const a = Math.PI * (k + 0.5) / 12, xx = cx + Math.cos(a) * F.bowlOutRX, yy = bowlY + Math.sin(a) * F.bowlOutRX * 0.42;
+      dot(xx - 0.45, yy - 0.15, tone(8), 0.9, 0.4);
+      dot(xx - 0.15, yy + 0.3, tone(2.6), 0.3, 0.3);
+    }
+    cut(cx, bowlY, F.bowlRX, F.bowlRY);
+    span(cx, bowlY, F.bowlRX, F.bowlRY, tone(2), true);
+    cut(cx, bowlY + 0.6, F.bowlRX - 0.35, F.bowlRY - 0.15);
+    // ── 7. LA COUPELLE ET LE BOUTON D'OÙ SORT LE JET.
+    const jy = H - F.jetY;
+    lathe(jy + 3.2, bowlY + 0.5, (t) => 1.1 + (t > 0.82 ? 0.8 : t < 0.12 ? 0.5 : 0), 4.2);
+    span(cx, jy + 3.5, 3.4, 1.45, tone(3.4));
+    span(cx, jy + 3.1, 3.4, 1.4, tone(6.8));
+    span(cx, jy + 3.1, 2.2, 0.85, tone(2.4));
+    lathe(jy - 0.6, jy + 3, (t) => 1.55 * Math.sin(Math.min(1, t * 1.15) * Math.PI * 0.85 + 0.25), 4.6);   // la pomme de pin
+    for (let k = 0; k < 5; k++) dot(cx - 0.9 + (k % 2) * 1.1, jy + 0.2 + k * 0.48, tone(2.4), 0.45, 0.3);
+    return FOUNTAIN_HI.set(z, c), c;
   }
 
   /* L'OBÉLISQUE de la place. ⚠️ Il n'est PAS une seconde fontaine : deux
@@ -19755,6 +20087,8 @@ house: house(),
     plazaMonument: plazaMonumentSprite(),
     plazaFountain: plazaFountainSprite(),
     fountainGeo: FOUNTAIN_GEO,        // zip 429 : lue par drawTownFrame pour l'eau et le jet
+    plazaFountainHi,                  // 2026-10-04 : la même fontaine au pixel d'écran (un canevas par cran de zoom)
+    townNewsBoardHi,                  // 2026-10-04 : le tableau des nouvelles au pixel d'écran, qui montre ce qu'il porte
     waterRamp: WAT_RAMP,              // 2026-09-21 : la fontaine reprend la même rampe de profondeur que les rivières/le lac
     /* Zip 426 — le mobilier de l'agrandissement. ⚠️ Les étals sont un TABLEAU
        (quatre bâches) et non quatre clés : le rendu choisit par hachage de la
@@ -20040,4 +20374,97 @@ house: house(),
     return z ? withTreeGeom(z, () => townTreeSprite(sizedSpec(sp, z), "autumn", frame, 0, false, F)) : townTreeSprite(sp, "autumn", frame, 0, false, F);
   });
   return S;
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-04 — LA MÉDAILLE DE LA FERME (écran des médailles).
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Une décoration à l'ancienne : ruban à trois bandes, barrette, disque d'or frappé
+   d'un emblème en relief. Dessinée au PIXEL D'ART sur une grille de 28 × 42 que
+   l'appelant agrandit d'un facteur entier (`px`) — un insigne de menu se lit comme
+   le reste du jeu, pas comme une icône vectorielle collée dessus.
+   `def` vient de `MD.MEDAL_QUESTS` (couleurs du ruban, emblème) ; `earned` faux
+   rend la silhouette en creux, grise, avec un « ? » : la place existe déjà, et
+   c'est elle qui donne envie d'y revenir.
+   ⚠️ L'ÉCLAIRAGE VIENT DU HAUT À GAUCHE, comme tout le jeu (DESSIN.md) : reflet
+   en haut à gauche du disque, ombre portée en bas à droite, relief de l'emblème
+   décalé d'un pixel vers le bas-droite. */
+const MEDAL_STAR_MAP = [
+  "....#....",
+  "....#....",
+  "...###...",
+  "#########",
+  ".#######.",
+  "..#####..",
+  "..##.##..",
+  ".##...##.",
+  ".#.....#.",
+];
+const MEDAL_Q_MAP = [".###.", "#...#", "...#.", "..#..", ".....", "..#.."];
+export const MEDAL_ART_W = 28, MEDAL_ART_H = 42;
+export function drawQuestMedal(ctx, ox, oy, px, def, earned) {
+  const P = Math.max(1, px | 0);
+  const dot = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x * P, oy + y * P, P, P); };
+  const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x * P, oy + y * P, w * P, h * P); };
+  const rib = earned ? (def && def.ribbon) || ["#1d2f6b", "#f2d36b", "#1d2f6b"] : ["#8d8a84", "#a9a59d", "#8d8a84"];
+  const G = earned
+    ? { rimD: "#7a4c0e", rim: "#c78f22", face: "#eab843", hi: "#ffe390", lo: "#bf861d", emb: "#fff0b0", embD: "#94600f", shadow: "rgba(40,24,6,0.35)" }
+    : { rimD: "#5d5a55", rim: "#8a8780", face: "#a3a098", hi: "#bdbab2", lo: "#8f8c85", emb: "#c9c6be", embD: "#6d6a64", shadow: "rgba(0,0,0,0.18)" };
+  // ── LE RUBAN : trois bandes, une queue fendue en V. L'ombre de pli à gauche
+  //    de chaque bande donne le volume d'un tissu tendu sur la barrette.
+  const RX = 7, RW = 14, RH = 17;
+  for (let y = 0; y < RH; y++) {
+    for (let x = 0; x < RW; x++) {
+      // la fente en V au bas : on retire un triangle centré sur les 4 dernières lignes
+      if (y >= RH - 4 && Math.abs(x - (RW - 1) / 2) < (y - (RH - 5)) * 1.1) continue;
+      const band = x < 4 ? 0 : x < 10 ? 1 : 2;
+      let c = rib[band];
+      dot(RX + x, y, c);
+      if (x === 0 || x === 4 || x === 10) dot(RX + x, y, "rgba(0,0,0,0.22)");
+      if (x === 3 || x === 9 || x === 13) dot(RX + x, y, "rgba(255,255,255,0.10)");
+    }
+  }
+  // un fil d'or au milieu de la bande claire (le galon)
+  if (earned) for (let y = 0; y < RH - 5; y += 2) dot(RX + 7, y, "rgba(255,255,255,0.28)");
+  // ── LA BARRETTE.
+  rect(5, 15, 18, 3, G.rimD);
+  rect(6, 15, 16, 1, G.hi);
+  rect(6, 16, 16, 1, G.rim);
+  // ── L'ANNEAU qui tient le disque.
+  rect(12, 18, 4, 2, G.rimD); rect(13, 18, 2, 1, G.hi);
+  // ── LE DISQUE : ombre portée, liseré, couronne, champ éclairé.
+  const cx = 13.5, cy = 30.5, R = 10.6;
+  for (let y = 19; y < MEDAL_ART_H; y++) for (let x = 0; x < MEDAL_ART_W; x++) {
+    const dx = x + 0.5 - cx - 1, dy = y + 0.5 - cy - 1;
+    if (Math.hypot(dx, dy) <= R && Math.hypot(x + 0.5 - cx, y + 0.5 - cy) > R) dot(x, y, G.shadow);
+  }
+  for (let y = 19; y < MEDAL_ART_H; y++) for (let x = 0; x < MEDAL_ART_W; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy);
+    if (d > R) continue;
+    const lit = -(dx + dy) / (R * 1.41);           // +1 en haut à gauche, −1 en bas à droite
+    let c;
+    if (d > R - 1.15) c = lit > 0.25 ? G.rim : G.rimD;
+    else if (d > R - 2.4) c = lit > 0.35 ? G.hi : lit < -0.35 ? G.lo : G.rim;
+    else if (d > R - 3.2) c = lit > 0.2 ? G.lo : G.rimD;   // le creux sous la couronne
+    else c = lit > 0.55 ? G.hi : lit < -0.5 ? G.lo : G.face;
+    dot(x, y, c);
+  }
+  // les grènetis de la couronne : une perle tous les 30°
+  for (let k = 0; k < 12; k++) {
+    const a = k * Math.PI / 6;
+    const x = Math.floor(cx + Math.cos(a) * (R - 1.8)), y = Math.floor(cy + Math.sin(a) * (R - 1.8));
+    dot(x, y, -(Math.cos(a) + Math.sin(a)) > 0 ? G.emb : G.lo);
+  }
+  // ── L'EMBLÈME, EN RELIEF : ombre d'un pixel en bas à droite, puis la face.
+  const map = earned ? MEDAL_STAR_MAP : MEDAL_Q_MAP;
+  const mw = map[0].length, mh = map.length;
+  const ex = Math.round(cx - mw / 2), ey = Math.round(cy - mh / 2) - (earned ? 1 : 0);
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) if (map[j][i] === "#") dot(ex + i + 1, ey + j + 1, G.embD);
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) if (map[j][i] === "#") dot(ex + i, ey + j, G.emb);
+  // la mer sous l'étoile : deux vaguelettes gravées (c'est le Bateau des Étoiles)
+  if (earned && def && def.emblem === "star") {
+    for (const [x, y] of [[9, 36], [10, 35], [11, 36], [12, 35], [13, 36], [14, 35], [15, 36], [16, 35], [17, 36]]) dot(x, y, G.embD);
+  }
+  // l'éclat : une croix de lumière sur la couronne, en haut à gauche
+  if (earned) { dot(7, 24, "#fffbe6"); dot(6, 24, "rgba(255,251,230,0.6)"); dot(8, 24, "rgba(255,251,230,0.6)"); dot(7, 23, "rgba(255,251,230,0.6)"); dot(7, 25, "rgba(255,251,230,0.6)"); }
 }

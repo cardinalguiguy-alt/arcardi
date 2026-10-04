@@ -11,31 +11,24 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-04 — VERDICT : MAISONS NETTES, SOLS ET OBJETS DE JARDIN PAS ASSEZ DÉTAILLÉS ; LOT GEMINI PRÉPARÉ (rien d'intégré)
+### 2026-10-04 (nuit) — QUÊTE AU MENU DEV, MÉDAILLES, BOUSCULADES, POUSSIÈRE, FONTAINE, TABLEAU — LIVRÉS, NON COMMITÉS
 
-Guillaume : le réseau de rues et de chemins de VT est bon ; « la netteté des maisons est super, mais **les sols et les objets de jardin ne sont pas assez détaillés** », et **les arbres dégarnis d'automne ne sont
-pas au niveau**. Cause (lue dans le code) : maisons, monuments et lampadaires sont posés au pixel d'écran ; les sols sont des tuiles de 64 px d'art agrandies ; les objets de jardin viennent de planches Gemini en pixel art
-à GROS BLOCS — les repasser au pixel d'écran n'y ajoute rien, **il faut les repeindre**. Récit et décisions : README ferme (journal 2026-10-04), `docs/A-JUGER.md` (« Jugé le 2026-10-04 »), leçon dans `docs/IMAGES-ET-BLENDER.md`.
-Réponse : **`refs/lot-gemini/`** (non commité) — `00-LISEZ-MOI.md` (méthode, captures, nommage), `A` sols VT, `B` arbres VT+ferme, `C` objets (dont **C0 : les objets de jardin déjà en jeu à repeindre**, six feuilles dans `objets-ref/`),
-`D` bâtiments VT, `E` ferme ; `sols-ref/` et `arbres-ref/` exportés du jeu. Guillaume produit les images chez Gemini (usage ample). **Aucun code ni jeu modifié ; Supabase : rien.**
-Décidé : sols repeints en gardant le plan de la tuile (pluie, neige, flaques dérivées de la peinture sèche, jamais une version « mouillée » à peindre) ; arbres = TROIS images du MÊME arbre (feuillu / mi-chute / nu) au squelette identique, fondues
-par bouquets. **Ouvertes** : sols en Gemini, en PROCÉDURAL (possible : plan conservé + passe de détail + carte de hauteur ; prototype proposé sur le dallage civique) ou panachés ; les « petits bugs » du pavage (à nommer par Guillaume
-ou à chercher en jeu) ; ferme en pixel art ou peinte (E suppose pixel) ; intérieurs ; café/restaurant ; tailles d'arbres dérivées par échelle. La carte ouverte (plan illustré, `planVille.js`) est livrée (`ed138b9`), **à juger**.
-⚠️ Le routeur (2026-10-03, matin) reste **à juger en vraie séance** : une tâche qui a lu trop ou raté un fichier = corriger la ligne du routeur ; un piège que son titre n'a pas fait « sonner » = un titre à réécrire. Lampadaires au pixel d'écran : **pas vu** les crans 3 à 5.
-⚠️ Dette : chênes de la ferme verts l'hiver ; mémoire de la glace = celle du manteau ; herbes hautes = six silhouettes répétées.
-⚠️ `hook-bancs.sh` : en conteneur neuf il annonce « BANCS ROUGES » faute de `node_modules` (`npm ci`). Ici `verify-densite` est rouge sur UN contrôle réel : deux `imageSmoothingEnabled = true` littéraux (`FermeGame.js` 28858 et 28863, le plan
-de la carte, `ed138b9`) — antérieur au lot, non corrigé (lissage voulu à tolérer dans le banc, ou à réécrire : à trancher).
+Fait et vu en jeu (un client, `audit-tmp`) : **frise de la quête** au menu dev (`Q.STAR_DEV_STEPS`/`devStarTo`, « aller à » une étape,
+signe le maire — ligne rouge du 444 levée par Guillaume) ; **médailles** (`medailles.js`, `shared.medals`, menu 🏅 du HUD, « Rejouer »
+garde la médaille et le ×2 d'Eduardo) ; **bousculades** (`residentBumpHold`, `RESIDENT_TEMPERS`, arrêt diffusé dans `residentStops.b`) ;
+**poussière** (`poussiere.js`, terre battue, sable dont la plage cuite `EAU.bakedSandAt`, labour sec) ; **fontaine** au pixel d'écran
+(`plazaFountainHi`, rideau, mascarons, pièces) ; **tableau des nouvelles** (`gazette.js` : gazette du jour, petites annonces tirées,
+`shared.board`, `townNewsBoardHi`). Bancs : `verify-quete` 954/954, `verify-jalons` 135, `verify-maire` 139, `verify-vallee` 279,
+`render-eau`, `verify-collision`, `verify-strings`, `verify-docs` verts. **Supabase : rien** (trois champs de plus dans le JSON de `ferme_saves`).
+⚠️ **Pas vu** : les bousculades et la livraison d'annonce côté INVITÉ (deux clients) ; la poussière à la ferme ; la fontaine la nuit.
+⚠️ `app/audit-tmp/page.js` (indices de hooks désormais relatifs à `sharedRef`) et `app/api/audit-cap/route.js` toujours commités : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — INTÉGRER LE LOT GEMINI, UNE FAMILLE À LA FOIS
+### ⏭️ ACTION SUIVANTE — TROIS DEMANDES DE GUILLAUME EN ATTENTE, DANS CET ORDRE
 
-**D'abord demander à Guillaume les « petits bugs » du pavage et son choix sols Gemini / procédural.** Puis, à chaque retour d'images : **UNE famille**, la mesurer (taille, bouclage des tuiles comme `render-rues`, écart de teinte/valeur avec
-l'actuel, squelette identique d'un état d'arbre à l'autre), fabriquer une image par cran de zoom (`tools/lib-mip.mjs`, modèle
-`build-lampadaires.mjs`), brancher derrière un repli (l'ancien dessin), relancer les bancs, **JUGER EN JEU**. D'abord `dallage_civique`
-(il valide la méthode), puis `goudron`, `herbe` ; arbres : chêne, érable, bouleau. **Les scripts de fabrication restent à écrire.**
-**Restent de la feuille de route** : 13 (ombres portées à bord franc, fanions figés, fontaine), 14 (police pixel du monde), 8 (intérieurs :
-séance de conception à part, §2 — LISTER les décisions et ATTENDRE ; aucun résident n'entre dans un bâtiment, `res.zone` n'a que `farm` et
-`town`) ; la ferme sans sol mouillé ; café « Chez Juliette » et restaurant (ligne 15 du tableau de `components/ferme/README.md`).
-
+(1) **Dallage autour du tribunal** : deux textures (ancienne/nouvelle) accolées dans la même zone — garder l'ancienne ailleurs, jamais
+contiguë (`solHD.js`, interrupteur FIX-004). (2) **Rosace de la fontaine** : orangé pâle, motifs « calçada » de Lisbonne
+(`FTN_ROSE_R`, `townFountainRose`, fermeArt.js). (3) **Étoile reine** : branches trop rondes. Ensuite : faire juger la frise, la fontaine,
+le tableau ; puis la séance de conception des intérieurs (audit partie 2) et l'audit partie 3.
 
 → **Jugements humains en attente** (« Toujours ouvert — livré, jamais jugé ») : `docs/A-JUGER.md`. À lire pour « reprends le
 travail » ou pour choisir un chantier, pas pour une tâche de code ciblée. **Notes d'intégration d'image et commerces de la

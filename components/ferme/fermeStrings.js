@@ -2073,7 +2073,9 @@ const STAR_EN = {
     section: "⭐ Star — The Star Boat",
     /* ⚠️ 2026-09-13 — le menu suit la nouvelle trame (voir `devYard`, quete.js) : le
        dire ici évite qu'un bouton qui s'arrête au maire passe pour un bouton cassé. */
-    hint: "Start it, push it, replay a scene. ⚠️ None of these gives anything: you skip the playing, you don't earn a thing. Every button follows the timeline — shipyard (mayor → plans → hull + rudder), then the rain, then the stars. Without the mayor's signature, a button books the appointment and stops there.",
+    /* 2026-10-04 — la frise : « aller à » un événement (voir STAR_DEV_STEPS, quete.js).
+       La ligne rouge du 444 est levée par Guillaume : la frise signe le maire. */
+    hint: "Click an event to go there: everything before it is done (mayor and budget signed included), the event itself is left to play — its setup is laid out (purse, dish, vial, appointment, timber delivered). The rain and the meteor play on click. Clicking an event that's already done restarts the quest from scratch and walks back to it. Nothing here gives gold or items.",
     notStarted: "Not started",
     chapterAt: (k, n, total) => `Chapter ${k} · ${n}/${total} pieces`,
     // 2026-09-13 — before the rain the quest has no chapter number, but it has a state.
@@ -2175,6 +2177,52 @@ const STAR_EN = {
        quête pour atteindre est un lieu qu'on ne va pas regarder — donc qu'on
        ne juge qu'une fois. */
     saw: "\u{1FA9A} Open Tristan's saw",
+    // 2026-10-04 — la frise.
+    toolsLabel: "Tools — the quest doesn't move forward",
+    act: (a) => ({
+      yard: "I · The shipyard", rain: "II · The announcement and the rain", farm: "III · The farm stars",
+      town: "IV · Valley Town", wreck: "V · The wreck", evil: "VI · The seventh sister", end: "VII · The ending",
+    }[a] || a),
+    step: (k) => ({
+      yard: "The town hall's notice: reopen the port",
+      mayor: "🎩 Mayor's audience — the shipyard",
+      plans: "📐 The engineer's plans",
+      hull: "🔨 Hull and rudder on the slipway",
+      warn: "📣 The observatory's notice (the panic)",
+      fall: "☄ The rain on the farm — plays",
+      digs: "⛏ The other farm craters dug",
+      blue: "💙 The blue one (candies of light)",
+      rose: "🌹 The rose one (the hot dish)",
+      white: "🤍 The white one (the vial)",
+      townFall: "☄ The Valley Town meteor — plays",
+      queen: "👑 The queen (the crater)",
+      shy: "🕶️ The hidden one",
+      green: "🌿 The green one",
+      vandal: "🥷 Kerguélen and the wreck (the hammer)",
+      budget: "🎩 Mayor's audience — the budget",
+      evilSeen: "🌊 The seventh, seen in the evil lake",
+      evilHaul: "🎣 The seventh, hauled ashore",
+      evilRevive: "✨ The seventh, revived",
+      rebuild: "⛵ The ship rebuilt",
+      agree: "🎩 The mayor's summons (the party)",
+      baptism: "🍾 The christening",
+      inaug: "🎉 Inauguration and launch",
+      done: "🏅 Quest complete — the medal",
+    }[k] || k),
+    stepTip: (k) => ({
+      mayor: "Books an appointment due now: the audience stays to play.",
+      hull: "Timber delivered, not raised: the hammer stays to play.",
+      blue: "Hole dug, purse filled: the offering stays to play.",
+      rose: "Hole dug, dish cooked: the run stays to play.",
+      white: "Hole dug, one vial in your bag: the taming stays to play.",
+      queen: "Cold crater, her lights in the flow: feed and wake stay to play.",
+      budget: "Books the budget appointment, due now.",
+      evilSeen: "Rod reset: cast in the evil lake.",
+      evilHaul: "Rod reset: the haul stays to play.",
+      rebuild: "Every piece delivered, none raised: the hammer stays to play.",
+      agree: "The quest is won: the mayor's summons stays to play.",
+      done: "Everything done; the final scene plays, then the medal.",
+    }[k] || ""),
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
      déjà un, et le 442 a livré « 🔍 🔍 Joueur1 a trouvé… » sur six libellés
@@ -3255,6 +3303,39 @@ export const FERME_STR = {
        c'était la seule des 1 081 clés du fichier à ne pas être bilingue : le public
        visé ne pouvait lire aucune ligne de la seule histoire du jeu. */
     star: STAR_FR,
+    /* 2026-10-04 — les médailles de la ferme (voir medailles.js). ⚠️ AUCUN SPOIL
+       AVANT L'AVIS : tant que la quête n'a pas annoncé la pluie, elle s'appelle
+       « le chantier naval » (consigne transversale de QUETE.md). */
+    medals: {
+      hudTip: "Médailles de la ferme",
+      title: "🏅 Médailles de la ferme",
+      sub: "Chaque grande quête achevée laisse une médaille à la ferme. Elle reste, même quand on rejoue la quête.",
+      name: { star: "Le Bateau des Étoiles" },
+      nameEarly: { star: "Le chantier naval" },
+      hidden: "Une histoire à venir…",
+      stateNone: "Pas encore commencée.",
+      stateRunning: "En cours.",
+      stateReplay: "Rejouée en ce moment — la médaille est déjà gagnée.",
+      wonOn: (day, date) => `Gagnée le jour ${day} · ${date}`,
+      wonBy: (names) => `Par ${names}`,
+      times: (n) => `Achevée ${n} fois`,
+      replay: "↻ Rejouer la quête",
+      replayConfirm: "La quête repart de zéro pour toute la ferme : le navire, les étoiles, les audiences. La médaille, elle, reste. Rejouer ?",
+      wonToast: "🏅 La ferme reçoit une médaille : le Bateau des Étoiles !",
+      againToast: (n) => `🏅 Le Bateau des Étoiles, achevé une ${n}e fois !`,
+      wonChat: "La ferme a gagné la médaille du Bateau des Étoiles.",
+      againChat: (n) => `Le Bateau des Étoiles a été achevé une ${n}e fois.`,
+      replayToast: (who) => `${who} relance le Bateau des Étoiles. La médaille reste.`,
+      close: "Fermer",
+    },
+    /* 2026-10-04 — les bousculades (voir RESIDENT_TEMPERS, fermeConstants.js). Trois
+       caractères, trois registres : le bougon mord, le patient soupire, le doux
+       s'excuse (même quand c'est vous qui lui êtes rentré dedans). */
+    resBump: {
+      grumpy: ["Non mais regarde où tu marches !", "Eh ! Tu veux ma place, aussi ?", "Ça va, je te dérange pas ?", "La rue est large, pourtant.", "Mes pieds ! Mes pieds !", "On se connaît, peut-être ?"],
+      patient: ["Eh, doucement…", "Oh là, on se calme.", "Deux fois, ça commence à faire.", "Tu me cherches, ou quoi ?", "Je t'avais vu, moi."],
+      kind: ["Oh, pardon !", "Excuse-moi, j'étais dans la lune.", "Oups, toutes mes excuses !", "Pardon, pardon, je passe.", "Oh ! Je regardais ailleurs."],
+    },
     /* ⚠️ ZIP 480 — l audience chez le maire. Une seule table, deux langues : voir
        la note au-dessus de MAIRE_FR. */
     maire: MAIRE_FR,
@@ -5198,6 +5279,75 @@ export const FERME_STR = {
        LISIBLE. Sans lui, les affinités restent un fichier de constantes que
        personne ne voit jamais — ce qu'elles étaient jusqu'ici. */
     newsBoardTitle: "Tableau des nouvelles",
+    /* 2026-10-04 — la gazette et les petites annonces (gazette.js). */
+    gazette: {
+      masthead: "La Gazette de Valley Town",
+      dateLine: (day, season) => `Jour ${day} · ${season}`,
+      head: {
+        launch: ["Le Bateau des Étoiles a pris la mer", "Toute la ville était au port pour voir partir La Belle Étoile."],
+        finale: ["Le port se prépare à une fête", "Le maire promet une inauguration dont on parlera longtemps."],
+        wreck: ["Saccage au chantier naval", "On ignore encore qui s'en est pris à la coque. La mairie se réunit."],
+        meteor: ["Un météore tombe près de la ville", "Les curieux se pressent autour du cratère encore chaud."],
+        fallen: ["Pluie de pierres sur la vallée", "Des fermiers rapportent des trous fumants dans leurs champs."],
+        warned: ["L'observatoire lance un avis", "Une pluie de pierres est attendue cette nuit ou la suivante. Rentrez les bêtes."],
+        yardTaken: (who) => ["Le port ensablé va rouvrir", `La ferme de ${who || "nos voisins"} relève le chantier naval. Le maire attend sa visite.`],
+        yardOffer: ["La mairie veut rouvrir le port", "Elle cherche une ferme pour relever le vieux chantier naval. Avis ci-dessous."],
+        election: (k, name) => ["Jour d'élection", `${name} l'emporte et prend la mairie pour un nouveau mandat.`],
+        newcomer: (n) => ["Une nouvelle tête à la ferme", `${n} vient de s'installer. Passez dire bonjour.`],
+        filler0: ["Le champ de foire bat son plein", "Les marchands disent n'avoir jamais vu autant de citrouilles."],
+        filler1: ["Les pigeons de la place en grève", "Ils réclament plus de miettes. La boulangerie n'a pas répondu."],
+        filler2: ["Concours de la plus belle haie", "Le jury passera sans prévenir. Taillez droit."],
+        filler3: ["La fontaine a été nettoyée", "On y a repêché quarante-deux pièces et un chapeau."],
+        filler4: ["Le train arrive à l'heure", "Gustave tient à ce qu'on le sache."],
+        filler5: ["Calme plat sur Valley Town", "Le meilleur jour pour une promenade au bord du lac."],
+      },
+      brief: {
+        wxTomorrow: (k, part) => {
+          const when = { morning: "le matin", afternoon: "l'après-midi", evening: "le soir", night: "la nuit" }[part] || "dans la journée";
+          return "Demain : " + ({ overcast: "ciel gris", shower: "quelques averses", rain: "de la pluie", storm: "un orage", dryStorm: "un orage sec",
+            hail: "de la grêle", snowLight: "quelques flocons", snow: "de la neige", snowHeavy: "une tempête de neige" }[k] || "du temps changeant") + " " + when + ".";
+        },
+        wxFine: "Demain : grand beau, pas un nuage.",
+        mayor: (name, next) => `À la mairie : ${name}. Prochaine élection le jour ${next}.`,
+        voyage: "Eduardo est en mer. Ses cales reviendront pleines.",
+        inTown: (n) => `${n} habitant${n > 1 ? "s" : ""} de la ferme flâne${n > 1 ? "nt" : ""} en ville aujourd'hui.`,
+        candles: (n) => `${n} cierge${n > 1 ? "s" : ""} brûle${n > 1 ? "nt" : ""} à l'église.`,
+        medal: (n) => n > 1 ? `La ferme porte la médaille du Bateau des Étoiles (achevé ${n} fois).` : "La ferme porte la médaille du Bateau des Étoiles.",
+        ads: (n) => `${n} petite${n > 1 ? "s" : ""} annonce${n > 1 ? "s" : ""} aujourd'hui, ci-dessous.`,
+      },
+      adsTitle: "Petites annonces",
+      adsNone: "Aucune annonce aujourd'hui. Repassez demain.",
+      adGood: (key, n) => ({
+        crop0: `${n} navet${n > 1 ? "s" : ""}`, crop1: `${n} pomme${n > 1 ? "s" : ""} de terre`, crop2: `${n} tomate${n > 1 ? "s" : ""}`,
+        crop3: `${n} citrouille${n > 1 ? "s" : ""}`, egg: `${n} œuf${n > 1 ? "s" : ""}`, fish: `${n} poisson${n > 1 ? "s" : ""}`,
+        wood: `${n} bûches`, stone: `${n} pierres`,
+      }[key] || `${n} ×`),
+      adWhy: (key, i) => {
+        const P = {
+          crop0: ["pour une soupe d'hiver", "pour ses lapins", "pour le marché de demain"],
+          crop1: ["pour un gratin du dimanche", "pour la fête du quartier", "pour faire des frites"],
+          crop2: ["pour une sauce", "pour ses conserves", "pour une salade de saison"],
+          crop3: ["pour une tarte", "pour décorer sa porte", "pour le concours du plus gros"],
+          egg: ["pour un gâteau", "pour des crêpes", "pour une omelette géante"],
+          fish: ["pour le dîner de vendredi", "pour fumer au jardin", "pour son chat, qui insiste"],
+          wood: ["pour réparer sa clôture", "pour l'hiver", "pour un banc neuf"],
+          stone: ["pour un muret", "pour paver son allée", "pour caler sa brouette"],
+        }[key] || ["pour une affaire à lui"];
+        return P[i % P.length];
+      },
+      adLine: (name, good, why) => `${name} cherche ${good} ${why}.`,
+      adReward: (g) => `Récompense : ${g} or`,
+      adExpires: "Jusqu'à ce soir",
+      adHave: (h, n) => `Dans ton sac : ${h}/${n}`,
+      adDeliver: "Livrer",
+      adTakenBy: (who) => `Honorée par ${who}`,
+      adShort: "Il t'en manque.",
+      adDoneChat: (who, name, good, g) => `${who} a livré ${good} à ${name} (+${g} or pour la ferme).`,
+      adTakenToast: (who) => `Trop tard : ${who} l'a déjà honorée.`,
+      adShortToast: "Il manque quelque chose dans ton sac.",
+      sealed: "Avis officiel",
+      society: "Carnet mondain",
+    },
     newsBoardSub: "Place de Valley Town",
     newsBoardInTown: "En ville en ce moment",
     newsBoardNobody: "Personne en ville. La place est à vous.",
@@ -5365,6 +5515,35 @@ export const FERME_STR = {
   },
   en: {
     star: STAR_EN,
+    // 2026-10-04 — the farm's medals (see medailles.js and the FR block).
+    medals: {
+      hudTip: "The farm's medals",
+      title: "🏅 The farm's medals",
+      sub: "Every great quest you finish leaves a medal on the farm. It stays, even when you play the quest again.",
+      name: { star: "The Star Boat" },
+      nameEarly: { star: "The shipyard" },
+      hidden: "A story yet to come…",
+      stateNone: "Not started yet.",
+      stateRunning: "In progress.",
+      stateReplay: "Being replayed — the medal is already won.",
+      wonOn: (day, date) => `Won on day ${day} · ${date}`,
+      wonBy: (names) => `By ${names}`,
+      times: (n) => `Completed ${n} times`,
+      replay: "↻ Play the quest again",
+      replayConfirm: "The quest starts over for the whole farm: the ship, the stars, the audiences. The medal stays. Play again?",
+      wonToast: "🏅 The farm earns a medal: the Star Boat!",
+      againToast: (n) => `🏅 The Star Boat, completed for the ${n}th time!`,
+      wonChat: "The farm won the Star Boat medal.",
+      againChat: (n) => `The Star Boat was completed for the ${n}th time.`,
+      replayToast: (who) => `${who} starts the Star Boat over. The medal stays.`,
+      close: "Close",
+    },
+    // 2026-10-04 — bumps (see the FR block).
+    resBump: {
+      grumpy: ["Watch where you're going!", "Hey! Want my spot too?", "Am I in your way?", "The street's wide enough, you know.", "My feet! My feet!", "Do we know each other?"],
+      patient: ["Easy now…", "Whoa there, steady.", "Twice now. That's a pattern.", "Are you looking for trouble?", "I saw you coming, you know."],
+      kind: ["Oh, sorry!", "Excuse me, I was miles away.", "Oops, my apologies!", "Sorry, sorry, just passing.", "Oh! I was looking elsewhere."],
+    },
     maire: MAIRE_EN,
     /* ⚠️ CÔTÉ ANGLAIS, `maireFor` REND TOUJOURS LA TABLE ANGLAISE : la
        déclinaison féminine n'existe pas encore en anglais, et l'anglais n'en a
@@ -6919,6 +7098,75 @@ export const FERME_STR = {
     townTripBackChat: (n) => `🚂 ${n} is back from Valley Town.`,
     townTripGuestChat: (n, g) => `🚂 ${n} is off to Valley Town, with ${g} in tow.`,
     newsBoardTitle: "Notice board",
+    // 2026-10-04 — the gazette and the small ads (gazette.js).
+    gazette: {
+      masthead: "The Valley Town Gazette",
+      dateLine: (day, season) => `Day ${day} · ${season}`,
+      head: {
+        launch: ["The Star Boat has put to sea", "The whole town came down to the harbour to see La Belle Étoile sail."],
+        finale: ["The harbour gets ready for a party", "The mayor promises an inauguration people will talk about for years."],
+        wreck: ["Vandals at the shipyard", "Nobody knows yet who smashed the hull. The town hall is meeting."],
+        meteor: ["A meteor falls near town", "Onlookers crowd around the still-warm crater."],
+        fallen: ["Stones rain on the valley", "Farmers report smoking holes in their fields."],
+        warned: ["The observatory issues a notice", "A rain of stones is expected tonight or the next. Bring the animals in."],
+        yardTaken: (who) => ["The silted harbour will reopen", `${who ? who + "'s farm" : "Our neighbours"} took on the old shipyard. The mayor awaits a visit.`],
+        yardOffer: ["The town hall wants the harbour back", "It is looking for a farm to restore the old shipyard. Notice below."],
+        election: (k, name) => ["Election day", `${name} wins and takes the town hall for a new term.`],
+        newcomer: (n) => ["A new face on the farm", `${n} just moved in. Drop by and say hello.`],
+        filler0: ["The fairground is buzzing", "Traders say they have never seen so many pumpkins."],
+        filler1: ["The square's pigeons on strike", "They demand more crumbs. The bakery has not replied."],
+        filler2: ["Best hedge contest", "The jury will come unannounced. Trim straight."],
+        filler3: ["The fountain has been cleaned", "Forty-two coins and a hat were fished out."],
+        filler4: ["The train runs on time", "Gustave insists everyone should know."],
+        filler5: ["All quiet in Valley Town", "The best day for a walk by the lake."],
+      },
+      brief: {
+        wxTomorrow: (k, part) => {
+          const when = { morning: "in the morning", afternoon: "in the afternoon", evening: "in the evening", night: "at night" }[part] || "during the day";
+          return "Tomorrow: " + ({ overcast: "grey skies", shower: "a few showers", rain: "rain", storm: "a storm", dryStorm: "a dry storm",
+            hail: "hail", snowLight: "a few flakes", snow: "snow", snowHeavy: "a snowstorm" }[k] || "changeable weather") + " " + when + ".";
+        },
+        wxFine: "Tomorrow: clear skies, not a cloud.",
+        mayor: (name, next) => `At the town hall: ${name}. Next election on day ${next}.`,
+        voyage: "Eduardo is at sea. His hold will come back full.",
+        inTown: (n) => `${n} of the farm's residents ${n > 1 ? "are" : "is"} strolling in town today.`,
+        candles: (n) => `${n} candle${n > 1 ? "s" : ""} burning at the church.`,
+        medal: (n) => n > 1 ? `The farm wears the Star Boat medal (completed ${n} times).` : "The farm wears the Star Boat medal.",
+        ads: (n) => `${n} small ad${n > 1 ? "s" : ""} today, below.`,
+      },
+      adsTitle: "Small ads",
+      adsNone: "No ads today. Come back tomorrow.",
+      adGood: (key, n) => ({
+        crop0: `${n} turnip${n > 1 ? "s" : ""}`, crop1: `${n} potato${n > 1 ? "es" : ""}`, crop2: `${n} tomato${n > 1 ? "es" : ""}`,
+        crop3: `${n} pumpkin${n > 1 ? "s" : ""}`, egg: `${n} egg${n > 1 ? "s" : ""}`, fish: `${n} fish`,
+        wood: `${n} logs`, stone: `${n} stones`,
+      }[key] || `${n} ×`),
+      adWhy: (key, i) => {
+        const P = {
+          crop0: ["for a winter soup", "for the rabbits", "for tomorrow's market"],
+          crop1: ["for a Sunday gratin", "for the street party", "to make chips"],
+          crop2: ["for a sauce", "for preserves", "for a seasonal salad"],
+          crop3: ["for a pie", "to decorate the door", "for the biggest-pumpkin contest"],
+          egg: ["for a cake", "for pancakes", "for a giant omelette"],
+          fish: ["for Friday dinner", "to smoke in the garden", "for a very insistent cat"],
+          wood: ["to fix a fence", "for the winter", "for a new bench"],
+          stone: ["for a low wall", "to pave a path", "to wedge a wheelbarrow"],
+        }[key] || ["for some business of theirs"];
+        return P[i % P.length];
+      },
+      adLine: (name, good, why) => `${name} is looking for ${good} ${why}.`,
+      adReward: (g) => `Reward: ${g} gold`,
+      adExpires: "Until tonight",
+      adHave: (h, n) => `In your bag: ${h}/${n}`,
+      adDeliver: "Deliver",
+      adTakenBy: (who) => `Taken by ${who}`,
+      adShort: "You're short.",
+      adDoneChat: (who, name, good, g) => `${who} delivered ${good} to ${name} (+${g} gold for the farm).`,
+      adTakenToast: (who) => `Too late: ${who} already took it.`,
+      adShortToast: "Something's missing from your bag.",
+      sealed: "Official notice",
+      society: "Society column",
+    },
     newsBoardSub: "Valley Town square",
     newsBoardInTown: "In town right now",
     newsBoardNobody: "Nobody about. The square is yours.",
