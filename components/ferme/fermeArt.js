@@ -2491,17 +2491,26 @@ export function townTreeSize(tw, x, y, obj) {
 /* 2026-09-28 (phase 12a) — les essences qui gardent leur feuillage l'hiver
    (elles lisent la charge des conifères, qui tient plus longtemps). */
 export function townTreeEvergreen(k) { return k === TT.FIR || k === TT.PINE || k === TT.CYPRESS || k === TT.REF_FIR || k === TT.MIMOSA; }
-export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow) {
+/* 2026-10-05 — LE CRAN DE BOURGEONNEMENT D'UN ARBRE (0..3) à la part de fin d'hiver
+   `late` (meteo.js § 0 bis, `WX.lateWeight`) : celle de la saison, décalée par arbre
+   d'un hachage de sa case (±0,4 cran) — une rue ne bourgeonne pas d'un bloc, comme elle
+   ne se dénude pas d'un bloc (`townTreeFall`). */
+export function townTreeBud(late, x, y) {
+  if (!(late > 0)) return 0;
+  const v = late * 3.2 + ((waterHash(x * 17 + 3, y * 31 + 7) % 1000) / 1000 - 0.5) * 0.8;
+  return v < 0.5 ? 0 : Math.min(3, Math.floor(v + 0.5));
+}
+export function townTreeImg(S, tw, x, y, seasonKey, obj, now, snowLvl, onSnow, bud) {
   const set = S && S.townTrees;
   if (!set) return null;
   const k = townTreeKind(tw, x, y, obj);
   if (k === null || !set[k]) return null;
   const size = set[k].sizes || set[k].grand ? townTreeSize(tw, x, y, obj) : "adult";
   /* L'HIVER (phase 12a) : l'image vient de l'atlas paresseux des arbres
-     d'hiver — même pose de vent, même phase par case. */
+     d'hiver — même pose de vent, même phase par case. 2026-10-05 : + ses bourgeons. */
   if (seasonKey === "winter" && S.townTreesWinter) {
     const fi = !now ? 1 : TREE_SWAY[Math.floor(now / (C.TOWN_TREE_SWAY_MS / 2) + (waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000) * 8) & 7];
-    const cell = S.townTreesWinter.get(k, size, snowLvl | 0, fi, onSnow);
+    const cell = S.townTreesWinter.get(k, size, snowLvl | 0, fi, onSnow, bud | 0);
     if (cell) return { img: cell, m: cell.m, k };
   }
   const m = size === "grand" && set[k].grand ? set[k].grand
@@ -2647,13 +2656,14 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now, load
     mix = treeSnowMix(townTreeEvergreen(k) ? load.tc : load.tl, (waterHash(x * 5 + 1, y * 11 + 7) % 1000) / 1000);
   }
   const onSnow = !!(load && load.ground > 1);
-  const r = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix ? mix.a : 0, onSnow);
+  const bud = load ? load.bud | 0 : 0;   // 2026-10-05 : les bourgeons de la fin d'hiver (`townTreeBud`)
+  const r = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix ? mix.a : 0, onSnow, bud);
   if (!r || !r.img) return false;
   const dx = px + SPR_T / 2 - r.m.w / 2, dy = py + SPR_T - r.m.base;
   if (r.img.sx !== undefined) blitCell(ctx, r.img, dx, dy);
   else ctx.drawImage(r.img, dx, dy);
   if (mix && mix.k > 0.01) {
-    const r2 = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix.b, onSnow);
+    const r2 = townTreeImg(S, tw, x, y, seasonKey, obj, now, mix.b, onSnow, bud);
     if (r2 && r2.img) {
       ctx.globalAlpha = mix.k;
       if (r2.img.sx !== undefined) blitCell(ctx, r2.img, dx, dy); else ctx.drawImage(r2.img, dx, dy);
@@ -17113,7 +17123,52 @@ export function buildSprites() {
       return cell;
     };
     const ADULT = { geom: [48, 64, 58, 24], sx: 1, sy: 1, twS: 1, rs: 1 };
-    const build = (k, size, lvl, fi, onSnow) => {
+    /* ══════════════════════════════════════════════════════════════════════
+       2026-10-05 — LES BOURGEONS DE LA FIN D'HIVER (Guillaume : « des bourgeons
+       discrets sur les arbres »), par CRAN (`bud` 1..3, `townTreeBud`).
+       Ils se posent là où un vrai bourgeon pousse : au BOUT des rameaux (`tips`,
+       les pointes que `bareTree` connaît déjà — celles où s'accrochaient les
+       dernières feuilles de l'automne), puis le long d'eux (`twigs`). Un pixel,
+       un peu plus chaud et plus clair que le rameau (le bourgeon qui gonfle) ; au
+       dernier cran, une pointe sur cinq verdit (le débourrement qui commence).
+       ⚠️ DISCRETS, ET C'EST LA CONSIGNE : jamais une couronne colorée — un arbre
+       nu qui « picote » à dix pas. Au premier cran, un bout de rameau sur trois.
+       ⚠️ Peints APRÈS la neige des branches, et jamais sur un pixel déjà blanc :
+       un bourgeon ne perce pas un paquet de neige. Seules les essences dont on
+       connaît les pointes en portent (les feuillus dessinés en code et le
+       pommier) ; le saule, le magnolia et les persistants n'en ont pas. */
+    /* Par essence : [le bourgeon qui gonfle, la pointe qui verdit]. L'érable rougit (ses
+       bourgeons et ses fleurs précoces), le bouleau sort ses chatons ocre, le cerisier
+       ses bourgeons pourpres. */
+    const BUD_COL = {
+      oak: [[122, 78, 46], [143, 166, 90]], maple: [[150, 62, 50], [156, 160, 88]], birch: [[164, 138, 82], [150, 170, 96]],
+      cherry: [[142, 63, 58], [160, 170, 98]], apple: [[125, 74, 58], [150, 172, 96]],
+    };
+    const budPaint = (c, tips, k, bud, seed) => {
+      if (!bud || !tips || !tips.tips) return;
+      const sp = TREE_SPECS[k], sid = k === TT.REF_APPLE ? "apple" : sp && sp.id;
+      const cols = BUD_COL[sid] || [[120, 82, 52], [146, 168, 92]];
+      const g = c.getContext("2d"), W = c.width, H = c.height, im = g.getImageData(0, 0, W, H), d = im.data;
+      const hh = (x, y, s) => ((((x * 73856093) ^ (y * 19349663) ^ ((seed + s) * 83492791)) >>> 0) % 1000) / 1000;
+      const put = (x, y, col) => {
+        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
+        const o = (y * W + x) * 4;
+        if (d[o + 3] > 0 && d[o] * 0.3 + d[o + 1] * 0.59 + d[o + 2] * 0.11 > 200) return;   // de la neige : on n'y touche pas
+        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+      };
+      const tipShare = [0, 0.34, 0.68, 1][bud], twigShare = [0, 0, 0.18, 0.36][bud];
+      for (const p of tips.tips) {
+        const x = Math.round(p.x), y = Math.round(p.y);
+        if (hh(x, y, 1) >= tipShare) continue;
+        put(x, y, bud >= 3 && hh(x, y, 2) < 0.2 ? cols[1] : cols[0]);
+      }
+      for (const p of tips.twigs || []) {
+        const x = Math.round(p.x - 0.5), y = Math.round(p.y - 0.5);
+        if (hh(x, y, 3) < twigShare) put(x, y, cols[0]);
+      }
+      g.putImageData(im, 0, 0);
+    };
+    const build = (k, size, lvl, fi, onSnow, bud) => {
       /* 2026-09-29 — le saule de la planche n'a que deux gabarits, l'adulte et
          son grand (`WILLOW_GRAND`) : toute autre taille demandée est l'adulte. */
       const z = k === TT.REF_WILLOW ? (size === "grand" ? WILLOW_GRAND : ADULT) : size === "adult" ? ADULT : TREE_SIZES[size];
@@ -17136,6 +17191,7 @@ export function buildSprites() {
           else { const r = bareTree(sized(sp), frame, BARE[sp.id] || BARE.oak, seed, onSnow); c = r.c; mask = r.mask; tips = r; }
         }
         winterSnowPass(c, native ? 0 : lvl, seed + lvl, mask);
+        if (bud) budPaint(c, tips, k, bud, seed);   // 2026-10-05 : la fin d'hiver, après la neige des branches
         const cell = place(c);
         cell.m = { w: z.geom[0], h: z.geom[1], base: z.geom[2] };
         // 2026-09-30 : les pointes et les rameaux, où s'accrochent les dernières feuilles d'automne.
@@ -17145,12 +17201,14 @@ export function buildSprites() {
     };
     return {
       /* `k` : l'essence (`TT`), `size` : sa taille, `lvl` : 0 nu, 1 léger, 2
-         alourdi, `fi` : la pose de vent (indice de `TREE_FRAMES`). */
-      get(k, size, lvl, fi, onSnow) {
-        const key = `${k}|${size}|${lvl}|${fi}|${onSnow ? 1 : 0}`;
+         alourdi, `fi` : la pose de vent (indice de `TREE_FRAMES`), `bud` (2026-10-05) :
+         0 sans bourgeons, 1..3 les crans de la fin d'hiver. */
+      get(k, size, lvl, fi, onSnow, bud) {
+        const b = bud | 0;
+        const key = `${k}|${size}|${lvl}|${fi}|${onSnow ? 1 : 0}` + (b ? `|b${b}` : "");
         if (memo.has(key)) return memo.get(key);
         let cell = null;
-        try { cell = build(k, size, lvl, fi, !!onSnow); } catch (e) { cell = null; }
+        try { cell = build(k, size, lvl, fi, !!onSnow, b); } catch (e) { cell = null; }
         memo.set(key, cell);
         return cell;
       },

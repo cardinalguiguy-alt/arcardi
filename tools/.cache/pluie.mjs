@@ -88,12 +88,15 @@ function relax(v, gain, unload, dtH) {
 export const groundRain = (W) => Math.min(1, W.rain + 0.6 * W.hail);
 /* L'eau qui coule au caniveau, 0..1, pour le temps de CETTE image. */
 export const runOf = (W) => Math.max(0, Math.min(1, (groundRain(W) - PLUIE.RUN_MIN) / PLUIE.RUN_SPAN));
+/* 2026-10-05 — `season` est une ÉTIQUETTE (meteo.js § 0 bis) : en fin de saison, le sol
+   sèche à la vitesse qui glisse vers celle de la saison suivante (`WX.seasonMix`) ; au
+   cœur de la saison, les valeurs exactes d'avant. */
 export function packStep(st, W, dtH, hour, season) {
   const N = PLUIE, rain = groundRain(W);
   const sun = sunAt(hour, season) * Math.max(0, 1 - 1.25 * W.dark) * Math.max(0, 1 - 2 * rain);
-  st.w = Math.max(0, Math.min(1, relax(st.w, N.WET_GAIN * rain, (N.WET_DRY[season] || 0.3) + N.SUN_DRY * sun + N.WIND_DRY * W.wind, dtH)));
+  st.w = Math.max(0, Math.min(1, relax(st.w, N.WET_GAIN * rain, WX.seasonMix(N.WET_DRY, season, 0.3) + N.SUN_DRY * sun + N.WIND_DRY * W.wind, dtH)));
   const fill = N.PUD_FILL * Math.max(0, rain - N.PUD_MIN_RAIN) / (1 - N.PUD_MIN_RAIN);
-  const drain = (N.PUD_DRAIN[season] || 0.15) + N.PUD_SUN * sun;
+  const drain = WX.seasonMix(N.PUD_DRAIN, season, 0.15) + N.PUD_SUN * sun;
   st.p = Math.max(0, Math.min(1, st.p + (fill * (1 - st.p) - (st.p > 0 ? drain : 0)) * dtH));
   st.since = rain > 0.15 ? 0 : st.since + dtH * 60;
   return st;

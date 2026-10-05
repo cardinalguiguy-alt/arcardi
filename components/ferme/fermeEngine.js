@@ -20,6 +20,7 @@
    ========================================================================== */
 
 import * as C from "./fermeConstants";
+import * as WX from "./meteo";   // 2026-10-05 : l'étiquette de la saison (`seasonTagAt`, fin de saison — meteo.js § 0 bis)
 /* ⚠️⚠️ ZIP 444 — LE MOTEUR N'IMPORTE PLUS AUCUNE QUÊTE, ET C'EST UNE RÉPARATION
    AUTANT QU'UN RETRAIT. Le 442 lui faisait emprunter `enqMarketMod` : une issue
    d'enquête déplaçait la cote du marché. Le 442 avait pris la peine d'écrire
@@ -12465,6 +12466,36 @@ export function seasonAt(ms) {
   if (forcedSeasonKey) return C.SEASONS.find(s => s.key === forcedSeasonKey);
   const idx = Math.floor(Math.max(0, ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS);
   return C.SEASONS[idx % C.SEASONS.length];
+}
+/* 2026-10-05 — L'AVANCÉE DE LA SAISON (0..1), ET SON FORÇAGE, PARTAGÉ COMME LA SAISON.
+   Jusqu'ici elle vivait dans FermeGame (`seasonProgressAt`), forcée au menu dev
+   chez un seul joueur (`leafDevRef`, pour juger la chute des feuilles). Elle commande
+   désormais la MÉTÉO de la fin de saison (meteo.js § 0 bis), la température et les
+   bourgeons : forcée chez un seul, elle ferait tomber une giboulée chez l'un et une
+   neige chez l'autre. Même motif que `forcedSeasonKey` : la source de vérité est
+   `sharedRef.current.forcedSeasonP` (arbitrée par l'hôte, diffusée dans `p.state`,
+   persistée), ceci n'en est que le reflet, écrit par `applyForcedSky`. */
+let forcedSeasonP = null;
+export function setForcedSeasonProgress(p) {
+  forcedSeasonP = typeof p === "number" && p >= 0 && p < 1 ? p : null;
+  return forcedSeasonP;
+}
+export function seasonProgressAt(ms) {
+  if (forcedSeasonP != null) return forcedSeasonP;
+  const q = Math.max(0, ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS;
+  return q - Math.floor(q);
+}
+/* L'ÉTIQUETTE de la saison à l'instant `ms` (meteo.js § 0 bis) : ce que lisent la
+   météo, le manteau de neige, le sol mouillé et le froid du lac. ⚠️ Pour un JOUR de
+   jeu, l'instant de son DÉBUT (`dayStartAt` moins k journées), comme la saison :
+   une étiquette qui changerait en pleine journée retirerait l'averse en cours. */
+export function seasonTagAt(ms) {
+  return WX.seasonTag(seasonAt(ms).key, seasonProgressAt(ms));
+}
+/* La PHASE de l'année (0..4 : l'indice de la saison + son avancée) — ce que lit la
+   température (`WX.temperatureAt`), continue d'une saison à l'autre. */
+export function seasonPhaseAt(ms) {
+  return C.SEASONS.indexOf(seasonAt(ms)) + seasonProgressAt(ms);
 }
 export function seasonOf() {
   return seasonAt(Date.now());

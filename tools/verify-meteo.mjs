@@ -27,8 +27,8 @@ import { installFakeDOM, loadFerme } from "./lib-canvas.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeEngine", "meteo", "lumiere", "faune"]);
-const C = mods.fermeConstants, E = mods.fermeEngine, WX = mods.meteo, LM = mods.lumiere, F = mods.faune;
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeEngine", "meteo", "lumiere", "faune", "neige"]);
+const C = mods.fermeConstants, E = mods.fermeEngine, WX = mods.meteo, LM = mods.lumiere, F = mods.faune, NG = mods.neige;
 
 let fail = 0, n = 0;
 const ok = (name, cond, detail) => { n++; console.log((cond ? "  OK   " : "  FAIL ") + name + (detail ? "  —  " + detail : "")); if (!cond) fail++; };
@@ -384,6 +384,132 @@ console.log("§11 — La ferme et la ville");
   let fcDiff = 0;
   for (let d = 1; d <= 600; d++) if (JSON.stringify(WX.forecast(d, "autumn", "farm")) !== JSON.stringify(WX.forecast(d, "autumn"))) fcDiff++;
   ok("la prévision de la ferme diffère parfois de celle de la ville", fcDiff > 0, `${fcDiff} jours d'automne sur 600`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-05 — LA FIN DE SAISON (meteo.js § 0 bis), LA TEMPÉRATURE (§ 9), LA GELÉE (§ 10).
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("§12 — La fin de saison : l'hiver qui s'adoucit, l'automne qui annonce l'hiver");
+{
+  /* (1) HORS FIN DE SAISON, RIEN N'A BOUGÉ D'UN BIT : l'empreinte des tirages, des deux
+     lieux, des prévisions et des canaux, calculée avec le `meteo.js` d'AVANT la fin de
+     saison (commit « patins bonhomme ») et recalculée ici. Falsifié : un poids d'odds
+     déplacé d'une unité la change. */
+  const { createHash } = await import("crypto");
+  const h = createHash("sha256");
+  for (const se of SEASONS) for (let d = 1; d <= 2000; d++) {
+    h.update(JSON.stringify(WX.dayWeather(d, se))); h.update(JSON.stringify(WX.placeDayWeather(d, se, "farm"))); h.update(JSON.stringify(WX.forecast(d, se, "farm")));
+    for (let t = A; t < B; t += 97) { h.update(JSON.stringify(WX.weatherAt(d, t, se, null, "town"))); h.update(JSON.stringify(WX.weatherAt(d, t, se, null, "farm"))); }
+  }
+  const fp = h.digest("hex").slice(0, 16);
+  ok("⚠️ au cœur des saisons, le ciel est celui d'avant, au bit près", fp === "07145d00d582717b", `empreinte ${fp}`);
+  // (2) L'étiquette : la clé seule avant la fin, 12 crans ensuite, et seulement l'hiver et l'automne.
+  const tags = [0.2, 0.54, 0.55, 0.7, 0.999].map((p) => WX.seasonTag("winter", p));
+  ok("l'étiquette : la clé au cœur de la saison, un cran ensuite", tags[0] === "winter" && tags[1] === "winter" && tags[2] === "winter~1" && tags[4] === "winter~12" && WX.seasonTag("summer", 0.99) === "summer" && WX.seasonTag("spring", 0.99) === "spring", tags.join(" "));
+  ok("seasonBase / seasonLate relisent l'étiquette", WX.seasonBase("autumn~7") === "autumn" && WX.seasonLate("winter") === 0 && WX.seasonLate("winter~12") > 0.95 && WX.seasonLate("winter~1") < 0.02);
+  // (3) Les chances, mesurées : moins de neige et plus de soleil à la fin de l'hiver ; pas de neige à la fin de l'automne.
+  const stats = (tag) => {
+    let snow = 0, gib = 0, gibEps = 0, wind = 0, rain = 0, sunny = 0, mins = 0, snowEp = 0;
+    for (let d = 1; d <= 3000; d++) {
+      const eps = WX.dayWeather(d, tag).eps, k = eps[0] ? eps[0].kind : "clear";
+      if (WX.SNOW_KINDS.includes(k)) snow++;
+      if (eps.some((e) => WX.SNOW_KINDS.includes(e.kind))) snowEp++;
+      if (k === "giboulee") { gib++; gibEps += eps.length; }
+      if (k === "windy") wind++;
+      if (k === "rain") rain++;
+      if (d <= 300) for (let t = A; t < B; t += 10) { const w = WX.weatherAt(d, t, tag, null); mins++; if (w.dark < 0.25 && w.rain < 0.05 && w.snow < 0.05) sunny++; }
+    }
+    return { snow: snow / 30, gib: gib / 30, perDay: gib ? gibEps / gib : 0, wind: wind / 30, rain: rain / 30, sunny: 100 * sunny / mins, snowEp };
+  };
+  const w0 = stats("winter"), w9 = stats(WX.seasonTag("winter", 0.97)), a0 = stats("autumn"), a9 = stats(WX.seasonTag("autumn", 0.97));
+  /* ⚠️ 2026-10-05, ajustement de Guillaume : « garder des chutes de neige pas trop rares jusqu'à
+     samedi soir et dimanche matin — diminuer leur occurrence mais surtout leur intensité ».
+     Samedi 20 h (heure de Paris) ≈ 83 % de la saison, dimanche 10 h ≈ 91 %. */
+  const wSat = stats(WX.seasonTag("winter", 0.83)), wSun = stats(WX.seasonTag("winter", 0.91));
+  ok("fin d'hiver : la neige reste fréquente jusqu'au dimanche matin, mais moins qu'au cœur de l'hiver", wSat.snow >= 22 && wSun.snow >= 18 && w9.snow < w0.snow * 0.6, `${w0.snow.toFixed(1)} % → samedi soir ${wSat.snow.toFixed(1)} %, dimanche matin ${wSun.snow.toFixed(1)} %, fin ${w9.snow.toFixed(1)} % des jours`);
+  const snowPeak = (tag) => { let s = 0, k = 0, mx = 0; for (let d = 1; d <= 3000; d++) for (const e of WX.dayWeather(d, tag).eps) if (WX.SNOW_KINDS.includes(e.kind)) { s += e.p.snow; k++; mx = Math.max(mx, e.p.snow); } return { mean: s / k, max: mx }; };
+  const pk0 = snowPeak("winter"), pkSat = snowPeak(WX.seasonTag("winter", 0.83)), pkSun = snowPeak(WX.seasonTag("winter", 0.91));
+  ok("fin d'hiver : SURTOUT des chutes moins fortes (intensité moyenne et plus forte chute)", pkSat.mean < pk0.mean * 0.65 && pkSun.mean < pk0.mean * 0.5 && pkSun.max < 0.6, `moyenne ${pk0.mean.toFixed(2)} → ${pkSat.mean.toFixed(2)} (samedi soir) → ${pkSun.mean.toFixed(2)} (dimanche matin), la plus forte ${pk0.max.toFixed(2)} → ${pkSun.max.toFixed(2)}`);
+  ok("fin d'hiver : surtout du soleil (≥ 85 % du temps sans pluie ni ciel gris)", w9.sunny >= 85 && w9.sunny > w0.sunny, `${w0.sunny.toFixed(0)} % → ${w9.sunny.toFixed(0)} %`);
+  ok("fin d'hiver : des journées de giboulées, deux à trois averses chacune", w9.gib > 25 && w9.perDay >= 2 && w9.perDay <= 3, `${w9.gib.toFixed(1)} % des jours, ${w9.perDay.toFixed(2)} averses par journée`);
+  ok("⚠️ fin d'automne : pas une seule chute de neige", a9.snowEp === 0 && WX.placeDayWeather(1, WX.seasonTag("autumn", 0.97), "farm") && (() => { for (let d = 1; d <= 3000; d++) if (WX.placeDayWeather(d, WX.seasonTag("autumn", 0.97), "farm").eps.some((e) => WX.SNOW_KINDS.includes(e.kind))) return false; return true; })(), `${a9.snowEp} jours`);
+  ok("fin d'automne : des coups de vent, moins de pluies de fond", a9.wind > 10 && a9.rain < a0.rain * 0.6, `vent ${a0.wind.toFixed(1)} % → ${a9.wind.toFixed(1)} %, pluie ${a0.rain.toFixed(1)} % → ${a9.rain.toFixed(1)} %`);
+  // (4) La giboulée reste une giboulée : brève, sous un ciel clair, sans saut ; et commandée, une série.
+  let gWorst = 0, gDark = 0, gLate = 0, gN = 0;
+  const gTag = WX.seasonTag("winter", 0.97);
+  for (let d = 1; d <= 1500; d++) {
+    const eps = WX.dayWeather(d, gTag).eps;
+    if (!eps.length || eps[0].kind !== "giboulee") continue;
+    gN++;
+    for (const e of eps) { if (e.t0 + e.rise + e.hold + e.fall > B - 9.99) gLate++; gDark = Math.max(gDark, e.p.dark); }
+    let prev = WX.weatherAt(d, A, gTag, null);
+    for (let t = A + 0.25; t <= B; t += 0.25) { const w = WX.weatherAt(d, t, gTag, null); for (const c of WX.CHANNELS) gWorst = Math.max(gWorst, Math.abs(w[c] - prev[c])); prev = w; }
+  }
+  ok("la giboulée : ciel clair (dark ≤ 0,2), aucun saut, dans la journée", gN > 100 && gDark <= 0.2 && gWorst <= 0.06 && gLate === 0, `${gN} journées, dark max ${gDark.toFixed(2)}, pire pas ${gWorst.toFixed(3)}, ${gLate} débordantes`);
+  const fg = { day: 9, kind: "giboulee", at: 9 * 60 };
+  let wet = 0, dry = 0;
+  for (let t = 9 * 60 + 60; t < 20 * 60; t += 5) { const w = WX.weatherAt(9, t, "winter", fg); if (w.rain > 0.2) wet++; else if (w.rain < 0.02) dry++; }
+  ok("une giboulée commandée alterne averses et éclaircies jusqu'au soir", wet > 10 && dry > 30, `${wet} relevés sous l'averse, ${dry} au sec`);
+  // (5) Le manteau de la fin d'hiver : plus mince que celui du cœur de l'hiver (un hiver joué d'un bout à l'autre).
+  const PER = Math.round(C.SEASON_REAL_MS / C.DAY_REAL_MS), W0 = 20000;
+  const tagOf = (late) => (d) => { const p = (d - W0) / PER; return p < 0 ? "autumn" : p >= 1 ? "spring" : late ? WX.seasonTag("winter", p) : "winter"; };
+  const meanG = (late, p0, p1) => { let s = 0, k = 0; for (let d = W0 + Math.floor(PER * p0); d < W0 + PER * p1; d += 3) { s += NG.snowPack(d, 13 * 60, tagOf(late), null, "town").g; k++; } return s / k; };
+  const gMid = meanG(true, 0.2, 0.5), gEnd = meanG(true, 0.8, 1), gEndOld = meanG(false, 0.8, 1);
+  ok("fin d'hiver : la neige recule (manteau de midi des 20 derniers %)", gEnd < 0.25 * gMid && gEnd < gEndOld, `cœur ${gMid.toFixed(1)} cm, fin ${gEnd.toFixed(2)} cm (sans fin de saison : ${gEndOld.toFixed(1)} cm)`);
+}
+
+console.log("§13 — La température et la gelée blanche");
+{
+  const idx = { spring: 0, summer: 1, autumn: 2, winter: 3 };
+  // (1) Continue d'une saison à l'autre.
+  let jump = 0;
+  for (const ph of [0, 1, 2, 3]) jump = Math.max(jump, Math.abs(WX.yearMeanAt(ph - 1e-4) - WX.yearMeanAt(ph + 1e-4)));
+  ok("la moyenne de l'année ne saute pas aux bascules", jump < 0.01, `pire saut ${jump.toFixed(4)} °C`);
+  // (2) Par moment de l'année : le petit matin et l'après-midi, sur la météo réelle de l'étiquette.
+  const range = (se, p, place) => {
+    const tag = WX.seasonTag(se, p), ph = idx[se] + p, lo = [], hi = [];
+    let frostDays = 0, frost11 = 0, frost12sun = 0;
+    for (let d = 1; d <= 400; d++) {
+      let a = 99, b = -99, f = false;
+      const Wd = WX.weatherAt(d, A, tag, null, place);
+      for (let t = A; t < B; t += 15) {
+        const W = WX.weatherAt(d, t, tag, null, place), hr = t / 60, T = WX.temperatureAt(ph, hr, W, place, d);
+        if (hr <= 10) a = Math.min(a, T); if (hr >= 12 && hr <= 17) b = Math.max(b, T);
+        const fr = WX.frostOf(T, NG.sunAt(hr, tag), W, Wd, hr);
+        if (hr < 10 && fr.shade > 0.15) f = true;
+        if (Math.abs(hr - 11) < 1e-6 && fr.shade > 0.15) frost11++;
+        if (Math.abs(hr - 12) < 1e-6 && fr.sun > 0.15) frost12sun++;
+      }
+      lo.push(a); hi.push(b); if (f) frostDays++;
+    }
+    const avg = (v) => v.reduce((s, x) => s + x, 0) / v.length;
+    return { lo: avg(lo), hi: avg(hi), frost: frostDays / 4, frost11: frost11 / 4, frost12sun: frost12sun / 4 };
+  };
+  const rows = [["spring", 0.5], ["summer", 0.5], ["autumn", 0.5], ["autumn", 0.9], ["winter", 0.4], ["winter", 0.92]].map(([se, p]) => ({ se, p, ...range(se, p, "town") }));
+  for (const r of rows) console.log(`        ${r.se} à ${Math.round(r.p * 100)} % : matin ${r.lo.toFixed(1)} °C, après-midi ${r.hi.toFixed(1)} °C, gelée ${r.frost.toFixed(0)} % des matins (à l'ombre à 11 h : ${r.frost11.toFixed(0)} %, au soleil à midi : ${r.frost12sun.toFixed(0)} %)`);
+  const R = (se, p) => rows.find((r) => r.se === se && r.p === p);
+  ok("l'été est chaud sans canicule permanente, l'hiver gèle", R("summer", 0.5).hi > 22 && R("summer", 0.5).hi < 28 && R("winter", 0.4).lo < -4, `été ${R("summer", 0.5).hi.toFixed(1)} °C l'après-midi, hiver ${R("winter", 0.4).lo.toFixed(1)} °C au matin`);
+  ok("la fin de l'hiver est plus douce que son cœur (et l'après-midi dégèle)", R("winter", 0.92).hi > R("winter", 0.4).hi + 4 && R("winter", 0.92).hi > 4, `${R("winter", 0.4).hi.toFixed(1)} → ${R("winter", 0.92).hi.toFixed(1)} °C l'après-midi`);
+  ok("⚠️ fin d'automne : une gelée au petit matin la plupart des jours, plus jamais au milieu de l'automne", R("autumn", 0.9).frost > 50 && R("autumn", 0.5).frost === 0, `${R("autumn", 0.5).frost.toFixed(0)} % → ${R("autumn", 0.9).frost.toFixed(0)} % des matins`);
+  ok("⚠️ …et elle fond vite en fin de matinée (soleil à midi : ~jamais ; ombre à 11 h : rare)", R("autumn", 0.9).frost12sun < 2 && R("autumn", 0.9).frost11 < 15, `soleil à midi ${R("autumn", 0.9).frost12sun.toFixed(1)} %, ombre à 11 h ${R("autumn", 0.9).frost11.toFixed(1)} %`);
+  // (3) Ce que le ciel impose.
+  let snowWarm = 0, rainFrozen = 0, reads = 0;
+  for (let d = 1; d <= 600; d++) for (let t = A; t < B; t += 20) {
+    const W = WX.weatherAt(d, t, "winter", null), T = WX.temperatureAt(3.3, t / 60, W, "town", d); reads++;
+    if (W.snow > 0.15 && T > 0.6) snowWarm++;
+    if (W.rain > 0.15 && T < 0.8) rainFrozen++;
+  }
+  ok("il neige ⇒ 0,5 °C au plus ; il pleut ⇒ il ne gèle pas", snowWarm === 0 && rainFrozen === 0, `${snowWarm} neiges tièdes, ${rainFrozen} pluies sous zéro, ${reads} relevés`);
+  // (4) La ferme, en rase campagne, est plus froide au petit matin (c'est là que la gelée prend le mieux).
+  const Wc = { rain: 0, snow: 0, hail: 0, dark: 0, bolts: 0, near: 0, wind: 0, flake: 0 };
+  ok("la ferme perd un degré de plus au petit matin, pas l'après-midi", WX.temperatureAt(2.9, 7, Wc, "farm", 5) < WX.temperatureAt(2.9, 7, Wc, "town", 5) - 0.5 && WX.temperatureAt(2.9, 15, Wc, "farm", 5) === WX.temperatureAt(2.9, 15, Wc, "town", 5));
+  // (5) L'affichage : un entier, jamais « −0 ».
+  ok("l'affichage arrondit sans « −0 »", Object.is(WX.tempRound(-0.3), 0) && WX.tempRound(-0.6) === -1 && WX.tempRound(4.5) === 5);
+  // (6) Le moteur : l'étiquette et la phase suivent le forçage partagé de l'avancée.
+  E.setForcedSeason("winter"); E.setForcedSeasonProgress(0.9);
+  const tg = E.seasonTagAt(Date.now()), ph = E.seasonPhaseAt(Date.now());
+  E.setForcedSeasonProgress(null); E.setForcedSeason(null);
+  ok("le moteur : saison et avancée forcées ⇒ étiquette et phase", tg === WX.seasonTag("winter", 0.9) && Math.abs(ph - 3.9) < 1e-9 && E.setForcedSeasonProgress(1.2) === null, `${tg}, phase ${ph}`);
 }
 
 console.log(`\nverify-meteo : ${n - fail}/${n}`);

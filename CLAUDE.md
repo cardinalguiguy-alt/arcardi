@@ -11,34 +11,40 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 (soir) — LAPINS DE VT, PATINS LOUÉS, CANNE QUI SE RANGE, BONHOMME CASSABLE ET CHAPEAUX — DANS L'ARBRE, NON COMMITÉS
+### 2026-10-05 (nuit) — FIN DE SAISON, TEMPÉRATURE EN DIRECT, GELÉE, BOURGEONS — DANS L'ARBRE, NON COMMITÉ (livraison 1 sur 2)
 
-Récit complet : README de la ferme, en tête (« 2026-10-05 (soir) »). **Cinq livraisons séparées, rien de commité** (le dernier commit est « neigos » : `git status` dit tout).
-**(1) Les lapins de Valley Town** : `faune.js` § 10 bis (routine partagée, zéro message), `fauneArt.js` § 6 (20 poses × 4 robes, PETITS : assis 9 px contre 11 pour
-le chat ; tête de face OVALE, pas plate — deux corrections de Guillaume devenues contrôles de banc), trajets ondulés + rafales de bonds, jardins ouverts à l'aube et au
-crépuscule, aucune capture. **(2) La canne se range** après 15 s à plus de 4 cases de l'eau. **(3) Les patins se louent** : 60 or, 10 min réelles (`inv.skatesUntil` ;
-l'ancien `inv.skates` est remis à zéro). **(4) Le bonhomme** : K coup de pied (une boule seule en 1 à 3 coups ; un bonhomme encaisse, la tête tombe, il s'écroule aux
-coups RAPPROCHÉS), R soulever ↔ rouler (taille figée), poussée beaucoup plus lente, chapeaux et écharpe mesurés sur la tête (`tools/render-bonhomme.mjs`).
-**Supabase : rien** (JSON dans l'inventaire et les tas de neige ; aucune migration SQL). Bancs relancés, chiffres réels : `verify-faune` 103/103, `verify-bonhomme` 66/66,
-`verify-patin` 23/23, `verify-vallee` 292/292, `verify-strings` 1228 clés ; bundle esbuild et `no-undef` propres. Vu EN JEU à un client : lapin figé à 3 cases ; canne rangée à 16 s ;
-boule roulée, soulevée, posée, écrasée en 3 coups ; bonhomme décoré cassé en 7 coups. **Pas vu** : les lapins la nuit / sous la neige / dans un jardin ; le patin loué qui
-expire sur la glace ; tout cela **à deux vrais clients** (le `snowFx` d'un autre, la botte d'un autre). **Pas de touche tactile pour K et R.** ⚠️ **Tout le monde peut casser le
-bonhomme de tout le monde** (dit, pas décidé). **Question de Guillaume tranchée : la végétation de VT NE passe PAS sur la ferme** (arbres de la ferme = objets de jeu à PV, autre
-grain ; `docs/A-JUGER.md`). **Projet à moyen terme (lui) : la boutique d'hiver « bien plus belle »** (chalet procédural provisoire).
-**Le harnais à deux clients MARCHE** (`app/audit-duo`, `docs/VERIFICATION.md` : la panne était `document.hidden`) — reste à JOUER le patin, le bonhomme et les lapins à deux.
-**Le menu dev à deux** : météo et saison forcées = pour TOUTE la session ; profondeur de neige, glace, lac, feuilles = locales à chacun. **La neige en descendant du train** est
-préchauffée pendant le fondu (`prewarmTownSnow`) ; non vue sur la machine de Guillaume. Restent aussi à juger ceux de la veille (bois ouest, obélisque, reine, rosace).
-**Idée en attente, rien de codé** : l'horloge ne roule QUE pendant qu'un hôte est en ligne (retour tardif = un seul jour de plus, 6h00) — `docs/AUDIT-2026-10.md`, partie 3 ;
-la changer touche la sauvegarde, donc validation préalable.
-⚠️ `app/audit-tmp/page.js`, `app/audit-duo/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture, SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
-corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js — le serveur de dev l'avertit à chaque compilation) ; `tools/lib-canvas.mjs` annonce honorer `translate` et ne le fait pas.
-⚠️ **Le serveur de dev** (`arcardi-local`, port 3100) peut se figer sur « Compiling /audit-tmp » si on touche `.next/cache` à chaud : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
+Demande de Guillaume en deux volets. **(A) livré ici** : fin d'hiver douce (« moins de neige, surtout du soleil, un peu de pluie, dans la même journée ;
+des bourgeons discrets ») ; fin d'automne qui annonce l'hiver (« une petite gelée légère au petit matin qui fond vite en fin de matinée », « pas de chutes
+de neige ») ; température en direct. **(B) PAS COMMENCÉ** : patinoire, marché d'hiver (voir ACTION SUIVANTE).
+**Fait** : `meteo.js` § 0 bis — la saison d'un jour devient une ÉTIQUETTE (`"winter~7"`, 12 crans dès 55 % de la saison, `E.seasonTagAt`), qui traverse
+tirages, manteau, sol mouillé et lac sans changer une signature ; `LATE_ODDS` (ajusté par Guillaume : neige encore 28 % des jours le samedi soir, 23 % le
+dimanche matin, mais chutes moins fortes — `LATE_SNOW_CUT`), deux genres neufs (`giboulee` par séries de 2-3, `windy`) ; § 9 la température
+(pure fonction, continue d'une saison à l'autre) ; § 10 la gelée lue dans la température (part d'abord au soleil, tient à l'ombre). `neige.js` : fonte de
+fin d'hiver (`*_MELT_LATE`), gelée au pixel ombre/soleil. Bourgeons : `makeWinterTrees` (crans 1-3, `A.townTreeBud`) — **VT seulement** (les arbres de la
+ferme gardent leurs feuilles l'hiver). HUD « 🌡️ −3 °C » (1 Hz) + fourchette du jour dans le message du matin. ⚠️ **L'avancée de saison du menu dev est
+devenue PARTAGÉE** (`forcedSeasonP`, 3e rangée « Météo et saison » ; la rangée locale « feuilles » a disparu).
+**Bancs relancés** : `verify-meteo` 76/76 (§ 12-13 neufs, dont l'empreinte au bit près des tirages hors fin de saison — falsifiée), `verify-neige` 17/17,
+`verify-pluie` 34/34, `verify-feuilles` 29/29, `verify-faune` 103/103, `verify-lumiere` 86/86, `verify-jour` 40/40, `verify-strings` 1231 clés ; bundle
+esbuild et `no-undef` propres. **Vu en jeu** : le HUD (−2 °C à 6 h en hiver ; 5 °C à 10 h, hiver forcé à 97 % + giboulées), le forçage partagé.
+**PAS VU** (volet du navigateur masqué, capture impossible) : bourgeons, gelée d'automne, giboulées et coup de vent à l'écran, rien à deux clients.
+⚠️ **Changement à juger** : la gelée d'HIVER suit aussi la température (à l'ombre toute la journée par grand froid) au lieu de « aube → 10 h 12 ».
+**Supabase : rien** (`forcedSeasonP` = un champ JSON de plus, comme `forcedSeason`).
+Restent à juger d'avant : lapins de VT, patins loués, canne qui se range, bonhomme cassable (`docs/A-JUGER.md`) ; pas de touche tactile K/R ; tout le
+monde peut casser le bonhomme de tout le monde (dit, pas décidé). Idée en attente : l'horloge qui ne roule qu'avec un hôte (`docs/AUDIT-2026-10.md`, partie 3).
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; passer `?room=` unique (un autre agent peut
+partager le relais 54321). ⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore pas `translate`.
+⚠️ Serveur de dev figé sur « Compiling » : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER, PUIS LES SOLS DE VALLEY TOWN SUR LE MODÈLE FIX-004
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER (A), PUIS LA PATINOIRE ET LE MARCHÉ D'HIVER (B)
 
-(1) Faire juger `docs/A-JUGER.md` (en tête : les lapins, les patins loués, le bonhomme cassable, puis le patin et le lac, les bois, l'obélisque, la reine, la rosace) — idéalement EN
-JOUANT À DEUX. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements** (`components/ferme/solHD.js`, `docs/AUDIT-2026-10.md` FIX-004) — poser les questions de
-cadrage avant. (3) À moyen terme : la boutique d'hiver peinte, les arbres (lot B) et les objets de jardin (lot C0) de `refs/lot-gemini/`, les intérieurs (phase 8).
+(1) Faire juger (A) en jeu : menu dev « ❄️ Hiver » + « 📅 Saison à 97 % » + « 🌦️ Giboulées » en ville (bourgeons, giboulées) ; « 🍂 Automne » + 84/97 % à
+8 h (gelée qui recule au soleil vers 10 h). (2) **(B), décisions DÉJÀ PRISES avec Guillaume** : l'hiver, l'esplanade du champ de foire (`TOWN_MARKET`)
+devient une GRANDE patinoire, ouverte tout l'hiver ; le chalet des patins va à côté ; la bande BLOQUE sans patins avec un message (« chaussez des
+patins »), mais **si on insiste on entre et on tombe** ; les résidents patinent à l'occasion ; le marché déménage dans la **prairie à l'ouest de la
+Maison Garfield** (x≈80-115, y≈2-27, au pied de l'escalier ouest de la Haute-Ville) « ou ailleurs si plus approprié » — exigence : **pas posé là, cohérent
+avec l'environnement, une vraie installation vivante** ; les étals actuels pour l'instant. **Montrer un plan AVANT de construire.** Plus tard : marché de
+Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place. Contrainte : ville tirée d'une graine (aucun `rnd()` de plus) → calque
+saisonnier (cases solides à basculer, chemins des résidents). (3) Ensuite : sols de VT (FIX-004), boutique d'hiver peinte, lots B/C0, intérieurs.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -68,7 +74,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
-| Météo, saisons | `components/ferme/meteo.js` | `verify-meteo` |
+| Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |
 | Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
 | Sols de VT (pavements, herbe), arbres, intégrer une image Gemini de sol ou d'arbre | `refs/lot-gemini/00-LISEZ-MOI.md`, puis `refs/lot-gemini/A-sols-vt.md` ou `refs/lot-gemini/B-arbres.md` ; `tools/lib-mip.mjs`, `tools/build-lampadaires.mjs` (le modèle) | `render-rues`, `render-arbres`, `verify-densite` |
 | Eau, reflets, berges, parc | `components/ferme/eau.js` ; README ferme §18-§20 | `render-eau`, `render-rive`, `render-parc` |

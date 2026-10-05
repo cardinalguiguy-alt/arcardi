@@ -4832,13 +4832,19 @@ export const FERME_STR = {
         overcast: `Ciel gris ${when}.`, shower: `Quelques averses ${when}.`, rain: `La pluie arrive ${when}, et elle va durer.`,
         storm: `Un orage monte ${when}, prends un imperméable !`, dryStorm: `Orage de chaleur ${when} : des éclairs, pas une goutte.`,
         hail: `Gare à la grêle ${when} !`, snowLight: `Quelques flocons ${when}.`, snow: `Il neigera ${when}.`, snowHeavy: `Tempête de neige ${when} !`,
+        // 2026-10-05 — la fin de saison (meteo.js § 0 bis).
+        giboulee: `Des giboulées dès ${when} : soleil et averses en alternance.`, windy: `Coup de vent ${when}, tiens bien ton chapeau !`,
       })[k] || "";
     },
     /* 2026-09-29 — la ville n'a pas toujours le temps de la ferme (meteo.js § 3 bis) :
        sa prévision s'ajoute quand elle diffère. `txt` : une phrase de `chatForecast`,
        ou "" s'il fera beau en ville. */
     chatForecastTown: (txt) => txt ? `En ville : ${txt.charAt(0).toLowerCase()}${txt.slice(1)}` : "En ville : pas un nuage.",
-    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
+    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️", giboulee: "🌦️", windy: "🌬️" })[k] || "☀️",
+    /* 2026-10-05 — LA TEMPÉRATURE (meteo.js § 9) : en direct dans le bandeau, et la fourchette
+       du jour dans le message du matin. Le vrai signe moins (U+2212) et une espace insécable. */
+    tempC: (t) => `${t < 0 ? "\u2212" : ""}${Math.abs(t)}\u00a0°C`,
+    chatTemps: (lo, hi) => `Entre ${lo} et ${hi} aujourd'hui.`,
     chatJoin: (name) => `${name} rejoint la ferme.`,
     chatLeave: (name) => `${name} a quitté la ferme.`,
     // Effets flottants
@@ -5168,11 +5174,14 @@ export const FERME_STR = {
     devFaunaSection: "Faune de Valley Town",
     devFaunaHint: "Se poser à côté d'un des trois chats. La saison de la faune se force plus haut (« Météo et saison »). Les lucioles sortent la nuit, de 21h15 à 1h30.",
     devSkySection: "Météo et saison",
-    devSkyHint: (now) => `Pour TOUT LE MONDE (arbitré par l'hôte). La météo commandée vaut pour la journée en cours, puis la rotation reprend ; elle arrive progressivement (un orage met une à deux minutes à monter). Elle tombe sur la ferme ET sur la ville (hors commande, les deux lieux ont le même temps quatre jours sur cinq, et toujours la même neige). La saison forcée tient jusqu'à « Saison réelle » : arbres, buissons, neige, faune, miel et vergers la suivent. Maintenant : ${now}.`,
-    devWeatherBtn: (k) => ({ clear: "☀️ Beau", overcast: "☁️ Couvert", shower: "🌦️ Averse", rain: "🌧️ Pluie", storm: "⛈️ Orage", dryStorm: "🌩️ Orage sec", hail: "🧊 Grêle", snowLight: "🌨️ Neige fine", snow: "🌨️ Neige", snowHeavy: "❄️ Tempête de neige" }[k] || "🔄 Rotation"),
+    devSkyHint: (now) => `Pour TOUT LE MONDE (arbitré par l'hôte). La météo commandée vaut pour la journée en cours, puis la rotation reprend ; elle arrive progressivement (un orage met une à deux minutes à monter). Elle tombe sur la ferme ET sur la ville (hors commande, les deux lieux ont le même temps quatre jours sur cinq, et toujours la même neige). La saison forcée tient jusqu'à « Saison réelle » : arbres, buissons, neige, faune, miel et vergers la suivent. L'avancée de la saison (troisième rangée) règle la chute des feuilles, la fin de saison (giboulées de la fin d'hiver, coups de vent et gelées de la fin d'automne), la température et les bourgeons ; la fin de saison commence à 55 %. Maintenant : ${now}.`,
+    devWeatherBtn: (k) => ({ clear: "☀️ Beau", overcast: "☁️ Couvert", windy: "🌬️ Coup de vent", shower: "🌦️ Averse", giboulee: "🌦️ Giboulées", rain: "🌧️ Pluie", storm: "⛈️ Orage", dryStorm: "🌩️ Orage sec", hail: "🧊 Grêle", snowLight: "🌨️ Neige fine", snow: "🌨️ Neige", snowHeavy: "❄️ Tempête de neige" }[k] || "🔄 Rotation"),
     devSeasonBtn: (k) => ({ spring: "🌸 Printemps", summer: "☀️ Été", autumn: "🍂 Automne", winter: "❄️ Hiver" }[k] || "🔄 Saison réelle"),
-    devWeatherChat: (who, k) => k ? `🛠️ ${who} a commandé la météo du jour : ${({ clear: "beau temps", overcast: "ciel couvert", shower: "averse", rain: "pluie", storm: "orage", dryStorm: "orage sec", hail: "grêle", snowLight: "neige fine", snow: "neige", snowHeavy: "tempête de neige" })[k]}.` : `🛠️ ${who} a rendu la météo à sa rotation.`,
+    devWeatherChat: (who, k) => k ? `🛠️ ${who} a commandé la météo du jour : ${({ clear: "beau temps", overcast: "ciel couvert", windy: "coup de vent", shower: "averse", giboulee: "giboulées", rain: "pluie", storm: "orage", dryStorm: "orage sec", hail: "grêle", snowLight: "neige fine", snow: "neige", snowHeavy: "tempête de neige" })[k]}.` : `🛠️ ${who} a rendu la météo à sa rotation.`,
     devSeasonChat: (who, k) => k ? `🛠️ ${who} a forcé la saison : ${({ spring: "printemps", summer: "été", autumn: "automne", winter: "hiver" })[k]}.` : `🛠️ ${who} a rétabli la vraie saison.`,
+    // 2026-10-05 — l'avancée de la saison, forcée pour tout le monde (meteo.js § 0 bis).
+    devSeasonP: (v) => (v == null ? "📅 Avancée réelle" : `📅 Saison à ${Math.round(v * 100)} %`),
+    devSeasonPChat: (who, v) => v == null ? `🛠️ ${who} a rétabli la vraie avancée de la saison.` : `🛠️ ${who} a placé la saison à ${Math.round(v * 100)} %.`,
     // AUDIT 2026-10 (FIX-004) — l'interrupteur du prototype de dallage civique haute résolution (solHD.js).
     devCivicHdSection: "Dallage civique (prototype, sur cet écran)",
     devCivicHdBtn: (on) => on ? "🪨 Haute résolution" : "🧱 Ancien dessin",
@@ -5181,7 +5190,6 @@ export const FERME_STR = {
     devSnowDepth: (v) => (v == null ? "🔄 Météo" : v === 0 ? "∅ Pas de neige" : `❄️ ${String(v).replace(".", ",")} cm`),
     devSnowTrees: (v) => (v == null ? "🌲 Arbres : météo" : ["🌳 Nus", "🌲 Légers", "🎄 Alourdis"][v]),
     devSnowClear: "🧹 Effacer les traces",
-    devLeaf: (v) => (v == null ? "🍂 Feuilles : saison" : `🍂 Saison à ${Math.round(v * 100)} %`),
     devIce: (v) => (v == null ? "🧊 Étang : météo" : v === 0 ? "💧 Étang libre" : v < 1 ? "🧊 La glace prend" : v < 2 ? "🧊 Presque pris" : "🧊 Étang gelé"),
     devLake: (v) => (v == null ? "⛸️ Lac : météo" : v < 5.3 ? "🌊 Lac libre" : v < 5.8 ? "⛸️ La rive prise" : v < 6.3 ? "⛸️ Lac à moitié pris" : "⛸️ Lac gelé"),
     devFaunaCat: (i) => ["🐈 Le chat roux (marché)", "🐈‍⬛ Le chat noir (église)", "🐈 La tricolore (port)"][i],
@@ -5307,7 +5315,8 @@ export const FERME_STR = {
         wxTomorrow: (k, part) => {
           const when = { morning: "le matin", afternoon: "l'après-midi", evening: "le soir", night: "la nuit" }[part] || "dans la journée";
           return "Demain : " + ({ overcast: "ciel gris", shower: "quelques averses", rain: "de la pluie", storm: "un orage", dryStorm: "un orage sec",
-            hail: "de la grêle", snowLight: "quelques flocons", snow: "de la neige", snowHeavy: "une tempête de neige" }[k] || "du temps changeant") + " " + when + ".";
+            hail: "de la grêle", snowLight: "quelques flocons", snow: "de la neige", snowHeavy: "une tempête de neige",
+            giboulee: "des giboulées, entre deux éclaircies", windy: "un coup de vent" }[k] || "du temps changeant") + " " + when + ".";
         },
         wxFine: "Demain : grand beau, pas un nuage.",
         mayor: (name, next) => `À la mairie : ${name}. Prochaine élection le jour ${next}.`,
@@ -6743,10 +6752,13 @@ export const FERME_STR = {
         overcast: `Grey skies ${when}.`, shower: `A few showers ${when}.`, rain: `Rain is coming ${when}, and it will last.`,
         storm: `A storm is building ${when}, grab a raincoat!`, dryStorm: `Heat lightning ${when}: flashes, not a drop.`,
         hail: `Watch out for hail ${when}!`, snowLight: `A few flakes ${when}.`, snow: `It will snow ${when}.`, snowHeavy: `Snowstorm ${when}!`,
+        giboulee: `Sunshowers from ${when}: sun and showers taking turns.`, windy: `A gale ${when}, hold on to your hat!`,
       })[k] || "";
     },
     chatForecastTown: (txt) => txt ? `In town: ${txt.charAt(0).toLowerCase()}${txt.slice(1)}` : "In town: not a cloud.",
-    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️" })[k] || "☀️",
+    wxEmoji: (k) => ({ overcast: "☁️", shower: "🌦️", rain: "🌧️", storm: "⛈️", dryStorm: "🌩️", hail: "🧊", snowLight: "🌨️", snow: "🌨️", snowHeavy: "❄️", giboulee: "🌦️", windy: "🌬️" })[k] || "☀️",
+    tempC: (t) => `${t < 0 ? "\u2212" : ""}${Math.abs(t)}\u00a0°C`,
+    chatTemps: (lo, hi) => `Between ${lo} and ${hi} today.`,
     chatJoin: (name) => `${name} joined the farm.`,
     chatLeave: (name) => `${name} left the farm.`,
     fxWood: (n) => `+${n} wood`,
@@ -7045,11 +7057,13 @@ export const FERME_STR = {
     devFaunaSection: "Valley Town wildlife",
     devFaunaHint: "Stand next to one of the three cats. The wildlife season is forced above (\"Weather and season\"). Fireflies come out at night, 9:15 pm to 1:30 am.",
     devSkySection: "Weather and season",
-    devSkyHint: (now) => `For EVERYONE (the host decides). Ordered weather lasts for the current day, then the rotation resumes; it arrives gradually (a storm takes one to two minutes to build). It falls on the farm AND the town (otherwise both places share the same weather four days out of five, and always the same snow). A forced season holds until "Real season": trees, bushes, snow, wildlife, honey and orchards follow it. Now: ${now}.`,
-    devWeatherBtn: (k) => ({ clear: "☀️ Clear", overcast: "☁️ Overcast", shower: "🌦️ Shower", rain: "🌧️ Rain", storm: "⛈️ Storm", dryStorm: "🌩️ Dry storm", hail: "🧊 Hail", snowLight: "🌨️ Light snow", snow: "🌨️ Snow", snowHeavy: "❄️ Snowstorm" }[k] || "🔄 Rotation"),
+    devSkyHint: (now) => `For EVERYONE (the host decides). Ordered weather lasts for the current day, then the rotation resumes; it arrives gradually (a storm takes one to two minutes to build). It falls on the farm AND the town (otherwise both places share the same weather four days out of five, and always the same snow). A forced season holds until "Real season": trees, bushes, snow, wildlife, honey and orchards follow it. The season's progress (third row) drives falling leaves, the end of the season (late-winter sunshowers, late-autumn gales and frosts), the temperature and the buds; the end of the season starts at 55 %. Now: ${now}.`,
+    devWeatherBtn: (k) => ({ clear: "☀️ Clear", overcast: "☁️ Overcast", windy: "🌬️ Gale", shower: "🌦️ Shower", giboulee: "🌦️ Sunshowers", rain: "🌧️ Rain", storm: "⛈️ Storm", dryStorm: "🌩️ Dry storm", hail: "🧊 Hail", snowLight: "🌨️ Light snow", snow: "🌨️ Snow", snowHeavy: "❄️ Snowstorm" }[k] || "🔄 Rotation"),
     devSeasonBtn: (k) => ({ spring: "🌸 Spring", summer: "☀️ Summer", autumn: "🍂 Autumn", winter: "❄️ Winter" }[k] || "🔄 Real season"),
-    devWeatherChat: (who, k) => k ? `🛠️ ${who} ordered today's weather: ${({ clear: "clear skies", overcast: "overcast", shower: "shower", rain: "rain", storm: "storm", dryStorm: "dry storm", hail: "hail", snowLight: "light snow", snow: "snow", snowHeavy: "snowstorm" })[k]}.` : `🛠️ ${who} returned the weather to its rotation.`,
+    devWeatherChat: (who, k) => k ? `🛠️ ${who} ordered today's weather: ${({ clear: "clear skies", overcast: "overcast", windy: "gale", shower: "shower", giboulee: "sunshowers", rain: "rain", storm: "storm", dryStorm: "dry storm", hail: "hail", snowLight: "light snow", snow: "snow", snowHeavy: "snowstorm" })[k]}.` : `🛠️ ${who} returned the weather to its rotation.`,
     devSeasonChat: (who, k) => k ? `🛠️ ${who} forced the season: ${k}.` : `🛠️ ${who} restored the real season.`,
+    devSeasonP: (v) => (v == null ? "📅 Real progress" : `📅 Season at ${Math.round(v * 100)} %`),
+    devSeasonPChat: (who, v) => v == null ? `🛠️ ${who} restored the season's real progress.` : `🛠️ ${who} set the season to ${Math.round(v * 100)} %.`,
     // AUDIT 2026-10 (FIX-004) — the switch of the high-resolution civic paving prototype (solHD.js).
     devCivicHdSection: "Civic paving (prototype, on this screen)",
     devCivicHdBtn: (on) => on ? "🪨 High resolution" : "🧱 Old drawing",
@@ -7057,7 +7071,6 @@ export const FERME_STR = {
     devSnowHint: "LOCAL, for judging: forces the ground depth and the state of the trees on this screen only (other players keep the weather's snow). \"Weather\" hands back to the computed snowpack.",
     devSnowDepth: (v) => (v == null ? "🔄 Weather" : v === 0 ? "∅ No snow" : `❄️ ${v} cm`),
     devSnowTrees: (v) => (v == null ? "🌲 Trees: weather" : ["🌳 Bare", "🌲 Light", "🎄 Heavy"][v]),
-    devLeaf: (v) => (v == null ? "🍂 Leaves: season" : `🍂 Season at ${Math.round(v * 100)} %`),
     devIce: (v) => (v == null ? "🧊 Pond: weather" : v === 0 ? "💧 Pond open" : v < 1 ? "🧊 Ice forming" : v < 2 ? "🧊 Nearly frozen" : "🧊 Pond frozen"),
     devLake: (v) => (v == null ? "⛸️ Lake: weather" : v < 5.3 ? "🌊 Lake open" : v < 5.8 ? "⛸️ Shore ice" : v < 6.3 ? "⛸️ Lake half frozen" : "⛸️ Lake frozen"),
     devSnowClear: "🧹 Clear the tracks",
@@ -7169,7 +7182,8 @@ export const FERME_STR = {
         wxTomorrow: (k, part) => {
           const when = { morning: "in the morning", afternoon: "in the afternoon", evening: "in the evening", night: "at night" }[part] || "during the day";
           return "Tomorrow: " + ({ overcast: "grey skies", shower: "a few showers", rain: "rain", storm: "a storm", dryStorm: "a dry storm",
-            hail: "hail", snowLight: "a few flakes", snow: "snow", snowHeavy: "a snowstorm" }[k] || "changeable weather") + " " + when + ".";
+            hail: "hail", snowLight: "a few flakes", snow: "snow", snowHeavy: "a snowstorm",
+            giboulee: "sunshowers between bright spells", windy: "a gale" }[k] || "changeable weather") + " " + when + ".";
         },
         wxFine: "Tomorrow: clear skies, not a cloud.",
         mayor: (name, next) => `At the town hall: ${name}. Next election on day ${next}.`,

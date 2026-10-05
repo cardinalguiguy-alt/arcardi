@@ -62,6 +62,23 @@ export const NEIGE = {
      doux : seuls le soleil et la pluie font fondre. */
   SUN_MELT: { winter: 0.9, spring: 2.6, summer: 6, autumn: 1.6 },
   WARM_MELT: { winter: 0, spring: 1.4, summer: 5, autumn: 0.7 },
+  /* 2026-10-05 — LA FIN DE L'HIVER (meteo.js § 0 bis) : ce que valent la fonte au soleil,
+     l'air doux et la fonte de la glace au DERNIER jour de l'hiver ; on y glisse depuis
+     les valeurs d'hiver à mesure que la fin de saison avance (`WX.seasonMixTo`). Un
+     soleil déjà plus fort, un air à peine doux : la neige recule au soleil, tient à
+     l'ombre des murs et des arbres. Réglé au banc (`verify-meteo` § 12, « la neige recule ») —
+     le premier jet visait les valeurs du printemps et ne laissait plus rien dès le
+     samedi matin. Mesuré sur un hiver joué d'un bout à l'autre : à 70 % de la saison,
+     19 % des midis blancs au soleil et 48 % à l'ombre (avant : 57 et 76) ; à 80 %, 16
+     et 29 ; ensuite, les neiges de la fin d'hiver poudrent et fondent. ⚠️ Depuis
+     l'ajustement de Guillaume (meteo.js, `LATE_ODDS` / `LATE_SNOW_CUT` : des chutes pas
+     trop rares jusqu'au dimanche matin, mais moins fortes), mesuré à la fin de chaque
+     chute : le samedi soir (83 %), 28 % des jours neigent, et 8 chutes sur 10 laissent
+     un voile (≥ 0,3 cm), 4 sur 10 blanchissent (≥ 1,5 cm) ; le dimanche matin (91 %),
+     23 %, une sur deux et une sur quatre. Le lac ne prend plus après 60 %. */
+  SUN_MELT_LATE: { winter: 1.4 },
+  WARM_MELT_LATE: { winter: 0.15 },
+  ICE_WARM_LATE: { winter: 0.12 },
   RAIN_MELT: 2.4,
   SHADE_SUN: 0.2,          // à l'ombre (au sud-est d'un mur, d'une haie, d'un arbre) : un cinquième du soleil
   /* La chaussée : la circulation (qu'on ne voit pas) et le chasse-neige.
@@ -125,9 +142,11 @@ export function iceCover(ice) {
 }
 /* Le soleil : lever et coucher par saison, en heures — depuis la phase 12c, LA table du
    ciel (`C.SUN_HOURS`) : la fonte et la lumière ne peuvent plus diverger. */
-const SUN_HOURS = C.SUN_HOURS;   // 2026-09-29 (phase 12c) : LA table du lever et du coucher, celle du ciel (fermeConstants.js)
+/* 2026-09-29 (phase 12c) : LA table du lever et du coucher, celle du ciel (fermeConstants.js).
+   2026-10-05 : lue par l'ÉTIQUETTE de la saison (`WX.sunHoursOfTag`, meteo.js § 0 bis) —
+   la table telle quelle au cœur de la saison, l'interpolation du ciel à sa fin. */
 export function sunAt(hour, season) {
-  const [a, b] = SUN_HOURS[season] || SUN_HOURS.spring;
+  const [a, b] = WX.sunHoursOfTag(season);
   const h = ((hour % 24) + 24) % 24;
   if (h <= a || h >= b) return 0;
   const s = Math.sin(Math.PI * (h - a) / (b - a));
@@ -160,16 +179,21 @@ function relax(v, gain, unload, dtH) {
    MÊME grandeur que l'étang intègre — deux formules auraient divergé au premier
    réglage. Les opérations sont celles d'avant, dans le même ordre : l'étang n'a pas
    bougé d'un bit (`render-glace`). */
+/* 2026-10-05 — `season` est une ÉTIQUETTE (meteo.js § 0 bis). La glace ne prend que
+   l'hiver (sa BASE) ; l'air doux, le soleil et la fonte glissent vers ceux de la saison
+   suivante à mesure que la fin de saison avance (`WX.seasonMix`) — la fin de l'hiver
+   rend le lac, l'étang et la neige au printemps qui vient, au lieu de les lui laisser
+   d'un coup le lundi. Au cœur de la saison, les valeurs exactes d'avant. */
 export function iceRate(W, hour, season) {
   const N = NEIGE;
   const sun = sunAt(hour, season) * Math.max(0, 1 - 1.25 * W.dark) * Math.max(0, 1 - 3 * W.snow);
   const sun0 = sunAt(hour, season);
   let grow = 0;
-  if (season === "winter") {
+  if (WX.seasonBase(season) === "winter") {
     grow = sun0 <= 0 ? N.ICE_NIGHT + N.ICE_NIGHT_CLEAR * Math.max(0, 1 - W.dark) : N.ICE_DAY * (1 - sun0);
     if (W.snow > 0.05) grow += N.ICE_SNOW;
   }
-  const iceMelt = sun * N.ICE_SUN + W.rain * N.ICE_RAIN + (N.ICE_WARM[season] || 0);
+  const iceMelt = sun * N.ICE_SUN + W.rain * N.ICE_RAIN + WX.seasonMixTo(N.ICE_WARM, N.ICE_WARM_LATE, season, 0);
   return grow - iceMelt;
 }
 /* Un pas de `dtH` heures sous le temps `W`, à l'heure `hour`. */
@@ -178,8 +202,8 @@ export function packStep(st, W, dtH, hour, season) {
   const f = fallRate(W.snow);
   /* Le soleil : caché par le ciel (`dark`) et nul quand il neige. */
   const sun = sunAt(hour, season) * Math.max(0, 1 - 1.25 * W.dark) * Math.max(0, 1 - 3 * W.snow);
-  const warm = N.WARM_MELT[season] || 0, rain = W.rain * N.RAIN_MELT;
-  const sunM = sun * (N.SUN_MELT[season] || 0);
+  const warm = WX.seasonMixTo(N.WARM_MELT, N.WARM_MELT_LATE, season, 0), rain = W.rain * N.RAIN_MELT;
+  const sunM = sun * WX.seasonMixTo(N.SUN_MELT, N.SUN_MELT_LATE, season, 0);
   const mOpen = sunM + warm + rain, mShade = sunM * N.SHADE_SUN + warm + rain;
   st.g = Math.max(0, st.g + (f - mOpen) * dtH - st.g * N.SETTLE_H * dtH);
   st.s = Math.max(0, st.s + (f - mShade) * dtH - st.s * N.SETTLE_H * dtH);
@@ -935,8 +959,14 @@ export function renderChunk(st, pack, P, imp, out) {
       if (c === CL.GRASS || c === CL.LAWN || c === CL.SHORE || c === CL.TILLED) {
         /* L'HIVER SANS NEIGE : l'herbe dort (olive paille), et le matin la
            gelée blanche givre les brins — et les crêtes d'un labour (2026-09-29 :
-           la terre ne « dort » pas, elle ne prend que la gelée). */
-        if (P.frost > 0.02 && st.fine[o] / 127 > 0.55 - P.frost * 0.9 && (c !== CL.TILLED || !st.aux[o])) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, P.frost * 1.4)); }
+           la terre ne « dort » pas, elle ne prend que la gelée).
+           2026-10-05 — LA GELÉE DE CE PIXEL passe de celle du soleil (`P.frost`) à celle
+           de l'ombre (`P.frostShade`, meteo.js § 10) selon l'ombre qu'il reçoit (celle de
+           la case et l'ombre portée) : au matin, elle recule d'abord au soleil et ne
+           reste que dans les ombres bleues des murs, des haies et des arbres. */
+        const shK = Math.max(st.shade[o] / 255, st.cast[o] / 255);
+        const fr = P.frostShade == null ? P.frost : P.frost + (P.frostShade - P.frost) * Math.min(1, shK * 1.25);
+        if (fr > 0.02 && st.fine[o] / 127 > 0.55 - fr * 0.9 && (c !== CL.TILLED || !st.aux[o])) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, fr * 1.4)); }
         else if (P.winter && c !== CL.TILLED) { dout[q] = WINTER_GRASS[0]; dout[q + 1] = WINTER_GRASS[1]; dout[q + 2] = WINTER_GRASS[2]; dout[q + 3] = 96; }
       } else if (c === CL.STREET && P.wetRoad > 0.02) {
         /* La chaussée mouillée, plus sombre dans les ornières où l'eau de fonte
@@ -1430,7 +1460,8 @@ export function makeSnowField(tw, env) {
          un cran de 2 mm y basculait d'un coup un dixième des pixels — le dépôt
          et la fonte doivent être PROGRESSIFS (Guillaume). */
       const fineQ = (v) => (v < 4 ? q(v, 0.04) : 100 + q(v, 0.2));
-      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25)].join(",");
+      // 2026-10-05 : + la gelée de l'ombre (`frostShade`, meteo.js § 10), au même pas que celle du soleil.
+      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), q(p.frostShade == null ? -1 : p.frostShade, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25)].join(",");
       if (k !== pkey) { pkey = k; ver++; }
       if (pk.g + pk.s + pk.berm < 0.05 && prints.size) { prints.clear(); printCum.clear(); }
     },

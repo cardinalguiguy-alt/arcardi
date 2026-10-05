@@ -1165,10 +1165,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const snowFxRef = useRef({ parts: [], wob: new Map(), swings: new Map(), localAt: 0 });
   const [snowDecoFor, setSnowDecoFor] = useState(null);
   const [snowDecoDraft, setSnowDecoDraft] = useState(null);
-  /* 2026-09-30 — les feuilles mortes : l'avancée de la saison forcée au menu dev (locale,
-     `null` = la vraie), et les feuilles qui volent (locales, comme les flocons). */
-  const leafDevRef = useRef(null);
-  const [leafDevUi, setLeafDevUi] = useState(null);
+  /* 2026-09-30 — les feuilles mortes : les feuilles qui volent (locales, comme les flocons).
+     (L'avancée de la saison forcée au menu dev, locale ici jusqu'au 2026-10-05, est devenue
+     partagée : `forcedSeasonP`, `E.seasonProgressAt`.) */
   const leafFlurryRef = useRef(null);
   const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null, lake: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
@@ -1417,7 +1416,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const planOpenRef = useRef(false);
   const [timberOpen, setTimberOpen] = useState(false); // 454 — les commandes de bois à Tristan
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
-  const [forcedSkyUi, setForcedSkyUi] = useState({ weather: null, season: null }); // 2026-09-26 : miroir RENDABLE du forçage météo/saison (voir applyForcedSky)
+  const [forcedSkyUi, setForcedSkyUi] = useState({ weather: null, season: null, seasonP: null }); // 2026-09-26 : miroir RENDABLE du forçage météo/saison (voir applyForcedSky) ; 2026-10-05 : + l'avancée de la saison
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
   // l'ancien enchaînement automatique E->dépôt/E->lancement par un vrai menu
@@ -3064,7 +3063,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // qu'en créant une ferme neuve après avoir forcé une terre sur une autre :
     // la variable de module du moteur serait restée sur l'ancien forçage.
     applyForcedWorld(saved && saved.forcedWorld);
-    applyForcedSky(saved && saved.forcedWeather, saved && saved.forcedSeason); // 2026-09-26, même raison que la ligne du dessus
+    applyForcedSky(saved && saved.forcedWeather, saved && saved.forcedSeason, saved && saved.forcedSeasonP); // 2026-09-26, même raison que la ligne du dessus
     minimapDirtyRef.current = true;
     restoredRef.current = true;
     // Filet identique à applySnapshot (non-hôte) : l'hôte est aussi un joueur
@@ -3271,7 +3270,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // littéral ci-dessus parce que applyForcedWorld doit aussi mettre le moteur
     // à jour, et que sharedRef.current vient tout juste d'être remplacé.
     applyForcedWorld(payload.forcedWorld);
-    applyForcedSky(payload.forcedWeather, payload.forcedSeason); // 2026-09-26
+    applyForcedSky(payload.forcedWeather, payload.forcedSeason, payload.forcedSeasonP); // 2026-09-26 ; 2026-10-05 : + l'avancée
     // Chantier "sucrerie déplaçable" : même conversion qu'à loadFarmByCode
     // (voir ce commentaire), au cas où ce snapshot proviendrait encore d'un
     // état pré-chantier (reprise/rejoin sur une ferme jamais rechargée
@@ -3910,6 +3909,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // raison ; AUCUNE migration Supabase (un champ de plus dans le JSON).
       forcedWeather: s.forcedWeather || null,
       forcedSeason: s.forcedSeason || null,
+      forcedSeasonP: s.forcedSeasonP == null ? null : s.forcedSeasonP,   // 2026-10-05 : l'avancée de la saison forcée — même chemin, aucune migration
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -4208,15 +4208,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        monde (voir `meteo.js`, § 5). Un champ absent de la requête = inchangé. */
     if (req.kind === "devSky") {
       let wf = s.forcedWeather || null, sf = s.forcedSeason || null;
+      // 2026-10-05 : l'avancée de la saison forcée (0..1), partagée comme la saison (meteo.js § 0 bis).
+      let sp = s.forcedSeasonP == null ? null : s.forcedSeasonP;
       if ("weather" in req) wf = req.weather && WX.WX_KINDS.includes(req.weather)
         ? { day: s.day || 1, kind: req.weather, at: E.gameTimeMin(s.dayStartAt, Date.now()) } : null;
       if ("season" in req) sf = req.season || null;
-      applyForcedSky(wf, sf);
+      if ("seasonP" in req) sp = typeof req.seasonP === "number" && req.seasonP >= 0 && req.seasonP < 1 ? req.seasonP : null;
+      applyForcedSky(wf, sf, sp);
       dirtyRef.current = true;
       persistFnRef.current && persistFnRef.current();
       out.state = shareState();
       if ("weather" in req) broadcastChat("🛠️", L.devWeatherChat(f.name, s.forcedWeather ? s.forcedWeather.kind : null));
       if ("season" in req) broadcastChat("🛠️", L.devSeasonChat(f.name, s.forcedSeason));
+      if ("seasonP" in req) broadcastChat("🛠️", L.devSeasonPChat(f.name, s.forcedSeasonP));
       hostFlushOut(out, f, null);
       return;
     }
@@ -8738,12 +8742,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ La météo commandée nomme SON jour : le lendemain, `weatherNow` ne la lit
      plus et la rotation normale revient d'elle-même (demande de Guillaume) —
      rien à effacer, donc rien à oublier d'effacer. ------------------------ */
-  function applyForcedSky(weather, season) {
+  /* 2026-10-05 : + `seasonP`, l'avancée de la saison forcée (0..1 ou null) — même chemin,
+     même reflet dans le moteur (`E.setForcedSeasonProgress`). Absente d'une sauvegarde ou
+     d'un état plus anciens : null, l'avancée réelle. */
+  function applyForcedSky(weather, season, seasonP) {
     const s = sharedRef.current;
     s.forcedWeather = WX.normalizeForce(weather);
     s.forcedSeason = E.setForcedSeason(season || null);
-    setForcedSkyUi(u => (u.weather === s.forcedWeather && u.season === s.forcedSeason) ? u
-      : { weather: s.forcedWeather, season: s.forcedSeason });
+    s.forcedSeasonP = E.setForcedSeasonProgress(seasonP == null ? null : +seasonP);
+    setForcedSkyUi(u => (u.weather === s.forcedWeather && u.season === s.forcedSeason && u.seasonP === s.forcedSeasonP) ? u
+      : { weather: s.forcedWeather, season: s.forcedSeason, seasonP: s.forcedSeasonP });
   }
   /* Le temps qu'il fait à l'instant `ms` (maintenant par défaut) — `meteo.js`.
      ⚠️ La saison d'une journée est celle de son DÉBUT (`seasonAt(dayStartAt)`) :
@@ -8757,8 +8765,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function weatherNow(ms, place) {
     const sh = sharedRef.current;
     const pl = place || WX.placeOf(meRef.current && meRef.current.zone);
+    /* 2026-10-05 : l'ÉTIQUETTE de la saison (`E.seasonTagAt`, la fin de saison — meteo.js
+       § 0 bis), lue au début du jour comme la saison ; partout où la météo est lue. */
     return WX.weatherAtMs(ms == null ? Date.now() : ms, sh.dayStartAt || Date.now(), sh.day || 1,
-      (ds) => E.seasonAt(ds).key, sh.forcedWeather || null, pl);
+      (ds) => E.seasonTagAt(ds), sh.forcedWeather || null, pl);
+  }
+  /* 2026-10-05 — LA GELÉE BLANCHE À L'INSTANT, pour le champ de neige d'un lieu (meteo.js
+     § 10) : { sun, shade }, lue dans la température de ce lieu — la même que le bandeau —,
+     le ciel de l'instant `W` et celui de l'aube (une gelée posée par une nuit claire ne
+     part pas parce qu'un nuage passe). Au niveau du COMPOSANT (et pas dans la boucle) :
+     la ville et la ferme la lisent l'une et l'autre. */
+  function frostNow(place, W) {
+    const sh = sharedRef.current, now = Date.now(), day = sh.day || 1, ds = sh.dayStartAt || now;
+    const h = (C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+    const tag = E.seasonTagAt(ds);
+    const T = WX.temperatureAt(E.seasonPhaseAt(now), h, W, place, day);
+    const Wd = WX.weatherAt(day, C.DAY_START_MIN, tag, sh.forcedWeather || null, place);
+    return WX.frostOf(T, NG.sunAt(h, tag), W, Wd, h);
   }
   /* 2026-09-28 (phase 12a) — LE MANTEAU NEIGEUX À L'INSTANT (`neige.js`) : une pure
      fonction du jour, de l'heure de jeu, des saisons des jours remontés et du
@@ -8776,7 +8799,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mm.pack && now - mm.at < 150) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
-    const pk = PL.wetPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, "town");
+    const pk = PL.wetPack(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, "town");
     mm.at = now; mm.pack = pk;
     return pk;
   }
@@ -8785,11 +8808,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      fondre d'un seul côté. Le mémo garde le lieu dans sa clé. */
   /* 2026-09-30 — L'AVANCÉE DE LA SAISON (0..1), pour les feuilles mortes : une pure
      fonction de l'heure réelle (la saison dure `SEASON_REAL_MS`, comme `E.seasonAt`) —
-     les deux joueurs voient la même chute. Forcée au menu dev (locale). */
+     les deux joueurs voient la même chute.
+     2026-10-05 : elle vit dans le moteur (`E.seasonProgressAt`), et son forçage au menu
+     dev est PARTAGÉ comme celui de la saison (`forcedSeasonP`) : elle commande aussi la
+     météo de la fin de saison, que deux joueurs doivent voir pareille. */
   function seasonProgressAt(ms) {
-    if (leafDevRef.current != null) return leafDevRef.current;
-    const q = (ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS;
-    return q - Math.floor(q);
+    return E.seasonProgressAt(ms);
   }
   function snowPackNow(place) {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
@@ -8798,7 +8822,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mm.pack && now - mm.at < 150 && mm.key === key) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
-    const pk = NG.snowPack(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, pl);
+    const pk = NG.snowPack(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, pl);
     if (dev.depth != null) {
       const g = dev.depth;
       Object.assign(pk, { g, s: g * 1.08, r: Math.min(NG.NEIGE.ROAD_CAP, g * 0.3), berm: g * 1.1, rh: g * 0.8, rc: g });
@@ -8811,7 +8835,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* 2026-10-04 — LE FROID DU LAC DU SUD (`NG.lakeCold`, ses seuils : `NEIGE.LAKE_K0`),
        et `lkEq`, ce qu'il vaut en cm d'étang (`GL.lakeIceEq`) : la seule grandeur que
        lisent le dessin, la faune et le patin. Forcé au menu dev (local, comme l'étang). */
-    pk.lk = dev.lake != null ? dev.lake : NG.lakeCold(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, pl);
+    pk.lk = dev.lake != null ? dev.lake : NG.lakeCold(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, pl);
     pk.lkEq = pl === "town" ? GL.lakeIceEq(pk.lk) : 0;
     mm.at = now; mm.pack = pk; mm.key = key;
     return pk;
@@ -8858,7 +8882,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      un scalaire partagé qui change rarement. Un canal à lui coûterait un
      `send` de plus par changement (§3 : seul le NOMBRE de send est facturé),
      un champ de plus à réconcilier, et un point de divergence de plus. */
-  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0, forcedWeather: s.forcedWeather || null, forcedSeason: s.forcedSeason || null }; }
+  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0, forcedWeather: s.forcedWeather || null, forcedSeason: s.forcedSeason || null, forcedSeasonP: s.forcedSeasonP == null ? null : s.forcedSeasonP }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
   // -------- Tous : application des deltas reçus --------
@@ -9009,7 +9033,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // le moteur à jour ; le changement d'index qui en découle est ensuite
     // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
     // qui purge les breloques, les monstres et le cache de carte toute seule.
-    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason, p.state.forcedSeasonP); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     // 2026-10-04 — leurs patins, pour la pose qu'on leur voit sur la glace (`remoteHasSkates`).
     if (p.farmer && p.farmer.id !== me.id && p.farmer.inv) {
       const rs = playersRef.current.get(p.farmer.id);
@@ -9888,11 +9912,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dev ne se prévoit pas : elle est annoncée par le menu lui-même. */
         /* 2026-09-29 — DEUX LIEUX : la prévision est celle de la FERME (le message dit
            « bonne journée à la ferme »), et la ville s'ajoute quand elle diffère. */
-        const seK = E.seasonAt(s.dayStartAt).key;
+        const seK = E.seasonTagAt(s.dayStartAt);   // 2026-10-05 : l'étiquette (la fin de saison a ses giboulées, ses coups de vent)
         const fc = WX.forecast(s.day, seK, "farm"), fcT = WX.forecast(s.day, seK, "town");
         const sameSky = JSON.stringify(fc) === JSON.stringify(fcT);
+        /* 2026-10-05 — LA FOURCHETTE DU JOUR À LA FERME (meteo.js § 9) : le froid du petit
+           matin, la douceur de l'après-midi, lus sur le temps PRÉVU (sans forçage, comme la
+           prévision) — dans le même message, donc sans un `send()` de plus. */
+        const phT = E.seasonPhaseAt(s.dayStartAt);
+        let loT = Infinity, hiT = -Infinity;
+        for (let tmT = C.DAY_START_MIN; tmT <= 20 * 60; tmT += 20) {
+          const Tt = WX.temperatureAt(phT, tmT / 60, WX.weatherAt(s.day, tmT, seK, null, "farm"), "farm", s.day);
+          if (tmT <= 10 * 60) loT = Math.min(loT, Tt); else if (tmT >= 12 * 60) hiT = Math.max(hiT, Tt);
+        }
+        const tempsT = isFinite(loT) && isFinite(hiT)
+          ? " " + L.chatTemps(L.tempC(WX.tempRound(Math.min(loT, hiT))), L.tempC(WX.tempRound(Math.max(loT, hiT)))) : "";
         broadcastChat(fc ? L.wxEmoji(fc.kind) : "☀", L.chatNewDay(s.day) + (fc ? " " + L.chatForecast(fc.kind, fc.part) : "")
-          + (sameSky ? "" : " " + L.chatForecastTown(fcT ? L.chatForecast(fcT.kind, fcT.part) : "")));
+          + (sameSky ? "" : " " + L.chatForecastTown(fcT ? L.chatForecast(fcT.kind, fcT.part) : "")) + tempsT);
       }
     }, 1000);
     const saveTimer = setInterval(() => {
@@ -9963,7 +9998,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     const it = setInterval(() => {
       const s = sharedRef.current;
-      setHud(h => ({ ...h, timeMin: E.gameTimeMin(s.dayStartAt, Date.now()) }));
+      /* 2026-10-05 — LA TEMPÉRATURE EN DIRECT (meteo.js § 9), à côté de l'horloge : celle du
+         lieu où l'on se tient (la ferme ou la ville, qui n'ont pas toujours le même temps),
+         une pure fonction de l'heure et du ciel — aucun message. `weatherNow` ne lit que des
+         refs : l'effet monté une fois la lit à jour. */
+      const nowT = Date.now(), tmT = E.gameTimeMin(s.dayStartAt, nowT);
+      const plT = WX.placeOf(meRef.current && meRef.current.zone);
+      const tempT = WX.tempRound(WX.temperatureAt(E.seasonPhaseAt(nowT), tmT / 60, weatherNow(nowT, plT), plT, s.day || 1));
+      setHud(h => ({ ...h, timeMin: tmT, temp: tempT }));   // ⚠️ toujours un objet neuf, comme avant : d'autres panneaux vivent de ce rendu à 1 Hz
       // 2026-07 station update: am I near the townhall? (drives the corner
       // notification card for waiting visitors, 1 Hz is plenty)
       const m0 = meRef.current;
@@ -14199,7 +14241,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       },
       electionToday: E.isElectionDay(day), mayorKey: E.mayorOf(day).key, nextElection: E.mayorNextElection(day),
       newcomer: nc ? rosterOf(nc.rid).name : null,
-      tomorrow: WX.forecast(day + 1, E.seasonAt(s.dayStartAt).key, "town"),
+      tomorrow: WX.forecast(day + 1, E.seasonTagAt(s.dayStartAt + C.DAY_REAL_MS), "town"),   // 2026-10-05 : l'étiquette de DEMAIN (au début de sa journée)
       voyagerAway: !!(voy && voy.trip && voy.trip.phase === "away"),
       inTown: res.filter(r => resZone(r) === "town").length,
       candles: s.churchCandles | 0,
@@ -17332,15 +17374,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundSnowK = Math.max(0, Math.min(1, (fSnowPk.g - 0.3) / 1.5));
       charSnowAt = null; charSnowZone = null;
       let fSnowRec = null, fSnowF = null;
-      if (fSnowPk.g + fSnowPk.s > 0.05 || fSnowSeason === "winter") {
+      /* 2026-10-05 : la gelée de la ferme se lit dans SA température (rase campagne : elle y
+         prend mieux qu'en ville, meteo.js § 9-10) ; le champ se bâtit aussi pour elle (fin
+         d'automne). Avant : l'hiver seulement, de l'aube à dix heures. */
+      const WsnF = wxFrame(), frF = frostNow("farm", WsnF);
+      if (fSnowPk.g + fSnowPk.s > 0.05 || fSnowSeason === "winter" || frF.shade > 0.02) {
         fSnowRec = farmSnowField(w);
         farmSnowSync(fSnowRec);
         fSnowF = fSnowRec.f;
-        const Wsn = wxFrame();
+        const Wsn = WsnF;
         const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
-        const frost = fSnowSeason === "winter" && fSnowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
         const sunSn = Math.min(1, NG.sunAt(hr, fSnowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05 });
+        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost: frF.sun, frostShade: frF.shade, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05 });
         fSnowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
         /* Les cratères de la quête sont chauds (leur chaleur ne descend jamais sous
            0,12 sur la ferme, voir leur dessin plus bas) : ils font fondre la neige
@@ -21556,14 +21601,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        serait refait à l'arrivée — le travail perdu, et le défaut intact. */
     function townSnowParams(snowPk, snowSeason, Wsn) {
       const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
-      /* La gelée blanche : les matins d'hiver clairs, de l'aube à dix heures,
-         là où il n'y a pas de neige. */
-      const frost = snowSeason === "winter" && snowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
+      /* La gelée blanche, là où il n'y a pas de neige. 2026-10-05 : lue dans la TEMPÉRATURE
+         (`frostNow`, meteo.js § 10) — au soleil et à l'ombre — au lieu de « les matins d'hiver
+         clairs, de l'aube à dix heures » : elle annonce l'hiver à la fin de l'automne, part
+         d'abord au soleil, tient à l'ombre des murs. */
+      const fr = frostNow("town", Wsn);
       const wetRoad = Math.min(1, snowPk.r * 0.5 + (snowPk.g > 0.5 ? 0.4 : 0));
       /* Le soleil sur la neige (0..1) : ombres bleues franches et éclats par
          beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
       const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-      return { winter: snowSeason === "winter", frost, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 };
+      return { winter: snowSeason === "winter", frost: fr.sun, frostShade: fr.shade, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 };
     }
     /* ╔══════════════════════════════════════════════════════════════════════
        ║ 2026-10-05 — LA NEIGE DE LA VILLE EST PRÊTE QUAND L'ÉCRAN S'ÉCLAIRCIT.
@@ -21593,10 +21640,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!at) return;
       const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
       if (!tw) return;
-      const snowPk = snowPackNow("town"), snowSeason = E.seasonOf().key;
-      if (!(snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter")) return;
+      const snowPk = snowPackNow("town"), snowSeason = E.seasonOf().key, Wtown = weatherNow(Date.now(), "town");
+      // 2026-10-05 : + la gelée (fin d'automne) — la même condition que `drawTownFrame`.
+      if (!(snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", Wtown).shade > 0.02)) return;
       const f = townSnowField(tw);
-      f.setParams(snowPk, townSnowParams(snowPk, snowSeason, weatherNow(Date.now(), "town")));
+      f.setParams(snowPk, townSnowParams(snowPk, snowSeason, Wtown));
       // Le cadre d'arrivée, large : le zoom le plus serré de la ville est plafonné (`townZoomTarget`), donc le plus ÉLOIGNÉ des deux.
       const zm = Math.min(C.TOWN_ZOOM_NEAR, manualZoomRef.current) || 1;
       const hw = Math.ceil(canvas.width / (zm * T) / 2) + 3, hh = Math.ceil(canvas.height / (zm * T) / 2) + 3;
@@ -21767,13 +21815,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const snowPk = snowPackNow();
       const snowSeason = E.seasonOf().key;
       const leafP = seasonProgressAt(Date.now());   // 2026-09-30 : l'avancée de la saison, pour la chute des feuilles
+      const budLate = snowSeason === "winter" ? WX.lateWeight("winter", leafP) : 0;   // 2026-10-05 : la fin d'hiver, pour les bourgeons (`A.townTreeBud`)
       roofSnowFrame = { house: roofSnowOf(snowPk.rh), cold: roofSnowOf(snowPk.rc) };
       charSnowAt = null; charSnowZone = null;
       groundSnowK = Math.max(0, Math.min(1, (snowPk.g - 0.3) / 1.5));
       let snowF = null;
-      if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter") {
+      /* 2026-10-05 : le champ se bâtit aussi pour la GELÉE de la fin d'automne (et du début du
+         printemps) — c'est lui qui la dessine (`NG.renderChunk`). Même condition au préchauffage. */
+      const WsnT = wxFrame();
+      if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", WsnT).shade > 0.02) {
         snowF = townSnowField(tw);
-        const Wsn = wxFrame();
+        const Wsn = WsnT;
         snowF.setParams(snowPk, townSnowParams(snowPk, snowSeason, Wsn));
         // Ce qui tombe pendant cette image comble les traces (une heure de jeu = 48 s réelles).
         snowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
@@ -22337,6 +22389,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   dropTreeSnow(tw, i, x, y, e, size, ld, false, cum, windK);
                 }
               }
+            }
+            /* 2026-10-05 — LES BOURGEONS DE LA FIN D'HIVER : le cran de CET arbre, porté par sa
+               charge (`drawTownTree` le passe à l'atlas d'hiver). */
+            if (_se === "winter" && budLate > 0) {
+              tLoad = tLoad || { tl: 0, tc: 0, ground: 0 };
+              tLoad.bud = A.townTreeBud(budLate, x, y);
             }
             pushE((y + 1) * T, e, () => {
               /* ⚠️ UN ARBRE ENTAMÉ S'ASSOMBRIT, ET ÇA PASSE PAR `ctx.filter`,
@@ -36398,7 +36456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           survol, via .ferme-hud-extra en CSS. */}
       <div className={"ferme-hud panel" + (craftMenuOpen ? " ferme-hud-pinned" : "")}>
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
-        <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(); /* 2026-09-26 : sans argument — il lui passait le numéro de jour, qu'elle ignorait */ const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
+        <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(); /* 2026-09-26 : sans argument — il lui passait le numéro de jour, qu'elle ignorait */ const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}{typeof hud.temp === "number" ? <> &nbsp; 🌡️ {L.tempC(hud.temp)}</> : null}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
         {/* 2026-10-04 — les médailles : une ligne cliquable, visible d'emblée dès
             qu'une médaille est gagnée (c'est un trophée, on le montre), sinon
@@ -41089,6 +41147,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => sendReq({ kind: "devSky", season: k })}>{L.devSeasonBtn(k)}</button>
                   ))}
                 </div>
+                {/* 2026-10-05 — L'AVANCÉE DE LA SAISON, POUR TOUT LE MONDE (elle était locale, « feuilles ») :
+                    elle commande la chute des feuilles, la météo de la fin de saison (giboulées, coups de vent),
+                    la température, la gelée et les bourgeons — deux joueurs doivent la voir pareille. */}
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, 0.3, 0.6, 0.72, 0.84, 0.97].map(v => (
+                    <button key={"devseasonp-" + v} className={"ferme-dev-btn" + ((forcedSkyUi.seasonP == null ? null : forcedSkyUi.seasonP) === v ? " on" : "")} onClick={() => sendReq({ kind: "devSky", seasonP: v })}>{L.devSeasonP(v)}</button>
+                  ))}
+                </div>
                 {/* AUDIT 2026-10 (FIX-004) — LE DALLAGE CIVIQUE HAUTE RÉSOLUTION, LOCAL (`HD.civicHD.on`) :
                     pour comparer le prototype à l'ancien dessin au même endroit, sans recharger. */}
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devCivicHdSection}</div>
@@ -41124,12 +41190,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <button key={"devlake-" + v} className={"ferme-dev-btn" + (snowDevUi.lake === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, lake: v }; setSnowDevUi(u => ({ ...u, lake: v })); }}>{L.devLake(v)}</button>
                   ))}
                 </div>
-                {/* 2026-09-30 — LES FEUILLES MORTES : l'avancée de la saison, locale (`leafDevRef`, lue par `seasonProgressAt`). */}
-                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
-                  {[null, 0.3, 0.6, 0.72, 0.84, 0.97].map(v => (
-                    <button key={"devleaf-" + v} className={"ferme-dev-btn" + (leafDevUi === v ? " on" : "")} onClick={() => { leafDevRef.current = v; setLeafDevUi(v); }}>{L.devLeaf(v)}</button>
-                  ))}
-                </div>
+                {/* 2026-09-30 — l'avancée de la saison était réglée ici, LOCALEMENT, pour les feuilles ;
+                    2026-10-05 : elle est partagée et vit sous les saisons (section météo). */}
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devFaunaSection}</div>
                 <div className="ferme-dev-hint">{L.devFaunaHint}</div>
                 <div className="ferme-dev-grid">
