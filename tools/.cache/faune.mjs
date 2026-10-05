@@ -297,6 +297,7 @@ export function faunaWorld(tw) {
   const fishStalls = (tw.props || []).filter((p) => p.kind === "stall" && C.TOWN_STALL_TRADES[p.v] && C.TOWN_STALL_TRADES[p.v].key === "fish");
 
   const nav = E.townNav(tw);
+  const rab = rabbitWorld(tw, nav);
   const cats = CAT_DEFS.map((d, ci) => ({ ...d, idx: ci, spots: catSpots(tw, nav, d.home, fishStalls) })).filter((c) => c.spots.length >= 3);
 
   // Les papillons : une maison par massif fleuri, une sur trois.
@@ -395,7 +396,7 @@ export function faunaWorld(tw) {
   const lilies = (tw.props || []).filter((p) => p.kind === "lily").map((p) => ({ id: p.y * W + p.x, x: p.x + 0.5, y: p.y + 0.55 }));
 
   const v = { W, H, wet, sd, wdist, odist, duckLand, comp, pond, duckSites, fishSites, quay, pier, floats, soar, portRect, fishStalls,
-              cats, flowers, flowerGrid, bflyHomes, ffZones, deep, lilies, pathCache: new Map() };
+              cats, rab, flowers, flowerGrid, bflyHomes, ffZones, deep, lilies, pathCache: new Map() };
   FW_CACHE.w = tw; FW_CACHE.v = v;
   return v;
 }
@@ -1337,6 +1338,356 @@ export function faunaCats(fw, env, tw) {
   return out;
 }
 
+
+/* ── 10 bis. LES LAPINS ────────────────────────────────────────────────────
+   (2026-10-05, demande de Guillaume : « des petits lapins à VT dans les zones
+   sauvages, mais aussi occasionnellement dans les jardins ; plus mignons et
+   fluffy qu'en ferme, et des trajectoires moins systématiquement
+   rectilignes ».) Les dessins sont dans `fauneArt.js` (§ 6).
+   ⚠️ CE QUI EST TRANCHÉ (avec lui, 2026-10-05) : ROUTINE PARTAGÉE comme les
+   chats (une pure fonction de l'heure et de la carte : le même lapin est au
+   même endroit chez les deux joueurs, zéro message) ; AUCUNE capture, aucun
+   bouton — seulement des gestes gratuits : il se fige, détale en zigzag, et un
+   lapin « hardi » s'enhardit devant un joueur qui reste immobile ; des jardins
+   OUVERTS seulement (ce que la marche des lapins peut atteindre : une clôture
+   ou un portail les arrête, comme n'importe qui).
+   ⚠️ LEUR MONDE SE LIT SUR LA CARTE, RIEN N'EST ÉCRIT EN COORDONNÉES : un
+   lapin vit où il y a des ARBRES (le couvert : lisières et clairières des
+   quatre bois) ou une prairie LOIN DU PAVÉ (≥ 6 cases) ; un terrier se pose à
+   la lisière, espacé des autres de 22 cases ; un jardin est une pelouse de
+   maison, atteinte à pied depuis ce terrier (≤ 28 pas). Le jour où un bois
+   bouge, ses lapins le suivent.
+   ⚠️ LE TRAJET N'EST PAS UNE DROITE, NI PAR LE CHEMIN NI PAR LE GESTE :
+   (1) le chemin (A* sur la grille des lapins : herbe, jamais le pavé, le
+   chemin de terre et la chaussée se traversent à contrecœur) est tiré au
+   cordeau puis ONDULÉ — un décalage latéral sinusoïdal (deux harmoniques,
+   phases tirées du créneau), repris case par case s'il sort de l'herbe ;
+   (2) le geste est une suite de RAFALES de 2 à 4 bonds, séparées de pauses où
+   il se dresse, broute ou écoute — la vitesse n'est jamais constante, et deux
+   lapins qui font le même trajet ne s'arrêtent pas aux mêmes endroits.
+   ⚠️ La foulée se lit sur le CHEMIN PARCOURU, jamais sur le temps (voir les
+   chats). ⚠️ Aucune téléportation : comme tout ce fichier, la bête VOYAGE de
+   la cible du créneau précédent à celle du créneau courant. */
+const RAB_SLOT = 60, RAB_HOP = 0.5, RAB_HOP_T = 0.3;
+const RAB_COATS = ["fauve", "gris", "fauve", "creme", "fauve", "tache", "gris", "fauve", "creme"];
+const rabNight = (tm) => tm >= 22 * 60 + 30 || tm < 5 * 60 + 30;
+const rabMidday = (tm) => tm >= 11 * 60 + 30 && tm < 16 * 60 + 30;
+const rabDawnDusk = (tm) => (tm >= 5 * 60 + 30 && tm < 9 * 60 + 30) || (tm >= 17 * 60 && tm < 22 * 60 + 30);
+function rabbitWorld(tw, nav) {
+  const none = { rabbits: [], okAt: () => false, okM: () => false, los: () => false, coverAt: () => 0, pathCache: new Map(), routes: new Map() };
+  if (!tw || !nav) return none;
+  const W = tw.w, H = tw.h, N = W * H;
+  const isTree = (o) => o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
+  const grassy = (g) => g === C.G_GRASS || g === C.G_TOWN_LAWN;
+  const gateBlock = new Uint8Array(N);
+  for (const g of tw.gates || []) for (let dx = 0; dx < (g.w || 2); dx++) { const x = g.x + dx; if (x >= 0 && x < W) gateBlock[g.y * W + x] = 1; }
+  const okc = new Uint8Array(N), cost = new Uint8Array(N), tr = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    if (isTree(tw.objects[i])) tr[i] = 1;
+    const g = tw.ground[i];
+    if (!nav.walk[i] || tw.solid[i] || tw.hedge[i] || gateBlock[i] || tw.elev[i]) continue;
+    if (!grassy(g) && g !== C.G_PATH) continue;
+    okc[i] = 1; cost[i] = g === C.G_PATH ? 3 : 1;
+    if (tw.road && tw.road[i]) cost[i] += 2;
+  }
+  const okAt = (x, y) => { const cx = Math.floor(x), cy = Math.floor(y); return cx >= 0 && cy >= 0 && cx < W && cy < H && okc[cy * W + cx] === 1; };
+  // Les arbres alentour (rayon 3), par table de sommes.
+  const sat = new Int32Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) sat[(y + 1) * (W + 1) + x + 1] = tr[y * W + x] + sat[y * (W + 1) + x + 1] + sat[(y + 1) * (W + 1) + x] - sat[y * (W + 1) + x];
+  const treesNear = (x, y, r) => {
+    const x0 = Math.max(0, x - r), y0 = Math.max(0, y - r), x1 = Math.min(W, x + r + 1), y1 = Math.min(H, y + r + 1);
+    return sat[y1 * (W + 1) + x1] - sat[y0 * (W + 1) + x1] - sat[y1 * (W + 1) + x0] + sat[y0 * (W + 1) + x0];
+  };
+  const coverAt = (x, y) => treesNear(Math.floor(x), Math.floor(y), 3);
+  // Le pavé : tout ce qui est praticable sans être de l'herbe, et les murs. Distance (4-voisinage).
+  const pd = new Float32Array(N).fill(99);
+  { const q = [];
+    for (let i = 0; i < N; i++) if ((nav.walk[i] && !grassy(tw.ground[i])) || (tw.solid[i] && !tr[i] && !tw.hedge[i])) { pd[i] = 0; q.push(i); }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % W, y = (i / W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = yy * W + xx; if (pd[j] > pd[i] + 1) { pd[j] = pd[i] + 1; q.push(j); }
+      }
+    } }
+  // Les jardins : la pelouse de chaque maison à jardin (les maisons de ville n'en ont pas).
+  const gardenCell = new Uint8Array(N);
+  for (const h of C.townAllHouses()) {
+    if (h.dense) continue;
+    const gx = h.x - 2, gy = h.y - 1, gw = C.TOWN_HOUSE_W + 4, gh = C.TOWN_HOUSE_H + 4;
+    for (let y = gy; y < gy + gh; y++) for (let x = gx; x < gx + gw; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const i = y * W + x;
+      if (okc[i] && tw.ground[i] === C.G_TOWN_LAWN && pd[i] >= 1) gardenCell[i] = 1;
+    }
+  }
+  // Les carrés de potager : leurs abords sont un jardin aussi.
+  for (const p of tw.plots || []) for (let y = p.y - 1; y <= p.y + p.h; y++) for (let x = p.x - 1; x <= p.x + p.w; x++) {
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const i = y * W + x; if (okc[i] && pd[i] >= 1) gardenCell[i] = 1;
+  }
+  const wild = (i) => okc[i] === 1 && grassy(tw.ground[i]) && !gardenCell[i] && (treesNear(i % W, (i / W) | 0, 3) >= 3 || pd[i] >= 6);
+  // Les terriers : à la lisière, espacés ; tirés dans l'ordre d'un hachage (déterministe, §4).
+  const cand = [];
+  for (let y = 6; y < H - 6; y++) for (let x = 6; x < W - 6; x++) {   // jamais au bord de la carte (le terrier se voit)
+    const i = y * W + x;
+    if (!wild(i) || pd[i] < 3 || treesNear(x, y, 3) < 4) continue;
+    let nb = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (okc[i + dy * W + dx]) nb++;
+    if (nb >= 2) cand.push({ x, y, h: fh(x, y, 91) });
+  }
+  cand.sort((a, b) => a.h - b.h || a.y - b.y || a.x - b.x);
+  // Le terrier d'un lapin : ce que la marche atteint (≤ 28 pas, 8 voisins sans couper un angle plein).
+  const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  const reach = (x0, y0, lim) => {
+    const rd = new Int16Array(N).fill(-1); rd[y0 * W + x0] = 0; const q = [y0 * W + x0];
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % W, y = (i / W) | 0; if (rd[i] >= lim) continue;
+      for (const [dx, dy] of NB) {
+        const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = yy * W + xx; if (!okc[j] || rd[j] >= 0) continue;
+        if (dx && dy && (!okc[y * W + xx] || !okc[yy * W + x])) continue;
+        rd[j] = rd[i] + 1; q.push(j);
+      }
+    }
+    return rd;
+  };
+  /* Les terriers se répartissent par POINT LE PLUS ÉLOIGNÉ : le premier tiré au
+     hachage, puis chaque suivant est le candidat le plus loin de ceux déjà
+     posés (≥ 20 cases). Au « premier qui passe l'espacement », quatre terriers
+     sur huit tombaient sur la même bande nord et le sud-est n'en avait aucun
+     (vu au premier jet).
+     ⚠️ UN TERRIER DOIT OUVRIR SUR UN TERRITOIRE : ≥ 450 cases atteintes à pied.
+     Premier jet, vu EN JEU : un terrier tombé dans une parcelle « À vendre »
+     close d'une haie (des arbres, de l'herbe, aucune sortie : les portails sont
+     fermés aux lapins) y gardait ses deux lapins prisonniers, visibles par-dessus
+     la haie sans jamais pouvoir en sortir. Un candidat trop enclavé est écarté
+     avec son voisinage (6 cases). */
+  const warrens = [];
+  const dead = new Set();
+  const tryAdd = (c) => {
+    const rd = reach(c.x, c.y, 28);
+    let n = 0; for (let i = 0; i < N; i++) if (rd[i] >= 0) n++;
+    if (n < 450) { for (const q of cand) if (Math.hypot(q.x - c.x, q.y - c.y) < 6) dead.add(q); return false; }
+    c.rd = rd; warrens.push(c); return true;
+  };
+  for (const c of cand) { if (tryAdd(c)) break; }
+  while (warrens.length && warrens.length < 8) {
+    let best = null, bd = 0;
+    for (const c of cand) {
+      if (dead.has(c)) continue;
+      let d = Infinity; for (const q of warrens) d = Math.min(d, Math.hypot(q.x - c.x, q.y - c.y));
+      if (d > bd) { bd = d; best = c; }
+    }
+    if (!best || bd < 20) break;
+    tryAdd(best);
+  }
+  const spot = (i, k) => ({ cx: i % W, cy: (i / W) | 0, x: (i % W) + 0.25 + fr(i, k, 7) * 0.5, y: ((i / W) | 0) + 0.62 + fr(i, k, 8) * 0.2 });
+  const rabbits = [];
+  warrens.forEach((wr, wi) => {
+    const rd = wr.rd;
+    const pool = [], cov = [], gard = [], dens = [];
+    for (let i = 0; i < N; i++) {
+      if (rd[i] < 0) continue;
+      if (gardenCell[i]) { if (fh(i, wi, 31) % 2 === 0) gard.push(spot(i, wi)); continue; }
+      if (!wild(i)) continue;
+      const x = i % W, y = (i / W) | 0, t = treesNear(x, y, 3);
+      if (rd[i] <= 16 && fh(i, wi, 23) % 3 === 0) pool.push(spot(i, wi));
+      if (rd[i] <= 9 && t >= 4 && pd[i] >= 2 && fh(i, wi, 24) % 2 === 0) cov.push(spot(i, wi));
+      if (rd[i] <= 5 && t >= 5 && pd[i] >= 2) dens.push(spot(i, wi));
+    }
+    if (pool.length < 8 || !cov.length) return;
+    const n = wi < 3 ? 2 : 1;
+    for (let j = 0; j < n; j++) {
+      const idx = rabbits.length;
+      rabbits.push({ idx, coat: RAB_COATS[idx % RAB_COATS.length], warren: wr, pool, cover: cov, garden: gard, dens: dens.length ? dens : cov.slice(0, 3) });
+    }
+  });
+  /* `okM` : l'herbe praticable AVEC UNE MARGE de 0,14 case (un lapin a une
+     largeur : il ne frôle pas l'angle d'un mur ni d'un tronc — vu au premier
+     banc, 0,17 % des images avaient un lapin DANS un coin plein). Le cordeau
+     et les réactions lisent `okM` ; `okAt` reste la case nue, pour les bancs. */
+  const okM = (x, y) => okAt(x - 0.14, y - 0.14) && okAt(x + 0.14, y - 0.14) && okAt(x - 0.14, y + 0.14) && okAt(x + 0.14, y + 0.14);
+  // Le cordeau : un segment est libre s'il ne croise que des cases d'herbe ou de terre.
+  const los = (x0, y0, x1, y1) => {
+    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 0.12);
+    for (let i = 1; i <= n; i++) if (!okM(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n)) return false;
+    return true;
+  };
+  return { rabbits, okAt, okM, los, coverAt, okc, cost, W, H, pathCache: new Map(), routes: new Map() };
+}
+/* A* sur la grille des lapins (8 voisins, sans couper un angle plein), dans une
+   fenêtre autour du couple de cases. Rend les centres de cases, de A à B. */
+function rabAStar(rw, ax, ay, bx, by) {
+  const { W, H, okc, cost } = rw;
+  const PADW = 10, x0 = Math.max(0, Math.min(ax, bx) - PADW), y0 = Math.max(0, Math.min(ay, by) - PADW);
+  const x1 = Math.min(W - 1, Math.max(ax, bx) + PADW), y1 = Math.min(H - 1, Math.max(ay, by) + PADW);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, n = w * h;
+  const g = new Float32Array(n).fill(1e9), from = new Int32Array(n).fill(-1), done = new Uint8Array(n);
+  const s = (ay - y0) * w + (ax - x0), t = (by - y0) * w + (bx - x0);
+  g[s] = 0;
+  const heap = [[Math.hypot(ax - bx, ay - by), s]];
+  const push = (e) => { heap.push(e); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  while (heap.length) {
+    const [, i] = pop();
+    if (done[i]) continue; done[i] = 1;
+    if (i === t) break;
+    const x = i % w, y = (i / w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+      const j = yy * w + xx, gi = (yy + y0) * W + xx + x0;
+      if (!okc[gi] || done[j]) continue;
+      if (dx && dy && (!okc[(y + y0) * W + xx + x0] || !okc[(yy + y0) * W + x + x0])) continue;
+      const ng = g[i] + (dx && dy ? 1.414 : 1) * cost[gi];
+      if (ng < g[j]) { g[j] = ng; from[j] = i; push([ng + Math.hypot(xx + x0 - bx, yy + y0 - by), j]); }
+    }
+  }
+  if (!done[t]) return null;
+  const out = [];
+  for (let i = t; i >= 0; i = from[i]) { out.push({ x: (i % w) + x0 + 0.5, y: ((i / w) | 0) + y0 + 0.5 }); if (i === s) break; }
+  return out.reverse();
+}
+function rabBase(rw, A, B) {
+  const key = A.cx + "," + A.cy + ">" + B.cx + "," + B.cy;
+  let p = rw.pathCache.get(key);
+  if (p === undefined) {
+    p = rabAStar(rw, A.cx, A.cy, B.cx, B.cy);
+    if (p) {
+      // Tiré au cordeau : on saute de point en point tant que la ligne reste libre.
+      const q = [p[0]]; let i = 0;
+      while (i < p.length - 1) { let j = p.length - 1; while (j > i + 1 && !rw.los(p[i].x, p[i].y, p[j].x, p[j].y)) j--; q.push(p[j]); i = j; }
+      p = q;
+    }
+    rw.pathCache.set(key, p || null);
+  }
+  return p;
+}
+/* Le trajet d'un lapin pour un créneau : le chemin tiré au cordeau, ondulé. */
+function rabRoute(rw, r, k, A, B) {
+  const key = r.idx + ":" + k;
+  let R = rw.routes.get(key);
+  if (R) return R;
+  const base = rabBase(rw, A, B);
+  let pts;
+  if (!base) pts = [{ x: A.x, y: A.y }, { x: B.x, y: B.y }];
+  else pts = [{ x: A.x, y: A.y }, ...base.slice(1, -1), { x: B.x, y: B.y }];
+  if (A.cx === B.cx && A.cy === B.cy) pts = [{ x: B.x, y: B.y }];
+  const L0 = pathLen(pts);
+  if (L0 > 0.5) {
+    // L'ondulation : deux harmoniques, estompées aux deux bouts, reprises si elles sortent de l'herbe.
+    const lam1 = 4 + fr(r.idx, k, 61) * 3.5, lam2 = 1.7 + fr(r.idx, k, 62) * 1.1;
+    const ph1 = fr(r.idx, k, 63) * 6.283, ph2 = fr(r.idx, k, 64) * 6.283;
+    const amp = 0.5 + fr(r.idx, k, 65) * 0.35;
+    const out = [];
+    const n = Math.max(2, Math.ceil(L0 / 0.3));
+    for (let i = 0; i <= n; i++) {
+      const s = L0 * i / n, q = along(pts, s);
+      const env = Math.min(1, s / 1.4, (L0 - s) / 1.4);
+      let o = amp * env * (Math.sin(6.283 * s / lam1 + ph1) + 0.4 * Math.sin(6.283 * s / lam2 + ph2));
+      let nx = -q.hy, ny = q.hx, px = q.x + nx * o, py = q.y + ny * o;
+      for (let tries = 0; tries < 3 && !(rw.okM(px, py) && (i === 0 || rw.los(out[out.length - 1].x, out[out.length - 1].y, px, py))); tries++) {
+        o *= 0.5; px = q.x + nx * o; py = q.y + ny * o;
+        if (tries === 2) { px = q.x; py = q.y; }
+      }
+      out.push({ x: px, y: py });
+    }
+    out[0] = { x: A.x, y: A.y }; out[out.length - 1] = { x: B.x, y: B.y };
+    /* ⚠️ ON RELIT LE TRAJET ENTIER : le repli « sans décalage » d'un point n'était pas
+       vérifié contre son voisin, et la corde de deux points voisins peut couper un
+       angle plein (2 lectures sur 288 000 hors de l'herbe, `verify-faune` §7). Un
+       trajet dont un tronçon n'est pas libre garde son chemin tiré au cordeau, droit
+       mais sûr — mieux vaut une ligne qu'un lapin dans un mur. */
+    let clean = true;
+    for (let i = 1; i < out.length && clean; i++) if (!rw.los(out[i - 1].x, out[i - 1].y, out[i].x, out[i].y)) clean = false;
+    if (clean) pts = out;
+  }
+  const L = pathLen(pts);
+  R = { pts, L, sched: L > 0.05 ? rabSched(fh(r.idx, k, 77), L, RAB_SLOT * 0.7) : { segs: [], T: 0 } };
+  if (rw.routes.size > 600) rw.routes.clear();
+  rw.routes.set(key, R);
+  return R;
+}
+/* Le geste : des rafales de 2 à 4 bonds, séparées de pauses (il se dresse ou broute). */
+function rabSched(seed, L, cap) {
+  const segs = []; let t = 0, s = 0, i = 0;
+  while (s < L - 1e-6) {
+    const n = 2 + fh(seed, i, 1) % 3;
+    for (let j = 0; j < n && s < L - 1e-6; j++) {
+      const ds = Math.min(RAB_HOP * (0.85 + fr(seed, i * 7 + j, 2) * 0.35), L - s);
+      const dur = RAB_HOP_T * (0.55 + 0.45 * ds / RAB_HOP);
+      segs.push({ t0: t, t1: t + dur, s0: s, s1: s + ds, hop: ds / RAB_HOP });
+      t += dur; s += ds;
+    }
+    if (s < L - 1e-6) {
+      const p = 0.45 + fr(seed, i, 3) * 1.6;
+      segs.push({ t0: t, t1: t + p, s0: s, s1: s, rest: fr(seed, i, 4) < 0.5 ? "graze" : "sit" });
+      t += p;
+    }
+    i++;
+  }
+  const k = Math.max(1, t / cap);
+  if (k > 1) for (const g of segs) { g.t0 /= k; g.t1 /= k; }
+  return { segs, T: t / k };
+}
+function rabTarget(rw, env, r, k) {
+  const ms = k * RAB_SLOT * 1000, tm = tminAt(env, ms);
+  if (stormyAt(env, ms) || rabNight(tm)) return r.dens[r.idx % r.dens.length];
+  if (r.garden.length && rabDawnDusk(tm) && fh(r.idx, k, 13) % 100 < 14) return r.garden[fh(r.idx, k, 14) % r.garden.length];
+  const pool = rabMidday(tm) ? r.cover : r.pool;
+  return pool[fh(r.idx, k, 57) % pool.length];
+}
+function rabRestPose(r, tt, tm, storm) {
+  const h = fh(r.idx, Math.floor(tt / 6), 71) % 100;
+  if (rabNight(tm) || storm) return h < 85 ? "sleep" : "loaf";
+  if (rabMidday(tm)) return h < 38 ? "loaf" : h < 55 ? "sleep" : h < 70 ? "sit" : h < 85 ? "groom" : "graze";
+  return h < 42 ? "graze" : h < 62 ? "sit" : h < 74 ? "groom" : h < 86 ? "front" : h < 93 ? "loaf" : "tilt";
+}
+/* Les poses du bond : ramassé au départ, en l'air, la réception — de profil, ou
+   de face / de dos quand il va vers le bas / le haut de l'écran. */
+function rabHopPose(hx, hy, ph) {
+  const air = ph > 0.18 && ph < 0.78;
+  if (Math.abs(hy) > Math.abs(hx) * 1.3) return (hy > 0 ? "down" : "up") + (air ? 1 : 0);
+  return ph < 0.18 ? "hop0" : ph < 0.78 ? "hop1" : "hop2";
+}
+/* Pour les bancs : ce que la routine tire (cible d'un créneau, trajet, chemin entre deux places). */
+export const rabbitTargetProbe = (fw, env, r, k) => rabTarget(fw.rab, env, r, k);
+export const rabbitRouteProbe = (fw, r, k, A, B) => rabRoute(fw.rab, r, k, A, B);
+export const rabbitPathProbe = (fw, A, B) => rabBase(fw.rab, A, B);
+export function faunaRabbits(fw, env, tw) {
+  const out = [];
+  const rw = fw && fw.rab;
+  if (!rw || !rw.rabbits.length) return out;
+  const tm = tminAt(env, env.nowMs);
+  const storm = stormyAt(env, env.nowMs);
+  for (const r of rw.rabbits) {
+    const tt = env.t + r.idx * 17.3;
+    const k = Math.floor(tt / RAB_SLOT), u = tt - k * RAB_SLOT;
+    const A = rabTarget(rw, env, r, k - 1), B = rabTarget(rw, env, r, k);
+    const R = rabRoute(rw, r, k, A, B);
+    let x = B.x, y = B.y, hx = 1, hy = 0, pose, lift = 0, moving = false, rest = true, restT = u - R.sched.T, face = (fh(r.idx, k, 3) & 1) ? 1 : -1, hopping = false;
+    if (R.L > 0.05) { const e = endHeading(R.pts); hx = e.hx; hy = e.hy; }
+    if (u < R.sched.T) {
+      let g = R.sched.segs[R.sched.segs.length - 1];
+      for (const q of R.sched.segs) if (u < q.t1) { g = q; break; }
+      const ph = (u - g.t0) / Math.max(1e-6, g.t1 - g.t0);
+      const sd = g.rest ? g.s0 : g.s0 + (g.s1 - g.s0) * ph;
+      const q = along(R.pts, sd);
+      x = q.x; y = q.y; hx = q.hx; hy = q.hy; rest = false;
+      if (g.rest) { pose = g.rest === "graze" ? "graze" + (Math.floor(tt * 3) & 1) : (Math.floor(tt * 0.9) % 4 === 3 ? "sitTwitch" : "sit"); moving = false; }
+      else { moving = true; hopping = true; lift = Math.sin(Math.PI * ph) * 0.17 * Math.min(1, g.hop * 1.1); pose = rabHopPose(hx, hy, ph); }
+      face = hx < -0.05 ? -1 : hx > 0.05 ? 1 : face;
+    } else {
+      const p = rabRestPose(r, tt, tm, storm);
+      pose = p === "groom" ? "groom" + (Math.floor(tt * 2.6) & 1) : p === "graze" ? "graze" + (Math.floor(tt * 3) & 1)
+        : p === "sleep" ? "sleep" + (Math.floor(tt * 0.8) & 1) : p === "tilt" ? "frontTilt" : p === "sit" && Math.floor(tt * 0.9) % 5 === 4 ? "sitTwitch" : p;
+      if (R.L > 0.05) face = hx < -0.05 ? -1 : hx > 0.05 ? 1 : face;
+    }
+    out.push({ id: "r" + r.idx, idx: r.idx, coat: r.coat, x, y, face, pose, lift, moving, hopping, resting: rest, restT, spd: moving ? 1.6 : 0,
+               bold: fh(r.idx, k, 41) % 100 < 35, sleeping: pose.startsWith("sleep"), hx, hy });
+  }
+  return out;
+}
+
 /* ── 11. LES RÉACTIONS (locales, chez chaque client) ───────────────────────
    Une réaction est un DÉCALAGE qui s'ajoute à la routine et revient à zéro
    tout seul — jamais une seconde position qu'il faudrait réconcilier. Elle
@@ -1675,6 +2026,90 @@ export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
     c.x = o.x; c.y = o.y; c.face = o.face; c.react = o.mode;
   }
 }
+/* Les lapins : se figer, détaler en zigzag, guetter, revenir ; et, pour un
+   lapin « hardi » (`bold`, tiré par créneau), venir voir un joueur qui reste
+   immobile. Local, comme toutes les réactions : un décalage qui se résorbe vers
+   la routine, jamais une seconde position à réconcilier. Aucune capture.
+   ⚠️ La fuite n'est PAS une droite : le cap est dévié d'un sinus (±0,75 rad, 6 Hz)
+   et chaque pas est refusé s'il sort de l'herbe (`fw.rab.okAt`), alors on
+   tourne ; la cible vise le COUVERT (arbres) plutôt que n'importe où.
+   ⚠️ Le retour (« back ») vise la routine du moment, qui bouge pendant ce temps :
+   comme les chats, on la rejoint en bondissant, jamais en sautant. */
+export function faunaReactRabbits(S, fw, rabs, threats, dt, rnd) {
+  const rw = fw && fw.rab;
+  if (!rw || !rabs.length) return;
+  const M = S.rabbits || (S.rabbits = new Map());
+  for (const c of rabs) {
+    let o = M.get(c.id);
+    const nearOf = () => { let near = null, nd = Infinity; for (const q of threats) { const l = Math.hypot(c.x - q.x, c.y - q.y); if (l < nd) { nd = l; near = q; } } return { near, nd }; };
+    if (!o) {
+      const { near, nd } = nearOf();
+      if (!near) continue;
+      if (nd < (c.sleeping ? 1.8 : 5.2) && (near.moving || nd < 2.2)) o = { mode: "freeze", t: 0, x: c.x, y: c.y, face: c.face, who: near.id, ph: rnd() * 6.28 };
+      else if (c.bold && c.resting && !c.sleeping && c.restT > 3 && near.still > 2.5 && nd > 2.4 && nd < 6.5) o = { mode: "approach", t: 0, x: c.x, y: c.y, face: c.face, who: near.id, ph: rnd() * 6.28 };
+      else continue;
+      M.set(c.id, o);
+    }
+    o.t += dt;
+    c.lift = 0;
+    const who = threats.find((q) => q.id === o.who) || nearOf().near;
+    const dWho = who ? Math.hypot(who.x - o.x, who.y - o.y) : 99;
+    // Un pas de longueur v·dt vers (tx, ty), dévié de `dev` rad ; refusé hors de l'herbe, alors on tourne.
+    const step = (tx, ty, v, dev) => {
+      const dx = tx - o.x, dy = ty - o.y, l = Math.hypot(dx, dy);
+      if (l < 1e-3) return 0;
+      const a0 = Math.atan2(dy, dx) + dev, s = Math.min(l, v * dt);
+      for (const da of [0, 0.6, -0.6, 1.2, -1.2, 2.2]) {
+        const a = a0 + da, nx = o.x + Math.cos(a) * s, ny = o.y + Math.sin(a) * s;
+        if (rw.okM(nx, ny)) { o.x = nx; o.y = ny; o.vx = Math.cos(a); o.vy = Math.sin(a); if (Math.abs(o.vx) > 0.05) o.face = o.vx > 0 ? 1 : -1; return l; }
+      }
+      return l;
+    };
+    const hopPhase = (period) => (o.t / period) % 1;
+    const pickFlee = () => {
+      const bx = o.x - (who ? who.x : o.x - 1), by = o.y - (who ? who.y : o.y), base = Math.atan2(by, bx);
+      let best = null, bs = -1;
+      for (let k = 0; k < 9; k++) {
+        const a = base + (k ? (rnd() - 0.5) * 2.4 : 0), r = 4.5 + rnd() * 2.5;
+        const tx = o.x + Math.cos(a) * r, ty = o.y + Math.sin(a) * r;
+        if (!rw.okM(tx, ty) || !rw.los(o.x, o.y, tx, ty)) continue;
+        const sc = rw.coverAt(tx, ty) + rnd() * 2;
+        if (sc > bs) { bs = sc; best = { tx, ty }; }
+      }
+      if (best) { o.tx = best.tx; o.ty = best.ty; } else { o.tx = o.x + Math.cos(base) * 4; o.ty = o.y + Math.sin(base) * 4; }
+    };
+    const facing = () => { if (who && Math.abs(who.x - o.x) > 0.05) o.face = who.x > o.x ? 1 : -1; };
+    if (o.mode === "freeze") {
+      // Il se fige, oreilles dressées, et décide : tout près ou en mouvement → il file.
+      c.pose = o.t > 0.5 && Math.floor(o.t * 5) % 4 === 3 ? "sitTwitch" : "sit"; facing();
+      if (o.t > 0.8) {
+        if (dWho < 3.4 || (who && who.moving && dWho < 4.6)) { o.mode = "flee"; o.t = 0; pickFlee(); }
+        else if (o.t > 3) { o.mode = "watch"; o.t = 0; }
+      }
+    } else if (o.mode === "flee") {
+      const l = step(o.tx, o.ty, 3.9, Math.sin(o.t * 6.2 + o.ph) * 0.75);
+      const ph = hopPhase(0.28), v = Math.abs(o.vy || 0) > Math.abs(o.vx || 1) * 1.3;
+      c.pose = v ? (o.vy > 0 ? "down" : "up") + (ph < 0.55 ? 1 : 0) : ph < 0.55 ? "run0" : "run1";
+      c.lift = Math.sin(Math.PI * Math.min(1, ph / 0.8)) * 0.24 * (ph < 0.8 ? 1 : 0);
+      if (l < 0.3 || o.t > 3.2) { o.mode = "watch"; o.t = 0; }
+    } else if (o.mode === "watch") {
+      c.pose = Math.floor(o.t * 4) % 5 === 3 ? "sitTwitch" : "sit"; facing();
+      if (who && (dWho < 3.0 || (who.moving && dWho < 4.0)) && o.t > 0.6) { o.mode = "flee"; o.t = 0; pickFlee(); }
+      else if (o.t > 5) { o.mode = "back"; o.t = 0; }
+    } else if (o.mode === "approach") {
+      // Il s'enhardit : de petits bonds vers le joueur immobile, puis il le regarde de face.
+      if (!who || who.moving || dWho < 1.6) { o.mode = who && dWho < 2.4 ? "freeze" : "back"; o.t = 0; }
+      else if (dWho > 2.1) { step(who.x, who.y, 1.3, Math.sin(o.t * 2.3 + o.ph) * 0.5); const ph = hopPhase(0.42); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.1; }
+      else { c.pose = o.t % 6 < 3.2 ? "front" : "frontTilt"; facing(); if (o.t > 24) { o.mode = "back"; o.t = 0; } }
+    } else if (o.mode === "back") {
+      const l = step(c.x, c.y, 1.9, 0);
+      const ph = hopPhase(0.34); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.15;
+      if (l < 0.2 || o.t > 40) { M.delete(c.id); continue; }
+    }
+    c.x = o.x; c.y = o.y; c.face = o.face; c.react = o.mode; c.moving = o.mode === "flee" || o.mode === "back"; c.resting = false;
+  }
+}
+
 function lineWalkable(x0, y0, x1, y1, walkable) {
   const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 0.3);
   for (let i = 1; i <= n; i++) if (!walkable(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n)) return false;

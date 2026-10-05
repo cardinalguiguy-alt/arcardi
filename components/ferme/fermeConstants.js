@@ -327,6 +327,17 @@ export const FISH = [
 // jouant, comme tout le reste de la quête de l'étoile (CLAUDE.md §13).
 export const ROD_PROMPT_RANGE = 2.5;
 export const ROD_PROMPT_IDLE_MS = 300;
+/* 2026-10-05 — LA CANNE SE RANGE TOUTE SEULE (Guillaume : « un moyen de ranger la rod
+   automatiquement quand on s'éloigne plus de 15 secondes d'un plan d'eau »). Armée,
+   la canne reste armée tant qu'on ne change pas de case (voir `armRod`) : on la
+   retrouvait dans la main bien après avoir quitté la rive, et le premier clic
+   « utiliser l'outil » visait de l'eau à l'autre bout de la carte. `ROD_STOW_RANGE`
+   est plus large que la portée de l'invite (`ROD_PROMPT_RANGE`) exprès : on ne la
+   range pas au pas qui suit la dernière case d'eau, on la range quand on est
+   VRAIMENT parti ; `ROD_STOW_AWAY_MS` d'éloignement continu, remis à zéro dès
+   qu'on revient à portée. Nombres à juger en jouant. */
+export const ROD_STOW_RANGE = 4;
+export const ROD_STOW_AWAY_MS = 15000;
 
 // --- Outils ---
 /* ⚠️ 2026-09-13 — LA FAUX (`scythe`) S'AJOUTE EN QUEUE, JAMAIS AU MILIEU.
@@ -8602,7 +8613,17 @@ export const NET_PRICE = 300;            // l'épuisette, au marché (or de la c
 /* 2026-10-04 — LES PATINS, au chalet du lac (`TOWN_SKATE_CHALET`), l'hiver seulement :
    une paire par fermier, pour toujours (comme l'épuisette). Plus cher qu'elle : c'est
    la boutique « très chic » de la demande, et c'est le seul objet qui ouvre un lieu. */
-export const SKATES_PRICE = 450;
+/* 2026-10-05 — ⚠️ LES PATINS SE LOUENT, ILS NE S'ACHÈTENT PLUS (Guillaume : « les ice skates
+   doivent être loués pour 10 minutes. pas achetés définitivement »). DIX MINUTES RÉELLES (le
+   chiffre qu'il a donné, comme les quinze minutes de la blessure : `ICE_INJURED_MS`), à
+   compter de la location, que l'on patine ou non. Le prix passe de 450 or (la paire pour
+   toujours) à `SKATES_RENT_PRICE` : un tarif de location, pas un équipement — à juger en
+   jouant, comme tout nombre neuf. La location s'arrête sans rien demander (`E.skatesActive`) ;
+   on est prévenu à `SKATES_WARN_MS` puis à `SKATES_WARN2_MS` de la fin. */
+export const SKATES_RENT_PRICE = 60;
+export const SKATES_RENT_MS = 10 * 60 * 1000;
+export const SKATES_WARN_MS = 60 * 1000;
+export const SKATES_WARN2_MS = 15 * 1000;
 export const NET_COOLDOWN_MS = 2200;     // un coup d'épuisette toutes les 2,2 s au plus (arbitré par l'hôte)
 export const NET_ODDS = { carp: 0.4, bfly: 0.55 };   // chance d'attraper (tirée par l'hôte)
 export const NET_REACH = { carp: 2.6, bfly: 1.3 };   // portée, en cases, du pied du joueur à la bête (carpe : 1,9 au premier jet — vu en jeu, les carpes gardent le large, jamais à portée depuis la berge)

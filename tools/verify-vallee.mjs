@@ -2002,13 +2002,19 @@ section("Valley Town — le chalet des patins");
   ok("son comptoir s'atteint à pied depuis le quai", reachN > 0, `${reachN} cases à portée du comptoir`);
   const mkS = () => { const f = { inv: {}, tools: {} }; E.normalizeFarmer(f); return f; };
   const f = mkS();
-  ok("un fermier neuf n'a pas de patins", f.inv.skates === 0);
-  ok("hors de l'hiver, le chalet ne vend rien", E.resolveBuySkates(f, 1e9, "autumn", true).reason === "closed" && f.inv.skates === 0);
-  ok("loin du comptoir, rien", E.resolveBuySkates(f, 1e9, "winter", false).reason === "far" && f.inv.skates === 0);
-  ok("sans or, pas de patins", E.resolveBuySkates(f, C.SKATES_PRICE - 1, "winter", true).reason === "noGold" && f.inv.skates === 0);
-  const b = E.resolveBuySkates(f, C.SKATES_PRICE, "winter", true);
-  ok("l'achat coûte le prix affiché", b.ok && b.moneyDelta === -C.SKATES_PRICE && f.inv.skates === 1);
-  ok("on n'en achète pas deux", E.resolveBuySkates(f, 1e9, "winter", true).reason === "have");
+  const NOW = 1_000_000;
+  ok("un fermier neuf n'a pas de patins loués", E.skatesLeftMs(f.inv, NOW) === 0 && f.inv.skatesUntil === 0 && f.inv.skates === 0);
+  ok("hors de l'hiver, le chalet ne loue rien", E.resolveRentSkates(f, 1e9, "autumn", true, NOW).reason === "closed" && f.inv.skatesUntil === 0);
+  ok("loin du comptoir, rien", E.resolveRentSkates(f, 1e9, "winter", false, NOW).reason === "far" && f.inv.skatesUntil === 0);
+  ok("sans or, pas de location", E.resolveRentSkates(f, C.SKATES_RENT_PRICE - 1, "winter", true, NOW).reason === "noGold" && f.inv.skatesUntil === 0);
+  const b = E.resolveRentSkates(f, C.SKATES_RENT_PRICE, "winter", true, NOW);
+  ok("la location coûte le prix affiché, bien moins que l'ancienne paire (450 or)", b.ok && b.moneyDelta === -C.SKATES_RENT_PRICE && C.SKATES_RENT_PRICE < 450, `${C.SKATES_RENT_PRICE} or`);
+  ok("elle dure dix minutes RÉELLES, pas une de plus", f.inv.skatesUntil === NOW + 10 * 60 * 1000 && C.SKATES_RENT_MS === 600000 && E.skatesActive(f.inv, NOW + 599999) && !E.skatesActive(f.inv, NOW + 600000));
+  ok("le temps restant décroît, jamais négatif", E.skatesLeftMs(f.inv, NOW + 1000) === 599000 && E.skatesLeftMs(f.inv, NOW + 9e6) === 0);
+  ok("on ne loue pas deux fois de suite", E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000).reason === "have");
+  ok("la location finie, on peut en reprendre une (elle repart de zéro)", (() => { const r = E.resolveRentSkates(f, 1e9, "winter", true, NOW + 700000); return r.ok && f.inv.skatesUntil === NOW + 700000 + 600000; })());
+  ok("une ancienne paire achetée (2026-10-04) est remise à zéro", (() => { const g = { inv: { skates: 1 }, tools: {} }; E.normalizeFarmer(g); return g.inv.skates === 0 && !E.skatesActive(g.inv, NOW); })());
+  ok("les avertissements tombent dans la location (60 s puis 15 s avant la fin)", C.SKATES_WARN_MS < C.SKATES_RENT_MS && C.SKATES_WARN2_MS < C.SKATES_WARN_MS);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

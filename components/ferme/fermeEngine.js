@@ -1177,8 +1177,11 @@ export function normalizeFarmer(f) {
      NET_* dans fermeConstants.js). Déclarés ICI pour ne pas s'effacer (§4 de
      CLAUDE.md : « poser le champ, migrer, relire » — tenu par verify-vallee). */
   if (typeof f.inv.net !== "number") f.inv.net = 0;
-  /* 2026-10-04 — les patins (`resolveBuySkates`) : une paire, gardée pour toujours. */
-  if (typeof f.inv.skates !== "number") f.inv.skates = 0;
+  /* 2026-10-05 — les patins se LOUENT (`resolveRentSkates`) : `skatesUntil` est l'instant (ms, horloge
+     de l'hôte, comme `injuredUntil`) où la location prend fin. `skates` (la paire gardée pour toujours,
+     2026-10-04) n'existe plus : toute ancienne paire est remise à zéro. */
+  if (typeof f.inv.skatesUntil !== "number") f.inv.skatesUntil = 0;
+  f.inv.skates = 0;
   if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
   for (const k of Object.keys(f.inv.catMilk)) {
     const e = f.inv.catMilk[k];
@@ -1489,19 +1492,23 @@ export function resolveBuyNet(f, money) {
   f.inv.net = 1;
   return { ok: true, moneyDelta: -C.NET_PRICE };
 }
-/* 2026-10-04 — LES PATINS, CÔTÉ HÔTE. Même forme que l'épuisette juste au-dessus :
-   `money` en LECTURE, le prix revient dans `moneyDelta`. Le chalet n'ouvre que
-   l'hiver (`season`, la saison réelle que l'hôte lit) : hors saison, il ne vend
-   rien — les patins n'ont nulle part où servir. La PORTÉE (être au comptoir) est
-   tenue par l'hôte sur la position qu'il connaît (`near`, calculé à l'appel). */
-export function resolveBuySkates(f, money, season, near) {
+/* 2026-10-05 — LES PATINS SE LOUENT, CÔTÉ HÔTE (avant : `resolveBuySkates`, la paire pour toujours).
+   Même forme que l'épuisette : `money` en LECTURE, le prix revient dans `moneyDelta`. Le chalet
+   n'ouvre que l'hiver (`season`, la saison réelle que l'hôte lit) : hors saison, il ne loue
+   rien — les patins n'ont nulle part où servir. La PORTÉE (être au comptoir) est tenue par
+   l'hôte sur la position qu'il connaît (`near`, calculé à l'appel). `now` : l'horloge de l'hôte,
+   passée en argument pour qu'un banc rejoue une location (jamais `Date.now()` ici). On ne loue
+   pas deux fois de suite : tant que la location court, le comptoir dit « vous les avez ». */
+export function skatesActive(inv, now) { return !!inv && (inv.skatesUntil | 0) > 0 && inv.skatesUntil > now; }
+export function skatesLeftMs(inv, now) { return skatesActive(inv, now) ? inv.skatesUntil - now : 0; }
+export function resolveRentSkates(f, money, season, near, now) {
   normalizeFarmer(f);
-  if (f.inv.skates > 0) return { ok: false, reason: "have", moneyDelta: 0 };
+  if (skatesActive(f.inv, now)) return { ok: false, reason: "have", moneyDelta: 0 };
   if (season !== "winter") return { ok: false, reason: "closed", moneyDelta: 0 };
   if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
-  if ((money | 0) < C.SKATES_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
-  f.inv.skates = 1;
-  return { ok: true, moneyDelta: -C.SKATES_PRICE };
+  if ((money | 0) < C.SKATES_RENT_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
+  f.inv.skatesUntil = now + C.SKATES_RENT_MS;
+  return { ok: true, moneyDelta: -C.SKATES_RENT_PRICE, until: f.inv.skatesUntil };
 }
 /* Le chalet : son emprise (cases) une fois la ville générée — le décor `skateChalet`
    qu'a posé le générateur, ou `null`. Et la distance d'un point (semelle, cases) au

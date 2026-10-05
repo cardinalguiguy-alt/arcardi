@@ -11,30 +11,34 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 — BOIS DES COINS OUEST, PATINS ET LAC GELÉ, BONHOMME DE NEIGE — TROIS LIVRAISONS, COMMITÉES (« bdn »)
+### 2026-10-05 (soir) — LAPINS DE VT, PATINS LOUÉS, CANNE QUI SE RANGE, BONHOMME CASSABLE ET CHAPEAUX — DANS L'ARBRE, NON COMMITÉS
 
-Le commit « bdn » porte le lot du 2026-10-04 (nuit) (étoile reine, obélisque) ET les trois livraisons du jour (arbre propre à la reprise ;
-seuls deux bancs ont été corrigés après : `verify-pont`, motif trop étroit depuis le patin ; `verify-planche3`, empreinte renouvelée pour les bois). Récits : README de la ferme, en tête (une entrée par livraison). **(1) Les bois** : `TOWN_WOODS_WEST`, champ par polygone,
-clairières rouvertes par un parcours 0-1 en fin de générateur. **(2) Le patin** : `patin.js` (pur), glace du lac par `lakeCold` (neige.js) et la
-règle de l'étang étirée (`glace.js`), chute sans patins = blessure de 15 min (`iceFall`), chalet des patins PROCÉDURAL ET PROVISOIRE (prompt
-Gemini dans `docs/IMAGES-ET-BLENDER.md`), 450 or. **(3) Le bonhomme** : `bonhomme.js` (pur), rouler / empiler / décor au choix, ferme et ville,
-dégel daté par l'hôte. Vus en jeu à un client (hiver, lac et neige forcés au menu dev). **Supabase : rien** (`inv.skates`, `snowmen` : du JSON).
-**Le harnais à deux clients MARCHE** (`app/audit-duo`, `docs/VERIFICATION.md` : la panne était `document.hidden`) — reste à JOUER le patin et le bonhomme à deux avec lui.
-**Le menu dev à deux** (vérifié) : météo et saison forcées = pour TOUTE la session ; profondeur de neige, glace, lac, feuilles = locales à chacun (README ferme, journal 2026-10-05 « suite »).
-**La neige en descendant du train** est préchauffée pendant le fondu (`prewarmTownSnow`) ; non vue sur la machine de Guillaume. Pas vu : la
-nuit sur la glace et près d'un bonhomme ; le lac sous la vraie météo. Restent aussi ceux de la veille (obélisque en fondu et sous la pluie, reine
-en ville et la nuit, rosace sous la neige).
-**Idée en attente, rien de codé** : l'horloge ne roule QUE pendant qu'un hôte est en ligne (retour tardif = un seul jour de plus, 6h00) —
-`docs/AUDIT-2026-10.md`, partie 3 ; la changer touche la sauvegarde, donc validation préalable.
-⚠️ `app/audit-tmp/page.js`, `app/audit-duo/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
-corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js) ; `tools/lib-canvas.mjs` annonce honorer `translate` et ne le fait pas
-(les feuilles de personnage n'y ont qu'une direction — `render-etoile` ne juge que la rangée 0).
+Récit complet : README de la ferme, en tête (« 2026-10-05 (soir) »). **Cinq livraisons séparées, rien de commité** (le dernier commit est « neigos » : `git status` dit tout).
+**(1) Les lapins de Valley Town** : `faune.js` § 10 bis (routine partagée, zéro message), `fauneArt.js` § 6 (20 poses × 4 robes, PETITS : assis 9 px contre 11 pour
+le chat ; tête de face OVALE, pas plate — deux corrections de Guillaume devenues contrôles de banc), trajets ondulés + rafales de bonds, jardins ouverts à l'aube et au
+crépuscule, aucune capture. **(2) La canne se range** après 15 s à plus de 4 cases de l'eau. **(3) Les patins se louent** : 60 or, 10 min réelles (`inv.skatesUntil` ;
+l'ancien `inv.skates` est remis à zéro). **(4) Le bonhomme** : K coup de pied (une boule seule en 1 à 3 coups ; un bonhomme encaisse, la tête tombe, il s'écroule aux
+coups RAPPROCHÉS), R soulever ↔ rouler (taille figée), poussée beaucoup plus lente, chapeaux et écharpe mesurés sur la tête (`tools/render-bonhomme.mjs`).
+**Supabase : rien** (JSON dans l'inventaire et les tas de neige ; aucune migration SQL). Bancs relancés, chiffres réels : `verify-faune` 103/103, `verify-bonhomme` 66/66,
+`verify-patin` 23/23, `verify-vallee` 292/292, `verify-strings` 1228 clés ; bundle esbuild et `no-undef` propres. Vu EN JEU à un client : lapin figé à 3 cases ; canne rangée à 16 s ;
+boule roulée, soulevée, posée, écrasée en 3 coups ; bonhomme décoré cassé en 7 coups. **Pas vu** : les lapins la nuit / sous la neige / dans un jardin ; le patin loué qui
+expire sur la glace ; tout cela **à deux vrais clients** (le `snowFx` d'un autre, la botte d'un autre). **Pas de touche tactile pour K et R.** ⚠️ **Tout le monde peut casser le
+bonhomme de tout le monde** (dit, pas décidé). **Question de Guillaume tranchée : la végétation de VT NE passe PAS sur la ferme** (arbres de la ferme = objets de jeu à PV, autre
+grain ; `docs/A-JUGER.md`). **Projet à moyen terme (lui) : la boutique d'hiver « bien plus belle »** (chalet procédural provisoire).
+**Le harnais à deux clients MARCHE** (`app/audit-duo`, `docs/VERIFICATION.md` : la panne était `document.hidden`) — reste à JOUER le patin, le bonhomme et les lapins à deux.
+**Le menu dev à deux** : météo et saison forcées = pour TOUTE la session ; profondeur de neige, glace, lac, feuilles = locales à chacun. **La neige en descendant du train** est
+préchauffée pendant le fondu (`prewarmTownSnow`) ; non vue sur la machine de Guillaume. Restent aussi à juger ceux de la veille (bois ouest, obélisque, reine, rosace).
+**Idée en attente, rien de codé** : l'horloge ne roule QUE pendant qu'un hôte est en ligne (retour tardif = un seul jour de plus, 6h00) — `docs/AUDIT-2026-10.md`, partie 3 ;
+la changer touche la sauvegarde, donc validation préalable.
+⚠️ `app/audit-tmp/page.js`, `app/audit-duo/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture, SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
+corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js — le serveur de dev l'avertit à chaque compilation) ; `tools/lib-canvas.mjs` annonce honorer `translate` et ne le fait pas.
+⚠️ **Le serveur de dev** (`arcardi-local`, port 3100) peut se figer sur « Compiling /audit-tmp » si on touche `.next/cache` à chaud : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER, PUIS LES SOLS DE VALLEY TOWN SUR LE MODÈLE FIX-004
 
-(1) Faire juger `docs/A-JUGER.md` (en tête : le patin et le lac, le bonhomme, les bois ; puis l'obélisque, la reine, la rosace) — idéalement EN
-JOUANT À DEUX, avec le harnais réparé. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements**
-(`components/ferme/solHD.js`, `docs/AUDIT-2026-10.md` FIX-004) — poser les questions de cadrage avant.
+(1) Faire juger `docs/A-JUGER.md` (en tête : les lapins, les patins loués, le bonhomme cassable, puis le patin et le lac, les bois, l'obélisque, la reine, la rosace) — idéalement EN
+JOUANT À DEUX. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements** (`components/ferme/solHD.js`, `docs/AUDIT-2026-10.md` FIX-004) — poser les questions de
+cadrage avant. (3) À moyen terme : la boutique d'hiver peinte, les arbres (lot B) et les objets de jardin (lot C0) de `refs/lot-gemini/`, les intérieurs (phase 8).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -60,7 +64,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 |---|---|---|
 | Neige, hiver, glace, feuilles mortes | `components/ferme/neige.js`, `glace.js`, `feuilles.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles` |
 | Patin, glace du lac, chalet des patins | `components/ferme/patin.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journal 2026-10-05) | `verify-patin`, `render-glace`, `verify-vallee` |
-| Bonhomme de neige | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme` |
+| Bonhomme de neige (coups de pied, boule portée, chapeaux) | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme`, `render-bonhomme` |
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
@@ -68,7 +72,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
 | Sols de VT (pavements, herbe), arbres, intégrer une image Gemini de sol ou d'arbre | `refs/lot-gemini/00-LISEZ-MOI.md`, puis `refs/lot-gemini/A-sols-vt.md` ou `refs/lot-gemini/B-arbres.md` ; `tools/lib-mip.mjs`, `tools/build-lampadaires.mjs` (le modèle) | `render-rues`, `render-arbres`, `verify-densite` |
 | Eau, reflets, berges, parc | `components/ferme/eau.js` ; README ferme §18-§20 | `render-eau`, `render-rive`, `render-parc` |
-| Faune (colverts, chats, lucioles) | `components/ferme/faune.js`, `fauneArt.js` | `verify-faune` |
+| Faune (colverts, chats, LAPINS de VT, lucioles) | `components/ferme/faune.js` (§ 10 bis), `fauneArt.js` (§ 6) | `verify-faune`, `render-lapins` |
 | Maisons, façades, image Gemini à intégrer | `docs/IMAGES-ET-BLENDER.md` (d'abord « Notes qui restent vraies »), `fermeConstants.js` (`TOWN_HOUSE_MODELS`, `TOWN_SHOP_MODELS`), `tools/build-maison-sprites.mjs` | `verify-vallee`, `verify-densite`, `verify-compo` |
 | Clôtures, buis, haies | `components/ferme/clotures.js`, `buis.js` | `render-haies`, `render-buis` |
 | Génération de la ville, rues, collision, marche | `components/ferme/fermeEngine.js` ; README ferme §15 et §15 bis (pièges) | `verify-vallee`, `verify-collision`, `verify-compo`, `render-rues` |

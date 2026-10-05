@@ -23,6 +23,18 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-05 (soir)** : **les lapins de Valley Town** — l'échelle (assis 9 px contre 11 pour le chat : assez petits ?), la tête de face (ovale, yeux sur
+  les côtés), le « fluffy » (contour teinté + touches claires), les 4 robes, les trajets (ondulation, rafales de bonds, pauses), le nombre (10), les jardins
+  (14 % des créneaux de l'aube et du crépuscule), la fuite en zigzag, le lapin hardi. Planche : `tools/out/lapins-planche.png`. Pas vus : la nuit, sous la neige
+  (ils laissent des empreintes de chat), un jardin, à deux clients.
+- **Le 2026-10-05 (soir)** : **les patins loués** — 60 or / 10 minutes réelles : le prix, la durée, les avertissements (60 s, 15 s) ; ⚠️ la fin de location
+  PENDANT qu'on est sur la glace fait tomber (blessure de 15 min) — trop dur ? une tolérance (finir la glissade) est possible.
+- **Le 2026-10-05 (soir)** : **la canne qui se range toute seule** (15 s à plus de 4 cases de l'eau) — vue en jeu (rangée à 16 s), à juger : 15 s et 4 cases.
+- **Le 2026-10-05 (soir)** : **le bonhomme cassable et les boules portées** — K (coup de pied : une boule seule en 1 à 3 coups ; un bonhomme encaisse, la tête
+  tombe de plus en plus souvent, il s'écroule aux coups rapprochés), R (soulever ↔ rouler), la marche plus lente en poussant (−72 % au maximum), les chapeaux et
+  l'écharpe posés sur la tête mesurée. Vus en jeu à un client (boule roulée, soulevée, posée, écrasée en 3 coups ; bonhomme décoré cassé en 7 coups). Pas vus : à deux
+  clients (le `snowFx` d'un autre), la nuit, sous le dégel ; **pas de touche tactile** pour K et R ; **tout le monde peut casser le bonhomme de tout le monde** (à trancher).
+
 - **Le 2026-10-05** : **le bonhomme de neige** — le geste (façonner, rouler, poser, empiler : la vitesse de croissance, le ralentissement),
   la traînée dans la neige, le dessin (taille contre le joueur, sphères, accessoires — planche `tools/out/bonhomme-planche.png`), le panneau du
   décor et son aperçu, la durée du dégel (une journée de jeu) et son affaissement. Pas vus : à deux vrais clients, la nuit.
@@ -221,6 +233,13 @@ du délai est un plancher PHYSIQUE (~150-300 ms Europe↔Australie/Hong Kong, vi
 fibre) qu'aucune architecture ne supprime — l'objectif atteignable est un rendu lisse malgré ce
 délai connu, pas son élimination. Rien d'engagé, aucune piste tranchée : à étudier.
 
+⚠️ **PROJETS À MOYEN TERME AJOUTÉS LE 2026-10-05 (Guillaume)** : (1) **LA BOUTIQUE D'HIVER « bien plus belle que ça »** — le chalet des patins est procédural et
+provisoire (prompt Gemini dans `docs/IMAGES-ET-BLENDER.md`) : un vrai bâtiment peint au pixel d'écran, son intérieur, son enseigne, la location en comptoir vivant ; à
+faire avec le lot D de `refs/lot-gemini/` (bâtiments) ; rien de codé. (2) **LA VÉGÉTATION DE VALLEY TOWN SUR LA FERME — ÉCARTÉE POUR L'INSTANT** (question de Guillaume :
+« si ça pose le moindre problème, on ne fait pas ») : les arbres de la ferme sont des OBJETS DE JEU (`objHp`, on les coupe, ils repoussent, collision d'une case) et leur
+grain est celui de la ferme (16 px d'art, personnages et cultures à la même échelle) ; les essences de la ville (15, quatre tailles, 13,5 px/m) ne se posent pas dessus sans
+toucher à la collision et à l'échelle, et la décision d'orientation « la ferme reste en pixel art ou passe au peint » (`refs/lot-gemini/E-ferme-vf.md`) n'est pas prise. La
+voie propre reste le lot E (chêne de la ferme en 5 états, au grain de la ferme).
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-27 (après la phase 7a), À NE PAS PERDRE** — détail au
 tableau des phases de `components/ferme/README.md` : **UN TERRAIN DE FOOT** dans une prairie vide (idée de
 Guillaume) — emplacement, fonction et style À TRANCHER AVEC LUI (options au README). (Les clôtures par quartier :

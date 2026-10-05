@@ -1157,6 +1157,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const snowRemoteRef = useRef(new Map());
   const snowGhostRef = useRef(null);
   const snowIdleRef = useRef({ at: 0, x: 0, y: 0 });
+  /* 2026-10-05 — LES COUPS DE PIED ET LA BOULE PORTÉE. `snowFxRef` : les éclats de neige (locaux, `parts`),
+     le branle d'un tas qu'on vient de frapper (`wob`, par id), les bottes qui frappent (`swings`, par joueur).
+     Rien de cela ne circule : l'hôte diffuse UN `snowFx` avec le résultat du coup (dans le même `apply` que
+     la liste des tas), et chacun joue ce qu'il voit. `snowKickAtRef` : la cadence locale d'un coup. */
+  const snowKickAtRef = useRef(0);
+  const snowFxRef = useRef({ parts: [], wob: new Map(), swings: new Map(), localAt: 0 });
   const [snowDecoFor, setSnowDecoFor] = useState(null);
   const [snowDecoDraft, setSnowDecoDraft] = useState(null);
   /* 2026-09-30 — les feuilles mortes : l'avancée de la saison forcée au menu dev (locale,
@@ -2202,6 +2208,65 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBagOpen(false);
     pushToast(L.rodArmedToast);
   }
+  /* 2026-10-05 — LA CANNE SE RANGE TOUTE SEULE après `ROD_STOW_AWAY_MS` d'éloignement continu de
+     tout plan d'eau (portée `ROD_STOW_RANGE`, voir fermeConstants). Un contrôle par demi-seconde
+     suffit : pas de `setState` tant que rien ne change, et le nettoyage coupe l'intervalle dès que
+     la canne n'est plus armée (changement de case, rangement). ⚠️ Le même `E.waterNearby` que
+     l'invite « sortir la canne » : une seule façon de dire « il y a de l'eau », dans les trois
+     mondes (ferme, ville, monde maléfique) ; ailleurs (tribunal, intérieurs) il n'y a pas d'eau,
+     donc la canne se range au bout des 15 s. Une pêche en cours (mini-jeu, halage) ne se range
+     jamais : le joueur est alors au bord de l'eau, et on ne lui retire pas la canne des mains. */
+  useEffect(() => {
+    if (!rodArmed || fishMini) return undefined;   // une pêche en cours (mini-jeu) : jamais
+    let awaySince = null;
+    const id = setInterval(() => {
+      if (!rodArmedRef.current) return;
+      const m = meRef.current;
+      if (!m) return;
+      const zone = m.zone || "farm";
+      const w = zone === "town" ? townWorldRef.current : zone === "evil" ? evilWorldRef.current : zone === "farm" ? worldRef.current : null;
+      const wet = !!w && E.waterNearby(w, m.x, m.y, C.ROD_STOW_RANGE);
+      if (wet || fishHaulRef.current || evilHaulRef.current) { awaySince = null; return; }
+      const now = performance.now();
+      if (awaySince === null) { awaySince = now; return; }
+      if (now - awaySince >= C.ROD_STOW_AWAY_MS) {
+        rodArmedRef.current = false; setRodArmed(false);
+        pushToast(L.rodStowedToast);
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [rodArmed, fishMini]);
+  /* 2026-10-05 — LA LOCATION DES PATINS (`E.resolveRentSkates`) : (1) `skateClock` bat la seconde tant
+     que le panneau du chalet est ouvert, pour que le temps restant se lise en direct ; (2) un contrôle
+     par seconde PRÉVIENT à `SKATES_WARN_MS` puis `SKATES_WARN2_MS` de la fin, et dit la fin. Les
+     avertissements ne se répètent pas (`warned`) et se réarment à chaque nouvelle location.
+     ⚠️ Le client lit `skatesUntil` dans SON sac (diffusé par l'hôte à la location) et le compare à sa
+     propre horloge, comme `injuredUntil` : à quelques secondes d'écart d'horloge près, sur dix minutes. */
+  const [skateClock, setSkateClock] = useState(0);
+  useEffect(() => {
+    if (!skateShopOpen) return undefined;
+    setSkateClock(Date.now());
+    const id = setInterval(() => setSkateClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [skateShopOpen]);
+  useEffect(() => {
+    const warned = { on: false, a: false, b: false };
+    const id = setInterval(() => {
+      const inv = invRef.current;
+      if (!inv) return;
+      const left = E.skatesLeftMs(inv, Date.now());
+      if (left > 0) {
+        warned.on = true;
+        if (left > C.SKATES_WARN_MS) { warned.a = false; warned.b = false; }
+        else if (left <= C.SKATES_WARN2_MS) { if (!warned.b) { warned.b = true; warned.a = true; pushToast(L.skatesWarn2Toast(Math.ceil(left / 1000))); } }
+        else if (!warned.a) { warned.a = true; pushToast(L.skatesWarnToast); }
+      } else if (warned.on) {
+        warned.on = false; warned.a = false; warned.b = false;
+        pushToast(L.skatesEndedToast);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lang]);
   function armHealKit() {
     if (!(myInv && (myInv.healKit || 0) > 0)) return;
     handModeRef.current = null; setHandMode(null);
@@ -5602,7 +5667,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveBuyNet(f, s.money);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "netBought" : "net_" + r.reason, n: C.NET_PRICE };
-    } else if (req.kind === "snowTake" || req.kind === "snowDrop" || req.kind === "snowDeco") {
+    } else if (req.kind === "snowTake" || req.kind === "snowDrop" || req.kind === "snowDeco" || req.kind === "snowMode" || req.kind === "snowKick" || req.kind === "snowSmash") {
       /* 2026-10-05 — LE BONHOMME DE NEIGE (`bonhomme.js`). Prendre une boule (façonnée au
          sol, ou celle du haut d'un tas pas fini), la poser (seule, ou EMPILÉE si un tas
          l'attend), décorer un bonhomme fini. L'hôte borne la taille annoncée par le temps
@@ -5612,32 +5677,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const zone = req.zone === "town" ? "town" : "farm", nowS = Date.now();
       const st = sharedRef.current;
       let r;
-      if (req.kind === "snowTake") r = BN.resolveSnowTake(st, f.id, zone, req.fromId || null, nowS);
-      else if (req.kind === "snowDrop") r = BN.resolveSnowDrop(st, f.id, zone, +req.x || 0, +req.y || 0, +req.r || 0, nowS, C.PLAYER_SPEED, () => "sm" + nowS.toString(36) + Math.floor(Math.random() * 1e6).toString(36));
+      const newSnowId = () => "sm" + nowS.toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+      if (req.kind === "snowTake") r = BN.resolveSnowTake(st, f.id, zone, req.fromId || null, nowS, !!req.carry);
+      else if (req.kind === "snowMode") r = BN.resolveSnowMode(st, f.id, zone, !!req.carry, +req.r || 0, nowS, C.PLAYER_SPEED);
+      else if (req.kind === "snowSmash") r = BN.resolveSnowSmashHeld(st, f.id);
+      else if (req.kind === "snowKick") {
+        /* LE COUP DE PIED : la portée se lit sur la dernière position que l'hôte connaît du joueur
+           (les paquets `pos`), avec une marge pour la latence ; la cadence (`KICK.GAP_MS`) et la chance de
+           chute sont tenues par `resolveSnowKick`. Un coup refusé (trop loin, trop vite) ne dit rien. */
+        const tasK = (st.snowmen || []).find((q) => q.id === String(req.sid || "") && q.zone === zone);
+        const dK = tasK ? Math.hypot(C.footX(f.x || 0) - tasK.x, C.footY(f.y || 0) - tasK.y) - tasK.balls[0] * 0.8 : 99;
+        if (!tasK) r = { ok: false, reason: "gone" };
+        else if (dK > BN.KICK.REACH + 1.5) r = { ok: false, reason: "far" };
+        else r = BN.resolveSnowKick(st, f.id, zone, tasK.id, nowS, Math.random, newSnowId, +req.ux || 0, +req.uy || 0);
+      }
+      else if (req.kind === "snowDrop") r = BN.resolveSnowDrop(st, f.id, zone, +req.x || 0, +req.y || 0, +req.r || 0, nowS, C.PLAYER_SPEED, newSnowId);
       // ⚠️ `sid`, PAS `id` : `sendReq` écrase `id` par l'expéditeur — premier jet, l'hôte cherchait un bonhomme nommé comme le joueur (vu en jeu : le décor ne prenait jamais).
       else r = BN.resolveSnowDeco(st, String(req.sid || ""), req.deco);
       if (r.ok) {
         dirtyRef.current = true;
         const pay = { snowmen: st.snowmen || [], snowRoll: st.snowRoll || {} };
         if (r.done) pay.snowDone = { id: r.id, by: f.id };
+        // L'effet d'un coup : UN champ de plus dans le même `apply` (§3 : aucun message de plus).
+        if (req.kind === "snowKick") pay.snowFx = { zone, kind: r.destroyed ? "destroyed" : r.fell ? "fall" : "hit", id: r.id, x: r.x, y: r.y, r: r.r, n: r.n, hits: r.hits, ux: +req.ux || 0, uy: +req.uy || 0, by: f.id, fell: r.fell || null };
+        if (req.kind === "snowSmash") pay.snowFx = { zone: r.zone, kind: "smash", x: +req.x || 0, y: +req.y || 0, r: r.r, ux: +req.ux || 0, uy: +req.uy || 0, by: f.id };
         hostSend({ type: "broadcast", event: "apply", payload: pay });
         if (r.tooBig) out.toast = { id: f.id, key: "snowTooBig" };
       } else {
         // Le refus défait la boule que le joueur a prise chez lui en optimiste (voir `snowAct`).
         hostSend({ type: "broadcast", event: "apply", payload: { snowmen: st.snowmen || [], snowRoll: st.snowRoll || {} } });
-        out.toast = { id: f.id, key: "snow_" + r.reason };
+        if (r.reason !== "gap" && r.reason !== "far") out.toast = { id: f.id, key: "snow_" + r.reason };
       }
-    } else if (req.kind === "buySkates") {
-      /* 2026-10-04 — LES PATINS, au comptoir du chalet du lac (`E.resolveBuySkates`). La
+    } else if (req.kind === "rentSkates") {
+      /* 2026-10-05 — LES PATINS SE LOUENT, au comptoir du chalet du lac (`E.resolveRentSkates`,
+         dix minutes ; avant : `buySkates`, la paire pour toujours). La
          portée se lit sur la dernière position que l'hôte connaît du fermier (les
          paquets `pos`) — avec une case de marge pour la latence : la carte de la ferme
          s'arrête bien avant la rangée du lac, donc une position de ferme ne peut pas
          passer pour « au comptoir ». La saison est la saison RÉELLE, lue par l'hôte. */
       const twS = getTownWorldCached(E);
       const nearS = E.townSkateChaletDist(twS, C.footX(f.x || 0), C.footY(f.y || 0)) <= C.TOWN_SKATE_CHALET_REACH + 1;
-      const r = E.resolveBuySkates(f, s.money, E.seasonOf().key, nearS);
+      const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now());
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
-      out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: C.SKATES_PRICE };
+      out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: C.SKATES_RENT_PRICE };
     } else if (req.kind === "iceFall") {
       /* 2026-10-04 — LA CHUTE SUR LA GLACE SANS PATINS. Calque exact de « starBurn » :
          la glissade se joue chez le joueur (sa position, sa glace — une pure fonction
@@ -8899,6 +8981,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // 2026-10-05 — les bonshommes de neige : la liste entière (elle est courte, `MAX_PER_ZONE`), et ce que chacun pousse.
     if (p.snowmen) sharedRef.current.snowmen = BN.normalizeSnowmen(p.snowmen);
     if (p.snowRoll) sharedRef.current.snowRoll = p.snowRoll;
+    if (p.snowFx) snowFxPlay(p.snowFx);   // 2026-10-05 — un coup de pied vu : éclats, branle, botte
     if (p.snowDone && p.snowDone.by === me.id) { setSnowDecoDraft(null); setSnowDecoFor(p.snowDone.id); }
     if (p.townChop) {
       const s3 = sharedRef.current;
@@ -8930,7 +9013,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // 2026-10-04 — leurs patins, pour la pose qu'on leur voit sur la glace (`remoteHasSkates`).
     if (p.farmer && p.farmer.id !== me.id && p.farmer.inv) {
       const rs = playersRef.current.get(p.farmer.id);
-      if (rs) rs.skates = (p.farmer.inv.skates | 0) > 0;
+      if (rs) rs.skatesUntil = p.farmer.inv.skatesUntil | 0;
     }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
@@ -9258,7 +9341,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (key === "snowTooBig") return L.snowTooBigToast;
     if (key && key.startsWith("snow_")) return L.snowRefuse(key.slice(5));
-    if (key === "skatesBought") return L.skatesBoughtToast(n | 0);
+    if (key === "skatesBought") return L.skatesBoughtToast(n | 0, C.SKATES_RENT_MS / 60000);
     if (key === "skates_have") return L.skatesHaveToast;
     if (key === "skates_closed") return L.skatesClosedToast;
     if (key === "skates_far") return L.skatesFarToast;
@@ -16814,6 +16897,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!uiOpen) pressJumpOrAct();
       }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
+      // 2026-10-05 — K : un coup de pied (dans la boule qu'on tient, dans le tas qu'on touche, ou dans le vide).
+      if (e.code === "KeyK" && !e.repeat && !uiOpen) snowKickAct();
       // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
       // visitor card for the nearest one waiting within reach. NOTE: KeyQ is
       // ALSO move-left on AZERTY (ZQSD) - !e.repeat keeps a held Q from
@@ -16822,6 +16907,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code === "KeyF") toggleMount();
       // Zip 251 : R avec l'outil main tenant un objet -> le remet dans le sac
       // (prioritaire sur le cycle de façade ville / d'orientation clôture).
+      // 2026-10-05 — R devant une boule, ou une boule en main : changer de prise (soulever ↔ rouler). Prioritaire : on a les mains prises.
+      if (e.code === "KeyR" && !e.repeat && !uiOpen && snowModeAct()) return;
       if (e.code === "KeyR" && slotRef.current === SLOT.carry && carryModeRef.current === "hand" && handHeldRef.current) { handStoreHeld(); return; }
       if (e.code === "KeyR" && slotRef.current === SLOT.build && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
@@ -21023,7 +21110,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!skating) townIceWarn(tw, m, dx, dy);
       if (skating) {
         const st = skCur || (skateRef.current = PT.skateNew(m.vx || 0, m.vy || 0));
-        const hasSk = !!(invRef.current && invRef.current.skates > 0);
+        const hasSk = E.skatesActive(invRef.current, Date.now());
         let ix = 0, iy = 0;
         if (moving) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
         PT.skateStep(st, ix, iy, dt, { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked) });
@@ -21109,7 +21196,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            la regarde ou qu'on la marche. Rend 1 (aucun effet) partout ailleurs
            en ville, donc s'applique sans garde ici. */
         spSec *= C.courtStairSlowMul(m.x, m.y);
-        if (snowRollRef.current) spSec *= BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — pousser une grosse boule ralentit
+        if (snowRollRef.current) spSec *= snowRollRef.current.carry ? BN.carrySpeedMul(snowRollRef.current.r) : BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — pousser une grosse boule ralentit (la porter, beaucoup moins)
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -25174,6 +25261,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             snowWalk("cat:" + c.coat, "paw", c.x, c.y, ce);
             pushE(gy, ce, () => { groundShadow(gx, gy, 9, 0.18); blitF(cell, gx, gy, c.face); }, 0, Math.floor(c.x));
           }
+          /* 2026-10-05 — LES LAPINS DE VALLEY TOWN (faune.js § 10 bis, fauneArt.js § 6).
+             Routine partagée, réactions locales ; aucun bouton, aucune capture. Le bond
+             se lit dans `lift` (cases) : le corps monte, l'OMBRE reste au sol et
+             rétrécit un peu — c'est elle qui dit « il est en l'air ». */
+          const rabbitsT = FAU.faunaRabbits(fw, env, tw);
+          FAU.faunaReactRabbits(SL, fw, rabbitsT, threats, fdt, Math.random);
+          for (const r of rabbitsT) {
+            if (!inView(r.x, r.y, 2)) continue;
+            const cell = FAS.rabbit && FAS.rabbit[r.coat] && FAS.rabbit[r.coat][r.pose];
+            const gx = r.x * T, gy = r.y * T, re = townLvl(tw, "rabbit:" + r.idx, r.x, r.y), air = Math.max(0, r.lift || 0);
+            if (!air) snowWalk("rabbit:" + r.idx, "paw", r.x, r.y, re);
+            pushE(gy, re, () => { groundShadow(gx, gy, 8 - air * 8, 0.18 - air * 0.12); blitF(cell, gx, gy - air * T, r.face); }, 0, Math.floor(r.x));
+          }
           // ── Les petits effets : le cœur du chat qui dit bonjour.
           faunaFxRef.current = faunaFxRef.current.filter((fx) => nowP - fx.t0 < 1400);
           /* 2026-09-26 — le coup d'épuisette : un arc du haut de l'épaule vers la
@@ -26865,7 +26965,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dans la collision (§4, une grandeur de décor n'entre pas dans
            `canStand`). Il se cumule au galop, comme en ville. */
         if (E.farmBushSoftAt(w, m.x, m.y)) spSec *= C.TOWN_BUSH_SLOW;
-        if (snowRollRef.current && !mounted) spSec *= BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — la boule ralentit
+        if (snowRollRef.current && !mounted) spSec *= snowRollRef.current.carry ? BN.carrySpeedMul(snowRollRef.current.r) : BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — la boule ralentit (portée : moins)
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -27202,14 +27302,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const sm of list) {
         if (sm.zone !== zone) continue;
         const k = BN.slumpAt(sm, nowD);
-        push(sm.y * T, sm.x, () => A.drawSnowman(ctx, sm.x * T, sm.y * T, sm.balls, sm.deco, k, T));
+        // Le branle d'un coup de pied : un sinus amorti (16 rad/s, 0,26 s de constante), signé par le côté du coup.
+        const wb = snowFxRef.current.wob.get(sm.id);
+        let sway = 0;
+        if (wb) { const ag = performance.now() - wb.t0; if (ag > 1300) snowFxRef.current.wob.delete(sm.id); else sway = wb.dir * wb.amp * Math.sin(ag / 1000 * 16) * Math.exp(-ag / 260); }
+        push(sm.y * T, sm.x, () => A.drawSnowman(ctx, sm.x * T, sm.y * T, sm.balls, sm.deco, k, T, sway));
       }
       const g = snowGhostRef.current;
       if (g && g.zone === zone) push(g.y * T, g.x, () => A.drawSnowman(ctx, g.x * T, g.y * T, [g.r], null, 0, T));
       const me0 = meRef.current, roll = snowRollRef.current;
       if (roll && roll.zone === zone && me0 && snowZoneOf(me0) === zone) {
         const rb = { x: roll.bx, y: roll.by, r: roll.r };
-        push(rb.y * T, rb.x, () => A.drawSnowman(ctx, rb.x * T, rb.y * T, [rb.r], null, 0, T));
+        // Portée : soulevée dans les bras (l'ombre reste au sol) ; poussée : posée, qui creuse sa traînée.
+        if (roll.carry) push(rb.y * T + 2, rb.x, () => A.drawSnowBallHeld(ctx, rb.x * T, rb.y * T, rb.r, T));
+        else push(rb.y * T, rb.x, () => A.drawSnowman(ctx, rb.x * T, rb.y * T, [rb.r], null, 0, T));
       }
       const rolls = sharedRef.current.snowRoll || {}, est = snowRemoteRef.current;
       for (const pid of Object.keys(rolls)) {
@@ -27218,20 +27324,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const p = playersRef.current.get(pid);
         if (!p || (p.zone || "farm") !== zone) { est.delete(pid); continue; }
         let e = est.get(pid);
-        if (!e || e.at !== h.at) { e = { at: h.at, r: h.r, ux: [0, 0, -1, 1][p.dir] || 0, uy: [1, -1, 0, 0][p.dir] || 0, px: p.x, py: p.y, bx: null, by: null, trail: 0 }; est.set(pid, e); }
+        if (!e || e.at !== h.at) { e = { at: h.at, r: h.r, ux: [0, 0, -1, 1][p.dir] || 0, uy: [1, -1, 0, 0][p.dir] || 0, px: p.x, py: p.y, bx: null, by: null, trail: 0, carry: !!h.carry }; est.set(pid, e); }
         const dx = p.x - e.px, dy = p.y - e.py, d = Math.hypot(dx, dy);
         if (d > 1e-3 && d < 2) { e.ux = dx / d; e.uy = dy / d; }
         e.px = p.x; e.py = p.y;
-        const bp = BN.rollBallPos(C.footX(p.x), C.footY(p.y), e.ux, e.uy, e.r);
-        if (e.bx != null) {
+        const bp = e.carry ? BN.carryBallPos(C.footX(p.x), C.footY(p.y), e.ux, e.uy) : BN.rollBallPos(C.footX(p.x), C.footY(p.y), e.ux, e.uy, e.r);
+        if (e.bx != null && !e.carry) {
           const mv = Math.hypot(bp.x - e.bx, bp.y - e.by);
           if (mv > 1e-3 && mv < 2) { e.r = BN.rollGrow(e.r, mv, BN.snowK(snowDepthAt(zone, bp.x, bp.y))); snowTrailStamp(zone, bp.x, bp.y, e.ux, e.uy, e.r, mv, e); }
         }
         e.bx = bp.x; e.by = bp.y;
         const rr = e.r;
-        push(bp.y * T, bp.x, () => A.drawSnowman(ctx, bp.x * T, bp.y * T, [rr], null, 0, T));
+        if (e.carry) push(bp.y * T + 2, bp.x, () => A.drawSnowBallHeld(ctx, bp.x * T, bp.y * T, rr, T));
+        else push(bp.y * T, bp.x, () => A.drawSnowman(ctx, bp.x * T, bp.y * T, [rr], null, 0, T));
       }
       for (const pid of [...est.keys()]) if (!rolls[pid]) est.delete(pid);
+      /* 2026-10-05 — LES BOTTES QUI FRAPPENT ET LES ÉCLATS DE NEIGE (voir `snowFxPlay`). Une botte par joueur
+         qui vient de frapper (0,42 s), posée sur SA position ; les éclats retombent (gravité, 0,6 à 1,2 s) et
+         se trient comme le reste, au sol qu'ils quittent. */
+      {
+        const S = snowFxRef.current, nowP2 = performance.now();
+        for (const [pid, sw] of S.swings) {
+          const ag = nowP2 - sw.t0;
+          if (ag > 420) { S.swings.delete(pid); continue; }
+          const pl = pid === me.id ? meRef.current : playersRef.current.get(pid);
+          if (!pl || snowZoneOf(pl) !== zone) continue;
+          const fx2 = C.footX(pl.x) * T, fy2 = C.footY(pl.y) * T;
+          push(fy2 + 1, C.footX(pl.x), () => A.drawSnowKick(ctx, fx2, fy2, sw.ux, sw.uy, ag / 420));
+        }
+        if (S.parts.length) {
+          const alive = [];
+          for (const q of S.parts) {
+            const ag = nowP2 - q.t0;
+            if (ag > q.life) continue;
+            alive.push(q);
+            if (q.zone !== zone) continue;
+            const s2 = ag / 1000, px2 = q.x + q.vx * s2, py2 = q.y + q.vy * s2 + 34 * s2 * s2 * q.g;
+            const al = 1 - ag / q.life;
+            push(Math.max(q.y, py2) + 6, px2 / T, () => { ctx.globalAlpha = Math.min(1, al * 1.6); ctx.fillStyle = q.c; ctx.fillRect(Math.round(px2), Math.round(py2), q.s, q.s); ctx.globalAlpha = 1; });
+          }
+          if (alive.length !== S.parts.length) S.parts = alive;
+        }
+      }
     }
     function skateDraw(p, isSelf) {
       if (!p || (p.zone || "farm") !== "town") return {};
@@ -30749,7 +30883,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      si l'on y va (c'est la demande), mais personne ne doit la découvrir sans savoir. */
   function townIceWarn(tw, m, dx, dy) {
     if (skateWarnRef.current || !(dx || dy)) return;
-    if (invRef.current && invRef.current.skates > 0) return;
+    if (E.skatesActive(invRef.current, Date.now())) return;
     const l = Math.hypot(dx, dy);
     if (!townIceWalkable(tw, C.footX(m.x) + (dx / l) * 0.7, C.footY(m.y) + (dy / l) * 0.7)) return;
     skateWarnRef.current = 1;
@@ -30790,9 +30924,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'instantané d'arrivée (`farmersRef`). */
   function remoteHasSkates(id) {
     const r = playersRef.current.get(id);
-    if (r && typeof r.skates === "boolean") return r.skates;
+    if (r && typeof r.skatesUntil === "number") return r.skatesUntil > Date.now();
     const f = farmersRef.current && farmersRef.current[id];
-    return !!(f && f.inv && f.inv.skates > 0);
+    return !!(f && f.inv && E.skatesActive(f.inv, Date.now()));
   }
   /* LA CHUTE : la blessure de quinze minutes, le retour à la maison — le contrat exact
      de la brûlure (`starTryBurn`) : optimiste ici, gardée par l'hôte (`iceFall`), et la
@@ -30830,11 +30964,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   /* Je prends une boule : celle du haut d'un tas (`fromId`), ou j'en façonne une au sol.
      OPTIMISTE : je la pousse aussitôt ; si l'hôte refuse, elle disparaît (`snowRollReconcile`). */
-  function snowTake(m, zone, fromId, r) {
+  function snowTake(m, zone, fromId, r, carry) {
     const ux = [0, 0, -1, 1][m.dir] || 0, uy = [1, -1, 0, 0][m.dir] || 0;
-    const p = BN.rollBallPos(C.footX(m.x), C.footY(m.y), ux, uy, r);
-    snowRollRef.current = { r, zone, ux, uy, bx: p.x, by: p.y, at: performance.now(), trail: 0 };
-    sendReq({ kind: "snowTake", zone, fromId: fromId || null });
+    const cr = !!carry && !!fromId;        // une boule façonnée dans la neige se roule toujours : elle n'existe pas encore pour être portée
+    const p = cr ? BN.carryBallPos(C.footX(m.x), C.footY(m.y), ux, uy) : BN.rollBallPos(C.footX(m.x), C.footY(m.y), ux, uy, r);
+    snowRollRef.current = { r, zone, ux, uy, bx: p.x, by: p.y, at: performance.now(), trail: 0, carry: cr };
+    sendReq({ kind: "snowTake", zone, fromId: fromId || null, carry: cr });
   }
   /* Je pose ma boule là où elle est. L'hôte décide si elle s'empile. */
   function snowDrop(m) {
@@ -30851,8 +30986,91 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (snowRollRef.current) { snowDrop(m); return true; }
     const s = snowmanNear(m); if (!s) return false;
     if (s.deco) { if (!s.thawAt) { setSnowDecoDraft({ ...s.deco }); setSnowDecoFor(s.id); } else pushToast(L.snowThawing); return true; }
-    snowTake(m, zone, s.id, s.balls[s.balls.length - 1]);
+    snowTake(m, zone, s.id, s.balls[s.balls.length - 1], true);   // 2026-10-05 : on la SOULÈVE (elle garde sa taille) ; R la roule
     return true;
+  }
+  /* 2026-10-05 — R : CHANGER DE PRISE. Une boule en main passe de « poussée » (elle grossit en roulant, elle
+     pèse) à « portée » (soulevée : sa taille est figée, on marche presque normalement) et inversement — c'est
+     ce qui permet de CHOISIR sa taille (Guillaume : « un moyen de les pick up sans les faire rouler. Pour
+     contrôler leur taille »). Mains vides devant une boule ou un tas pas fini : on la prend ET on la roule. */
+  function snowModeAct() {
+    const m = meRef.current, zone = snowZoneOf(m); if (!zone) return false;
+    const roll = snowRollRef.current;
+    if (roll) {
+      roll.carry = !roll.carry; roll.at = performance.now();
+      const p = roll.carry ? BN.carryBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy) : BN.rollBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy, roll.r);
+      roll.bx = p.x; roll.by = p.y;
+      sendReq({ kind: "snowMode", zone: roll.zone, carry: roll.carry, r: roll.r });
+      pushToast(roll.carry ? L.snowCarryToast : L.snowRollToast);
+      return true;
+    }
+    const s = snowmanNear(m); if (!s || s.deco) return false;
+    snowTake(m, zone, s.id, s.balls[s.balls.length - 1], false);
+    return true;
+  }
+  /* 2026-10-05 — K : UN COUP DE PIED. Dans la boule qu'on tient, elle explose ; sinon dans le tas le plus
+     proche à portée (`KICK.REACH` du bord de sa boule du bas) : l'hôte tranche (un coup ne fait presque rien
+     à un bonhomme, des coups rapprochés le détruisent — `bonhomme.js`). Le geste est LOCAL tout de suite
+     (la botte, les éclats) : on n'attend pas la réponse de l'hôte pour voir son pied partir, et le
+     résultat (branle, chute, explosion) arrive dans le `snowFx` du même `apply` que la liste. Dans le vide,
+     la botte part quand même : un coup de pied raté se voit. */
+  function snowKickAct() {
+    const m = meRef.current, zone = snowZoneOf(m); if (!zone || m.sitOn) return false;
+    const nowP = performance.now();
+    if (nowP - snowKickAtRef.current < BN.KICK.GAP_MS) return true;
+    snowKickAtRef.current = nowP;
+    const fx = C.footX(m.x), fy = C.footY(m.y), S = snowFxRef.current;
+    const roll = snowRollRef.current;
+    const dirX = [0, 0, -1, 1][m.dir] || 0, dirY = [1, -1, 0, 0][m.dir] || 0;
+    if (roll) {
+      snowRollRef.current = null;
+      S.swings.set(me.id, { t0: nowP, ux: dirX, uy: dirY });
+      S.localAt = nowP;
+      snowFxPlay({ zone: roll.zone, kind: "smash", x: roll.bx, y: roll.by, r: roll.r, ux: dirX, uy: dirY, by: me.id });
+      sendReq({ kind: "snowSmash", zone: roll.zone, x: roll.bx, y: roll.by, r: roll.r, ux: dirX, uy: dirY });
+      return true;
+    }
+    let best = null, bd = Infinity;
+    for (const s of snowList()) {
+      if (s.zone !== zone) continue;
+      const d = Math.hypot(s.x - fx, s.y - fy) - s.balls[0] * 0.8;
+      if (d <= BN.KICK.REACH && d < bd) { bd = d; best = s; }
+    }
+    if (!best) { S.swings.set(me.id, { t0: nowP, ux: dirX, uy: dirY }); return true; }   // dans le vide
+    const l = Math.hypot(best.x - fx, best.y - fy) || 1, ux = (best.x - fx) / l, uy = (best.y - fy) / l;
+    S.swings.set(me.id, { t0: nowP, ux, uy });
+    S.localAt = nowP;
+    snowFxPlay({ zone, kind: "hit", id: best.id, x: best.x, y: best.y, r: best.balls[0], n: best.balls.length, ux, uy, by: me.id, hits: 1, local: true });
+    sendReq({ kind: "snowKick", zone, sid: best.id, ux, uy });
+    return true;
+  }
+  /* L'effet d'un coup de pied, chez tout le monde : la botte du frappeur, le branle du tas, les éclats.
+     ⚠️ N'utilise QUE des refs (`snowFxRef`, `meRef`) : elle est appelée depuis le gestionnaire d'`apply`. Le
+     frappeur a déjà joué son coup à l'instant du clic (`local`) : à l'arrivée du `snowFx` de l'hôte, on ne
+     rejoue ni sa botte ni l'éclat d'un simple choc (< 1,2 s), seulement ce que le coup a PRODUIT. */
+  function snowFxPlay(fx) {
+    if (!fx) return;
+    const S = snowFxRef.current, nowP = performance.now(), T2 = C.TILE;
+    const mine = fx.by && fx.by === me.id, echo = mine && !fx.local && nowP - (S.localAt || 0) < 1200;
+    const burst = (x, y, r, n, big) => {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, sp = (big ? 2.2 : 1.2) + Math.random() * (big ? 3.4 : 1.8);
+        S.parts.push({ zone: fx.zone, x: x * T2 + (Math.random() - 0.5) * r * T2 * 1.4, y: y * T2 - Math.random() * r * T2 * 1.1, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 9 - (big ? 30 : 16), t0: nowP, life: 600 + Math.random() * 600, s: Math.random() < 0.3 ? 2 : 1, g: 1, c: i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? "#c4d8ee" : "#8fb0d4" });   // blanc, bleu clair, bleu d'ombre : des éclats blancs sur la neige ne se voyaient pas
+      }
+      if (S.parts.length > 280) S.parts.splice(0, S.parts.length - 280);
+    };
+    if (!mine || fx.local) { /* la botte des autres, et la mienne (déjà posée dans `snowKickAct`) */ }
+    if (!mine && fx.by) S.swings.set(fx.by, { t0: nowP, ux: fx.ux || 0, uy: fx.uy || 0 });
+    if (fx.kind === "hit" || fx.kind === "fall") {
+      if (fx.id && !echo) S.wob.set(fx.id, { t0: nowP, dir: (fx.ux || 0) >= 0 ? 1 : -1, amp: fx.kind === "fall" ? 6 : 2.2 + Math.min(3, (fx.hits || 1) * 0.7) });
+      if (!echo) burst(fx.x + (fx.ux || 0) * -0.3, fx.y, Math.max(0.2, fx.r || 0.3), fx.kind === "fall" ? 14 : 5, false);
+      if (fx.kind === "fall" && fx.fell) burst(fx.fell.x, fx.fell.y, fx.fell.r, 10, false);
+    } else if (fx.kind === "destroyed") {
+      burst(fx.x, fx.y, Math.max(0.3, fx.r || 0.4) * 1.6, 34, true);
+      S.wob.delete(fx.id);
+    } else if (fx.kind === "smash") {
+      burst(fx.x, fx.y, Math.max(0.2, fx.r || 0.3), 22, true);
+    }
   }
   function snowStartAct() {
     const m = meRef.current, zone = snowZoneOf(m); if (!zone || m.sitOn) return false;
@@ -30866,10 +31084,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const zone = snowZoneOf(m); if (!zone) return null;
     const roll = snowRollRef.current;
     if (roll) {
-      const n = BN.nearestSnowman(snowList(), zone, roll.bx, roll.by);
+      const n = BN.nearestSnowman(snowList(), zone, roll.bx, roll.by), cy = roll.carry ? "Carry" : "";
       if (n && n.d <= BN.SNOWMAN.STACK_REACH && !n.s.deco && n.s.balls.length < 3)
-        return roll.r > n.s.balls[n.s.balls.length - 1] * BN.SNOWMAN.STACK_RATIO ? "snowTooBig" : "snowStack";
-      return "snowDrop";
+        return roll.r > n.s.balls[n.s.balls.length - 1] * BN.SNOWMAN.STACK_RATIO ? "snowTooBig" + cy : "snowStack" + cy;
+      return "snowDrop" + cy;
     }
     const s = snowmanNear(m);
     if (s) return s.deco ? (s.thawAt ? null : "snowDeco") : "snowTakeTop";
@@ -30909,11 +31127,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const roll = snowRollRef.current; if (!roll) return true;
     const dx = m.x - px, dy = m.y - py, d = Math.hypot(dx, dy);
     if (d > 1e-4) { roll.ux = dx / d; roll.uy = dy / d; }
-    const p = BN.rollBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy, roll.r);
+    const p = roll.carry ? BN.carryBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy) : BN.rollBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy, roll.r);
     if (d > 1e-4 && ballBlocked && ballBlocked(p.x, p.y)) return false;
     const moved = Math.hypot(p.x - roll.bx, p.y - roll.by);
     roll.bx = p.x; roll.by = p.y;
-    if (moved > 1e-4 && moved < 2) {
+    // Une boule PORTÉE ne grossit pas et ne creuse rien : c'est tout l'intérêt de la soulever (2026-10-05).
+    if (!roll.carry && moved > 1e-4 && moved < 2) {
       const depth = snowDepthAt(roll.zone, p.x, p.y);
       roll.r = BN.rollGrow(roll.r, moved, BN.snowK(depth));
       snowTrailStamp(roll.zone, p.x, p.y, roll.ux, roll.uy, roll.r, moved, roll);
@@ -36350,7 +36569,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -38559,7 +38778,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {/* 2026-10-04 — LE CHALET DES PATINS. Un achat, donc une `req` arbitrée par l'hôte
-          (`buySkates`, portée et saison comprises). Hors de l'hiver, le chalet est fermé :
+          (`rentSkates`, portée et saison comprises). Hors de l'hiver, le chalet est fermé :
           le panneau le dit et ne vend rien. Une fois chaussé, la ligne devient un rappel
           de ce que les patins ouvrent — de l'information, rien à gagner (§4). */}
       {/* 2026-10-05 — LE CHOIX DES ACCESSOIRES DU BONHOMME. Ouvert pour celui qui pose la
@@ -38607,7 +38826,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {skateShopOpen && (() => {
-        const owned = ((myInv || {}).skates | 0) > 0, winter = E.seasonOf().key === "winter";
+        /* 2026-10-05 — LA LOCATION : le panneau dit combien de temps il reste (re-lu chaque seconde,
+           `skateClock`), et propose de louer SEULEMENT quand la précédente est finie. */
+        const leftMs = E.skatesLeftMs(myInv, Math.max(skateClock, 0) || Date.now()), owned = leftMs > 0, winter = E.seasonOf().key === "winter";
+        const mm = Math.floor(leftMs / 60000), ss = Math.floor((leftMs % 60000) / 1000);
         const close = () => setSkateShopOpen(false);
         return (
         <div className="ferme-modal open" onClick={close}>
@@ -38619,10 +38841,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>⛸️</span>
               <div className="info">
                 <b>{L.skatesTitle}</b>
-                <span>{owned ? L.skatesOwnedDesc : L.skatesDesc}</span>
+                <span>{owned ? L.skatesOwnedDesc : L.skatesDesc(C.SKATES_RENT_MS / 60000)}</span>
               </div>
-              {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesOwned}</span>
-                : <button disabled={!winter || (hud.money | 0) < C.SKATES_PRICE} onClick={() => sendReq({ kind: "buySkates" })}>{L.skatesBuy(C.SKATES_PRICE)}</button>}
+              {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesRentedLeft(mm, ss)}</span>
+                : <button disabled={!winter || (hud.money | 0) < C.SKATES_RENT_PRICE} onClick={() => sendReq({ kind: "rentSkates" })}>{L.skatesRent(C.SKATES_RENT_PRICE, C.SKATES_RENT_MS / 60000)}</button>}
             </div>
           </div>
         </div>

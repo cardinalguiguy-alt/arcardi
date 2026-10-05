@@ -1,5 +1,61 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 (soir) — LES LAPINS DE VALLEY TOWN, LES PATINS LOUÉS, LA CANNE QUI SE RANGE, LE BONHOMME QU'ON PEUT CASSER
+
+Cinq demandes de Guillaume dans la séance, cinq livraisons séparées (la règle « un seul changement visuel par livraison » ne tient plus pour la feuille
+de route de Valley Town, mais elles ne se touchent pas). **Supabase : rien** (`inv.skatesUntil` est du JSON dans l'inventaire, les tas de neige
+gardent leurs champs dans la sauvegarde existante) ; **aucune migration SQL**.
+
+**1. Les lapins** (`faune.js` § 10 bis, `fauneArt.js` § 6, `verify-faune` § 7, `tools/render-lapins.mjs`). « Des petits lapins dans les zones sauvages, et
+occasionnellement dans les jardins, plus mignons et fluffy qu'en ferme, des trajectoires moins rectilignes. » Tranché avec lui : **routine partagée**
+(comme les chats : pure fonction de l'heure et de la carte, zéro message), **aucune capture** (se figent, détalent en zigzag, un lapin « hardi » vient
+voir un joueur immobile), **jardins ouverts** (ce que la marche des lapins atteint : une haie ou un portail les arrête), **procédural sur planche**.
+- *Où ils vivent* : lu sur la carte, rien en coordonnées — des arbres (lisières et clairières) ou une prairie à 6 cases du pavé ; 8 terriers au plus,
+  répartis au point le plus éloigné (≥ 20 cases) et chacun doit ouvrir sur ≥ 450 cases atteintes à pied (un terrier dans une parcelle « À vendre » close
+  d'une haie y enfermait ses lapins) ; 10 lapins, 4 robes (fauve, gris, crème, blanc taché). Midi : au couvert ; aube et crépuscule : ils broutent, et
+  14 % des créneaux de ces heures mènent à un jardin ; nuit et orage : au terrier, endormis.
+- *Le trajet n'est pas une droite* : A* sur la grille des lapins (herbe ; le chemin de terre et la chaussée se traversent à contrecœur ; jamais le pavé),
+  tiré au cordeau puis ONDULÉ (décalage latéral sinusoïdal à deux harmoniques, phases tirées du créneau, repris case par case s'il sort de l'herbe ; un
+  trajet dont un tronçon n'est pas libre garde sa ligne droite) ; le geste est une suite de RAFALES de 2 à 4 bonds séparées de pauses (il se dresse,
+  broute, écoute) — la vitesse n'est jamais constante. Les 94 trajets de plus de 6 cases du banc s'écartent de leur corde (90 de plus de 0,4 case).
+- *Les dessins* : 20 poses × 4 robes dans l'atlas de la faune (miche, endormi, toilette, broute, bond en trois temps, fuite, face/dos pour les trajets
+  verticaux). ⚠️ **Deux corrections de Guillaume en cours de route, devenues règles du banc** : « attention à la cohérence anatomique — pas de faces trop
+  élargies et plates, inspire-toi de vraies espèces de parc » → la tête de face est un OVALE plus haut que large, les yeux sur les côtés, le museau étroit,
+  les oreilles serrées (lapin de garenne, *cottontail*) ; « ils doivent être petits » → assis, 9 px visibles contre 11 pour le chat (≤ 85 %), aucune pose
+  au-delà de 14 × 12 px ; le premier jet avait la taille du chat. Contour teinté du pelage (pas noir) et touches claires : c'est ce qui fait « fluffy ».
+- *Réactions locales* : se figer (oreilles dressées), fuir en zigzag (cap dévié de ±0,75 rad à 6 Hz, bonds de 0,24 case, vers le couvert), guetter, revenir.
+- *Vu en jeu* : un lapin assis, figé, à 3 cases du joueur, à l'échelle d'un buisson. **Pas vu** : la nuit, sous la neige (ses empreintes sont celles du chat :
+  `paw`), les jardins, la fuite à l'écran en mouvement, à deux clients. ⚠️ Pas de bouton tactile pour rien (aucun geste n'en demande).
+**2. La canne se range toute seule** (`ROD_STOW_RANGE` 4 cases, `ROD_STOW_AWAY_MS` 15 s ; effet de `FermeGame.js` après `armRod`). Éloigné de tout plan d'eau
+15 s de suite (le même `E.waterNearby` que l'invite, dans les trois mondes ; hors eau, tribunal compris), la canne armée se range avec un toast. Vérifié en
+jeu : rangée 16,1 s après avoir quitté la berge ; et le minuteur repart de zéro si l'on revient à l'eau (11 s d'absence, retour, 11 s : rien, puis rangée 5 s plus tard).
+**3. Les patins se LOUENT** (`resolveRentSkates`, `SKATES_RENT_PRICE` 60 or, `SKATES_RENT_MS` 10 minutes RÉELLES) : « pas achetés définitivement ». L'inventaire
+porte `skatesUntil` (instant de fin, horloge de l'hôte, comme `injuredUntil`) ; l'ancien `inv.skates` est remis à zéro à la lecture (ceux qui avaient acheté
+la paire à 450 or ne sont pas remboursés — il n'y avait que les essais de Guillaume). Avertissements à 60 s et 15 s de la fin, toast à la fin ; le panneau du
+chalet montre le temps restant et ne reloue qu'une fois la location finie. ⚠️ **Choix par défaut, à juger** : à la fin, quelqu'un resté sur la glace perd ses
+patins et tombe (la règle d'avant : 15 min de blessure) — la parade est la sortie de glace avant la fin ; une tolérance (finir la glissade) reste possible.
+**À ajouter aux projets à moyen terme (Guillaume) : LA BOUTIQUE D'HIVER « bien plus belle que ça »** — le chalet des patins est PROCÉDURAL ET PROVISOIRE ;
+prompt Gemini déjà écrit (`docs/IMAGES-ET-BLENDER.md`), à refaire en bâtiment peint au pixel d'écran avec son intérieur et son enseigne, quand les sols et les
+objets de jardin seront faits. Rien de codé.
+**4. Le bonhomme de neige** (`bonhomme.js`, `verify-bonhomme` 64/64, `tools/render-bonhomme.mjs`) : « un moyen de détruire une boule ou le bonhomme entier ; la physique
+naturelle ; pouvoir soulever les boules sans les rouler ; plus long de les pousser quand elles grossissent ; des accessoires mieux posés ».
+- *K, le coup de pied* : dans la boule qu'on tient (elle explose), sinon dans le tas à portée (`KICK.REACH`). Une boule SEULE explose en 1 (petite) à 3 (grosse) coups.
+  Un bonhomme encaisse : chaque coup ajoute un `hits` qui retombe (au-delà de 1,2 s, 1 par 4,5 s) ; la boule du HAUT tombe avec 12 % de chance au premier coup
+  (35, 60, 85 % ensuite) et devient une boule seule posée à côté, dans le sens du coup ; il ne s'écroule, en explosant, qu'à 4 coups rapprochés (deux boules) ou 5
+  (trois). Un bonhomme décoré qui perd sa tête perd son décor. Des coups espacés de 6 s ne détruisent jamais rien ; un coup toutes les 0,5 s : 6 au plus. Le geste
+  est local tout de suite (botte, éclats), le résultat arrive dans un `snowFx` du MÊME `apply` (§3 : un coup = une `req`, au plus une par 0,42 s). ⚠️ **Tout le monde
+  peut casser le bonhomme de tout le monde** — c'est dit ici, pas décidé : si un jour c'est un problème, `by` (qui l'a roulé) est déjà dans le tas.
+- *R, changer de prise* : E sur un tas reprend la boule du haut en la SOULEVANT (taille figée, pas de traînée, marche ralentie de 30 % au plus, ombre au sol, boule
+  dessinée dans les bras) ; R passe de « portée » à « roulée » (elle regrossit) et inversement ; mains vides devant un tas, R la prend en la roulant. Une boule
+  façonnée dans la neige se roule toujours. L'hôte retient la nouvelle base à chaque bascule (`resolveSnowMode`) : une boule roulée puis soulevée garde sa taille.
+- *Plus long à pousser* : `GROW_K` 0,03 → 0,024 (de R0 à R_MAX en ~15 cases) et ralentissement 45 % → 72 % : pousser une boule jusqu'au rayon maximal prend ≥ 1,7 fois plus
+  de temps (le banc le mesure), chaque case coûte plus que la précédente.
+- *Les accessoires* : chaque chapeau se mesure sur la TÊTE (centre, rayons, corde du cercle) : haut-de-forme dont le bord s'enfonce dans le crâne, bonnet qui coiffe sans
+  descendre sur les yeux (cercle plus grand et plus haut que le crâne, revers, pompon), seau évasé qui épargne les yeux, béret dont la bande épouse la tête ; l'écharpe serre le
+  COU (la corde commune des deux boules) au lieu d'une largeur fixe. Le visage descend d'un peu plus d'un pixel pour laisser de la place au chapeau. Planches
+  `tools/out/bonhomme-chapeaux.png` (3 tailles × 5 chapeaux) et `bonhomme-chapeaux-degel.png` (le chapeau penche puis tombe).
+- *Pas vu en jeu* : voir la ligne de reprise de `CLAUDE.md`. Pas de touche tactile pour K et R.
+
 ## 2026-10-05 (suite) — LE HARNAIS À DEUX CLIENTS RÉPARÉ, LE MENU DEV À DEUX, LA NEIGE PRÊTE À L'ARRIVÉE EN VILLE
 
 **1. Le harnais** (voir `docs/VERIFICATION.md`, « LE HARNAIS DEUX CLIENTS ») : la cause était `document.hidden` (`netCanBroadcast`), pas le réseau.

@@ -4576,7 +4576,7 @@ export function snowBallCanvas(rPx, squash) {
   SNOWBALL_CACHE.set(key, c);
   return c;
 }
-export function drawSnowman(ctx, cx, by, balls, deco, k, T) {
+export function drawSnowman(ctx, cx, by, balls, deco, k, T, sway) {
   const n = balls.length, kk = Math.max(0, Math.min(1, +k || 0));
   const P = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
   const shrink = 1 - 0.42 * kk, squash = 1 - 0.38 * kk;
@@ -4590,7 +4590,9 @@ export function drawSnowman(ctx, cx, by, balls, deco, k, T) {
   for (let i = 0; i < n; i++) {
     const rp = balls[i] * T * shrink, ry = rp * squash;
     if (i > 0) yC -= (balls[i - 1] * T * shrink * squash + ry) * (0.8 - 0.15 * kk);
-    const lean = i === 2 ? Math.round(kk * kk * rp * 1.4) : i === 1 ? Math.round(kk * kk * rp * 0.4) : 0;
+    // `sway` (px, signé) : le branle d'un coup de pied — la tête part le plus loin, le milieu à moitié, le pied jamais (2026-10-05).
+    const sw = +sway || 0;
+    const lean = (i === 2 ? Math.round(kk * kk * rp * 1.4) : i === 1 ? Math.round(kk * kk * rp * 0.4) : 0) + (i === 2 ? Math.round(sw) : i === 1 ? Math.round(sw * 0.45) : 0);
     cen.push({ x: cx + lean, y: yC, r: rp, ry });
   }
   for (const b of cen) { const img = snowBallCanvas(b.r, b.ry / b.r); ctx.drawImage(img, Math.round(b.x - (img.width - 1) / 2), Math.round(b.y - (img.height - 1) / 2)); }
@@ -4618,17 +4620,31 @@ export function drawSnowman(ctx, cx, by, balls, deco, k, T) {
   }
   // ── LES BOUTONS de charbon, sur la boule du milieu.
   if (deco.extra === "buttons") for (let b = -1; b <= 1; b++) { const yy = mid.y + b * mid.ry * 0.38; P(mid.x - 1, yy - 1, 2, 2, COAL); P(mid.x - 1, yy - 1, 1, 1, COAL_HI); }
-  // ── L'ÉCHARPE, au cou : une bande sur le haut de la boule du milieu, un pan qui pend.
+  /* ── L'ÉCHARPE, AU COU. 2026-10-05 : « les accessoires pourraient être plus précisément posés et adaptés ».
+     Le cou est là où la tête et la boule du milieu se COUPENT : la rangée au milieu de leur recouvrement
+     (`nj`), et la largeur de l'écharpe est celle de la CORDE commune à cet endroit plus un pixel de tour —
+     elle serre le cou, quelle que soit la taille du bonhomme (avant : 0,95 × le rayon de la tête, trop large
+     sur un petit, trop étroit sur un grand). Les deux bouts retombent d'un pixel (l'écharpe épouse
+     l'arrondi), et le pan pend du côté droit, sous le tour. */
   if (deco.scarf !== "none") {
     const SC = { red: ["#b3263a", "#d8455a", "#7e1a28"], green: ["#2f7a4a", "#4f9a66", "#1f5434"], blue: ["#2f5aa8", "#5a80c8", "#1f3c78"] }[deco.scarf] || ["#b3263a", "#d8455a", "#7e1a28"];
-    const ny = Math.round(mid.y - mid.ry * 0.82), hw = Math.round(top.r * 0.95);
-    P(top.x - hw, ny, hw * 2, 3, SC[0]); P(top.x - hw, ny, hw * 2, 1, SC[1]); P(top.x - hw, ny + 2, hw * 2, 1, SC[2]);
-    if (deco.scarf === "green") for (let x = -hw + 1; x < hw; x += 3) P(top.x + x, ny, 1, 3, "#e8e0c8");   // rayée
-    const tx = top.x + Math.round(hw * 0.4);
-    P(tx, ny + 3, 3, 5, SC[0]); P(tx, ny + 3, 1, 5, SC[1]); P(tx, ny + 8, 1, 1, SC[2]); P(tx + 2, ny + 8, 1, 1, SC[2]);   // le pan, ses franges
+    const yb2 = top.y + top.ry, yt2 = mid.y - mid.ry;                         // le bas de la tête, le haut du milieu
+    const nj = Math.round((yb2 + yt2) / 2 - 1);
+    const chord = (b, y) => b.r * Math.sqrt(Math.max(0, 1 - Math.pow((y - b.y) / b.ry, 2)));
+    const hw = Math.max(3, Math.round(Math.min(chord(top, nj), chord(mid, nj)) + 1.6));
+    for (let x = -hw; x < hw; x++) {
+      const droop = Math.abs(x) >= hw - 1 ? 1 : 0;                           // les bouts retombent
+      P(top.x + x, nj + droop, 1, 3, SC[0]); P(top.x + x, nj + droop, 1, 1, SC[1]); P(top.x + x, nj + 2 + droop, 1, 1, SC[2]);
+    }
+    if (deco.scarf === "green") for (let x = -hw + 1; x < hw; x += 3) P(top.x + x, nj, 1, 3, "#e8e0c8");   // rayée
+    const tx = top.x + Math.round(hw * 0.45);
+    P(tx, nj + 3, 3, 5, SC[0]); P(tx, nj + 3, 1, 5, SC[1]); P(tx, nj + 8, 1, 1, SC[2]); P(tx + 2, nj + 8, 1, 1, SC[2]);   // le pan, ses franges
   }
   // ── LE VISAGE : deux yeux, une bouche en arc, sur la boule du haut.
-  const fy = top.y - top.ry * 0.12;
+  /* 2026-10-05 : le visage descend d'un peu plus d'un pixel (0,12 → −0,10 du rayon sous le centre) — la tête
+     d'un petit bonhomme n'a que quelques pixels de front, et un chapeau qui doit rester AU-DESSUS des yeux
+     n'avait plus de place pour coiffer : il se posait en équilibre au sommet. */
+  const fy = top.y + top.ry * 0.10;
   const eyeDx = Math.max(2, Math.round(top.r * 0.36));
   P(top.x - eyeDx - 1, fy - 2, 2, 2, COAL); P(top.x + eyeDx - 1, fy - 2, 2, 2, COAL);
   P(top.x - eyeDx - 1, fy - 2, 1, 1, COAL_HI); P(top.x + eyeDx - 1, fy - 2, 1, 1, COAL_HI);
@@ -4639,25 +4655,92 @@ export function drawSnowman(ctx, cx, by, balls, deco, k, T) {
   // ── LE NEZ : une carotte, pointée vers nous et un peu de côté (3/4).
   const noseAt = (nx2, ny2) => { P(nx2, ny2, 4, 2, "#e8742a"); P(nx2 + 4, ny2, 2, 1, "#e8742a"); P(nx2, ny2 + 1, 4, 1, "#c85a1a"); P(nx2, ny2, 1, 1, "#f4a060"); };
   if (deco.nose === "carrot") { if (!noseFallen) noseAt(top.x, fy); else noseAt(cx + r0 * 0.7, by - 2); }
-  // ── LE CHAPEAU, sur la tête — ou au sol, tombé, une fois le dégel avancé.
+  /* ── LE CHAPEAU, sur la tête — ou au sol, tombé, une fois le dégel avancé.
+     ⚠️ 2026-10-05 : « les accessoires pourraient être plus précisément posés et adaptés, surtout les
+     bonnets et les chapeaux ». Avant, chaque chapeau était un RECTANGLE posé à une hauteur fixe de la tête
+     (`hr` = 95 % du rayon, bord au même endroit pour tous) : trop large pour le crâne d'un petit bonhomme,
+     flottant au-dessus d'un grand, et un bonnet qui ressemblait à un bouchon. Désormais chaque chapeau se
+     mesure sur la TÊTE (centre, rayons, et la corde du cercle à la rangée où il se pose) :
+       · haut-de-forme : le bord s'enfonce dans le crâne (à 0,70 du rayon au-dessus du centre), la calotte a
+         la largeur de la corde à cet endroit, le ruban serre le pied de la calotte ;
+       · bonnet : il COIFFE — le revers serre la tête à 0,30 du rayon au-dessus du centre, sans jamais descendre
+         sur les yeux (la corde plus 1,3 px), le bonnet suit un cercle un peu plus grand et plus haut que le
+         crâne (il bouffe), pompon au sommet ;
+       · seau : il couvre le front sans cacher les yeux (rebord à 0,46), un tronc de cône qui s'évase vers le
+         rebord, le fond clair au sommet ;
+       · béret : un disque aplati, déporté d'un pixel, dont la bande épouse la corde de la tête.
+     Au sol (tombé), le MÊME dessin se pose sur sa base. */
   if (deco.hat !== "none") {
     const onHead = !hatFallen;
-    const hx = onHead ? top.x : cx - r0 - 6, hb = onHead ? Math.round(top.y - top.ry * 0.78) : by - 1;
-    const hr = Math.max(4, Math.round(top.r * 0.95));
+    const rx = Math.max(3, top.r), ry = Math.max(3, top.ry);
+    const hc = (y) => rx * Math.sqrt(Math.max(0, 1 - Math.pow((y - top.y) / ry, 2)));     // demi-corde de la tête à la rangée y
+    const spans = (y, hw, col, hx) => { const w = Math.max(1, Math.round(hw)); P(hx - w, y, w * 2, 1, col); };
+    const HX = onHead ? top.x : Math.round(cx - r0 - 7);
+    const base = (f) => onHead ? Math.round(top.y - ry * f) : by - 1;                      // la rangée où le chapeau « pose »
     if (deco.hat === "tophat") {
-      P(hx - hr - 2, hb - 1, hr * 2 + 4, 2, "#1c1c22"); P(hx - hr - 2, hb - 1, hr * 2 + 4, 1, "#3a3a44");          // le bord
-      P(hx - hr, hb - hr * 2, hr * 2, hr * 2 - 1, "#22222a"); P(hx - hr, hb - hr * 2, 2, hr * 2 - 1, "#3e3e48");   // le haut-de-forme, son jour à gauche
-      P(hx - hr, hb - 4, hr * 2, 2, "#b3263a"); P(hx - hr, hb - 4, hr * 2, 1, "#d8455a");                          // le ruban
+      const yb = base(0.70), pc = hc(Math.round(top.y - ry * 0.70)), bw = Math.round(pc + 2.6), cw = Math.max(3, Math.round(pc + 0.4)), ch = Math.max(8, Math.round(rx * 1.6));
+      spans(yb - 1, bw, "#1c1c22", HX); spans(yb, bw - 1, "#16161c", HX); P(HX - bw, yb - 1, 3, 1, "#3a3a44");           // le bord, son jour à gauche
+      for (let k = 0; k < ch; k++) spans(yb - 2 - k, cw, "#22222a", HX);                                              // la calotte
+      P(HX - cw, yb - 1 - ch, cw * 2, 1, "#34343e"); P(HX - cw, yb - ch, 2, ch - 1, "#3e3e48"); P(HX + cw - 2, yb - ch, 2, ch - 1, "#17171d");   // le dessus, le jour, l'ombre
+      P(HX - cw, yb - 4, cw * 2, 2, "#b3263a"); P(HX - cw, yb - 4, cw * 2, 1, "#d8455a");                             // le ruban
     } else if (deco.hat === "beanie") {
-      for (let dy = 0; dy < hr; dy++) { const hw = Math.round(hr * Math.sqrt(1 - (dy * dy) / (hr * hr))); P(hx - hw, hb - 2 - dy, hw * 2, 1, dy < 2 ? "#e8e0c8" : (dy & 1) ? "#c0303f" : "#a8263a"); }
-      P(hx - 2, hb - hr - 4, 4, 3, "#f4f1ea"); P(hx - 2, hb - hr - 4, 1, 1, "#ffffff");                            // le pompon
+      // Le revers s'arrête AU-DESSUS des yeux (`fy`, le visage) : un bonnet qui coiffe sans aveugler.
+      const yb = onHead ? Math.min(Math.round(top.y - ry * 0.30), Math.round(fy) - 3) : by - 1, cw = Math.round(hc(Math.min(yb, Math.round(top.y - ry * 0.30))) + 1.3);
+      const oc = { y: onHead ? top.y - ry * 0.18 : yb - ry * 0.75, rx: rx + 1.2, ry: ry + 2.4 };                          // le cercle du bonnet : un peu plus grand et plus haut que le crâne (il bouffe)
+      const topY = Math.round(oc.y - oc.ry);
+      for (let y = yb - 3; y >= topY; y--) {
+        const hw = oc.rx * Math.sqrt(Math.max(0, 1 - Math.pow((y - oc.y) / oc.ry, 2)));
+        if (hw < 1) continue;
+        const w = Math.round(hw);
+        for (let x = -w; x < w; x++) P(HX + x, y, 1, 1, ((x + w) % 3 === 0) ? "#8f1c2e" : (x < -w * 0.35 && y < yb - 5) ? "#d8455a" : "#b3263a");   // le tricot : côtes, le jour au nord-ouest
+      }
+      spans(yb - 3, cw, "#7e1a28", HX);                                                                                // l'ombre sous le tricot, au revers
+      for (let k = 0; k < 3; k++) spans(yb - k, cw, k === 0 ? "#cfc6a8" : "#e8e0c8", HX);                              // le revers
+      for (let x = -cw + 1; x < cw; x += 2) P(HX + x, yb - 1, 1, 1, "#cfc6a8");                                          // ses côtes
+      const py = topY - 3; P(HX - 1, py, 4, 4, "#f4f1ea"); P(HX - 1, py, 1, 1, "#ffffff"); P(HX + 2, py + 3, 1, 1, "#d8d2c0");   // le pompon
     } else if (deco.hat === "bucket") {
-      for (let dy = 0; dy < hr + 2; dy++) { const hw = hr + 1 - Math.round(dy * 0.35); P(hx - hw, hb - dy, hw * 2, 1, dy === 0 ? "#6e7680" : "#9aa2ac"); P(hx - hw, hb - dy, 1, 1, "#c6ccd4"); }
-      P(hx - hr + 2, hb - hr - 2, (hr - 2) * 2, 1, "#c6ccd4");                                                    // le fond, au jour
+      const yb = base(0.46), pc = hc(Math.round(top.y - ry * 0.46)), lw = Math.round(pc + 2.2), bh = Math.max(6, Math.round(rx * 1.05));
+      const w0 = pc + 1.2, w1 = w0 * 0.8;
+      for (let k = 0; k < bh; k++) { const hw = w0 + (w1 - w0) * k / (bh - 1); spans(yb - 1 - k, hw, "#9aa2ac", HX); P(HX - Math.round(hw), yb - 1 - k, 2, 1, "#c6ccd4"); P(HX + Math.round(hw) - 2, yb - 1 - k, 2, 1, "#6e7680"); }
+      spans(yb, lw, "#6e7680", HX); spans(yb - 1, lw, "#8a929c", HX);                                                  // le rebord évasé
+      spans(yb - 1 - Math.round(bh / 2), w0 * 0.92, "#7c848e", HX);                                                    // une moulure
+      spans(yb - bh, w1 - 1, "#c6ccd4", HX); spans(yb - bh - 1, Math.max(1, w1 - 3), "#d8dde4", HX);                  // le fond, vu d'un peu au-dessus
     } else if (deco.hat === "beret") {
-      P(hx - hr - 1, hb - 3, hr * 2 + 2, 3, "#24304e"); P(hx - hr - 1, hb - 3, hr * 2 + 2, 1, "#3a4a72"); P(hx, hb - 5, 1, 2, "#24304e");
+      const yb = base(0.58), pc = hc(Math.round(top.y - ry * 0.58)), hw = Math.round(pc + 3), dx = onHead ? -1 : 0;
+      const rows = [Math.round(hw * 0.62), hw, hw, Math.round(hw * 0.86)];
+      rows.forEach((w, k) => { spans(yb - 3 + k, w, k === 0 ? "#3a4a72" : "#24304e", HX + dx); });
+      P(HX + dx - hw + 1, yb - 2, 2, 1, "#3a4a72");                                                                    // le jour sur le bord gauche
+      spans(yb + 1, Math.max(2, Math.round(pc + 0.6)), "#161f36", HX);                                                  // la bande, qui épouse la corde de la tête
+      P(HX + dx - 1, yb - 5, 1, 2, "#24304e");                                                                         // la queue
     }
   }
+}
+
+/* 2026-10-05 — UNE BOULE PORTÉE : soulevée dans les bras, devant le ventre. Elle ne roule pas, donc pas de
+   traînée ; son ombre reste au SOL (`by`, le pied), c'est elle qui dit « elle est en l'air » ; la boule se
+   dessine plus haut de `lift` px + un tiers de son rayon (une grosse boule se tient plus haut). */
+export function drawSnowBallHeld(ctx, cx, by, r, T) {
+  const rp = Math.max(2, r * T), lift = Math.round(5 + rp * 0.55);
+  ctx.fillStyle = "rgba(52,74,120,0.24)";
+  for (let dy = -1; dy <= 1; dy++) { const hw = Math.round(rp * 0.8 * Math.sqrt(1 - (dy * dy) / 3)); ctx.fillRect(Math.round(cx - hw + 1), Math.round(by + dy - 1), hw * 2, 1); }
+  const img = snowBallCanvas(rp, 1);
+  ctx.drawImage(img, Math.round(cx - (img.width - 1) / 2), Math.round(by - lift - rp - (img.height - 1) / 2));
+}
+/* 2026-10-05 — LE COUP DE PIED : une botte qui s'arme en arrière, frappe vers l'avant et revient
+   (`u` de 0 à 1, 0,42 s). Elle se dessine à côté du pied, dans le sens (ux, uy) du coup, comme un
+   accessoire — le personnage lui-même ne change pas de pose (aucune feuille de plus). Un tracé clair
+   derrière la botte (trois pixels qui s'estompent) dit la vitesse. Aucun `rotate`. */
+export function drawSnowKick(ctx, fx, fy, ux, uy, u) {
+  const k = Math.max(0, Math.min(1, u));
+  // 0..0.3 : on arme (la botte recule et monte) ; 0.3..0.55 : on frappe ; 0.55..1 : on revient.
+  const along = k < 0.3 ? -9 * (k / 0.3) : k < 0.55 ? -9 + 21 * ((k - 0.3) / 0.25) : 12 - 12 * ((k - 0.55) / 0.45);
+  const lift = Math.round(Math.sin(Math.min(1, k / 0.55) * Math.PI) * 4);
+  const bx = Math.round(fx + ux * along), by = Math.round(fy + uy * along * 0.6 - lift - 1);
+  if (k >= 0.3 && k < 0.6) for (let s = 1; s <= 3; s++) { ctx.fillStyle = `rgba(255,255,255,${0.5 - s * 0.12})`; ctx.fillRect(Math.round(fx + ux * (along - s * 4)), Math.round(fy + uy * (along - s * 4) * 0.6 - lift - 1), 3, 1); }
+  ctx.fillStyle = "#5a3e26"; ctx.fillRect(bx - 2, by - 2, 5, 3);
+  ctx.fillStyle = "#8a6a46"; ctx.fillRect(bx - 2, by - 2, 5, 1);
+  ctx.fillStyle = "#2a1f16"; ctx.fillRect(bx - 2, by + 1, 5, 1);
+  ctx.fillStyle = "#c8b89c"; ctx.fillRect(bx + (ux >= 0 ? 2 : -2), by - 1, 1, 2);       // la pointe
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════

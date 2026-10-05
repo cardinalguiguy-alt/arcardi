@@ -339,13 +339,21 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   du front), et le froid du lac (`lakeCold`) ne passe `LAKE_K0` que rarement, par vagues de plus d'un jour, jamais l'été.
   Falsifiés : `riverLift` à 0, la distance non étirée dans `frozenAt` seul (4 188 désaccords). Planches
   `tools/out/glace-etang.png`, `tools/out/glace-lac.png`.
-- **`tools/verify-bonhomme.mjs` — 35 contrôles, 35/35 (2026-10-05 : le bonhomme de neige).** Il JOUE `bonhomme.js` : la
+- **`tools/verify-bonhomme.mjs` — 66 contrôles, 66/66 (2026-10-05 : le bonhomme de neige ; §7 les coups de pied, §8 la boule portée).** Il JOUE `bonhomme.js` : la
   boule grossit vite puis lentement, jamais au-delà de `R_MAX`, rien sous `MIN_CM` ; trois boules, la plus grosse en bas,
   la troisième ouvre le décor, une trop grosse se pose à côté ; l'hôte refuse la boule qu'on n'a pas prise, ramène une
   taille impossible au temps écoulé, ne donne pas la même boule à deux joueurs, plafonne PAR CARTE ; le décor ramené au
   catalogue, une sauvegarde relue intacte ; le dégel daté quand la neige part (et l'hiver), l'affaissement 0 → 1, le retrait
   à `THAW_MS`, la boule d'un joueur parti lâchée ; l'obstacle au pied, pas à un pas, pas sur l'autre carte. Falsifié :
   `STACK_RATIO` à 1,5, le plafond par le temps retiré (chacun rougit).
+  **§1 mesure le TEMPS, pas la distance** (« plus long de les pousser quand elles grossissent » : ≥ 1,7 × l'ancien réglage, chaque case coûte plus que la
+  précédente) ; **§7 les coups de pied** : une petite boule seule explose en 1 coup, une grosse en 3 ; un seul coup ne détruit JAMAIS un bonhomme et fait tomber une boule
+  une fois sur huit (12,0 % sur 2 000 tirages) ; des coups espacés de 6 s ne détruisent rien, un toutes les 0,5 s : 6 au plus (3 boules), 4 (2 boules) ; la cadence est bornée
+  (0,42 s) ; la liste relue (diffusion, sauvegarde) garde `hits` ; **§8 la boule portée** garde sa taille, roulée elle peut grossir, la bascule fige la base de l'hôte.
+  `tools/render-bonhomme.mjs` : la planche des chapeaux (trois tailles de tête × cinq chapeaux, puis le dégel) — `tools/out/bonhomme-chapeaux*.png` ; ⚠️ elle se JUGE à l'œil,
+  elle ne mesure rien (un chapeau qui flotte n'est pas un nombre).
+- **`tools/render-lapins.mjs` (2026-10-05)** : quatre robes × vingt poses sur de l'herbe, à côté d'un chat et d'une fermière (l'échelle se juge contre ses voisins) —
+  `tools/out/lapins-planche.png` ; mesure : le lapin assis ≤ 85 % du chat assis (cernes retirés). Les mêmes bornes sont tenues par `verify-faune` § 7.
 - **`tools/verify-patin.mjs` — 23 contrôles, 23/23 (2026-10-05 : le patin à glace).** Il JOUE `patin.js` à 60 i/s :
   croisière atteinte et jamais dépassée (course comprise), lancée ≈ v/k cases, virage qui COURBE (pas de pivot), arrêt
   en travers sans repartir en arrière et dans la distance de `BRAKE`, sans patins chute à `SLIP_T` et sol à
@@ -427,7 +435,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   (0/150 orages, 38/40) ; les chats qui lisent l'orage « maintenant » au lieu de l'heure de leur
   créneau (un chat à 558 cases/s, 39/40).
 
-- **`tools/verify-faune.mjs` — 49 contrôles, 49/49 (2026-09-26, phase 5 : la faune).** Il JOUE
+- **`tools/verify-faune.mjs` — 103 contrôles, 103/103 (2026-09-26, phase 5 : la faune ; 2026-10-05 : § 7 les lapins).** Il JOUE
   `components/ferme/faune.js` sur la vraie carte : une journée entière plus la nuit d'après, image
   par image (30 601 images, printemps et été), et borne le pas de chaque bête par sa vitesse physique
   — **c'est lui qui interdit la téléportation** ; les habitats (canard et carpe loin de la rive, chat
@@ -439,6 +447,14 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   bord de l'eau, goéland qui glissait en fin de pas, carpe contre la rive, chat trop apprivoisé pour
   fuir). ⚠️ **Falsifié deux fois** : remettre le seuil des canetons (48/49), retirer le garde « jamais
   hors de l'eau » (48/49 — après avoir durci le scénario, qui au premier jet ne pouvait pas échouer).
+
+  **§ 7 (2026-10-05) — LES LAPINS** : des terriers répartis (≥ 5 lapins), chacun avec places sauvages, couvert et terrier de nuit ; les jardins proposés sont JOIGNABLES À PIED ; une
+  journée entière image par image, printemps et hiver (288 010 lectures chacun) : aucun lapin plus vite que 3,4 cases/s, JAMAIS hors de l'herbe praticable (⚠️ il l'a trouvé :
+  la corde de deux points voisins d'un trajet ondulé coupait l'angle d'un mur — 2 lectures sur 288 000, d'où la relecture complète du trajet), bonds ≤ 0,3 case, les jardins
+  visités mais « occasionnellement » (0,2 à 20 % du temps), 18 poses sur 20 jouées ; les trajets longs ondulent (90 sur 94 s'écartent de plus de 0,4 case de leur corde) ;
+  deux clients voient les mêmes lapins au bit près ; la nuit ils sont au repos, sous l'orage au couvert ; les réactions (se figer, fuir en zigzag — ≥ 6 changements de cap —,
+  revenir ; le hardi vient à un joueur immobile sans fuir, le timide non) ; et les TAILLES (assis ≤ 85 % du chat, en miche plus court, aucune pose au-delà de 14 × 12 px).
+  ⚠️ Deux défauts d'échelle et d'anatomie vus par Guillaume (« petits », « pas de faces plates ») sont maintenant des contrôles.
 
 - **`tools/verify-echecs.mjs` — 68 contrôles, 68/68 (2026-09-24, audit échecs).** Les décisions
   du jeu d'échecs vivaient dans `ChessGame.js`, du JSX qu'aucun banc ne peut appeler — et c'est là

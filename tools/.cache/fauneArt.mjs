@@ -1383,6 +1383,287 @@ function eyesOf(rows) {
   return out;
 }
 
+/* ╔════════════════════════════════════════════════════════════════�
+   ║ 6. LE LAPIN DE VALLEY TOWN — plus doux que celui de la ferme.
+   ╚════════════════════════════════════════════════════════════════�
+   (2026-10-05, demande de Guillaume : « plus mignons et fluffy qu'en ferme ».)
+   Le lapin de la ferme est un rectangle brun à deux oreilles ; celui-ci est
+   dessiné pour ce qui fait craquer, PETIT (assis : 10 px visibles, contre 13 pour le chat) :
+     1. une tête RONDE ET GROSSE pour son corps, des JOUES de fourrure qui
+        débordent (les `f`), un museau blanc et un nez rose ;
+     2. un corps en BOULE, dont le contour est brisé de touffes claires (jamais
+        un bord lisse : le duvet) ;
+     3. un POMPON blanc à la place de la queue, qu'on voit de dos ;
+     4. de grandes oreilles à l'intérieur rose, qui racontent l'humeur (dressées
+        quand il guette, couchées quand il dort).
+   De profil, tête à DROITE (le rendu retourne), comme toute la faune ; poses de
+   face et de dos pour les trajets verticaux, comme les chats.
+   Quatre robes : fauve (le lapin de garenne), gris, crème, et blanc taché
+   (échappé d'un clapier — c'est le plus mignon, il en faut un).
+   Caractères : B pelage, h pelage clair (dos, haut du crâne), f touffe claire
+   (joues, poitrail, bord du duvet), b ombre, W blanc (ventre, museau), A oreille
+   (extérieur), I oreille (intérieur rose), E œil, e reflet de l'œil, N nez,
+   P patte, T pompon, t dessous du pompon. */
+const RABBIT_POSES = {
+  // Assis, aux aguets : la pose du lapin qui vous a vu.
+  sit: [
+    "....A.AA",
+    "....A.AI",
+    "....A.AI",
+    "...hhhhf",
+    "..hBBEBN",
+    "..BBBBWW",
+    ".hBBBBfW",
+    "hBBBBBBP",
+    "TtbbbbPP",
+  ],
+  // Une oreille qui pivote : le lapin écoute de côté.
+  sitTwitch: [
+    "....A..A",
+    "....A.AI",
+    "....A.AI",
+    "...hhhhf",
+    "..hBBEBN",
+    "..BBBBWW",
+    ".hBBBBfW",
+    "hBBBBBBP",
+    "TtbbbbPP",
+  ],
+  // La miche : pattes rentrées, oreilles couchées sur le dos — le lapin détendu.
+  loaf: [
+    "...AAA....",
+    "..hAIAhhf.",
+    ".hBBBBBEBN",
+    "hBBBBBBBWW",
+    "TtbbbbbbPP",
+  ],
+  // Endormi : la miche, l'œil clos ; il respire (deux images).
+  sleep0: [
+    "...AAA....",
+    "..hAIAhhf.",
+    ".hBBBBBbBN",
+    "hBBBBBBBWW",
+    "TtbbbbbbbP",
+  ],
+  sleep1: [
+    "...AAA....",
+    "..hAIAhhf.",
+    "hBBBBBBbBN",
+    "BBBBBBBBWW",
+    "TtbbbbbbbP",
+  ],
+  // La toilette : les pattes avant à la bouche.
+  groom0: [
+    "....A.AA",
+    "....A.AI",
+    "....A.AI",
+    "...hhhhf",
+    "..hBBEBN",
+    "..BBBBPP",
+    ".hBBBBWP",
+    "hBBBBBBf",
+    "TtbbbbPP",
+  ],
+  groom1: [
+    "....A.AA",
+    "....A.AI",
+    "....A.AI",
+    "...hhhhf",
+    "..hBBEBN",
+    "..BBBBWP",
+    ".hBBBBPP",
+    "hBBBBBBf",
+    "TtbbbbPP",
+  ],
+  // Il broute : la tête basse, le museau qui frétille.
+  graze0: [
+    ".hhh...AA.",
+    "hBBBhhBAIf",
+    "BBBBBBBBEN",
+    "BBBBBBBBWW",
+    "TtbbbbbPbP",
+  ],
+  graze1: [
+    ".hhh...AA.",
+    "hBBBhhBAIf",
+    "BBBBBBBBEW",
+    "BBBBBBBBWN",
+    "TtbbbbbPbP",
+  ],
+  // Le bond, trois temps : ramassé, en l'air (le corps s'allonge), la réception.
+  hop0: [
+    "....A.AA.",
+    "....A.AI.",
+    "...hhhhhf",
+    "..hBBBEBN",
+    ".hBBBBBWW",
+    "TBBBBBBPP",
+    "ttbbbbPPP",
+  ],
+  hop1: [
+    "......AAI..",
+    "..hhhhhhhf.",
+    ".hBBBBBBEBN",
+    "hBBBBBBBBWW",
+    "TbbbbbbbbbP",
+    "tPP....PP..",
+  ],
+  hop2: [
+    "....A.AA.",
+    "....A.AI.",
+    "...hhhhhf",
+    ".hBBBBEBN",
+    "hBBBBBBWW",
+    "TBBBBBBPP",
+    "ttbbbbbPP",
+  ],
+  // La fuite : tout en longueur, oreilles couchées en arrière.
+  run0: [
+    "..AAA.....",
+    ".hAIAhhhhf",
+    "hBBBBBBBEN",
+    "BBBBBBBBWW",
+    "tPbbbbbbPP",
+  ],
+  run1: [
+    "..AAA.....",
+    ".hAIAhhhhf",
+    "hBBBBBBBEN",
+    "TBBBBBBBWW",
+    ".PP....PP.",
+  ],
+  // De face, assis : la tête OVALE (plus haute que large), les yeux sur les côtés, le museau étroit.
+  front: [
+    ".AA.AA.",
+    ".AI.IA.",
+    ".AI.IA.",
+    "..hhh..",
+    ".hBBBh.",
+    "hEBBBEh",
+    "..BNB..",
+    "..WWW..",
+    ".BBWBB.",
+    "BBPBPBB",
+  ],
+  frontTilt: [
+    "AA...AA",
+    ".AI.IA.",
+    "..AIA..",
+    "..hhh..",
+    ".hBBBh.",
+    "hEBBBEh",
+    "..BNB..",
+    "..WWW..",
+    ".BBWBB.",
+    "BBPBPBB",
+  ],
+  // Il vient vers vous.
+  down0: [
+    ".AA.AA.",
+    ".AI.IA.",
+    ".AI.IA.",
+    "..hhh..",
+    ".hBBBh.",
+    "hEBBBEh",
+    "..BNB..",
+    "..WWW..",
+    "BBPBBPB",
+  ],
+  down1: [
+    ".AA.AA.",
+    ".AI.IA.",
+    ".AI.IA.",
+    "..hhh..",
+    ".hBBBh.",
+    "hEBBBEh",
+    "..BNB..",
+    "..WWW..",
+    "PBBBBBP",
+  ],
+  // Il s'éloigne : le dos, les oreilles, le POMPON.
+  up0: [
+    ".AA.AA.",
+    ".AI.IA.",
+    ".AI.IA.",
+    "..hhh..",
+    ".hBBBh.",
+    "BBBBBBB",
+    "BBBTBBB",
+    "BBPTPBB",
+    ".bbtbb.",
+  ],
+  up1: [
+    ".AA.AA.",
+    ".AI.IA.",
+    ".AI.IA.",
+    "..hhh..",
+    ".hBBBh.",
+    "BBBBBBB",
+    "BBBTBBB",
+    "PBBTBBP",
+    ".bbtbb.",
+  ],
+};
+
+/* LE DUVET (2026-10-05) : le cerne d'un lapin n'est pas noir, il prend la
+   teinte du pelage qu'il borde (assombrie de moitié), et, sauf sous le ventre
+   (où le contour doit poser la bête), un pixel sur trois du contour devient
+   une TOUCHE CLAIRE à demi fondue : le bord brisé qui fait le poil. Le même
+   tirage pour une pose et son miroir ne compte pas : le dessin est retourné
+   au rendu, pas redessiné. */
+function fluffOutline(src, seed) {
+  const [c, g] = cv(src.width + PAD * 2, src.height + PAD * 2);
+  g.drawImage(src, PAD, PAD);
+  const w = c.width, h = c.height;
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
+  const put = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (solid(x, y)) continue;
+    let r = 0, gg = 0, b = 0, n = 0;
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      if (!solid(x + dx, y + dy)) continue;
+      const o = ((y + dy) * w + x + dx) * 4; r += d[o]; gg += d[o + 1]; b += d[o + 2]; n++;
+    }
+    if (!n) continue;
+    r /= n; gg /= n; b /= n;
+    const under = solid(x, y - 1);   // le pixel est SOUS la bête : le contour qui la pose
+    const tuft = !under && catHash(x, y, seed) % 4 === 0;
+    if (tuft) put.push([x, y, Math.min(255, r + 38), Math.min(255, gg + 34), Math.min(255, b + 30), 205]);
+    else put.push([x, y, r * 0.5, gg * 0.46, b * 0.44, 255]);
+  }
+  for (const [x, y, r, gg, b, a] of put) { const o = (y * w + x) * 4; d[o] = r | 0; d[o + 1] = gg | 0; d[o + 2] = b | 0; d[o + 3] = a; }
+  g.putImageData(im, 0, 0);
+  return c;
+}
+const RABBIT_COATS = {
+  fauve: { B: "#b78a5f", h: "#d2ac80", f: "#ead3ae", b: "#8d6643", W: "#f1e7d5", A: "#9c7149", I: "#eaa9a2", E: "#2b1d19", e: "#ffffff",
+           N: "#e58f8c", P: "#d9bf99", T: "#f7f1e6", t: "#d6cab4", line: "#4d3626" },
+  gris:  { B: "#9a9694", h: "#b9b5b1", f: "#dedad4", b: "#757170", W: "#ece9e4", A: "#7d7977", I: "#e6b0aa", E: "#25232a", e: "#ffffff",
+           N: "#e29a98", P: "#cfcac3", T: "#f5f3ef", t: "#d3cfc8", line: "#3f3d44" },
+  creme: { B: "#d9b98a", h: "#ecd3a8", f: "#f8ead0", b: "#b39368", W: "#fbf3e2", A: "#c29f70", I: "#f0b3a8", E: "#3a261c", e: "#ffffff",
+           N: "#e9948f", P: "#efdcb8", T: "#fffaf0", t: "#e6d8bc", line: "#6a4f33" },
+  tache: { B: "#f3eee5", h: "#fffaf1", f: "#ffffff", b: "#d4ccbe", W: "#fffaf1", A: "#e5ddd0", I: "#f2b4ae", E: "#2a1d1a", e: "#ffffff",
+           N: "#e8918d", P: "#fbf7ef", T: "#ffffff", t: "#ddd5c8", line: "#6b5a4c", patch: true },
+};
+function rabbitPal(coat, pose) {
+  const P = RABBIT_COATS[coat];
+  return (ch, x, y) => {
+    let col = P[ch];
+    if (!col) return null;
+    // Le blanc taché : des plaques brunes sur le dos et une oreille, par blocs de 3 × 3 (comme la tricolore).
+    if (P.patch && (ch === "B" || ch === "h" || ch === "A")) {
+      if (ch === "A") return (x + y) % 2 ? "#a9744f" : "#b88256";
+      const k = catHash((x / 3) | 0, (y / 3) | 0, 11) % 6;
+      if (k === 0) return ch === "h" ? "#c99568" : "#b78a5f";
+      if (k === 1 && y >= 4) return "#a9744f";
+    }
+    return col;
+  };
+}
+export const RABBIT_COAT_KEYS = Object.keys(RABBIT_COATS);
+export const RABBIT_POSE_KEYS = Object.keys(RABBIT_POSES);
+
 /* ── Assemblage ─────────────────────────────────────────────────────────── */
 export const CAT_COAT_KEYS = Object.keys(CAT_COATS);
 export function buildFaunaSprites() {
@@ -1432,6 +1713,17 @@ export function buildFaunaSprites() {
       const ax = pose === "sit" || pose === "groom0" || pose === "groom1" ? 5 : pose === "front" || pose.startsWith("down") || pose.startsWith("up") ? 3 : pose.startsWith("sleep") ? 5 : pose === "loaf" ? 6 : 8;
       const c = add(`cat.${coat}.${pose}`, finish(ascii(rows, pal), ax, last(rows) + 1, "#1d1a1f"));
       c.eyes = eyesOf(rows);
+    }
+  }
+  // Les lapins : quatre robes, une dizaine de poses, ancrés sous le ventre (aux pattes pour la face et le dos).
+  for (const coat of RABBIT_COAT_KEYS) {
+    for (const [pose, rows] of Object.entries(RABBIT_POSES)) {
+      const pi = RABBIT_POSE_KEYS.indexOf(pose);
+      const w = Math.max(...rows.map((r) => r.length));
+      const ax = pose.startsWith("front") || pose.startsWith("down") || pose.startsWith("up") ? (w >> 1) : (w >> 1);
+      const c = fluffOutline(ascii(rows, rabbitPal(coat, pose)), 5 + pi);
+      c.ax = ax + PAD; c.ay = last(rows) + 1 + PAD;
+      add(`rabbit.${coat}.${pose}`, c);
     }
   }
   for (const sp of Object.keys(BFLY_PAL)) for (const o of [0, 1, 2, 3]) add(`bfly.${sp}.o${o}`, bflySprite(sp, o));

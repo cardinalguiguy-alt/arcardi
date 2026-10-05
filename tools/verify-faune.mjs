@@ -422,5 +422,120 @@ console.log("§6 — Les dessins : tailles et rapports (l'échelle unique, déci
   ok("sans fidélité, le même chat ne vient pas (il est trop loin et le joueur marche)", !L0.rubbed && L0.gift === 0, JSON.stringify(L0));
 }
 
+console.log("§7 — Les lapins (2026-10-05) : lieux, trajets, jardins, réactions, partage");
+{
+  const rw = fw.rab;
+  ok("des lapins, dans plusieurs terriers", rw.rabbits.length >= 5, `${rw.rabbits.length} lapins, ${new Set(rw.rabbits.map((r) => r.warren.x + "," + r.warren.y)).size} terriers`);
+  ok("chaque lapin a de quoi vivre : places sauvages, couvert, terrier de nuit", rw.rabbits.every((r) => r.pool.length >= 8 && r.cover.length >= 1 && r.dens.length >= 1),
+     rw.rabbits.map((r) => `${r.coat}:${r.pool.length}/${r.cover.length}/${r.dens.length}`).join(" "));
+  const withGarden = rw.rabbits.filter((r) => r.garden.length).length;
+  ok("une partie des lapins a des jardins à portée (ouverts, atteints à pied)", withGarden >= 1, `${withGarden} lapins sur ${rw.rabbits.length}`);
+  ok("toutes les places sont sur l'herbe praticable", rw.rabbits.every((r) => [...r.pool, ...r.cover, ...r.dens, ...r.garden].every((p) => rw.okAt(p.x, p.y))));
+  // Les jardins visités sont-ils clos ? un portail ou une haie n'est jamais franchi : on lit que le chemin existe.
+  let noPath = 0, paths = 0;
+  for (const r of rw.rabbits) for (const g of r.garden.slice(0, 6)) { paths++; const A = r.pool[0]; const p = F.rabbitPathProbe(fw, A, g); if (!p) noPath++; }
+  ok("chaque jardin proposé est joignable à pied", noPath === 0, `${noPath} sans chemin sur ${paths}`);
+
+  // Une journée entière, image par image : pas de téléportation, jamais hors de l'herbe, jamais de bond au-delà de ce qui se peut.
+  const dt = 1 / 30;
+  for (const season of ["spring", "winter"]) {
+    let prev = null, worst = 0, bad = 0, reads = 0, gardenFrames = 0, dayFrames = 0, straight = 0, hopFrames = 0, maxLift = 0, rest = 0;
+    const poses = new Set();
+    for (let ms = T0; ms < T0 + C.DAY_REAL_MS; ms += dt * 1000) {
+      const env = envAt(ms, season);
+      const cur = new Map();
+      for (const r of F.faunaRabbits(fw, env, tw)) {
+        cur.set(r.id, [r.x, r.y]); reads++; poses.add(r.pose);
+        if (!rw.okAt(r.x, r.y)) bad++;
+        const rr = rw.rabbits[r.idx];
+        if (rr.garden.some((g) => Math.hypot(g.x - r.x, g.y - r.y) < 0.9)) gardenFrames++;
+        dayFrames++; if (r.hopping) hopFrames++; if (r.resting) rest++;
+        maxLift = Math.max(maxLift, r.lift);
+        const p = prev && prev.get(r.id); if (p) { const v = Math.hypot(r.x - p[0], r.y - p[1]) / dt; if (v > worst) worst = v; }
+      }
+      prev = cur;
+    }
+    ok(`${season} — aucun lapin plus vite que 3,4 cases/s (la routine ; la fuite est locale)`, worst <= 3.4, `pire ${worst.toFixed(2)} sur ${reads} lectures`);
+    ok(`${season} — jamais hors de l'herbe praticable`, bad === 0, `${bad} lectures`);
+    ok(`${season} — les jardins : visités, mais occasionnellement`, gardenFrames / dayFrames > 0.002 && gardenFrames / dayFrames < 0.2, `${(100 * gardenFrames / dayFrames).toFixed(1)} % du temps, ${hopFrames} images de bond, ${rest} de repos`);
+    ok(`${season} — un répertoire de poses varié`, poses.size >= 9, [...poses].sort().join(" "));
+    ok(`${season} — le bond ne dépasse pas 0,3 case de haut`, maxLift <= 0.3, maxLift.toFixed(3));
+  }
+  // Les trajets ne sont pas des droites : l'écart latéral maximal d'un trajet long à sa corde.
+  {
+    let longest = 0, wiggly = 0, total = 0;
+    const k0 = Math.floor(T0 / 1000 / 60);
+    for (const r of rw.rabbits) for (let k = k0 + 2; k < k0 + 18; k++) {
+      const ms = k * 60 * 1000;
+      const A = F.rabbitTargetProbe(fw, envAt(ms, "summer"), r, k - 1), B = F.rabbitTargetProbe(fw, envAt(ms, "summer"), r, k);
+      const R = F.rabbitRouteProbe(fw, r, k, A, B); if (!R || R.L < 6) continue;
+      total++;
+      const a = R.pts[0], b = R.pts[R.pts.length - 1], len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      let dev = 0; for (const q of R.pts) dev = Math.max(dev, Math.abs((q.x - a.x) * (b.y - a.y) - (q.y - a.y) * (b.x - a.x)) / len);
+      longest = Math.max(longest, R.L); if (dev > 0.4) wiggly++;
+    }
+    ok("les trajets longs ondulent (écart > 0,4 case à leur corde)", total > 5 && wiggly / total > 0.6, `${wiggly}/${total} trajets de plus de 6 cases, le plus long ${longest.toFixed(1)}`);
+  }
+  // Le partage : même carte, même heure → mêmes lapins, au bit près.
+  {
+    const env = envAt(T0 + 123456, "summer");
+    const a = JSON.stringify(F.faunaRabbits(fw, env, tw));
+    const tw2 = E.generateTownWorld(); const fw2 = F.faunaWorld(tw2);
+    ok("deux clients voient les mêmes lapins", a === JSON.stringify(F.faunaRabbits(fw2, env, tw2)));
+  }
+  // La nuit : au terrier, endormis. L'orage : à l'abri.
+  {
+    const night = F.faunaRabbits(fw, envAt(T0 + C.DAY_REAL_MS * 0.97, "summer"), tw);
+    ok("tard la nuit, les lapins dorment ou se reposent près de leur terrier", night.every((r) => r.resting));
+    const storm = F.faunaRabbits(fw, envAt(T0 + C.DAY_REAL_MS * 0.4, "summer", T0, 3, true), tw);
+    ok("sous l'orage, ils sont au couvert", storm.every((r) => { const rr = rw.rabbits[r.idx]; return rr.dens.some((d) => Math.hypot(d.x - r.x, d.y - r.y) < 2) || !r.resting; }));
+  }
+  // Les réactions : se figer, fuir en zigzag, revenir ; le hardi vient voir un joueur immobile.
+  {
+    const rnd = (() => { let q = 7; return () => (q = (q * 16807) % 2147483647) / 2147483647; })();
+    const R0 = rw.rabbits[0];
+    const base = () => ({ id: "r0", idx: 0, coat: R0.coat, x: R0.pool[0].x, y: R0.pool[0].y, face: 1, pose: "sit", moving: false, resting: true, restT: 9, sleeping: false, bold: false });
+    const run = (bold, stillPlayer) => {
+      const S = {}; let px = base().x - (stillPlayer ? 8 : 6), py = base().y, minD = 99, fled = false, froze = false, back = false, outside = 0, turns = 0, lastH = null, maxLift = 0, apr = false;
+      const fl = F.faunaWorld(tw);
+      for (let i = 0; i < 1500; i++) {
+        const dtt = 0.05;
+        const c = base(); c.bold = bold; const o = S.rabbits && S.rabbits.get("r0"); if (o) { c.x = o.x; c.y = o.y; }
+        const stop = stillPlayer ? 22 : 140, walking = i < stop;
+        if (walking) px += 0.9 * dtt * 2.2;
+        const th = [{ id: "me", x: px, y: py, moving: walking, still: walking ? 0 : (i - stop) * dtt }];
+        F.faunaReactRabbits(S, fl, [c], th, dtt, rnd);
+        minD = Math.min(minD, Math.hypot(c.x - px, c.y - py));
+        if (!rw.okAt(c.x, c.y)) outside++;
+        maxLift = Math.max(maxLift, c.lift || 0);
+        if (c.react === "freeze") froze = true; if (c.react === "flee") { fled = true; if (o) { const h = Math.atan2(o.vy || 0, o.vx || 0); if (lastH !== null && Math.abs(Math.atan2(Math.sin(h - lastH), Math.cos(h - lastH))) > 0.15) turns++; lastH = h; } }
+        if (c.react === "approach") apr = true;
+        if (c.react === "back") back = true;
+      }
+      return { minD, fled, froze, back, outside, turns, maxLift, apr, ended: !S.rabbits.has("r0") };
+    };
+    const A = run(false, false);
+    ok("un joueur qui fonce : le lapin se fige, file, puis revient à sa routine", A.froze && A.fled && A.back && A.ended, JSON.stringify(A));
+    ok("la fuite zigzague (le cap change)", A.turns >= 6, `${A.turns} changements de cap`);
+    ok("la fuite reste sur l'herbe, et bondit au plus 0,3 case", A.outside === 0 && A.maxLift <= 0.31, `${A.outside} hors herbe, élan ${A.maxLift.toFixed(2)}`);
+    const B = run(true, true);
+    ok("le lapin hardi vient voir un joueur qui reste immobile (sans fuir)", B.apr && !B.fled && B.minD > 1.4 && B.minD < 3.2, JSON.stringify(B));
+    const Cc = run(false, true);
+    ok("le lapin timide, lui, ne s'approche pas", !Cc.apr, JSON.stringify(Cc));
+  }
+  // Les dessins : toutes les poses existent pour toutes les robes, et le lapin assis ne dépasse pas un chat assis.
+  {
+    const S = FA.buildFaunaSprites();
+    ok("quatre robes × toutes les poses dans l'atlas", FA.RABBIT_COAT_KEYS.length === 4 && FA.RABBIT_COAT_KEYS.every((c) => FA.RABBIT_POSE_KEYS.every((p) => S.rabbit[c][p])), `${FA.RABBIT_POSE_KEYS.length} poses`);
+    const needed = ["sit", "sitTwitch", "loaf", "sleep0", "sleep1", "groom0", "groom1", "graze0", "graze1", "hop0", "hop1", "hop2", "run0", "run1", "front", "frontTilt", "down0", "down1", "up0", "up1"];
+    ok("toutes les poses que la faune nomme existent", needed.every((p) => S.rabbit.fauve[p]));
+    // ⚠️ L'ÉCHELLE (Guillaume, 2026-10-05 : « ils doivent être petits ») : un lapin de parc est plus petit qu'un chat. Le premier jet faisait la taille du chat.
+    const rs = S.rabbit.fauve.sit.h - 4, cs = S.cat.roux.sit.h - 4, rl = S.rabbit.fauve.loaf.w - 4, cl = S.cat.roux.loaf.w - 4;
+    ok("le lapin assis fait au plus 85 % du chat assis (cernes retirés)", rs <= 0.85 * cs, `${rs} px contre ${cs} px`);
+    ok("le lapin en miche est plus court que le chat en miche", rl < cl, `${rl} px contre ${cl} px`);
+    ok("aucune pose du lapin ne dépasse 14 px de large ni 12 de haut (cernes retirés)", FA.RABBIT_POSE_KEYS.every((q) => S.rabbit.fauve[q].w - 4 <= 14 && S.rabbit.fauve[q].h - 4 <= 12));
+  }
+}
+
 console.log(`\nverify-faune : ${n - fail}/${n}`);
 process.exit(fail ? 1 : 0);
