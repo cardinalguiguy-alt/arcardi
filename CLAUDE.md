@@ -11,25 +11,27 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-04 (soir) — PARVIS DU TRIBUNAL D'UN SEUL DALLAGE, ROSACE EN PIERRE BLONDE — LIVRÉS, NON COMMITÉS
+### 2026-10-05 — BOIS DES COINS OUEST, PATINS ET LAC GELÉ, BONHOMME DE NEIGE — TROIS LIVRAISONS, NON COMMITÉES
 
-Fait et vu en jeu (un client, `audit-tmp`) : **famille de dallage par ZONE PAVÉE CONTIGUË** (`townPavingZones`, `townPavingFamily(x, y, tw)`,
-fermeArt.js) — plus de grès accolé au dallage civique autour du tribunal ; ⚠️ la cour du Salon de coiffure, reliée au parvis de l'église, passe en
-civique (à juger). **Rosace** recolorée en pierre blonde (`townFountainRose`, dessin inchangé) ; elle publie ses joints (`c.joints`), lus par la
-pluie et la neige. `verify-densite` revenu au vert (exceptions de lissage NOMMÉES dans le banc). Récit et chiffres : README de la ferme, journal
-du 2026-10-04 (soir). **Supabase : rien.** ⚠️ **Pas vu** : la rosace sous un manteau de neige ; et, du lot précédent (2026-10-04 nuit, quête,
-médailles, bousculades, poussière, fontaine, tableau) : bousculades et annonces côté INVITÉ, poussière à la ferme, fontaine la nuit.
-⚠️ `app/audit-tmp/page.js` et `app/api/audit-cap/route.js` toujours commités (`verify-portee` rouge à cause d'eux) : **à supprimer avant déploiement**.
-⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js — avertissement de compilation Next ; sans effet sur la pose).
+Sur l'arbre de travail, rien n'est commité depuis « nouveau dal » : le lot du 2026-10-04 (nuit) (étoile reine, obélisque) ET les trois
+livraisons du jour. Récits : README de la ferme, en tête (une entrée par livraison). **(1) Les bois** : `TOWN_WOODS_WEST`, champ par polygone,
+clairières rouvertes par un parcours 0-1 en fin de générateur. **(2) Le patin** : `patin.js` (pur), glace du lac par `lakeCold` (neige.js) et la
+règle de l'étang étirée (`glace.js`), chute sans patins = blessure de 15 min (`iceFall`), chalet des patins PROCÉDURAL ET PROVISOIRE (prompt
+Gemini dans `docs/IMAGES-ET-BLENDER.md`), 450 or. **(3) Le bonhomme** : `bonhomme.js` (pur), rouler / empiler / décor au choix, ferme et ville,
+dégel daté par l'hôte. Vus en jeu à un client (hiver, lac et neige forcés au menu dev). **Supabase : rien** (`inv.skates`, `snowmen` : du JSON).
+⚠️ **Pas vu** : à DEUX vrais clients — dans le harnais `audit-tmp` (iframes ou onglets), aucun client n'enregistre l'autre comme joueur distant,
+donc aucune position ne part (`netCanBroadcast` exige déjà un camarade connu) : plomberie du harnais, à démêler avant de juger l'invité. La
+nuit sur la glace et près d'un bonhomme ; le lac sous la vraie météo. Restent aussi ceux de la veille (obélisque en fondu et sous la pluie, reine
+en ville et la nuit, rosace sous la neige).
+⚠️ `app/audit-tmp/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
+corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js) ; `tools/lib-canvas.mjs` annonce honorer `translate` et ne le fait pas
+(les feuilles de personnage n'y ont qu'une direction — `render-etoile` ne juge que la rangée 0).
 
-### ⏭️ ACTION SUIVANTE — LE CHANTIER CLASSIQUE
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER, PUIS LES SOLS DE VALLEY TOWN SUR LE MODÈLE FIX-004
 
-(1) **Étoile reine** : branches trop rondes (demande de Guillaume en attente). Puis faire juger (`docs/A-JUGER.md`, en tête) la rosace, le parvis,
-la frise de la quête, la fontaine, le tableau ; puis la séance de conception des intérieurs (audit partie 2) et l'audit partie 3.
-
-→ **Jugements humains en attente** (« Toujours ouvert — livré, jamais jugé ») : `docs/A-JUGER.md`. À lire pour « reprends le
-travail » ou pour choisir un chantier, pas pour une tâche de code ciblée. **Notes d'intégration d'image et commerces de la
-Grand-Rue** : `docs/IMAGES-ET-BLENDER.md`, en tête.
+(1) Faire juger `docs/A-JUGER.md` (en tête : le patin et le lac, le bonhomme, les bois ; puis l'obélisque, la reine, la rosace) — idéalement EN
+JOUANT À DEUX, ce qui suppose de réparer d'abord le harnais. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements**
+(`components/ferme/solHD.js`, `docs/AUDIT-2026-10.md` FIX-004) — poser les questions de cadrage avant.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -54,6 +56,8 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Tâche | Lire, dans l'ordre | Bancs à relancer |
 |---|---|---|
 | Neige, hiver, glace, feuilles mortes | `components/ferme/neige.js`, `glace.js`, `feuilles.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles` |
+| Patin, glace du lac, chalet des patins | `components/ferme/patin.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journal 2026-10-05) | `verify-patin`, `render-glace`, `verify-vallee` |
+| Bonhomme de neige | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme` |
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
@@ -255,6 +259,8 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE TRANSITION QUI SE VOIT SE FAIT PAR UN ORDRE AU PIXEL OU PAR UNE DURÉE, JAMAIS PAR UN SEUIL COMMUN
 - UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL COUPE, LE JOUR OÙ « FINI » GAGNE UNE SUITE
 - UN DESSIN POSÉ PAR-DESSUS LE SOL N'EXISTE PAS POUR LA MÉTÉO TANT QU'IL NE PUBLIE PAS SES CREUX
+- UNE GRANDEUR INTÉGRÉE SUR UNE FENÊTRE QUI REPART DE ZÉRO MONTE EN DENT DE SCIE : SEUILLÉE, ELLE BASCULE CHAQUE JOUR
+- UN CHAMP `id` DANS UNE `req` EST ÉCRASÉ PAR L'EXPÉDITEUR
 
 **JavaScript / three.js / canevas**
 

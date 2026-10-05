@@ -329,7 +329,12 @@ for (const p of tw.props) mark(p.x, p.y);
    et `render-escaliers` vérifie case par case que les deux coïncident. */
 for (const r of C.TOWN_RAILS || []) markRect(r);
 markRect({ x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y }, 3, 3);
-markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
+markRect({ x: C.TOWN_MONUMENT_FOOT.x, y: C.TOWN_MONUMENT_FOOT.y }, C.TOWN_MONUMENT_FOOT.w, C.TOWN_MONUMENT_FOOT.h);   // 2026-10-04 (nuit) : l'enclos de l'obélisque
+/* 2026-10-04 — LE CHALET DES PATINS : son emprise LUE SUR LE MONDE (`E.townSkateChalet`,
+   le décor que le générateur a posé), comme la coque du chantier naval ci-dessous —
+   le générateur choisit son emplacement parmi plusieurs, une constante recopiée ici
+   accuserait la mauvaise place. Ce contrôle l'a réclamé au premier lancement. */
+{ const ch = E.townSkateChalet(tw); if (ch) markRect({ x: ch.x, y: ch.y }, ch.w, ch.h); }
 /* ⚠️⚠️ ZIP 450 — LA COQUE DU CHANTIER NAVAL, ET ELLE SE LIT SUR LE MONDE, PAS SUR
    UNE ANCRE. `tw.shipX/shipY` est la valeur que le GÉNÉRATEUR a posée et que le
    rendu dessinera : le banc lit donc exactement la même chose que les deux autres.
@@ -1973,6 +1978,37 @@ section("Valley Town — LA BARQUE : la mécanique, tenue à la barre");
     const miss = E.resolveNetCatch(f, "carp", null, t0 + 2e6, () => 0.99);
     ok("un coup raté ne compte rien", miss.ok && !miss.caught && f.inv.netLog.carp === 1);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-04 — LES PATINS ET LEUR CHALET.
+   ─────────────────────────────────────────────────────────────────────────────
+   Le chalet existe (une fois), son comptoir s'atteint À PIED depuis le quai du
+   train (le parcours de ce banc, `seen`), et l'achat tient ses quatre refus :
+   hors saison, loin du comptoir, sans or, déjà chaussé. Le pas sur la glace, lui,
+   est joué par `verify-patin`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — le chalet des patins");
+{
+  const chs = tw.props.filter((p) => p.kind === "skateChalet");
+  ok("le chalet est posé, une seule fois", chs.length === 1, chs.map((p) => `(${p.x},${p.y})`).join(" "));
+  const ch = E.townSkateChalet(tw);
+  let reachN = 0;
+  if (ch) for (let y = ch.y - 3; y <= ch.y + ch.h + 3; y++) for (let x = ch.x - 3; x <= ch.x + ch.w + 3; x++) {
+    if (!reach(x, y)) continue;
+    // la semelle au centre de la case, comme `C.tileAnchor` la pose
+    if (E.townSkateChaletDist(tw, x + 0.5, y + 0.5) <= C.TOWN_SKATE_CHALET_REACH) reachN++;
+  }
+  ok("son comptoir s'atteint à pied depuis le quai", reachN > 0, `${reachN} cases à portée du comptoir`);
+  const mkS = () => { const f = { inv: {}, tools: {} }; E.normalizeFarmer(f); return f; };
+  const f = mkS();
+  ok("un fermier neuf n'a pas de patins", f.inv.skates === 0);
+  ok("hors de l'hiver, le chalet ne vend rien", E.resolveBuySkates(f, 1e9, "autumn", true).reason === "closed" && f.inv.skates === 0);
+  ok("loin du comptoir, rien", E.resolveBuySkates(f, 1e9, "winter", false).reason === "far" && f.inv.skates === 0);
+  ok("sans or, pas de patins", E.resolveBuySkates(f, C.SKATES_PRICE - 1, "winter", true).reason === "noGold" && f.inv.skates === 0);
+  const b = E.resolveBuySkates(f, C.SKATES_PRICE, "winter", true);
+  ok("l'achat coûte le prix affiché", b.ok && b.moneyDelta === -C.SKATES_PRICE && f.inv.skates === 1);
+  ok("on n'en achète pas deux", E.resolveBuySkates(f, 1e9, "winter", true).reason === "have");
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

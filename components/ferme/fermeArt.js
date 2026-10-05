@@ -2720,6 +2720,49 @@ export function drawSnowStake(ctx, px, py, snow) {
    de dallage passe par `townPavingFamily` (celui de `drawTownFlagTile`) : si la
    famille d'une case change, la neige suit. `waterAt(wx, wy)` : l'eau au pixel
    (la cuisson de `eau.js` quand elle est prête — l'appelant la fournit). */
+/* 2026-10-04 (nuit) — LES COTES DE L'OBÉLISQUE DE LA PLACE (px d'art ; voir
+   `plazaMonumentHi`, dans `buildSprites`). AU NIVEAU DU MODULE parce que DEUX
+   lecteurs en ont besoin : le dessin, et la neige (`townSnowEnv.casterAt` : l'ombre
+   portée sur la neige se calcule depuis ces mêmes volumes, jamais depuis une copie). */
+const OBELISK_GEO = (() => {
+  const FT = C.TOWN_MONUMENT_FOOT;
+  const W = 72, H = 100, cx = W / 2;
+  return {
+    W, H, cx, KD: 0.36,
+    gy: H - FT.h * 8,                       // le sol au centre de l'emprise
+    postX: FT.w * 8 - 3,                    // demi-écart des bornes
+    postBack: H - FT.h * 16 + 5, postFront: H - 4,   // le pied des bornes, au sol
+    postW: 3.8, postH: 7.6, chainH: 5.4, sag: 2.4,
+    // L'empilement, du sol au fût : largeur, profondeur (en plan), hauteur.
+    steps: [[42, 40, 2.4], [35, 33, 2.4]],
+    socle: [27, 26, 5.6], cyma: [24, 23, 1.3], die: [21, 20, 13.5], cornice: [25, 24, 2.6], plinth: [14, 13, 2.0],
+    shaft: { wb: 10.2, wt: 6.4, h: 46 }, pyr: 7,
+  };
+})();
+/* La hauteur (px d'art) de ce qui se dresse en chaque pixel de l'enclos, en
+   coordonnées du MONDE : le plan de chaque bloc est sa largeur × sa profondeur
+   vue (`KD`), centré sur l'emprise ; les bornes ; rien sous les chaînes (une ombre
+   de chaîne ne se lirait pas, et un bloc la ferait passer pour un mur — ce que
+   faisait l'enclos traité comme une case de bâtiment, vu en jeu sous la neige). */
+function obeliskCasterCell(x, y) {
+  const O = OBELISK_GEO, FT = C.TOWN_MONUMENT_FOOT, T = SPR_T;
+  const mcx = (FT.x + FT.w / 2) * T, by = (FT.y + FT.h) * T, mcy = by - (O.H - O.gy);
+  const boxes = [];
+  let elev = 0;
+  for (const s2 of [...O.steps, O.socle, O.cyma, O.die, O.cornice, O.plinth]) { elev += s2[2]; boxes.push([s2[0] / 2, O.KD * s2[1] / 2, elev]); }
+  boxes.push([O.shaft.wb / 2, O.KD * O.plinth[1] * 0.45, elev + O.shaft.h + O.pyr]);
+  const out = new Uint8Array(T * T);
+  for (let ly = 0; ly < T; ly++) for (let lx = 0; lx < T; lx++) {
+    const wx = x * T + lx + 0.5, wy = y * T + ly + 0.5, dx = Math.abs(wx - mcx), dy = Math.abs(wy - mcy);
+    let h = 0;
+    for (const [hw, hd, hh] of boxes) if (dx <= hw && dy <= hd) h = Math.max(h, hh);
+    for (const py of [by - (O.H - O.postBack), by - (O.H - O.postFront)]) {
+      if (Math.abs(dx - O.postX) <= O.postW / 2 && Math.abs(wy - py) <= O.KD * O.postW / 2 + 0.5) h = Math.max(h, O.postH + 1.8);
+    }
+    out[ly * T + lx] = Math.min(255, Math.round(h));
+  }
+  return out;
+}
 export function townSnowEnv(tw, S, waterAt) {
   const lumOf = (cv) => {
     if (!cv || !cv.getContext) return null;
@@ -2739,6 +2782,13 @@ export function townSnowEnv(tw, S, waterAt) {
   const roseX0 = (C.TOWN_FOUNTAIN.x + 1) * SPR_T - FTN_ROSE_R, roseY0 = (C.TOWN_FOUNTAIN.y + 1) * SPR_T - FTN_ROSE_R;
   const lumAt = (A2, ax, ay) => (A2 ? A2.L[(ay % A2.h) * A2.w + (ax % A2.w)] : 128);
   const tall = (i) => tw.solid[i] && tw.ground[i] !== C.G_WATER && tw.objects[i] !== C.O_TREE && tw.objects[i] !== C.O_TREE2 && !(tw.soft && tw.soft[i]);
+  /* 2026-10-04 (nuit) — L'ENCLOS DE L'OBÉLISQUE (`TOWN_MONUMENT_FOOT`) : ses cases sont
+     solides (on ne traverse pas une chaîne), mais seul le SOCLE (`TOWN_MONUMENT`, 2 × 2,
+     comme avant l'enclos) compte pour l'abri et les congères ; et son ombre portée se lit
+     au pixel (`obeliskCasterCell`), pas en bloc de bâtiment. */
+  const FTm = C.TOWN_MONUMENT_FOOT, inFoot = (i) => { const x = i % tw.w, y = (i / tw.w) | 0; return x >= FTm.x && x < FTm.x + FTm.w && y >= FTm.y && y < FTm.y + FTm.h; };
+  const inSocle = (i) => { const x = i % tw.w, y = (i / tw.w) | 0; return x >= C.TOWN_MONUMENT.x && x < C.TOWN_MONUMENT.x + 2 && y >= C.TOWN_MONUMENT.y && y < C.TOWN_MONUMENT.y + 2; };
+  const tallSnow = (i) => tall(i) && (!inFoot(i) || inSocle(i));
   const propTiles = new Set((tw.props || []).map((p) => p.y * tw.w + p.x));
   const casterMemo = new Map(), shadowMemo = new Map();
   const trees = [];
@@ -2772,7 +2822,7 @@ export function townSnowEnv(tw, S, waterAt) {
       return lumAt(At, (x % supR) * SPR_T + lx, (y % supR) * SPR_T + ly) < At.mean - 18 ? 1 : 0;
     },
     trees,
-    tall,
+    tall: tallSnow,
     /* CE QUI PORTE UNE OMBRE, au pixel (hauteur en px d'art) : une clôture à la
        hauteur de ses voxels (`townFenceHeights` : l'ombre est ajourée comme
        elle), un bâtiment en bloc de 40 px (sa vraie hauteur n'est pas dans la
@@ -2786,6 +2836,7 @@ export function townSnowEnv(tw, S, waterAt) {
       let c = casterMemo.get(i);
       if (c === undefined) {
         if (tw.hedge && tw.hedge[i]) c = townFenceHeights(tw, x, y) || 0;
+        else if (inFoot(i)) c = obeliskCasterCell(x, y);
         else c = !propTiles.has(i) && tall(i) ? 40 : 0;
         casterMemo.set(i, c);
       }
@@ -4480,6 +4531,274 @@ export function drawStarDig(ctx, sheet, row, px, py, phase, fx) {
      glissade et dans la pose assise. */
   ctx.fillStyle = "rgba(0,0,0,0.34)";
   ctx.fillRect(px + 2, py + 11, 12, 1);
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 — LE BONHOMME DE NEIGE (`bonhomme.js` dit sa forme, ici on la dessine).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Trois boules (ou moins, pendant qu'on le monte), vues en 3/4 : chacune est une
+   SPHÈRE éclairée du nord-ouest — quatre tons de neige en paliers, une ombre BLEUE
+   au sud-est (DESSIN.md : la première chose qui fait « neige »), un cerne bleu-gris
+   d'un pixel — et elles se recouvrent un peu (une boule posée s'enfonce dans celle
+   du dessous). Puis le visage de charbon, et les accessoires choisis.
+   ⚠️ LES BOULES SONT EN CACHE PAR RAYON EN PIXELS (`snowBallCanvas`) : un disque
+   éclairé pixel par pixel coûte quelques centaines d'opérations, une image en
+   affiche une douzaine. Les accessoires, eux, sont quelques rectangles.
+   ⚠️ L'AFFAISSEMENT (`k`, 0..1, `slumpAt`) se DESSINE, il ne se masque pas : les
+   boules rétrécissent et s'écrasent (plus larges que hautes), le tas s'enfonce, la
+   tête penche, le chapeau tombe au sol vers k = 0,5, le nez vers 0,7 ; à la fin, un
+   monticule et ses objets. Aucun `rotate` (le faux canevas du banc).
+   `cx, by` : le pied (px), `balls` : rayons en cases du bas vers le haut, `deco` :
+   les choix (`SNOWMAN_DECO`, ou null pendant le montage), `T` : px par case. */
+const SNOWBALL = ["#6f88a6", "#9db4cc", "#c6d6e6", "#e2ebf4", "#f5f8fc", "#ffffff"];
+const SNOWBALL_CACHE = new Map();
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+export function snowBallCanvas(rPx, squash) {
+  const rx = Math.max(2, Math.round(rPx)), ry = Math.max(2, Math.round(rPx * (squash || 1)));
+  const key = rx * 100 + ry;
+  let c = SNOWBALL_CACHE.get(key);
+  if (c) return c;
+  const w = rx * 2 + 1, h = ry * 2 + 1;
+  c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const nx = (x - rx) / (rx + 0.5), ny = (y - ry) / (ry + 0.5), q = nx * nx + ny * ny;
+    if (q > 1) continue;
+    const nz = Math.sqrt(1 - q);
+    // La lumière du nord-ouest, un peu d'en haut ; l'ombre propre tire au bleu.
+    const L = -0.55 * nx - 0.62 * ny + 0.55 * nz;
+    const t = L + (BAYER4[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * 0.18;
+    const edge = q > 1 - 2.2 / (Math.min(rx, ry) + 1);
+    let col = t > 0.62 ? SNOWBALL[5] : t > 0.38 ? SNOWBALL[4] : t > 0.12 ? SNOWBALL[3] : t > -0.15 ? SNOWBALL[2] : SNOWBALL[1];
+    if (edge) col = L > 0.3 ? SNOWBALL[2] : SNOWBALL[0];                // le cerne : clair au jour, bleu à l'ombre
+    g.fillStyle = col; g.fillRect(x, y, 1, 1);
+  }
+  SNOWBALL_CACHE.set(key, c);
+  return c;
+}
+export function drawSnowman(ctx, cx, by, balls, deco, k, T) {
+  const n = balls.length, kk = Math.max(0, Math.min(1, +k || 0));
+  const P = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
+  const shrink = 1 - 0.42 * kk, squash = 1 - 0.38 * kk;
+  // L'ombre portée : une ellipse bleue au pied, décalée au sud-est.
+  const r0 = balls[0] * T * shrink;
+  ctx.fillStyle = "rgba(52,74,120,0.26)";
+  for (let dy = -2; dy <= 2; dy++) { const hw = Math.round(r0 * 1.05 * Math.sqrt(1 - (dy * dy) / 6.5)); ctx.fillRect(Math.round(cx - hw + 2), Math.round(by + dy - 1), hw * 2, 1); }
+  // Les boules, du bas vers le haut : centres empilés, recouvrement d'un cinquième.
+  const cen = [];
+  let yC = by - balls[0] * T * shrink * squash * 0.86;
+  for (let i = 0; i < n; i++) {
+    const rp = balls[i] * T * shrink, ry = rp * squash;
+    if (i > 0) yC -= (balls[i - 1] * T * shrink * squash + ry) * (0.8 - 0.15 * kk);
+    const lean = i === 2 ? Math.round(kk * kk * rp * 1.4) : i === 1 ? Math.round(kk * kk * rp * 0.4) : 0;
+    cen.push({ x: cx + lean, y: yC, r: rp, ry });
+  }
+  for (const b of cen) { const img = snowBallCanvas(b.r, b.ry / b.r); ctx.drawImage(img, Math.round(b.x - (img.width - 1) / 2), Math.round(b.y - (img.height - 1) / 2)); }
+  if (!deco || n < 3) return;
+  const top = cen[2], mid = cen[1];
+  const COAL = "#2a2a30", COAL_HI = "#55555e";
+  const hatFallen = kk >= 0.5, noseFallen = kk >= 0.7;
+  /* ── LES BRAS, derrière les mains : deux branches (ou un balai) qui partent des
+     flancs de la boule du milieu, vers le haut, et tombent au dégel. */
+  const droop = Math.round(kk * 6);
+  if (deco.arms === "twigs" || deco.arms === "broom") {
+    for (const sd of [-1, 1]) {
+      if (deco.arms === "broom" && sd === 1) continue;
+      const x0 = mid.x + sd * (mid.r - 1), y0 = mid.y - mid.r * 0.15;
+      for (let s2 = 0; s2 < 7; s2++) P(x0 + sd * s2, y0 - Math.round(s2 * 0.6) + Math.round(droop * s2 / 7), 1, 1, s2 < 3 ? "#5a3e26" : "#6e4c2e");
+      P(x0 + sd * 5, y0 - 5 + droop, 1, 2, "#6e4c2e"); P(x0 + sd * 7, y0 - 3 + droop, 1, 1, "#6e4c2e");   // les doigts de la branche
+    }
+    if (deco.arms === "broom") {
+      // Le balai, tenu côté droit : un manche droit, la paille en haut.
+      const bx = mid.x + mid.r + 1, byy = mid.y + mid.r * 0.6;
+      for (let s2 = 0; s2 < 16; s2++) P(bx + Math.round(s2 * 0.12), byy - s2 + Math.round(droop * s2 / 16), 1, 1, "#7a5432");
+      const tx = bx + 2, ty = byy - 16 + droop;
+      P(tx - 2, ty - 5, 5, 5, "#c9a24a"); P(tx - 2, ty - 5, 1, 5, "#e2c06a"); P(tx + 2, ty - 5, 1, 5, "#9a7a30"); P(tx - 2, ty - 1, 5, 1, "#8a3a2c");
+    }
+  }
+  // ── LES BOUTONS de charbon, sur la boule du milieu.
+  if (deco.extra === "buttons") for (let b = -1; b <= 1; b++) { const yy = mid.y + b * mid.ry * 0.38; P(mid.x - 1, yy - 1, 2, 2, COAL); P(mid.x - 1, yy - 1, 1, 1, COAL_HI); }
+  // ── L'ÉCHARPE, au cou : une bande sur le haut de la boule du milieu, un pan qui pend.
+  if (deco.scarf !== "none") {
+    const SC = { red: ["#b3263a", "#d8455a", "#7e1a28"], green: ["#2f7a4a", "#4f9a66", "#1f5434"], blue: ["#2f5aa8", "#5a80c8", "#1f3c78"] }[deco.scarf] || ["#b3263a", "#d8455a", "#7e1a28"];
+    const ny = Math.round(mid.y - mid.ry * 0.82), hw = Math.round(top.r * 0.95);
+    P(top.x - hw, ny, hw * 2, 3, SC[0]); P(top.x - hw, ny, hw * 2, 1, SC[1]); P(top.x - hw, ny + 2, hw * 2, 1, SC[2]);
+    if (deco.scarf === "green") for (let x = -hw + 1; x < hw; x += 3) P(top.x + x, ny, 1, 3, "#e8e0c8");   // rayée
+    const tx = top.x + Math.round(hw * 0.4);
+    P(tx, ny + 3, 3, 5, SC[0]); P(tx, ny + 3, 1, 5, SC[1]); P(tx, ny + 8, 1, 1, SC[2]); P(tx + 2, ny + 8, 1, 1, SC[2]);   // le pan, ses franges
+  }
+  // ── LE VISAGE : deux yeux, une bouche en arc, sur la boule du haut.
+  const fy = top.y - top.ry * 0.12;
+  const eyeDx = Math.max(2, Math.round(top.r * 0.36));
+  P(top.x - eyeDx - 1, fy - 2, 2, 2, COAL); P(top.x + eyeDx - 1, fy - 2, 2, 2, COAL);
+  P(top.x - eyeDx - 1, fy - 2, 1, 1, COAL_HI); P(top.x + eyeDx - 1, fy - 2, 1, 1, COAL_HI);
+  const mw = Math.max(2, Math.round(top.r * 0.45));
+  for (let m = -mw; m <= mw; m += 2) P(top.x + m, fy + 3 + Math.round((1 - (m * m) / (mw * mw + 0.01)) * 1.5), 1, 1, COAL);
+  // ── LA PIPE, au coin de la bouche, son fourneau, un filet de fumée.
+  if (deco.extra === "pipe") { const px2 = top.x + mw + 1, py2 = fy + 3; P(px2, py2, 3, 1, "#6e4a2c"); P(px2 + 3, py2 - 2, 2, 3, "#5a3a20"); P(px2 + 3, py2 - 2, 2, 1, "#8a6040"); P(px2 + 4, py2 - 4, 1, 1, "#d6dce4"); P(px2 + 5, py2 - 6, 1, 1, "#c6ccd4"); }
+  // ── LE NEZ : une carotte, pointée vers nous et un peu de côté (3/4).
+  const noseAt = (nx2, ny2) => { P(nx2, ny2, 4, 2, "#e8742a"); P(nx2 + 4, ny2, 2, 1, "#e8742a"); P(nx2, ny2 + 1, 4, 1, "#c85a1a"); P(nx2, ny2, 1, 1, "#f4a060"); };
+  if (deco.nose === "carrot") { if (!noseFallen) noseAt(top.x, fy); else noseAt(cx + r0 * 0.7, by - 2); }
+  // ── LE CHAPEAU, sur la tête — ou au sol, tombé, une fois le dégel avancé.
+  if (deco.hat !== "none") {
+    const onHead = !hatFallen;
+    const hx = onHead ? top.x : cx - r0 - 6, hb = onHead ? Math.round(top.y - top.ry * 0.78) : by - 1;
+    const hr = Math.max(4, Math.round(top.r * 0.95));
+    if (deco.hat === "tophat") {
+      P(hx - hr - 2, hb - 1, hr * 2 + 4, 2, "#1c1c22"); P(hx - hr - 2, hb - 1, hr * 2 + 4, 1, "#3a3a44");          // le bord
+      P(hx - hr, hb - hr * 2, hr * 2, hr * 2 - 1, "#22222a"); P(hx - hr, hb - hr * 2, 2, hr * 2 - 1, "#3e3e48");   // le haut-de-forme, son jour à gauche
+      P(hx - hr, hb - 4, hr * 2, 2, "#b3263a"); P(hx - hr, hb - 4, hr * 2, 1, "#d8455a");                          // le ruban
+    } else if (deco.hat === "beanie") {
+      for (let dy = 0; dy < hr; dy++) { const hw = Math.round(hr * Math.sqrt(1 - (dy * dy) / (hr * hr))); P(hx - hw, hb - 2 - dy, hw * 2, 1, dy < 2 ? "#e8e0c8" : (dy & 1) ? "#c0303f" : "#a8263a"); }
+      P(hx - 2, hb - hr - 4, 4, 3, "#f4f1ea"); P(hx - 2, hb - hr - 4, 1, 1, "#ffffff");                            // le pompon
+    } else if (deco.hat === "bucket") {
+      for (let dy = 0; dy < hr + 2; dy++) { const hw = hr + 1 - Math.round(dy * 0.35); P(hx - hw, hb - dy, hw * 2, 1, dy === 0 ? "#6e7680" : "#9aa2ac"); P(hx - hw, hb - dy, 1, 1, "#c6ccd4"); }
+      P(hx - hr + 2, hb - hr - 2, (hr - 2) * 2, 1, "#c6ccd4");                                                    // le fond, au jour
+    } else if (deco.hat === "beret") {
+      P(hx - hr - 1, hb - 3, hr * 2 + 2, 3, "#24304e"); P(hx - hr - 1, hb - 3, hr * 2 + 2, 1, "#3a4a72"); P(hx, hb - 5, 1, 2, "#24304e");
+    }
+  }
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-04 — LES POSES DU PATIN (`patin.js` dit laquelle, ici on la dessine).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Les cinq clés de `skatePose`/`skateSeen` : "glide" (la poussée alternée),
+   "stand" (immobile sur ses lames), "brake" (l'arrêt en travers), "slip" (sans
+   patins : les bras moulinent, les jambes partent en ciseaux) et "fall" (assis
+   sur la glace, sonné).
+   ⚠️ LES QUATRE RÈGLES DES POSES DU CRATÈRE, TENUES ICI AUSSI : on redécoupe la
+   feuille (la tenue achetée se voit en patinant), aucun `translate`/`rotate`
+   (le faux canevas du banc), les membres CONTRALATÉRAUX (la jambe qui pousse
+   et le bras qui part devant ne sont pas du même côté), et le miroir est fait
+   par l'appelant.
+   ⚠️ CHAUSSÉ, ON EST PLUS HAUT D'UN PIXEL : la dernière rangée (`py + 15`, le
+   sol) est la LAME, la bottine s'arrête au-dessus. Ce pixel est toute la
+   différence entre un patineur et un marcheur qui glisse. Les bottines sont
+   repeintes en blanc — ce ne sont pas des vêtements, ce sont les patins
+   achetés au chalet (§ `townSkateChaletSprite`).
+   ⚠️ LA FOULÉE EST UNE PHASE RÉELLE (`phase`, sa partie entière choisit la
+   jambe) : une poussée part de sous le corps, s'écarte en arrière en se
+   soulevant, revient — c'est le sinus d'un demi-tour, jamais un saut d'image. */
+const SKATE_BOOT = ["#ffffff", "#f6f3ec", "#d6d0c4"];
+const SKATE_BLADE = ["#ffffff", "#c6ccd4", "#6e7680"];
+export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt) {
+  const sy = row * 24, side = row === 2;
+  const ph = +phase || 0, leg = Math.floor(ph) & 1, u = ph - Math.floor(ph);
+  const P1 = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  /* ⚠️ SOUS UNE ROBE, SEUL LE PIED BOUGE. La tranche des jambes d'un personnage en
+     robe porte l'ourlet (rangées 16..20) : la couper en deux moitiés emportait une
+     demi-jupe avec la jambe qui pousse (premier jet, vu sur la planche). Avec
+     `skirt`, la jupe reste au buste et la tranche mobile commence sous l'ourlet. */
+  const LY = skirt ? 21 : POSE_LEG_Y, LH = 24 - LY;
+  /* La bottine d'une moitié de jambe dessinée en (lx, ly) : la feuille la peint en
+     x 5..7 (moitié gauche) ou 8..10 (moitié droite, donc 0..2 de sa moitié), sur ses
+     trois dernières rangées. */
+  const boot = (lx, ly, right) => {
+    const bx = lx + (right ? 0 : 5), by = ly + LH - 3;
+    P1(bx, by, 3, 3, SKATE_BOOT[1]); P1(bx, by, 1, 3, SKATE_BOOT[0]); P1(bx, by + 2, 3, 1, SKATE_BOOT[2]);
+    if (side) {                                                          // de profil : la lame entière, pointe relevée devant
+      P1(bx - 1, by + 3, 6, 1, SKATE_BLADE[1]); P1(bx - 1, by + 3, 2, 1, SKATE_BLADE[0]); P1(bx + 4, by + 2, 1, 1, SKATE_BLADE[1]);
+    } else {                                                             // de face ou de dos : la lame vue par la tranche
+      P1(bx + 1, by + 3, 1, 1, SKATE_BLADE[1]); P1(bx, by + 3, 1, 1, SKATE_BLADE[2]);
+    }
+  };
+  const halfLeg = (right, x, y) => ctx.drawImage(sheet, right ? 8 : 0, sy + LY, 8, LH, x, y, 8, LH);
+  const legs = (dl, dlY, dr, drY, top) => { halfLeg(false, px + dl, top + dlY); halfLeg(true, px + 8 + dr, top + drY); };
+  /* Le haut du corps : la tête (décalée de `hx`), puis le buste — avec sa jupe s'il
+     en a une — décalé de `tx`, posés pour que la tranche des jambes commence à `top + LY`. */
+  const upper = (top, hx, tx) => {
+    ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + hx, top, 16, POSE_HEAD_H);
+    ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y, px + tx, top + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y);
+  };
+  const arm = (lr, x, y) => ctx.drawImage(sheet, lr ? POSE_ARM_RX : POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, x, y, POSE_ARM_W, POSE_ARM_H);
+  if (pose === "slip") {
+    /* SANS PATINS. Le buste penche d'un côté puis de l'autre (cisaillement : la tête
+       part plus loin que le buste), les jambes en ciseaux, et les deux bras LEVÉS qui
+       moulinent en alternance.
+       ⚠️ LE BUSTE EST DÉCOUPÉ SANS SES BRAS (x 5..10) : la feuille les peint le long
+       du corps, et des bras levés ajoutés par-dessus en faisaient quatre (premier
+       jet). Les bras levés sont la manche de la feuille RETOURNÉE rangée par rangée
+       — la main en haut — puisqu'aucun `scale(1, −1)` ne passe au banc. */
+    const w = Math.sin(ph * Math.PI * 2), hx = Math.round(2 * w), tx = Math.round(w);
+    const top = py - 8;
+    ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + hx, top, 16, POSE_HEAD_H);
+    ctx.drawImage(sheet, 5, sy + POSE_TORSO_Y, 6, LY - POSE_TORSO_Y, px + 5 + tx, top + POSE_TORSO_Y, 6, LY - POSE_TORSO_Y);
+    legs(-2 + Math.round(w), 0, 2 + Math.round(w), 0, top + LY);
+    const armUp = (lr, x, y) => {
+      for (let k = 0; k < POSE_ARM_H; k++) ctx.drawImage(sheet, lr ? POSE_ARM_RX : POSE_ARM_LX, sy + POSE_ARM_Y + POSE_ARM_H - 1 - k, POSE_ARM_W, 1, x, y + k, POSE_ARM_W, 1);
+    };
+    const aL = w > 0 ? -2 : 0, aR = w < 0 ? -2 : 0;                    // le bras du côté où l'on penche monte plus haut
+    armUp(0, px + tx + 2, top + POSE_TORSO_Y - 4 + aL);
+    armUp(1, px + tx + 11, top + POSE_TORSO_Y - 4 + aR);
+    return;
+  }
+  if (pose === "fall") {
+    /* ASSIS SUR LA GLACE, SONNÉ : la pose assise du banc, posée au sol (le bassin à
+       hauteur de pieds) et trois étoiles qui tournent au-dessus de la tête. Ce qu'on
+       voit d'un ami qui vient de tomber, et c'est drôle — c'est le seul moment de
+       la mécanique qui doit l'être. */
+    const by = py + 6;
+    drawSeated(ctx, sheet, row, px, by);
+    const hy = by + SEAT_POSE.topY - 3;
+    for (let k = 0; k < 3; k++) {
+      const a = ph * 2.4 + k * (Math.PI * 2 / 3);
+      const sx = Math.round(px + 8 + Math.cos(a) * 6), syy = Math.round(hy + Math.sin(a) * 2);
+      P1(sx, syy - 1, 1, 3, "#f6d860"); P1(sx - 1, syy, 3, 1, "#f6d860"); P1(sx, syy, 1, 1, "#fffbe0");
+    }
+    return;
+  }
+  /* CHAUSSÉ : "stand", "brake", "glide". */
+  const top = py - 9;                                                   // un pixel plus haut : la lame
+  if (pose === "brake") {
+    /* L'ARRÊT EN TRAVERS : genoux fléchis (un pixel plus bas), jambes écartées, le
+       buste rejeté en arrière de la course (vers −x dans le repère du profil). */
+    const t2 = top + 1;
+    upper(t2, side ? -2 : 0, side ? -1 : 0);
+    legs(-2, -1, 2, -1, t2 + LY);
+    boot(px - 2, t2 + LY - 1, false); boot(px + 10, t2 + LY - 1, true);
+    arm(0, px - (side ? 1 : 0) + POSE_BODY_L - POSE_ARM_W, t2 + POSE_ARM_Y - 1);
+    arm(1, px - (side ? 1 : 0) + POSE_BODY_R, t2 + POSE_ARM_Y - 1);
+    return;
+  }
+  if (pose === "stand") {
+    upper(top, 0, 0);
+    legs(0, 0, 0, 0, top + LY);
+    boot(px, top + LY, false); boot(px + 8, top + LY, true);
+    return;
+  }
+  /* "glide" — LA POUSSÉE ALTERNÉE. `s` monte de 0 à 1 et redescend sur une foulée :
+     la jambe qui pousse s'écarte (en arrière de profil, sur le côté de face), se
+     soulève d'un pixel au plus loin, revient. La tête précède le buste d'un pixel :
+     on patine penché vers sa course. */
+  const sP = Math.sin(u * Math.PI), out = Math.round((skirt ? 0.5 : 1) + (skirt ? 2 : 2.5) * sP), lift = sP > 0.7 ? -1 : 0;
+  const crouch = 1;
+  upper(top + crouch, side ? 1 : 0, 0);
+  const ly = top + crouch + LY;
+  let dl, dr, ylL = 0, ylR = 0;
+  if (side) {
+    // De profil : la jambe qui pousse part EN ARRIÈRE (−x), l'autre glisse sous le corps.
+    dl = leg ? -out : 1; dr = leg ? 0 : -out - 1;
+  } else {
+    // De face, de dos : elle part SUR LE CÔTÉ, en V.
+    dl = leg ? -out : 0; dr = leg ? 0 : out;
+  }
+  if (leg) ylL = lift; else ylR = lift;
+  // La jambe qui pousse d'abord (derrière), celle qui porte ensuite — chacune avec sa bottine.
+  const half = (right) => {
+    const dx = right ? 8 + dr : dl, dy = right ? ylR : ylL;
+    halfLeg(right, px + dx, ly + dy);
+    boot(px + dx, ly + dy, right);
+  };
+  if (leg) { half(false); half(true); } else { half(true); half(false); }
+  /* De profil, le bras PROCHE (la manche de la feuille de profil, x 7..8) balance à
+     contresens de la jambe qui pousse ; celui de la feuille reste, c'est le bras
+     lointain. De face et de dos, les bras du buste suffisent : en ajouter dehors les
+     détachait du corps (premier jet, vu sur la planche). */
+  if (side) {
+    const swing = Math.round(2.5 * sP) * (leg ? 1 : -1);
+    ctx.drawImage(sheet, 7, sy + POSE_ARM_Y, 2, POSE_ARM_H, px + 7 + swing, top + crouch + POSE_ARM_Y, 2, POSE_ARM_H);
+  }
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
@@ -7283,6 +7602,163 @@ export function buildSprites() {
     P(g, 23, 0, 2, 6, "#8a8a94"); P(g, 21, 0, 6, 2, "#d8b45a"); // épi de faîtage
     return c;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LE CHALET DES PATINS (Guillaume : « étal d'hiver au bord du
+     ║ lac, mais très chic et couvert »). 64 × 60, ancré au milieu de sa rangée
+     ║ du bas (`TOWN_SKATE_CHALET_*`, 4 × 2 cases d'emprise).
+     ╚══════════════════════════════════════════════════════════════════════
+     ⚠️ PROVISOIRE ET DIT COMME TEL : c'est une infrastructure neuve, la règle du
+     projet est d'en proposer un prompt Gemini (`docs/IMAGES-ET-BLENDER.md`) ; ce
+     dessin-ci rend la mécanique jouable le jour même, et le bitmap le remplacera
+     sous le même nom de décor.
+     Ce qui le fait « chic » plutôt qu'« étal » : du bois PEINT (vert forêt, filets
+     crème), un toit d'ardoise à écailles avec son pignon et son emblème doré (un
+     patin — aucun mot cuit, §4 : un texte peint ne se traduit pas), un lambrequin
+     festonné rayé bordeaux, une guirlande de sapin à ampoules chaudes, deux
+     lanternes. Trois paires de patins pendues dans la vitrine disent ce qu'on y
+     vend sans une lettre. Fermé (hors de l'hiver) : volets clos, lambrequin roulé,
+     pas de guirlande, lanternes éteintes.
+     ⚠️ DES MASSES PLEINES, CERNÉES, ÉCLAIRÉES DU NORD-OUEST (DESSIN.md) : aucun
+     pixel tiré au hasard ; les rangs d'ardoise et les planches se déduisent de
+     leur pas, le pignon et l'emblème de l'axe (x = 32). */
+  function townSkateChaletSprite(open) {
+    const [c, g] = cv(64, 60);
+    const AX = 32;
+    const STONE = ["#7d786e", "#9a9588", "#b8b2a4", "#d2ccbe"];
+    const GR = ["#173629", "#1f4436", "#2b5a46", "#37694f", "#467c60"];
+    const TR = ["#9c917a", "#c9bea4", "#e8dfc8", "#fbf5e6"];
+    const SL = ["#232a36", "#2e3746", "#3b4658", "#4d5a6e", "#66748a"];
+    const GOLD = ["#8a6a2c", "#c39a48", "#e3c26a", "#f6e2a0"];
+    const BUR = ["#5e1726", "#7e2335", "#9a3245"], CREAM = "#efe4cc", CREAM_D = "#cfc2a6";
+    const INK = "#151a20";
+    // ── 1. LE SOUBASSEMENT de pierre (y 52..59), deux assises décalées.
+    P(g, 3, 52, 58, 8, STONE[1]); P(g, 3, 52, 58, 1, STONE[3]); P(g, 3, 59, 58, 1, STONE[0]);
+    for (let r = 0; r < 2; r++) for (let x = 3 + (r ? 6 : 0); x < 61; x += 12) P(g, x, 54 + r * 3, 1, 3, STONE[0]);
+    P(g, 3, 56, 58, 1, STONE[0]); P(g, 3, 52, 1, 8, STONE[2]); P(g, 60, 52, 1, 8, STONE[0]);
+    // ── 2. LES MURS : planches verticales peintes (pas de 4 px), le jour à gauche.
+    P(g, 5, 27, 54, 25, GR[2]);
+    for (let x = 5; x < 59; x += 4) { P(g, x, 27, 1, 25, GR[1]); P(g, x + 1, 27, 1, 25, x < AX ? GR[3] : GR[2]); }
+    P(g, 5, 27, 2, 25, GR[4]); P(g, 57, 27, 2, 25, GR[0]);              // l'arête éclairée, l'arête à l'ombre
+    P(g, 5, 50, 54, 2, GR[0]);                                          // le pied du mur, dans l'ombre du soubassement
+    // Les poteaux d'angle et la lisse, crème.
+    for (const px of [5, 57]) { P(g, px, 27, 2, 25, TR[2]); P(g, px, 27, 1, 25, px < AX ? TR[3] : TR[1]); }
+    P(g, 5, 27, 54, 2, TR[2]); P(g, 5, 28, 54, 1, TR[1]);
+    // ── 3. LA BAIE DU COMPTOIR (x 11..53, y 32..47).
+    const WX0 = 11, WX1 = 53, WY0 = 36, WY1 = 48;
+    P(g, WX0 - 2, WY0 - 1, WX1 - WX0 + 4, WY1 - WY0 + 3, TR[1]);        // le cadre, crème à l'ombre
+    P(g, WX0 - 2, WY0 - 1, WX1 - WX0 + 4, 1, TR[3]); P(g, WX0 - 2, WY0 - 1, 1, WY1 - WY0 + 3, TR[2]);
+    if (open) {
+      // L'intérieur éclairé : un dégradé en PALIERS (trois tons), le plus chaud en bas.
+      P(g, WX0, WY0, WX1 - WX0, WY1 - WY0, "#b9773a");
+      P(g, WX0, WY0 + 5, WX1 - WX0, WY1 - WY0 - 5, "#d99a44");
+      P(g, WX0, WY0 + 10, WX1 - WX0, WY1 - WY0 - 10, "#efbd66");
+      P(g, WX0, WY0, WX1 - WX0, 1, "#7a4a22");                          // l'ombre sous le linteau
+      /* La tringle, et trois paires de patins DE PROFIL pendues par leurs lacets : une
+         tige, un pied tourné vers la droite, une lame plus longue que le pied dont la
+         pointe se relève — c'est la lame qui fait lire « patin » et pas « botte ».
+         Dans une paire, la bottine du fond est plus sombre et décalée de trois pixels. */
+      P(g, WX0 + 1, WY0 + 1, WX1 - WX0 - 2, 1, "#8a909a");
+      const boot = (x, y, far) => {
+        const W0 = far ? "#d8d3c8" : "#f6f3ec", W1 = far ? "#b6b0a4" : "#d6d0c4", HI = far ? "#ece8de" : "#ffffff";
+        P(g, x, y, 2, 4, W0); P(g, x, y, 1, 4, HI);                     // la tige
+        P(g, x, y + 4, 4, 2, W0); P(g, x + 3, y + 5, 1, 1, W1); P(g, x, y + 5, 3, 1, W1);   // le pied, son ombre dessous
+        P(g, x - 1, y + 6, 6, 1, far ? "#9aa2ac" : "#c6ccd4"); P(g, x - 1, y + 6, 2, 1, far ? "#c6ccd4" : "#ffffff");  // la lame
+        P(g, x + 5, y + 5, 1, 1, far ? "#9aa2ac" : "#c6ccd4");          // sa pointe relevée
+        P(g, x + 1, y - 2, 1, 2, "#8a8a94");                            // le lacet jusqu'à la tringle
+      };
+      for (const bx of [AX - 15, AX - 3, AX + 9]) { boot(bx + 3, WY0 + 3, true); boot(bx, WY0 + 4, false); }
+      // Le comptoir : une planche épaisse qui déborde, éclairée dessus, son chant à l'ombre.
+      P(g, WX0 - 3, WY1 - 1, WX1 - WX0 + 6, 3, "#a8784a"); P(g, WX0 - 3, WY1 - 1, WX1 - WX0 + 6, 1, "#d6a674");
+      P(g, WX0 - 3, WY1 + 2, WX1 - WX0 + 6, 1, "#5e3e22");
+      // Sur le comptoir : une petite caisse et une tasse fumante (le marchand n'est pas loin).
+      P(g, AX + 14, WY1 - 4, 6, 3, "#6e4a2c"); P(g, AX + 14, WY1 - 4, 6, 1, "#9a6c42"); P(g, AX + 16, WY1 - 5, 2, 1, GOLD[2]);
+      P(g, AX - 19, WY1 - 3, 3, 2, "#f4f1ea"); P(g, AX - 16, WY1 - 3, 1, 1, "#f4f1ea");
+      // ── LE LAMBREQUIN : bandes bordeaux et crème (pas de 4), festonné en bas, sous la guirlande.
+      const VY = WY0 - 5;
+      for (let x = WX0 - 3; x < WX1 + 3; x++) {
+        const band = (((x - (WX0 - 3)) / 4) | 0) & 1;
+        const col = band ? CREAM : BUR[1];
+        P(g, x, VY, 1, 5, col);
+        P(g, x, VY, 1, 1, band ? "#fbf5e6" : BUR[2]);
+        const ph = (x - (WX0 - 3)) % 4;                                  // le feston : un demi-disque par bande
+        if (ph === 1 || ph === 2) P(g, x, VY + 5, 1, 1, col);
+        P(g, x, VY + (ph === 1 || ph === 2 ? 6 : 5), 1, 1, band ? CREAM_D : BUR[0]);   // sa lèvre d'ombre
+      }
+    } else {
+      // Les volets clos : deux vantaux de planches vertes, une écharpe crème en Z.
+      P(g, WX0, WY0, WX1 - WX0, WY1 - WY0, GR[2]);
+      for (let x = WX0; x < WX1; x += 3) P(g, x, WY0, 1, WY1 - WY0, GR[1]);
+      P(g, AX - 1, WY0, 2, WY1 - WY0, GR[0]);                           // le battement
+      for (const [x0, x1] of [[WX0, AX - 1], [AX + 1, WX1]]) {
+        P(g, x0, WY0 + 1, x1 - x0, 2, TR[2]); P(g, x0, WY1 - 3, x1 - x0, 2, TR[1]);
+        const n = x1 - x0, h = WY1 - WY0 - 6;
+        for (let k = 0; k < n; k++) P(g, x0 + k, WY0 + 3 + Math.round((h - 1) * (1 - k / (n - 1))), 2, 1, TR[1]);
+      }
+      // Le lambrequin roulé, sous l'avant-toit : un cylindre rayé.
+      for (let x = WX0 - 3; x < WX1 + 3; x++) { const band = (((x - (WX0 - 3)) / 4) | 0) & 1; P(g, x, WY0 - 5, 1, 3, band ? CREAM : BUR[1]); P(g, x, WY0 - 5, 1, 1, band ? "#fbf5e6" : BUR[2]); P(g, x, WY0 - 3, 1, 1, band ? CREAM_D : BUR[0]); }
+      P(g, WX0 - 2, WY1 + 1, WX1 - WX0 + 4, 1, TR[1]);                  // l'appui du comptoir fermé
+    }
+    // ── 4. LE TOIT : un pan d'ardoise à écailles qui déborde de 3 px, vu d'en haut (y 6..27).
+    const RX0 = 1, RX1 = 63, RY0 = 7, RY1 = 27;
+    P(g, RX0, RY0, RX1 - RX0, RY1 - RY0, SL[2]);
+    for (let y = RY0 + 1, r = 0; y < RY1 - 1; y += 3, r++) {
+      for (let x = RX0; x < RX1; x++) {
+        const ph = (x - RX0 + (r & 1) * 2) % 4;                          // les écailles, en quinconce
+        P(g, x, y + 2, 1, 1, ph === 0 || ph === 3 ? SL[1] : SL[0]);       // le bas arrondi de chaque écaille, à l'ombre
+        if (ph === 1 || ph === 2) P(g, x, y, 1, 1, x < AX ? SL[4] : SL[3]);  // son dos éclairé
+      }
+    }
+    P(g, RX0, RY0, RX1 - RX0, 2, SL[4]); P(g, RX0, RY0, RX1 - RX0, 1, "#8494aa");   // le faîtage, au soleil
+    P(g, RX0, RY1 - 1, RX1 - RX0, 1, SL[0]);                             // la rive basse
+    P(g, RX0, RY0, 1, RY1 - RY0, SL[3]); P(g, RX1 - 1, RY0, 1, RY1 - RY0, SL[0]);
+    // L'ombre du toit sur le haut des murs.
+    P(g, 5, 27, 54, 1, GR[0]);
+    // ── 5. LE PIGNON CENTRAL, son emblème doré (un patin), ses rives crème.
+    const GH = 15, GY = RY1 - 1;                                         // base du pignon sur la rive basse
+    for (let k = 0; k < GH; k++) {
+      const hw = Math.round((GH - k) * 0.95), y = GY - k;
+      P(g, AX - hw, y, 2 * hw, 1, TR[2]);                                // le tympan, crème
+      P(g, AX - hw - 2, y, 2, 1, TR[3]); P(g, AX + hw, y, 2, 1, TR[1]);  // les rives, le jour à gauche
+    }
+    P(g, AX - 1, GY - GH - 2, 2, 3, GOLD[2]); P(g, AX - 1, GY - GH - 3, 1, 1, GOLD[3]);   // l'épi
+    /* L'emblème : un médaillon bordeaux cerclé d'or (un ovale de 13 × 9, son cerne
+       éclairé au nord-ouest), un patin doré DE PROFIL dessus — la tige, le pied vers
+       la droite, la lame longue à la pointe relevée. */
+    const MY = GY - 6;
+    for (let dy = -4; dy <= 4; dy++) {
+      const hw = Math.round(6.5 * Math.sqrt(Math.max(0, 1 - (dy * dy) / 21)));
+      P(g, AX - hw, MY + dy, 2 * hw, 1, BUR[1]);
+      P(g, AX - hw, MY + dy, 1, 1, dy < 1 ? GOLD[2] : GOLD[1]); P(g, AX + hw - 1, MY + dy, 1, 1, dy < 0 ? GOLD[1] : GOLD[0]);
+    }
+    P(g, AX - 4, MY - 5, 8, 1, GOLD[2]); P(g, AX - 4, MY + 5, 8, 1, GOLD[0]);
+    /* ⚠️ LES DEUX MONTANTS ENTRE LA BOTTINE ET LA LAME : sans eux, la bottine posée
+       sur sa lame se lit comme la lettre « L » (premier jet, vu sur la planche) —
+       c'est le jour entre les deux qui fait un patin. */
+    P(g, AX - 3, MY - 4, 2, 4, GOLD[3]); P(g, AX - 3, MY - 4, 1, 4, "#fff4cc");   // la tige
+    P(g, AX - 3, MY, 5, 1, GOLD[2]); P(g, AX + 1, MY, 1, 1, GOLD[1]);             // le pied
+    P(g, AX - 2, MY + 1, 1, 1, GOLD[1]); P(g, AX + 1, MY + 1, 1, 1, GOLD[1]);     // les deux montants
+    P(g, AX - 4, MY + 2, 8, 1, GOLD[3]); P(g, AX + 4, MY + 1, 1, 1, GOLD[3]);    // la lame, sa pointe relevée
+    // ── 6. LA GUIRLANDE (ouvert seulement) : sapin sous l'avant-toit, nœuds rouges, ampoules chaudes.
+    if (open) {
+      for (let x = 2; x < 62; x++) {
+        const sag = Math.round(1.5 - 1.5 * Math.cos(((x - 2) / 15) * Math.PI * 2));   // quatre festons
+        const y = RY1 + sag;
+        P(g, x, y, 1, 2, (x & 1) ? "#2f5e3a" : "#3f7a4a"); P(g, x, y, 1, 1, "#4f8f58");
+        if ((x - 2) % 15 === 0) { P(g, x - 1, y, 3, 2, "#b3263a"); P(g, x - 1, y, 1, 1, "#d8455a"); P(g, x, y + 2, 1, 2, "#8e1c2c"); }
+        else if ((x - 2) % 5 === 2) { P(g, x, y + 2, 1, 1, "#ffd98a"); P(g, x, y + 1, 1, 1, "#fff2c4"); }
+      }
+    }
+    // ── 7. LES DEUX LANTERNES des poteaux d'angle (allumées si ouvert).
+    for (const lx of [2, 59]) {
+      P(g, lx, 33, 3, 1, INK); P(g, lx - 0, 34, 3, 5, INK);
+      P(g, lx + 1, 35, 1, 3, open ? "#ffe39a" : "#55606e");
+      if (open) P(g, lx + 1, 35, 1, 1, "#fffbe6");
+      P(g, lx, 39, 3, 1, INK); P(g, lx + 1, 32, 1, 1, INK);
+    }
+    // ── 8. LE CERNE : un trait sombre sous le soubassement et le long des rives du toit.
+    P(g, 3, 59, 58, 1, "#4a463f");
+    return c;
+  }
   // Une TOMBE. Trois silhouettes possibles auraient été du luxe : c'est
   // l'alignement qui fait le cimetière, pas la variété des pierres.
   function townGraveSprite() {
@@ -7961,6 +8437,9 @@ export function buildSprites() {
      ⚠️ AUCUN LISSAGE : chaque forme est remplie par balayage, rangée par rangée,
      au pixel d'écran (`span`) — un `ellipse()` lissé redonnerait le flou qu'on
      corrige. Le sprite natif (`plazaFountainSprite`) reste pour les reflets. */
+  /* 2026-10-04 (nuit) — la rampe de pierre de la PLACE, partagée par la fontaine et
+     l'obélisque (`plazaMonumentHi`) : « un seul chantier de pierre », nord et sud. */
+  const PLAZA_STONE = ["#3e3a34", "#56514a", "#6d685f", "#858076", "#9c978b", "#b3aea0", "#c8c3b4", "#dbd6c7", "#ece8da"];
   const FOUNTAIN_HI = new Map();
   // Le mascaron de lion, au demi-pixel d'art : crinière, face éclairée, yeux, gueule.
   const LION_MAP = [".aaaaa.", "aabbbaa", "abcbcba", "abbbbba", "aabddaa", ".abddba", "..aaa.."];
@@ -7974,7 +8453,7 @@ export function buildSprites() {
        premier jet tirait tout vers le haut de la rampe : une pierre pâle, sans
        creux, qu'on lisait comme du plâtre. Ce qui fait la PIERRE, c'est l'écart
        entre le dessus (au soleil) et les pans (à l'ombre). */
-    const ST = ["#3e3a34", "#56514a", "#6d685f", "#858076", "#9c978b", "#b3aea0", "#c8c3b4", "#dbd6c7", "#ece8da"];
+    const ST = PLAZA_STONE;
     const tone = (k) => ST[Math.max(0, Math.min(ST.length - 1, Math.round(k)))];
     const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
     const dot = (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))); };
@@ -8161,22 +8640,272 @@ export function buildSprites() {
   /* L'OBÉLISQUE de la place. ⚠️ Il n'est PAS une seconde fontaine : deux
      bassins symétriques auraient fait un jardin d'eau, pas une place. Une masse
      de pierre verticale au sud répond à une masse d'eau horizontale au nord —
-     ce sont les contraires qui équilibrent, pas les copies. */
-  function plazaMonumentSprite() {
-    const [c, g] = cv(48, 72);
-    const S = "#cfcabc", SL = "#e6e1d2", SD = "#a9a496";
-    P(g, 6, 62, 36, 9, SD); P(g, 6, 62, 36, 2, S);                   // emmarchement
-    P(g, 11, 54, 26, 9, S); P(g, 11, 54, 26, 2, SL);                 // socle
-    P(g, 15, 46, 18, 9, SD); P(g, 15, 46, 18, 1, S);                 // dé
-    g.fillStyle = S;                                                  // fût effilé
-    g.beginPath(); g.moveTo(18, 46); g.lineTo(21, 8); g.lineTo(27, 8); g.lineTo(30, 46); g.fill();
-    g.fillStyle = SL;
-    g.beginPath(); g.moveTo(18, 46); g.lineTo(21, 8); g.lineTo(23, 8); g.lineTo(21, 46); g.fill();
-    g.fillStyle = "#d8b45a";                                          // pyramidion doré
-    g.beginPath(); g.moveTo(20, 9); g.lineTo(24, 0); g.lineTo(28, 9); g.fill();
-    P(g, 14, 50, 20, 1, "#8f8a7c");                                   // inscription
-    P(g, 16, 52, 16, 1, "#8f8a7c");
-    return c;
+     ce sont les contraires qui équilibrent, pas les copies.
+     ╔═════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 (nuit) — L'OBÉLISQUE AU PIXEL D'ÉCRAN. Guillaume : « l'obélisque
+     ║ est cheap pour l'instant, le pousser pour qu'il soit plus détaillé et beau ».
+     ╚═════════════════════════════════════════════════════════════════════════
+     Cadré avec lui avant d'écrire : CIVIQUE À LA FRANÇAISE (fût monolithe,
+     pyramidion doré, socle mouluré, bronze patiné), le CALCAIRE BLOND de la
+     fontaine (`PLAZA_STONE` : la place lit un seul chantier de pierre), BORNES ET
+     CHAÎNES autour, « un tout petit peu plus élancé, pas abusé » (le sommet passe
+     de ~4,1 à ~5,1 cases au-dessus du sol ; le fût, de 3,2 à 4,5 fois sa largeur).
+     Même méthode que `plazaFountainHi` : un canevas par cran de zoom, des formes
+     ASSEMBLÉES remplies au pixel d'écran, aucun lissage. Lumière du haut à gauche :
+     les DESSUS prennent le jour, les FACES sont un cran plus sombres que le dallage
+     (c'est cet écart qui détache le monument d'une place claire — l'ancien était
+     plus pâle que le sol), l'arête gauche accroche, la droite s'assombrit.
+     ⚠️ VUE DE FACE, DESSUS EN OBLIQUE (profondeur × `KD`, comme les ellipses de la
+     fontaine) : aucune face latérale, sauf sur le pyramidion où la pente les montre.
+     Un fût vu « par l'arête » (gauche claire, droite sombre, l'ancien dessin) aurait
+     exigé un socle tourné à 45° — et l'enclos, lui, suit les cases.
+     ⚠️ L'ENCLOS SE LIT SUR `C.TOWN_MONUMENT_FOOT` (la collision) : bornes à 3 px des
+     bords de l'emprise. Le bas du canevas est le bord sud de l'emprise, son milieu
+     l'axe de la place — l'ancrage de `drawTownFrame` ne change pas de nature.
+     Le sprite natif (`plazaMonument`) est ce même dessin au cran 1 : un repli
+     (reflet, transformation non diagonale) qui garde la silhouette. */
+  const MONUMENT_HI = new Map();
+  function plazaMonumentHi(zIn) {
+    const z = Math.max(1, Math.min(8, Math.round(zIn)));
+    if (MONUMENT_HI.has(z)) return MONUMENT_HI.get(z);
+    const O = OBELISK_GEO, { W, H, cx, KD, gy } = O;
+    const [c, g] = cv(W * z, H * z);
+    const ST = PLAZA_STONE;
+    const tone = (k) => ST[Math.max(0, Math.min(ST.length - 1, Math.round(k)))];
+    /* ⚠️ UN DÉGRADÉ SUR UNE RAMPE DE NEUF TONS FAIT UNE MARCHE : arrondi, le fût
+       changeait de ton d'un coup à mi-hauteur et on y lisait un JOINT (premier jet,
+       planche). Ici le passage d'un cran au suivant est TRAMÉ (matrice de Bayer 4 × 4,
+       au pixel d'écran) : le fût s'éclaircit sans ligne. */
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const toneD = (k, px, py) => { const f = Math.floor(k); return ST[Math.max(0, Math.min(ST.length - 1, f + ((k - f) * 16 > BAYER[(py & 3) * 4 + (px & 3)] + 0.5 ? 1 : 0)))]; };
+    const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    // Un rectangle aux BORDS arrondis au pixel d'écran (jamais la largeur seule :
+    // deux pièces jointives ne laissent ni jour ni recouvrement).
+    const R = (x, y, w, h, col) => {
+      const l = Math.round(x * z), r = Math.round((x + w) * z), t = Math.round(y * z), b = Math.round((y + h) * z);
+      if (r > l && b > t) { g.fillStyle = col; g.fillRect(l, t, r - l, b - t); }
+    };
+    const dot = (x, y, col, w = 1 / z, h = 1 / z) => { g.fillStyle = col; g.fillRect(Math.round(x * z), Math.round(y * z), Math.max(1, Math.round(w * z)), Math.max(1, Math.round(h * z))); };
+    const fillPoly = (pts, col) => {
+      g.fillStyle = col;
+      let y0 = Infinity, y1 = -Infinity;
+      for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+      for (let py = Math.floor(y0 * z); py < Math.ceil(y1 * z); py++) {
+        const y = (py + 0.5) / z;
+        let L = Infinity, Rr = -Infinity;
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length];
+          if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) {
+            const x = a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]);
+            L = Math.min(L, x); Rr = Math.max(Rr, x);
+          }
+        }
+        if (Rr > L) { const l = Math.round(L * z), r = Math.round(Rr * z); if (r > l) g.fillRect(l, py, r - l, 1); }
+      }
+    };
+    const SHADE = "rgba(40,34,26,0.30)", SHADE_D = "rgba(40,34,26,0.42)";
+    // Le grain de la pierre : un pixel d'écran sur quatorze, un demi-cran plus clair ou plus sombre.
+    const grain = (x, y, w, h, base, seed) => {
+      for (let py = Math.round(y * z); py < Math.round((y + h) * z); py++) for (let px = Math.round(x * z); px < Math.round((x + w) * z); px++) {
+        const r = hash(px * 7 + seed, py * 13 + seed * 3);
+        if (r < 0.045) { g.fillStyle = tone(base - 0.6); g.fillRect(px, py, 1, 1); }
+        else if (r > 0.972) { g.fillStyle = tone(base + 0.7); g.fillRect(px, py, 1, 1); }
+      }
+    };
+    /* Un bloc de pierre : le dessus en oblique, la face, ses deux arêtes, le pied
+       assombri. `elev` est sa hauteur au-dessus du sol ; il est centré sur l'axe. */
+    const block = ([w, d, h], elev, frontT, topT, seed) => {
+      const yF = gy + KD * d / 2 - elev, yT = yF - h, yB = yT - KD * d, x0 = cx - w / 2;
+      R(x0, yB, w, KD * d, tone(topT));
+      R(x0, yB, w, 0.3, tone(topT - 1));                         // le bord du fond, dans l'ombre du suivant
+      R(x0, yT, w, h, tone(frontT));
+      R(x0, yF - Math.min(h * 0.3, 1.2), w, Math.min(h * 0.3, 1.2), tone(frontT - 0.6));   // le pied, moins éclairé
+      grain(x0, yT, w, h, frontT, seed);
+      grain(x0, yB, w, KD * d, topT, seed + 5);
+      R(x0, yT - 0.35, w, 0.35, tone(Math.min(8, topT + 1.3)));  // l'arête avant du dessus, qui accroche
+      R(x0, yT, 0.4, h, tone(frontT + 1.2));                     // l'arête gauche
+      R(x0 + w - 0.4, yT, 0.4, h, tone(frontT - 1));             // l'arête droite
+      return { x0, x1: x0 + w, yF, yT, yB, w, d, h };
+    };
+    // L'ombre d'un bloc posé sur un autre : contact au pied, et le côté sud-est du dessus d'en dessous.
+    const castOn = (low, up) => {
+      R(up.x0, up.yF, up.w, 0.45, SHADE_D);
+      const sx = up.x1, sw = Math.min(low.x1 - sx, Math.max(0.8, up.h * 0.55));
+      if (sw > 0) fillPoly([[sx, up.yF - KD * up.d], [sx + sw * 0.6, up.yF - KD * up.d], [sx + sw, up.yF], [sx, up.yF]], SHADE);
+    };
+
+    // ── 1. L'ENCLOS, CÔTÉ FOND : deux bornes, la chaîne du fond, les deux chaînes de côté.
+    const IRON = "#232227", IRON_M = "#3a3940", IRON_L = "#7c7a84";
+    const chain = (x0, y0, x1, y1, sag, along) => {
+      const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(4, Math.round(len / 0.95));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t + sag * 4 * t * (1 - t);
+        // son ombre au sol, vers le sud-est (lumière du nord-ouest)
+        g.fillStyle = "rgba(30,26,20,0.16)";
+        g.fillRect(Math.round((x + 1.1) * z), Math.round((y + O.chainH - sag * 4 * t * (1 - t) * 0.5 + 0.6) * z), Math.max(1, Math.round(0.7 * z)), Math.max(1, Math.round(0.35 * z)));
+        if (i % 2 === 0) {                                     // maillon de face : un ovale, son reflet en haut à gauche
+          if (along === "x") { dot(x - 0.5, y - 0.35, IRON_M, 1.0, 0.7); dot(x - 0.2, y - 0.1, IRON, 0.4, 0.25); dot(x - 0.5, y - 0.35, IRON_L, 1 / z, 1 / z); }
+          else { dot(x - 0.35, y - 0.5, IRON_M, 0.7, 1.0); dot(x - 0.1, y - 0.2, IRON, 0.25, 0.4); dot(x - 0.35, y - 0.5, IRON_L, 1 / z, 1 / z); }
+        } else if (along === "x") dot(x - 0.45, y - 0.12, IRON, 0.9, 0.3);   // maillon de chant
+        else dot(x - 0.12, y - 0.45, IRON, 0.3, 0.9);
+      }
+    };
+    const post = (px, gyPost, seed) => {
+      const w = O.postW, h = O.postH, d = w, x0 = px - w / 2, yF = gyPost + KD * d / 2, yT = yF - h;
+      // son ombre, au sud-est
+      fillPoly([[x0 + w, yF - KD * d], [x0 + w + 2.2, yF - KD * d + 0.8], [x0 + w + 2.2, yF + 0.6], [x0 + w * 0.4, yF + 0.6]], "rgba(30,26,20,0.22)");
+      R(x0, yT, w, h, tone(4.4));
+      R(x0, yT, 0.45, h, tone(6));
+      R(x0 + w - 0.45, yT, 0.45, h, tone(3.2));
+      R(x0, yF - 0.8, w, 0.8, tone(3.6));
+      R(x0, yT + 1.1, w, 0.35, tone(2.8));                     // la gorge sous la tête
+      R(x0, yT + 1.45, w, 0.3, tone(6.2));
+      grain(x0, yT, w, h, 4.4, seed);
+      // la tête en pointe de diamant : face, deux pans en biais, l'arête du haut
+      const hp = 1.8, bl = [x0, yT - KD * d], ap = [px, yT - KD * d / 2 - hp];
+      fillPoly([[x0, yT], bl, ap], tone(6.8));
+      fillPoly([[x0 + w, yT], [x0 + w, yT - KD * d], ap], tone(3.6));
+      fillPoly([[x0, yT], ap, [x0 + w, yT]], tone(5.2));
+      dot(ap[0] - 0.3, ap[1] + 0.2, tone(8), 0.5, 0.4);
+      // l'anneau de fonte où la chaîne s'accroche
+      dot(px - 0.45, yF - O.chainH - 0.45, IRON_M, 0.9, 0.9); dot(px - 0.2, yF - O.chainH - 0.2, IRON, 0.4, 0.4);
+    };
+    const xs = [cx - O.postX, cx + O.postX];
+    const att = (gyPost) => gyPost + KD * O.postW / 2 - O.chainH;
+    post(xs[0], O.postBack, 11); post(xs[1], O.postBack, 12);
+    chain(xs[0] + 0.8, att(O.postBack), xs[1] - 0.8, att(O.postBack), O.sag, "x");
+    chain(xs[0], att(O.postBack) + 0.9, xs[0], att(O.postFront) - 0.9, 1.0, "y");
+    chain(xs[1], att(O.postBack) + 0.9, xs[1], att(O.postFront) - 0.9, 1.0, "y");
+
+    // ── 2. LE MONUMENT, du sol au fût. L'ombre de contact des marches sur le dallage.
+    {
+      const [w, d] = O.steps[0], yF = gy + KD * d / 2;
+      fillPoly([[cx - w / 2 + 1, yF], [cx + w / 2, yF - KD * d], [cx + w / 2 + 3.5, yF - KD * d + 1.2], [cx + w / 2 + 3.5, yF + 1.1], [cx - w / 2 + 1, yF + 1.1]], "rgba(30,26,20,0.20)");
+    }
+    let elev = 0, prev = null;
+    const steps = O.steps.map((s, i) => {
+      const b = block(s, elev, 3.6 + i * 0.2, 6.0, 20 + i);
+      if (prev) castOn(prev, b);
+      // les joints des marches : des dalles d'environ onze pixels, décalées d'une marche à l'autre
+      for (let x = b.x0 + 5 + i * 5; x < b.x1 - 2; x += 10.5) { R(x, b.yT, 1 / z, b.h, tone(3)); R(x, b.yB, 1 / z, KD * b.d, tone(5.4)); }
+      prev = b; elev += s[2]; return b;
+    });
+    const socle = block(O.socle, elev, 3.7, 6.2, 30); castOn(prev, socle); elev += O.socle[2];
+    // la plaque de bronze du socle, patinée vert-de-gris, ses lignes gravées, ses quatre rivets, sa coulure
+    {
+      const pw = socle.w * 0.58, ph = socle.h * 0.56, px = cx - pw / 2, py = socle.yT + (socle.h - ph) / 2 - 0.1;
+      for (let k = 0; k < 3; k++) R(px + pw * (0.22 + k * 0.27) + hash(k, 41) * 0.8, py + ph, 0.45, socle.yF - py - ph - 0.3, "rgba(78,150,124,0.22)");
+      R(px - 0.35, py - 0.35, pw + 0.7, ph + 0.7, "#2c443a");
+      R(px, py, pw, ph, "#4c8370");
+      R(px, py, pw, 0.35, "#86bea4"); R(px, py, 0.35, ph, "#78b098");
+      R(px, py + ph - 0.35, pw, 0.35, "#30554a"); R(px + pw - 0.35, py, 0.35, ph, "#30554a");
+      for (let ln = 0; ln < 2; ln++) {
+        let x = px + 1.3 + (ln ? 0.8 : 0); const y = py + 1.05 + ln * 1.2, xe = px + pw - 1.3 - (ln ? 0.8 : 0);
+        while (x < xe) { const wd = Math.min(xe - x, 0.6 + hash(Math.round(x * 10), ln + 3) * 1.6); R(x, y, wd, 0.4, "#b2dcc6"); x += wd + 0.45; }
+      }
+      for (const [rx, ry] of [[px + 0.55, py + 0.55], [px + pw - 0.55, py + 0.55], [px + 0.55, py + ph - 0.55], [px + pw - 0.55, py + ph - 0.55]]) dot(rx - 0.2, ry - 0.2, "#c8b47e", 0.4, 0.4);
+    }
+    const cyma = block(O.cyma, elev, 4.6, 6.4, 31); castOn(socle, cyma); elev += O.cyma[2];
+    R(cyma.x0, cyma.yT + cyma.h * 0.45, cyma.w, 0.3, tone(4));   // le creux de la moulure
+    const die = block(O.die, elev, 4.0, 6.2, 32); castOn(cyma, die); elev += O.die[2];
+    // le panneau creusé du dé : le cadre ombre le haut et la gauche, la lumière revient en bas et à droite
+    const pnl = { x: die.x0 + 2.2, y: die.yT + 2.4, w: die.w - 4.4, h: die.h - 4.6 };
+    {
+      R(pnl.x, pnl.y, pnl.w, pnl.h, tone(3.4));
+      grain(pnl.x, pnl.y, pnl.w, pnl.h, 3.4, 33);
+      R(pnl.x, pnl.y, pnl.w, 0.7, tone(2.2)); R(pnl.x, pnl.y, 0.5, pnl.h, tone(2.5));
+      R(pnl.x, pnl.y + pnl.h - 0.45, pnl.w, 0.45, tone(5.6)); R(pnl.x + pnl.w - 0.4, pnl.y, 0.4, pnl.h, tone(5));
+    }
+    /* La couronne de laurier en bronze, accrochée au dé : deux branches qui partent
+       du nœud en bas et se rejoignent presque en haut, feuilles par paires (dedans,
+       dehors), éclairées en haut à gauche ; un nœud de ruban et ses deux pans. */
+    {
+      const wcx = cx, wcy = pnl.y + pnl.h * 0.47, r = Math.min(pnl.w, pnl.h) * 0.36;
+      const BR = ["#22392f", "#2f5245", "#46745f", "#6a9d84", "#9ccab2"];
+      const leaf = (lx, ly, ang, len, wid, col) => {
+        const ca = Math.cos(ang), sa = Math.sin(ang), ext = len + wid;
+        for (let py = Math.floor((ly - ext) * z); py <= Math.ceil((ly + ext) * z); py++) for (let px = Math.floor((lx - ext) * z); px <= Math.ceil((lx + ext) * z); px++) {
+          const u = (px + 0.5) / z - lx, v = (py + 0.5) / z - ly;
+          const a = (u * ca + v * sa) / len, b = (-u * sa + v * ca) / wid;
+          if (a * a + b * b <= 1) { g.fillStyle = col; g.fillRect(px, py, 1, 1); }
+        }
+      };
+      // l'ombre de la couronne sur le fond du panneau, décalée au sud-est
+      for (let k = 0; k <= 24; k++) { const th = Math.PI / 2 + (k / 24 - 0.5) * 2 * 2.7; dot(wcx + Math.cos(th) * r + 0.5, wcy + Math.sin(th) * r + 0.55, "rgba(30,26,20,0.30)", 0.9, 0.9); }
+      for (const side of [-1, 1]) for (let k = 0; k < 8; k++) {
+        const th = Math.PI / 2 - side * (0.28 + k * 0.33);      // du bas (nœud) vers le haut
+        const px = wcx + Math.cos(th) * r, py = wcy + Math.sin(th) * r;
+        const tang = th - side * Math.PI / 2;                   // la feuille pointe vers le haut de la branche
+        for (const io of [-1, 1]) {
+          const lx = px + Math.cos(th) * io * 0.55, ly = py + Math.sin(th) * io * 0.55;
+          const lit = -Math.cos(th) * 0.9 - Math.sin(th) * 1.1 + (io < 0 ? -0.3 : 0.3);
+          leaf(lx + Math.cos(tang) * 0.35, ly + Math.sin(tang) * 0.35, tang + io * side * 0.5, 0.95, 0.42, BR[Math.max(1, Math.min(4, Math.round(2.4 + lit)))]);
+        }
+      }
+      // le nœud de ruban, en bas, et ses deux pans qui tombent en s'écartant
+      dot(wcx - 0.7, wcy + r - 0.45, BR[2], 1.4, 0.9); dot(wcx - 0.35, wcy + r - 0.3, BR[1], 0.7, 0.5); dot(wcx - 0.7, wcy + r - 0.45, BR[4], 0.5, 0.35);
+      for (const side of [-1, 1]) for (let k = 0; k < 4; k++) dot(wcx + side * (0.4 + k * 0.42) - 0.25, wcy + r + 0.3 + k * 0.5, k === 3 ? BR[1] : BR[2 + (side < 0 ? 1 : 0)], 0.55, 0.55);
+    }
+    const cornice = block(O.cornice, elev, 4.4, 6.6, 34); castOn(die, cornice); elev += O.cornice[2];
+    R(cornice.x0, cornice.yF, cornice.w, 0.3, tone(2.4));                          // le larmier : l'arête sous le débord
+    R(die.x0, cornice.yF + 0.3, die.w, 0.9, SHADE_D);                              // et l'ombre qu'il porte sur le dé
+    R(cornice.x0, cornice.yT + cornice.h * 0.42, cornice.w, 0.28, tone(3.6));      // la moulure du bandeau
+    const plinth = block(O.plinth, elev, 3.9, 6.3, 35); castOn(cornice, plinth); elev += O.plinth[2];
+
+    // ── 3. LE FÛT : un trapèze, plus clair vers le haut, ses deux arêtes, ses coulures, ses lichens.
+    const S = O.shaft, sd = O.plinth[1] * 0.9;
+    const yb = gy + KD * sd / 2 - elev, yt = yb - S.h;
+    const xl = (y) => cx - (S.wb + (S.wt - S.wb) * (yb - y) / S.h) / 2;
+    for (let py = Math.floor(yt * z); py < Math.ceil(yb * z); py++) {
+      const y = (py + 0.5) / z, t = (yb - y) / S.h, l = xl(y), r = 2 * cx - l;
+      const L0 = Math.round(l * z), R0 = Math.round(r * z);
+      // le fût : un ton, plus sombre au pied (le socle lui renvoie moins de ciel), plus clair au sommet
+      const kF = 4.0 - Math.max(0, 0.22 - t) * 3 + Math.max(0, t - 0.7) * 2;
+      for (let px = L0; px < R0; px++) { g.fillStyle = toneD(kF, px, py); g.fillRect(px, py, 1, 1); }
+      g.fillStyle = tone(6.4 + t * 0.6); g.fillRect(L0, py, Math.max(1, Math.round(0.45 * z)), 1);
+      g.fillStyle = tone(2.6); g.fillRect(R0 - Math.max(1, Math.round(0.4 * z)), py, Math.max(1, Math.round(0.4 * z)), 1);
+      for (let px = L0 + 1; px < R0 - 1; px++) {
+        const hr = hash(px * 5 + 77, py * 11);
+        if (hr < 0.04) { g.fillStyle = tone(kF - 0.8); g.fillRect(px, py, 1, 1); }
+        else if (hr > 0.975) { g.fillStyle = tone(kF + 0.9); g.fillRect(px, py, 1, 1); }
+      }
+    }
+    // les coulures sous le pyramidion (la pluie lave la pierre en traînées), plus fortes à droite
+    for (let k = 0; k < 4; k++) {
+      const u = [0.18, 0.46, 0.7, 0.86][k], len = S.h * (0.18 + hash(k, 61) * 0.3);
+      for (let py = Math.floor(yt * z); py < Math.ceil((yt + len) * z); py++) {
+        const y = (py + 0.5) / z, l = xl(y), r = 2 * cx - l, a = 0.2 * (1 - (y - yt) / len) * (0.6 + u * 0.6);
+        g.fillStyle = `rgba(62,58,50,${a.toFixed(3)})`; g.fillRect(Math.round((l + (r - l) * u) * z), py, Math.max(1, Math.round(0.45 * z)), 1);
+      }
+    }
+    // des lichens au pied du fût et sur la corniche, côté nord-est (le moins sec)
+    for (let k = 0; k < 9; k++) {
+      const t = hash(k, 71) * 0.14, y = yb - t * S.h, l = xl(y), x = l + (2 * cx - 2 * l) * (0.5 + hash(k, 73) * 0.45);
+      dot(x, y - 0.6, hash(k, 75) < 0.5 ? "#a9ad82" : "#8f9b6c", 0.5, 0.45);
+    }
+    castOn(plinth, { x0: cx - S.wb / 2, x1: cx + S.wb / 2, yF: yb, w: S.wb, d: sd, h: S.h * 0.08 });
+
+    // ── 4. LE PYRAMIDION DORÉ : la face, et les deux pans que la pente montre.
+    {
+      const hw = S.wt / 2, dB = KD * S.wt, apex = [cx, yt - dB / 2 - O.pyr];
+      const FL = [cx - hw, yt], FR = [cx + hw, yt], BL = [cx - hw, yt - dB], BR = [cx + hw, yt - dB];
+      fillPoly([FL, BL, apex], "#f3d98e");
+      fillPoly([FR, apex, BR], "#9c7426");
+      fillPoly([FL, apex, FR], "#d6ad55");
+      fillPoly([FL, apex, [cx - hw * 0.35, yt]], "#e4c06a");      // la face, plus vive vers la lumière
+      dot(apex[0] - 0.55, apex[1] + 0.6, "#fff3cc", 0.45, 1.1);    // l'éclat
+      R(cx - hw - 0.15, yt - 0.1, S.wt + 0.3, 0.4, "#7a5a22");     // le liseré où l'or rejoint la pierre
+    }
+
+    // ── 5. L'ENCLOS, CÔTÉ RUE : la chaîne de devant, par-dessus les marches, puis ses deux bornes.
+    chain(xs[0] + 0.8, att(O.postFront), xs[1] - 0.8, att(O.postFront), O.sag, "x");
+    post(xs[0], O.postFront, 13); post(xs[1], O.postFront, 14);
+    // la mousse au pied des marches et des bornes, rare
+    for (let k = 0; k < 10; k++) {
+      const s0 = steps[0], x = s0.x0 + hash(k, 81) * s0.w, y = s0.yF - 0.3;
+      if (hash(k, 83) < 0.55) { dot(x, y, "#4f6a3a", 0.9, 0.4); dot(x + 0.3, y - 0.3, "#6f8a4c", 0.4, 0.3); }
+    }
+    return MONUMENT_HI.set(z, c), c;
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -9271,14 +10000,9 @@ export function buildSprites() {
        Seconde exception, pour la même raison : `PLUMP` 1,30. Les pointes d'une
        petite sont arrondies par ses pixels, pas par sa courbe ; à 0,75 la reine
        gardait des bouts ronds que ses sœurs n'ont pas (« bords un peu trop
-       arrondis encore »). 1,0 changeait à peine, 1,7 donnait une étoile de Noël. */
-    const RIN = queen ? 0.52 : 0.40, PLUMP = queen ? 1.0 : 0.75, HGT = 0.36;
-    /* ⚠️ 2026-09-13 — « TOUJOURS DES BORDS TROP ARRONDIS ». Durcir l'exposant ne
-       suffisait pas : `cos` a une dérivée NULLE en son sommet, donc toute puissance
-       de `cos` garde un bout rond. Seul un profil qui a un ANGLE au sommet fait une
-       pointe — le triangle `1 − |d|/SECT`, mêlé à 80 % (0,5 restait mou). Réservé à
-       la reine : à onze pixels, ce sont les pixels qui arrondissent les petites. */
-    const SHARP = queen ? 0.8 : 0;
+       arrondis encore »). 1,0 changeait à peine, 1,7 donnait une étoile de Noël.
+       (`RIN` et `PLUMP` de la reine : voir `radiusQueen` ci-dessous, 2026-10-04.) */
+    const RIN = queen ? 0.46 : 0.40, PLUMP = 0.75, HGT = 0.36;
     const SECT = Math.PI / 5;
     const radius = (th) => {
       let best = RIN;
@@ -9286,14 +10010,38 @@ export function buildSprites() {
         const d0 = th - (rot + k * 2 * SECT);
         const d = Math.atan2(Math.sin(d0), Math.cos(d0));
         if (Math.abs(d) >= SECT) continue;
-        const tri = 1 - Math.abs(d) / SECT;
-        const b = Math.pow(Math.cos(d * 2.5), PLUMP) * (1 - SHARP) + tri * SHARP;
-        best = Math.max(best, RIN + (STAR_ARMS[k] - RIN) * b);
+        best = Math.max(best, RIN + (STAR_ARMS[k] - RIN) * Math.pow(Math.cos(d * 2.5), PLUMP));
       }
       return best;
     };
+    /* ⚠️⚠️ 2026-10-04 — LA REINE A DES FLANCS DROITS. Guillaume, une troisième fois :
+       « branches trop rondes ». Le 13 septembre, on avait durci le PROFIL (le
+       triangle `1 − |d|/SECT` mêlé à 80 % au `cos`) : ça pointait le bout, et ça
+       laissait le défaut entier. ⚠️ TOUT PROFIL QUI INTERPOLE LE RAYON EN FONCTION DE
+       L'ANGLE DESSINE DES FLANCS BOMBÉS — même un profil linéaire : en polaire, une
+       droite n'est pas `r = a + b·θ`. Les branches gonflaient donc entre la pointe
+       et le creux, quel que soit le réglage. Ici chaque flanc est un vrai SEGMENT,
+       de la pointe (longueur `STAR_ARMS[k]`) au creux (`RIN`, à ±36°) : on intersecte
+       le rayon avec lui. Le creux redescend alors de 0,52 à 0,46 sans faire de
+       pétales — c'étaient les flancs bombés qui transformaient un creux profond en
+       fleur. Comparé sur planche (scratch, quatre colonnes) à 0,48 (plus trapu) et à
+       un cerne à quatre voisins (pointes d'un pixel, trop loin des sœurs) : Guillaume
+       a pris 0,46 avec le cerne ordinaire.
+       Les petites gardent leur profil : à onze pixels, ce sont les pixels qui
+       arrondissent, pas la courbe. */
+    const radiusQueen = (th) => {
+      for (let k = 0; k < 5; k++) {
+        const d0 = th - (rot + k * 2 * SECT);
+        const d = Math.atan2(Math.sin(d0), Math.cos(d0));
+        if (Math.abs(d) >= SECT) continue;
+        // Pointe en (L, 0), creux en (RIN·cos SECT, ±RIN·sin SECT), dans le repère de la branche.
+        const L = STAR_ARMS[k], ex = RIN * Math.cos(SECT) - L, ey = (d < 0 ? -1 : 1) * RIN * Math.sin(SECT);
+        return (L * ey) / (Math.cos(d) * ey - Math.sin(d) * ex);
+      }
+      return RIN;
+    };
     const height = (u, v) => {
-      const rr = radius(Math.atan2(v, u));
+      const rr = queen ? radiusQueen(Math.atan2(v, u)) : radius(Math.atan2(v, u));
       const s = Math.hypot(u, v) / rr;
       return s >= 1 ? -1 : HGT * Math.sqrt(1 - s * s);
     };
@@ -20156,7 +20904,9 @@ house: house(),
     // 2026-09-28 — `plazaTopiary` (trois disques sur un bâton, dans un bac) n'existe plus : le buis taillé est dans `buis.js`.
     // 2026-09-28 (soir) — …sauf derrière `C.TOWN_BUIS_LEGACY` : l'ancien dessin, construit seulement si l'interrupteur est actif.
     ...(C.TOWN_BUIS_LEGACY ? { plazaTopiary: plazaTopiarySpriteLegacy() } : {}),
-    plazaMonument: plazaMonumentSprite(),
+    plazaMonument: plazaMonumentHi(1),   // 2026-10-04 (nuit) : le même obélisque, au cran 1 (repli : reflet, transformation non diagonale)
+    plazaMonumentHi,                   // …et au pixel d'écran, un canevas par cran de zoom
+    monumentGeo: OBELISK_GEO,
     plazaFountain: plazaFountainSprite(),
     fountainGeo: FOUNTAIN_GEO,        // zip 429 : lue par drawTownFrame pour l'eau et le jet
     plazaFountainHi,                  // 2026-10-04 : la même fontaine au pixel d'écran (un canevas par cran de zoom)
@@ -20178,6 +20928,8 @@ house: house(),
     townBarrel: townBarrelSprite(),           // zip 431
     townSacks: townSackPileSprite(),          // zip 431
     townKiosk: townKioskSprite(),
+    townSkateChalet: townSkateChaletSprite(true),          // 2026-10-04 — ouvert (l'hiver)
+    townSkateChaletClosed: townSkateChaletSprite(false),   // fermé (le reste de l'année)
     townGrave: townGraveSprite(),
     townPlanter: townPlanterSprite(),
     /* 2026-09-29 (phase 7b) — LA TROISIÈME PLANCHE (voir `planche3Sprite`).

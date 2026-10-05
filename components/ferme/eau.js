@@ -328,14 +328,17 @@ function* buildBake(S, tw) {
     // l'étang déborde d'une case au-dessus du parc, et le premier jet l'a prise
     // pour un morceau du port.
     const isPond = r.mx >= park.x && r.mx < park.x + park.w && r.my >= park.y && r.my < park.y + park.h;
-    out.regions.push(yield* bakeRegion(S, tw, fn, kind, regOf, r, isPond));
+    // 2026-10-04 — le lac du sud (et le fleuve qui le prolonge : une seule région) gèle aussi, rarement (`glace.js`).
+    const lk = C.TOWN_LAKE;
+    const isLake = !isPond && r.mx >= lk.x && r.mx < lk.x + lk.w && r.my >= lk.y - 4 && r.my < lk.y + lk.h;
+    out.regions.push(yield* bakeRegion(S, tw, fn, kind, regOf, r, isPond, isLake));
     yield;
   }
   out.ms = nowMs() - t0;
   return out;
 }
 
-function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
+function* bakeRegion(S, tw, fn, kind, regOf, r, isPond, isLake) {
   const { W } = fn;
   // Le domaine : la boîte de la région, plus une case de terre autour (les
   // sources de la distance), bornée à la carte.
@@ -844,15 +847,26 @@ function* bakeRegion(S, tw, fn, kind, regOf, r, isPond) {
     if (n) depthCell[cy2 * cw + cx2] = Math.round(sum / n);
   }
   /* ⚠️ 2026-09-30 — LA GLACE DE L'ÉTANG (`glace.js`) : la distance à la berge meuble,
-     en cases, au pixel mouillé. C'est l'ORDRE DE GEL (la glace part des berges) ; elle
-     n'existe que pour l'étang (le port et le fleuve ne gèlent pas). */
+     en cases, au pixel mouillé. C'est l'ORDRE DE GEL (la glace part des berges).
+     ⚠️ 2026-10-04 — LE LAC AUSSI, MAIS PAS AVEC `dIn` : sa source est la berge MEUBLE
+     (un port est profond au pied de son quai, voir 3.3), alors que la glace, elle,
+     prend contre TOUT ce qui sort de l'eau — le quai, les pieux du ponton, l'échelle.
+     Lue sur `dIn`, la promenade aurait gardé une bande d'eau libre au pied du mur
+     pendant que la plage gelait. Le lac a donc sa distance à toute terre. Le fleuve
+     est dans la même région ; c'est `glace.js` qui l'empêche de geler. */
   let dsh = null;
   if (isPond) {
     dsh = new Float32Array(N);
     for (let i = 0; i < N; i++) if (wet[i]) dsh[i] = Math.sqrt(dIn[i]) / T;
+  } else if (isLake) {
+    const dL = new Float32Array(N);
+    for (let i = 0; i < N; i++) dL[i] = wet[i] ? EDT_INF : 0;
+    yield* edt2d(dL, RW, RH);
+    dsh = new Float32Array(N);
+    for (let i = 0; i < N; i++) if (wet[i]) dsh[i] = Math.sqrt(dL[i]) / T;
   }
   return {
-    isPond, bx0, by0, cw, ch, ox, oy, RW, RH,
+    isPond, isLake, bx0, by0, cw, ch, ox, oy, RW, RH,
     water: wc, bank: bc, lvl, sandM, full, depthCell, cellTop, faceH, swellOK, dsh,
   };
 }

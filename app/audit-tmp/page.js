@@ -8,8 +8,8 @@ function installHelpers() {
   window.__auditReady = true;
   // Son coupé pendant l'audit (préférences + lecture forcée muette).
   try { localStorage.setItem("arcardi:soundEnabled", "0"); localStorage.setItem("arcardi:musicEnabled", "0"); } catch (e) {}
-  const op = HTMLMediaElement.prototype.play;
-  HTMLMediaElement.prototype.play = function () { this.muted = true; this.volume = 0; return op.call(this); };
+  const op = window.HTMLMediaElement.prototype.play;
+  window.HTMLMediaElement.prototype.play = function () { this.muted = true; this.volume = 0; return op.call(this); };
   const AC = window.AudioContext;
   if (AC) { const W = function (...a) { const c = new AC(...a); try { c.suspend(); } catch (e) {} c.resume = () => Promise.resolve(); return c; }; W.prototype = AC.prototype; window.AudioContext = W; window.webkitAudioContext = W; }
   // rAF par worker (VERIFICATION.md) : une file, vidée à 16 ms ; __paused fige l'image sans rien perdre.
@@ -50,8 +50,9 @@ export default function AuditTmpPage() {
   }, []);
   if (!who) return null;
   const players = [
-    { profile_id: "p1", username: "Hote", joined_at: 1 },
-    { profile_id: "p2", username: "Amie", joined_at: 2 },
+    // joined_at en CHAÎNE (le jeu les trie par localeCompare) : en nombres, le second client plantait au montage.
+    { profile_id: "p1", username: "Hote", joined_at: "2026-01-01T00:00:01Z" },
+    { profile_id: "p2", username: "Amie", joined_at: "2026-01-01T00:00:02Z" },
   ];
   const me = who.p === 2 ? { id: "p2", username: "Amie" } : { id: "p1", username: "Hote" };
   return (

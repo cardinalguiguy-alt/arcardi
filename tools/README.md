@@ -331,6 +331,26 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   canevas (falsifié : `FALSIFY=cadre`). ⚠️ Il ne voit ni la lumière de la scène ni les maisons (des
   pavés gris) : la neige se juge ensuite en jeu. `tools/build-snow-roofs.mjs` fabrique les calques des
   toits et sa planche (`tools/out/toits-neige.png`).
+- **`tools/render-glace.mjs` — 30 contrôles, 30/30 (2026-09-30 l'étang ; 2026-10-05 +10 : le lac du sud).** La vraie
+  eau cuite (`eau.js`) et la couche de glace (`glace.js`). L'étang : ordre au pixel depuis la berge, front par pixels,
+  le dessin et la faune sur la même règle, la neige posée, les fenêtres claires, le manteau, les carpes figées. Le lac :
+  la glace prend contre le QUAI (distance à toute terre), gagne avec le froid sans reculer, part des rives, le fleuve ne
+  gèle jamais, le pas (`frozenAt`) et le dessin d'accord HORS du grain de ±0,03 du dessin (0 désaccord sur ~9 000 points
+  du front), et le froid du lac (`lakeCold`) ne passe `LAKE_K0` que rarement, par vagues de plus d'un jour, jamais l'été.
+  Falsifiés : `riverLift` à 0, la distance non étirée dans `frozenAt` seul (4 188 désaccords). Planches
+  `tools/out/glace-etang.png`, `tools/out/glace-lac.png`.
+- **`tools/verify-bonhomme.mjs` — 35 contrôles, 35/35 (2026-10-05 : le bonhomme de neige).** Il JOUE `bonhomme.js` : la
+  boule grossit vite puis lentement, jamais au-delà de `R_MAX`, rien sous `MIN_CM` ; trois boules, la plus grosse en bas,
+  la troisième ouvre le décor, une trop grosse se pose à côté ; l'hôte refuse la boule qu'on n'a pas prise, ramène une
+  taille impossible au temps écoulé, ne donne pas la même boule à deux joueurs, plafonne PAR CARTE ; le décor ramené au
+  catalogue, une sauvegarde relue intacte ; le dégel daté quand la neige part (et l'hiver), l'affaissement 0 → 1, le retrait
+  à `THAW_MS`, la boule d'un joueur parti lâchée ; l'obstacle au pied, pas à un pas, pas sur l'autre carte. Falsifié :
+  `STACK_RATIO` à 1,5, le plafond par le temps retiré (chacun rougit).
+- **`tools/verify-patin.mjs` — 23 contrôles, 23/23 (2026-10-05 : le patin à glace).** Il JOUE `patin.js` à 60 i/s :
+  croisière atteinte et jamais dépassée (course comprise), lancée ≈ v/k cases, virage qui COURBE (pas de pivot), arrêt
+  en travers sans repartir en arrière et dans la distance de `BRAKE`, sans patins chute à `SLIP_T` et sol à
+  `SLIP_T + FALL_T`, choc renvoyé, poses déduites des autres, même trajectoire à 60 et 144 i/s. Falsifié règle par
+  règle (`BRAKE_DOT` inatteignable, `GLIDE_K` à 0,28, `TURN_K` à 200 : chacun rougit).
 - **`tools/render-neige-ferme.mjs` — 12 contrôles + planches (2026-09-29 : la neige sur la ferme).**
   De vrais morceaux d'une ferme générée (`cour` avec un champ labouré, `riviere`, `gare`, `cratere`) avec
   le sol, la neige (`A.farmSnowEnv`), les chapeaux et les toits du jeu, en PNG ×3
@@ -844,7 +864,12 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   de la couleur de son toit (falsifié : sans le dessin des toits, 42 maisons sur 42 tombent), la ligne médiane de
   l'artère, toute case d'eau libre bleue. ⚠️ Faux canvas : pas de texte (la lettre N de la rose des vents n'y est pas).
   ⚠️ **Il ne juge pas le DESSIN** — un plan joli ou laid passe pareil ; c'est le PNG qui se regarde, et le jeu.
-- **`tools/render-rues.mjs` — 28 contrôles, 28/28 (434).** Le revêtement des rues de Valley
+- **`tools/render-rues.mjs` — 35 contrôles, 35/35 (relancé le 2026-10-04, nuit).** ⚠️ **2026-10-04 (nuit) — +6 SUR
+  L'OBÉLISQUE** : l'enclos (`TOWN_MONUMENT_FOOT`) solide case pour case, le dessin opaque (alpha ≥ 200) dans sa
+  largeur, un canevas par cran à la taille des cotes, le FÛT plus sombre que le dallage civique (153 contre 163 ;
+  l'ancien valait 202 — plus pâle que le sol, c'était le « cheap »), bancs et lampadaires par paires sur l'axe de la
+  place, et sous la neige une chaîne qui ne porte pas d'ombre quand le fût en porte (falsifiés en les lançant).
+  Le revêtement des rues de Valley
   Town : les trois pavés de 4×4 tuiles assemblés sur six tuiles de côté, puis **quatre fenêtres
   de la VRAIE carte** (l'artère, un carrefour, le cimetière, le bord de l'esplanade) peintes
   par `A.drawTownRoadTile`, c'est-à-dire par la fonction que la boucle de rendu appelle.

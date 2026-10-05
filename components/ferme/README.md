@@ -1,5 +1,133 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 — LE BONHOMME DE NEIGE (livraison 3 sur 3)
+
+Guillaume : « possibilité de construire un bonhomme de neige quand le sol est couvert de neige » ; tranché : **on roule les boules, puis
+décor au choix** ; sur les deux cartes (ferme et Valley Town), partagé, il fond avec la neige.
+- **Les règles** (`bonhomme.js`, pur, joué par `verify-bonhomme`) : la boule grossit en ROULANT (r² += K·d : vite au début, R0 0,16 → R_MAX
+  0,62 en ~11 cases de neige épaisse, rien sous 2,5 cm — les rues déneigées n'en donnent pas), elle ralentit la marche jusqu'à −45 % ; trois
+  boules au plus, chacune ≤ 92 % de celle du dessous (trop grosse : elle se pose À CÔTÉ) ; la troisième ouvre le choix des accessoires
+  (chapeau, écharpe, nez, bras, touche finale — `SNOWMAN_DECO`, des clés de partie qu'on ne renomme jamais) ; 14 tas par carte au plus.
+- **Le réseau** (§3) : une `req` pour PRENDRE (façonner au sol ou reprendre la boule du haut d'un tas pas fini), une pour POSER (l'hôte borne la
+  taille annoncée par le temps écoulé depuis la prise : on ne roule pas onze cases en une seconde), une pour DÉCORER. Pendant qu'on roule, rien :
+  la boule des autres se dessine devant eux et grossit de ce qu'on leur voit rouler, sa traînée se creuse chez soi. ⚠️ **`sendReq` écrase `id` par
+  l'expéditeur** : le champ du bonhomme s'appelle `sid` (premier jet `id` — l'hôte cherchait un bonhomme nommé comme le joueur, le décor ne prenait
+  jamais ; vu en jeu, aucun refus affiché). État partagé `snowmen`/`snowRoll`, sauvegardé avec `townChop` (aucune migration).
+- **Le dégel** : l'hôte date `thawAt` quand la neige de la carte passe sous 0,3 cm (ou que l'hiver finit), chacun dessine l'affaissement depuis
+  (`slumpAt`), l'hôte le retire après `THAW_MS` (une journée de jeu) ; la neige revenue ne l'arrête plus.
+- **Le geste** : E façonne une boule (l'invite « façonner » ne vient qu'à l'arrêt sur la neige, en dernier recours — sinon elle couvrait toutes
+  les autres tout l'hiver), E la pose (prioritaire sur tout : c'est la touche qui l'a prise), E près d'un tas reprend sa boule du haut, E devant un
+  bonhomme fini rouvre le décor (le sien ou celui d'un ami). Changer de carte une boule devant soi la LAISSE derrière, sur sa carte (piège des
+  deux cartes ; vu en jeu). Un bonhomme bloque le joueur (`blocked`, `blockedTown`) ; pas les habitants (`townNav` intact).
+- **Le dessin** (`drawSnowman`, fermeArt.js) : des sphères éclairées du nord-ouest, ombre propre BLEUE, cerne, ombre portée ; boules en cache par
+  rayon ; visage de charbon ; quatre chapeaux, trois écharpes (la verte rayée), carotte, branches ou balai, pipe ou boutons ; au dégel les boules
+  s'écrasent, la tête penche, le chapeau tombe au sol (k ≥ 0,5), le nez (0,7). La traînée : une auge de la largeur de la boule dans le champ de
+  neige (`stamp`), jusqu'au sol. Le panneau du décor a un aperçu dessiné par la même fonction. Planche : `tools/out/bonhomme-planche.png`.
+- **Bancs** : `verify-bonhomme` 35/35 (neuf, falsifié : `STACK_RATIO`, le plafond par le temps), `verify-strings` (1 219 clés), et la suite
+  de la livraison 2 relancée verte.
+- **Vu en jeu** (un client, hiver forcé, 12 cm forcés) : en ville, l'invite, la boule qui grossit et sa traînée, la pose, l'empilement des deux
+  boules suivantes, le choix qui s'ouvre, le décor appliqué (haut-de-forme, balai, pipe), le dégel daté à la neige retirée ; à la ferme, une boule
+  roulée et sa traînée. **Pas vu** : à deux vrais clients (le harnais, voir la livraison 2), la nuit, l'affaissement complet en temps réel (seize
+  minutes ; vu sur planche et à mi-course). **Supabase : rien.**
+
+## 2026-10-05 — LES PATINS, LE LAC GELÉ, LE CHALET DU LAC (livraison 2 sur 3)
+
+Guillaume : « des patins dispos à l'achat pour monter sur le lac gelé et le body of water au sud, qui pourrait être gelé
+occasionnellement ». Cadré avec lui : **un étal d'hiver au bord du lac, « très chic et couvert »** ; **sans patins, on glisse et on se blesse
+— « même blessure prévue, temps de 15 vraies minutes »** ; le lac gèle **« rarement, depuis la rive »**.
+- **Le froid du lac** (`neige.js`, `lakeCold`) : ⚠️ le lac NE LIT PAS `ice`. Intégré sur la fenêtre du manteau qui repart de zéro quatre jours plus
+  tôt, `ice` monte tout le jour et perd ~1,2 cm à chaque changement de jour : seuillé, il faisait geler et dégeler le lac TOUS les jours, quatre minutes
+  réelles à chaque fois (mesuré sur 900 jours d'hiver). Le lac somme le gain net de glace (`iceRate`, la formule de l'étang, sortie de `packStep` au
+  bit près) sur les **quatre derniers jours entiers, d'heure à heure** — une fenêtre calée sur la journée n'oscille plus. Mesuré : la rive prend 12,9 %
+  du temps d'hiver, par vagues (une tous les ~16 jours de jeu, la plus longue 6 jours = 96 min réelles), jamais l'été.
+- **La glace du lac** (`glace.js`) : la MÊME règle que l'étang (`iceThreshold`), distance étirée (`LAKE_DREF` 7 cases), épaisseur équivalente
+  (`lakeIceEq` : `LAKE_K0` 5,35 → `ICE_T0`, `LAKE_K1` 6,35 → `ICE_T1`) — front, fêlures, bulles, neige posée sans une ligne de dessin de plus. La
+  distance part de **toute terre** (`eau.js`, une EDT de plus pour le lac seul) : lue sur la berge meuble comme l'étang, le pied du quai restait libre
+  pendant que la plage gelait. **Le fleuve ne gèle jamais** (rampe de seuil sur 8 cases, infini au-delà de `TOWN_RIVER_X`). La cuisson cache ses
+  grandeurs fixes par région (`iceStatics`, 49 ms une fois ; 4 à 11 ms par cuisson) : **l'étang sort au bit près** (0 octet sur 6,8 millions, comparé).
+- **Le patin** (`patin.js`, pur, joué par `verify-patin`) : l'élan (`GLIDE_K`, ~9 cases de lancée depuis la croisière 7,6), le virage large (seule
+  la vitesse de travers est mangée), l'arrêt en travers à contresens (gerbe de glace), le choc qui renvoie un peu ; sans patins, la vitesse d'entrée
+  continue presque seule, les bras moulinent 0,95 s, la chute, et au sol (`down`) la blessure. La collision laisse passer l'eau gelée **pour les
+  joueurs seuls** (`townNav` intact : les habitants restent à terre) et la face du quai quand la glace est prise dessous (`townIceWalkable` — premier
+  essai : on butait au pied du quai, vu en jeu). La canne refuse l'eau gelée.
+- **La chute** : le contrat de la brûlure (`iceFall` : optimiste chez soi, gardée par l'hôte, `injured` seul rediffusé, zone remise à `farm` avec
+  x/y), `ICE_INJURED_MS` = 15 min, soignable au pansement. La berge prévient une fois par session avant le premier pas.
+- **Les poses** (`drawSkate`, fermeArt.js, découpées dans la feuille) : glisse en poussée alternée, arrêt, arrêt en travers, moulinet, assis sonné
+  avec trois étoiles ; un pixel plus haut chaussé (la lame), bottines blanches. Sous une robe, seul le pied bouge (premier jet : la jambe emportait
+  une demi-jupe). Celles des autres se DÉDUISENT (`skateSeen` : sur la glace, chaussés ou non, leur vitesse) — ⚠️ la ville dessine ses camarades par
+  `drawCharacter(p)`, pas par `drawRemote` (la ferme) : branchée là-bas seulement, la pose était invisible en ville (trouvé en jeu). Les **traces de
+  lames** et la gerbe sont LOCALES comme les empreintes (chacun creuse ce qu'il voit glisser, camarades compris), la neige fraîche les couvre.
+- **Le chalet des patins** (`townSkateChaletSprite`, procédural, PROVISOIRE — prompt Gemini dans `docs/IMAGES-ET-BLENDER.md`) : au pied du ponton,
+  4 × 2 cases, posé en passe finale au premier emplacement libre de `TOWN_SKATE_CHALET_SITES` ; ouvert l'hiver (lambrequin, guirlande, lanternes,
+  patins en vitrine, emblème doré — aucun mot cuit), volets clos sinon. E au comptoir : le panneau, l'achat (`buySkates` → `resolveBuySkates`,
+  450 or, portée et saison tenues par l'hôte). Au plan illustré aussi.
+- **Bancs** : `verify-patin` 23/23 (neuf, falsifié règle par règle), `render-glace` 30/30 (+10 : le lac, falsifiés ; planche `tools/out/glace-lac.png`),
+  `verify-vallee` 287/287 (+8 : le chalet, l'achat ; il a réclamé l'emprise du chalet au premier lancement), `verify-collision`, `verify-compo`,
+  `verify-densite`, `verify-neige` 17/17, `verify-faune` 74/74, `verify-strings` (1 205 clés), `render-plan` verts.
+- **Vu en jeu** (un client, hiver forcé, lac forcé à 6,0) : l'achat au comptoir (500 → 50 or), la descente du quai, la glisse, l'arrêt, le choc contre
+  le ponton, les traces ; l'invitée sans patins : l'avertissement, la glissade, la chute, la maison. Les poses déduites de deux camarades injectés
+  (chaussée qui file, déchaussé qui mouline puis tombe). **Pas vu** : deux vrais clients ensemble (dans ce montage, aucun des deux n'enregistre
+  l'autre comme joueur distant, donc aucune position ne part — plomberie du harnais, `netCanBroadcast` exige déjà un camarade connu), la nuit sur
+  la glace, le lac sous la vraie météo (forcé au menu). **Supabase : rien** (`inv.skates` vit dans le JSON du fermier).
+
+## 2026-10-05 — LES BOIS DES COINS OUEST (livraison 1 sur 3)
+
+Guillaume : « ajouter des arbres dans les coins. des forêts comme au sud est, mais dans la zone sud ouest » ; tranché : **sud-ouest en forêt, nord-ouest
+épaissi**. `TOWN_WOODS_WEST` (fermeConstants.js) : deux tracés (polygones, côtés sur les bords de carte poussés AU-DELÀ du bord, sinon le coin
+s'éclaircit), profondeur = distance signée au tracé + les trois octaves du sud-est (`townWoodPolyDepth`, exportée), et **la rampe du sud-est telle
+quelle** (futaie 50 %, sous-bois d'herbes hautes à 97 % avec sa frange) ; plus de conifères au nord-ouest (0,58 contre 0,42). Plantés en passe
+finale par hachages seuls (l'histoire du prolongement nord). ⚠️ **Les clairières qu'une futaie à 50 % referme sont ROUVERTES par construction**,
+pas par un sel chanceux : parcours 0-1 depuis le quai (arbre de ces bois = 1, case libre = 0), on retire les arbres du chemin le moins coûteux vers
+chaque poche (41 arbres sur ~490 au sud-ouest). Le couloir du train reste déboisé (x ≤ `TOWN_RAIL_X` + 2).
+- **Bancs** : `verify-vallee` (ville d'une seule poche, 99,9 % des cases atteignables), `verify-collision`, `verify-compo`, `verify-densite`,
+  `render-plan` verts. ~1 390 arbres en ville (~880 avant).
+- **Vu en jeu** (automne, un client) : les deux bois, la lisière qui s'éclaircit, le sous-bois, le rail dégagé. **Pas vu** : sous la neige, la nuit.
+  **Supabase : rien.**
+
+## 2026-10-04 (nuit, suite) — L'OBÉLISQUE DE LA GRAND-PLACE AU PIXEL D'ÉCRAN, DANS SON ENCLOS
+
+Guillaume : « l'obélisque est cheap pour l'instant, le pousser pour qu'il soit plus détaillé et beau ». Cadré avec lui avant d'écrire :
+**civique à la française**, **calcaire blond de la fontaine**, **bornes et chaînes**, « **un tout petit peu plus élancé, pas abusé** », et
+« **réagencer les deux bancs et les deux lampadaires en conséquence** ». Livraison SÉPARÉE de l'étoile reine.
+- **Le dessin** (`plazaMonumentHi`, fermeArt.js ; cotes `OBELISK_GEO` au niveau du module) : la méthode de la fontaine — un canevas par cran,
+  des formes assemblées au pixel d'écran, aucun lissage ; la rampe de pierre est maintenant COMMUNE (`PLAZA_STONE`). Deux marches à joints décalés,
+  un socle portant une **plaque de bronze vert-de-gris** (lignes gravées, rivets, coulure verte sur la pierre), une moulure, un **dé à panneau creusé**
+  et sa **couronne de laurier en bronze** à nœud de ruban, une corniche à larmier, un **fût tramé** (Bayer : la rampe de neuf tons faisait une marche
+  qu'on lisait comme un joint), coulures sous le **pyramidion doré** (trois faces), lichens ; quatre **bornes** à tête en pointe de diamant et des
+  **chaînes de fonte** en feston, leur ombre au sol. Le sommet passe de ~4,1 à ~5,1 cases ; le fût, de 3,2 à 4,5 fois sa largeur.
+  ⚠️ **Le défaut « cheap » était une VALEUR** : l'ancien fût (#cfcabc, L 202) était plus PÂLE que le dallage (L 163) ; les faces sont maintenant un
+  cran sous le sol, les dessus au-dessus. Le sprite natif est ce dessin au cran 1 (repli).
+- **L'enclos EST la collision** : `TOWN_MONUMENT_FOOT` (4 × 2 cases), seule source pour le générateur, le dessin et `verify-vallee`. Posé en **passe
+  finale** avec les déplacements (piège « une carte qu'on regénère ») : **bancs reculés d'un rang** (90/95, 75), **lampadaires avancés d'un rang** aux
+  coins de devant de l'enclos (89/96, 80). ⚠️ Premier essai : lampadaires ÉCARTÉS d'une case — vu en jeu la nuit, un trou entre leurs flaques laissait
+  l'obélisque dans le noir ; abandonné.
+- **La neige** : en ville, toute case solide qui n'est pas un décor projette un bloc de BÂTIMENT (40 px) ; l'enclos faisait un pavé bleu de quatre
+  cases (vu en jeu). Son ombre se lit maintenant au pixel sur les volumes du dessin (`obeliskCasterCell`) ; l'abri et les congères ne voient que le
+  socle 2 × 2, comme avant.
+- **Le dessin en jeu** (`drawScreenStone`, FermeGame.js) : la pose de la fontaine, sortie en fonction partagée (la fontaine l'appelle, inchangée).
+  L'ellipse d'ombre de l'ancien obélisque est retirée : au bord sud de l'enclos, elle tombait sous la chaîne.
+- **Bancs** : `render-rues` 35/35 (+6, falsifiés), `verify-vallee` 279/279, `verify-collision` 35, `verify-compo`, `verify-densite` (540), `verify-neige`
+  17/17, `render-neige`, `verify-lumiere` 86/86, `verify-pluie` 34/34, `render-pluie` 24/24, `render-parc`, `render-escaliers`, `render-glace` 20/20,
+  `verify-quete` 954/954, `render-etoile`, `verify-portee`, `verify-docs` verts.
+- **Vu en jeu** (un client, cran 2 — la place impose ce dézoom) : midi, 22 h, sous 12 cm de neige à 14 h et à 22 h. Guillaume, à l'écran :
+  « ce que je vois à l'écran est ok ». **Pas vu** : le fondu de zoom sur l'obélisque, la pluie (le dessin ne publie pas ses creux : pas de flaque
+  sur les marches), à deux joueurs. **Supabase : rien.**
+
+## 2026-10-04 (nuit) — L'ÉTOILE REINE À FLANCS DROITS
+
+Demande de Guillaume en attente depuis septembre : « branches trop rondes ». **La cause n'était pas un réglage** : le contour de la reine
+(`starWispRender`, `fermeArt.js`) interpolait le RAYON en fonction de l'angle, de la pointe au creux. En polaire, une droite n'est pas `r = a + b·θ` :
+tout profil de ce genre (le `cos`, puis le triangle mêlé à 80 % du 13 septembre) bombe les flancs, et les branches restaient des lobes. Maintenant chaque
+flanc de la reine est un vrai SEGMENT pointe → creux (`radiusQueen`), et le creux descend de 0,52 à 0,46 sans faire de pétales (c'étaient les flancs bombés
+qui changeaient un creux profond en fleur). Quatre colonnes comparées sur planche (actuelle ; flancs droits à 0,48 ; à 0,46 ; à 0,46 avec un cerne à quatre
+voisins, pointes d'un pixel) : **Guillaume a pris 0,46 au cerne ordinaire**. Les petites sœurs ne changent pas, au bit près.
+- **Bancs** : `render-etoile` vert (191 contrôles ; la reine : 174 pixels de matière contre 82 pour une petite, 17 px de haut, bord sombre, îlots 0 %),
+  `verify-portee` revenu au vert (l'échafaudage `app/audit-tmp` lit `window.HTMLMediaElement`).
+- **Vu en jeu** (un client, `audit-tmp`, ferme, midi) : la reine qui suit le joueur aux crans 3 et 4, au repos et en marche (le rendu penché
+  `starWispLive`). **Pas vu** : la reine en ville, la nuit (son halo), à deux joueurs. **Supabase : rien.**
+- **Verdict sur le dallage civique HD (FIX-004)** : « garder, et c'est le modèle » — la même méthode servira aux autres sols de la ville. Rien de
+  changé dans le code (il était déjà actif par défaut ; l'ancien dessin reste le repli pendant la fabrication et l'interrupteur du menu dev reste).
+
 ## 2026-10-04 (soir) — LE PARVIS DU TRIBUNAL D'UN SEUL DALLAGE, LA ROSACE EN PIERRE BLONDE
 
 Deux demandes de Guillaume, dans l'ordre.

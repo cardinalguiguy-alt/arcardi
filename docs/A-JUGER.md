@@ -18,10 +18,26 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
   comme les lampadaires, ne leur donnerait aucun détail — il faut les REPEINDRE.** Seuls les deux lampadaires de la planche 3, peints plus fin, échappent à ce constat (`c067d98`).
 - **Les arbres dégarnis d'automne** : la chute « ronge » la couronne parce que l'arbre n'a pas de charpente cachée sous ses feuilles (`bareTree`, `makeFallTrees`, `fermeArt.js`).
 - **Chantier** : `refs/lot-gemini/` — A (sols repeints, plan conservé), B (arbres : feuillu / mi-chute / nu au squelette identique), C0 (objets de jardin à repeindre depuis `objets-ref/`).
-  **Ouvert** : sols en images Gemini, en PROCÉDURAL (possible ; prototype proposé sur le dallage civique), ou panachés selon le revêtement. **Rien n'est codé ni intégré.**
+  **Sols : tranché le 2026-10-04 (nuit)** — le dallage civique procédural HD (FIX-004) est gardé et devient le MODÈLE des autres revêtements.
+  Arbres et objets de jardin : rien n'est codé ni intégré.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-05** : **le bonhomme de neige** — le geste (façonner, rouler, poser, empiler : la vitesse de croissance, le ralentissement),
+  la traînée dans la neige, le dessin (taille contre le joueur, sphères, accessoires — planche `tools/out/bonhomme-planche.png`), le panneau du
+  décor et son aperçu, la durée du dégel (une journée de jeu) et son affaissement. Pas vus : à deux vrais clients, la nuit.
+
+- **Le 2026-10-05** : **le patin et le lac gelé** — la sensation de glisse (croisière 7,6, ~9 cases de lancée, virage large, arrêt en
+  travers), les poses (poussée, moulinet, chute assise et ses étoiles), les traces de lames, la descente du quai ; le prix (450 or) ;
+  la rareté du gel du lac (12,9 % du temps d'hiver, par vagues de ~1 à 6 jours de jeu) et la largeur de la bande de rive ; **le chalet
+  des patins, PROVISOIRE** (procédural, prompt Gemini dans `docs/IMAGES-ET-BLENDER.md`). Pas vus : à deux vrais clients, la nuit.
+- **Le 2026-10-05** : **les bois des coins ouest** (sud-ouest en forêt, nord-ouest épaissi) — leur taille, leur densité, la part de
+  conifères au nord-ouest ; vus en automne seulement.
+
+- **Le 2026-10-04 (nuit, suite)** : **l'obélisque** — vu à l'écran par Guillaume (« ok ») ; restent à juger en jouant : sous la neige et la nuit, la
+  nouvelle place des bancs (un rang plus au nord) et des lampadaires (aux coins de devant de l'enclos), la taille des bornes et des chaînes.
+- **Le 2026-10-04 (nuit)** : **l'étoile reine à flancs droits** (creux 0,46, choisie sur planche) — à revoir EN JEU : en ville, la nuit
+  (son halo autour des pointes), à côté des petites sœurs.
 - **Le 2026-10-04 (soir)** : **la rosace en pierre blonde** (teinte, saturation — 28 % en jeu contre 13 % au dallage —, joints adoucis, bordure ;
   l'eau qui suit ses anneaux sous la pluie) ; **le parvis du tribunal d'un seul dallage** et **la cour du Salon de coiffure passée en dallage
   civique** (elle touche le parvis de l'église : conséquence de la règle « une zone, une famille »).

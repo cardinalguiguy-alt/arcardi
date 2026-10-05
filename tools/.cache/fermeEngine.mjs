@@ -1177,6 +1177,8 @@ export function normalizeFarmer(f) {
      NET_* dans fermeConstants.js). Déclarés ICI pour ne pas s'effacer (§4 de
      CLAUDE.md : « poser le champ, migrer, relire » — tenu par verify-vallee). */
   if (typeof f.inv.net !== "number") f.inv.net = 0;
+  /* 2026-10-04 — les patins (`resolveBuySkates`) : une paire, gardée pour toujours. */
+  if (typeof f.inv.skates !== "number") f.inv.skates = 0;
   if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
   for (const k of Object.keys(f.inv.catMilk)) {
     const e = f.inv.catMilk[k];
@@ -1486,6 +1488,34 @@ export function resolveBuyNet(f, money) {
   if ((money | 0) < C.NET_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
   f.inv.net = 1;
   return { ok: true, moneyDelta: -C.NET_PRICE };
+}
+/* 2026-10-04 — LES PATINS, CÔTÉ HÔTE. Même forme que l'épuisette juste au-dessus :
+   `money` en LECTURE, le prix revient dans `moneyDelta`. Le chalet n'ouvre que
+   l'hiver (`season`, la saison réelle que l'hôte lit) : hors saison, il ne vend
+   rien — les patins n'ont nulle part où servir. La PORTÉE (être au comptoir) est
+   tenue par l'hôte sur la position qu'il connaît (`near`, calculé à l'appel). */
+export function resolveBuySkates(f, money, season, near) {
+  normalizeFarmer(f);
+  if (f.inv.skates > 0) return { ok: false, reason: "have", moneyDelta: 0 };
+  if (season !== "winter") return { ok: false, reason: "closed", moneyDelta: 0 };
+  if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
+  if ((money | 0) < C.SKATES_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
+  f.inv.skates = 1;
+  return { ok: true, moneyDelta: -C.SKATES_PRICE };
+}
+/* Le chalet : son emprise (cases) une fois la ville générée — le décor `skateChalet`
+   qu'a posé le générateur, ou `null`. Et la distance d'un point (semelle, cases) au
+   bord de cette emprise : 0 dedans. */
+export function townSkateChalet(tw) {
+  if (!tw || !tw.props) return null;
+  const p = tw.props.find((q) => q.kind === "skateChalet");
+  return p ? { x: p.x - (C.TOWN_SKATE_CHALET_W >> 1), y: p.y - C.TOWN_SKATE_CHALET_H + 1, w: C.TOWN_SKATE_CHALET_W, h: C.TOWN_SKATE_CHALET_H } : null;
+}
+export function townSkateChaletDist(tw, fx, fy) {
+  const r = townSkateChalet(tw);
+  if (!r) return Infinity;
+  const dx = Math.max(r.x - fx, 0, fx - (r.x + r.w)), dy = Math.max(r.y - fy, 0, fy - (r.y + r.h));
+  return Math.hypot(dx, dy);
 }
 export function resolveNetCatch(f, kind, sp, now, rnd) {
   normalizeFarmer(f);
@@ -7719,6 +7749,69 @@ export function generateTownWorld() {
     }
   }
 
+  /* 2026-10-04 — LES BOIS DES COINS OUEST (`C.TOWN_WOODS_WEST`), JUSTE APRÈS LE
+     PROLONGEMENT NORD ET POUR LA MÊME RAISON (voir le bloc au-dessus) : rien de
+     ce qui précède ne bouge, et rien de ce qui suit ne tire. Même futaie, même
+     sous-bois que le sud-est ; seuls le champ (un tracé, pas une pente) et la
+     part de conifères diffèrent. `westWoodTrees` retient les cases plantées ICI :
+     ce sont les seules que la passe d'ouverture des clairières (fin de fonction)
+     a le droit de rendre à l'herbe. */
+  const westWoodTrees = new Set();
+  for (const wood of C.TOWN_WOODS_WEST) {
+    const b = wood.box;
+    for (let y = Math.max(0, b.y); y < Math.min(H - 1, b.y + b.h); y++) {
+      for (let x = Math.max(C.TOWN_RAIL_X + 3, b.x); x < Math.min(W - 1, b.x + b.w); x++) {
+        const d = townWoodPolyDepth(wood, x, y);
+        if (d <= 0) continue;
+        const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_DENSITY;
+        if (townHash2(x * 31 + 5, y * 37 + 9) >= dens) continue;
+        const i = id(x, y);
+        if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) continue;
+        if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+        if (propCover(x, y)) continue;
+        objects[i] = townHash2(x * 13 + 7, y * 11 + 3) < wood.coniferShare ? C.O_TREE2 : C.O_TREE;
+        objHp.set(i, C.TREE_HP);
+        westWoodTrees.add(i);
+      }
+    }
+    const GRASS_DEPTH_EFF = C.TOWN_WOOD_DEPTH + C.TOWN_WOOD_GRASS_FRINGE;
+    for (let y = Math.max(0, b.y); y < Math.min(H - 1, b.y + b.h); y++) {
+      for (let x = Math.max(C.TOWN_RAIL_X + 3, b.x); x < Math.min(W - 1, b.x + b.w); x++) {
+        const d = townWoodPolyDepth(wood, x, y) + C.TOWN_WOOD_GRASS_FRINGE;
+        if (d <= 0) continue;
+        const dens = Math.min(1, d / GRASS_DEPTH_EFF) * C.TOWN_WOOD_GRASS_DENSITY;
+        if (townHash2(x * 41 + 13, y * 43 + 17) >= dens) continue;
+        addGarden(x, y, "tallGrass");
+      }
+    }
+  }
+
+  /* 2026-10-04 — LE CHALET DES PATINS (`C.TOWN_SKATE_CHALET_SITES`), EN PASSE FINALE
+     ET SANS UN TIRAGE : le premier emplacement dont toute l'emprise est de l'herbe
+     libre — ni solide, ni haie, ni arbre, ni décor qui la couvre. Son emprise entière
+     bloque (on ne traverse pas un chalet), comme le kiosque. Le décor est ancré au
+     MILIEU DE SA RANGÉE DU BAS, comme le kiosque : c'est de là qu'on le dessine. */
+  {
+    const CW = C.TOWN_SKATE_CHALET_W, CH = C.TOWN_SKATE_CHALET_H;
+    const fits = (sx, sy) => {
+      for (let dy = 0; dy < CH; dy++) for (let dx = 0; dx < CW; dx++) {
+        const x = sx + dx, y = sy + dy;
+        if (!inMap(x, y)) return false;
+        const i = id(x, y);
+        if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) return false;
+        if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) return false;
+        if (propCover(x, y)) return false;
+      }
+      return true;
+    };
+    const site = C.TOWN_SKATE_CHALET_SITES.find((s) => fits(s.x, s.y));
+    if (site) {
+      for (let dy = 0; dy < CH; dy++) for (let dx = 0; dx < CW; dx++) solid[id(site.x + dx, site.y + dy)] = 1;
+      // `ox` : −8 px — l'emprise a quatre colonnes, son axe tombe ENTRE deux cases (comme le portail de la maison hantée).
+      props.push({ x: site.x + (CW >> 1), y: site.y + CH - 1, kind: "skateChalet", ox: -C.TILE / 2 });
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════
      HORS-ZIP 2026-09-02 — `soft` : LES CASES QU'ON TRAVERSE EN COUCHANT LE
      FEUILLAGE. Dérivée, jamais posée.
@@ -8206,6 +8299,36 @@ export function generateTownWorld() {
     props[k] = { ...props[k], x: cx + 3 };
     solid[from] = 0; solid[to] = 1;
   }
+  /* ⚠️⚠️ 2026-10-04 (nuit) — L'OBÉLISQUE GRANDIT ET PREND UN ENCLOS (bornes et
+     chaînes, choisies par Guillaume) : l'enclos EST la collision, `TOWN_MONUMENT_FOOT`
+     (4 × 2 cases, une de plus de chaque côté du socle). Et « réagencer les deux bancs
+     et les deux lampadaires en conséquence » : les bancs reculent d'un rang (le fût
+     monte plus haut entre eux, et la chaîne du fond venait buter contre leurs pieds),
+     les lampadaires AVANCENT d'un rang, aux deux coins de devant de l'enclos : ils
+     l'encadrent depuis la rue. ⚠️ PAS ÉCARTÉS : essayé d'abord (x − 4, x + 5), vu en
+     jeu la nuit — neuf cases entre eux ouvraient un trou entre leurs deux flaques de
+     lumière, et l'obélisque restait dans le noir pile au milieu.
+     ⚠️ TOUT EN PASSE FINALE, comme le banc du 436 juste au-dessus : les cases d'avant
+     sont restées solides pendant toute la génération, les nouvelles ne l'étaient pas
+     (CLAUDE.md §4 — une case de `solid` changée en route déplace autant qu'un tirage).
+     Un déplacement dont la case d'arrivée est prise est SAUTÉ, jamais forcé : le
+     décor reste où il était plutôt que de se poser sur autre chose. */
+  {
+    const mo = C.TOWN_MONUMENT, FT = C.TOWN_MONUMENT_FOOT;
+    for (let y = FT.y; y < FT.y + FT.h; y++) for (let x = FT.x; x < FT.x + FT.w; x++) if (inMap(x, y)) solid[id(x, y)] = 1;
+    const MOVES = [
+      ["bench", mo.x - 2, mo.y - 2, mo.x - 2, mo.y - 3], ["bench", mo.x + 3, mo.y - 2, mo.x + 3, mo.y - 3],
+      ["lamp", mo.x - 3, mo.y + 1, mo.x - 3, mo.y + 2], ["lamp", mo.x + 4, mo.y + 1, mo.x + 4, mo.y + 2],
+    ];
+    for (const [kind, fx, fy, tx, ty] of MOVES) {
+      const k = props.findIndex(p => p.kind === kind && p.x === fx && p.y === fy);
+      if (k < 0 || !inMap(tx, ty)) continue;
+      const to = id(tx, ty);
+      if (solid[to] || objects[to] !== C.O_NONE || props.some(p => p.x === tx && p.y === ty)) continue;
+      props[k] = { ...props[k], x: tx, y: ty };
+      solid[id(fx, fy)] = 0; solid[to] = 1;
+    }
+  }
 
   /* ═══════════════════════════════════════════════════════════════════════
      2026-09-29 (phase 7b) — LES LAMPADAIRES AUX CARREFOURS ET AUX PORTES.
@@ -8492,6 +8615,77 @@ export function generateTownWorld() {
       else hard[id(p.x, p.y)] = 1;
     }
     for (let i = 0; i < soft.length; i++) if (hard[i] || !solid[i]) soft[i] = 0;
+  }
+
+  /* 2026-10-04 — LES CLAIRIÈRES QUE LES BOIS DE L'OUEST ONT REFERMÉES SE ROUVRENT,
+     AU PLUS COURT. Une futaie à 50 % enferme fatalement des poches d'herbe (la
+     maquette du sud-ouest en faisait quatre de plus de huit cases, `verify-vallee`
+     en refuse une seule) ; régler un sel jusqu'à ce qu'aucune ne se forme, comme
+     au prolongement nord, ne tient que jusqu'au prochain réglage du tracé.
+     Ici la garantie est construite : un parcours 0-1 depuis le quai (une case
+     libre coûte 0, un arbre de CES bois coûte 1, le reste est un mur), puis,
+     pour chaque case libre qu'on n'atteint qu'en traversant des arbres, on
+     remonte le chemin le moins coûteux et on rend ses arbres à l'herbe. La
+     poche entière est alors reliée (ses cases se touchent) : on la marque
+     atteinte avant de passer à la suivante.
+     ⚠️ LA RÈGLE DE PASSAGE EST CELLE DE `townNav` (le rail, le solide hors
+     végétation molle, l'eau, les arbres, le dénivelé d'un pas) — d'où sa place
+     APRÈS `soft`. Les tabliers d'escalier n'y sont pas : aucun n'approche ces
+     coins, et une case qu'on n'atteint par aucun chemin reste à l'infini, donc
+     intouchée. Aucun autre arbre que les leurs ne peut tomber, et les poches
+     qui existaient avant eux (l'intérieur des jardins clos) restent ce qu'elles
+     étaient : on n'y arrive pas en traversant un de leurs arbres. */
+  if (westWoodTrees.size) {
+    const N = W * H;
+    const railCut = (x, y) => x <= C.TOWN_RAIL_X + 1 && !(y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h);
+    const free = (i) => {
+      if (railCut(i % W, (i / W) | 0)) return false;
+      if (solid[i] && !soft[i]) return false;
+      if (ground[i] === C.G_WATER) return false;
+      const o = objects[i];
+      return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
+    };
+    const INF = 0x3fffffff, cost = new Int32Array(N).fill(INF), from = new Int32Array(N).fill(-1);
+    /* ⚠️ UNE CASE PEUT ENTRER PLUSIEURS FOIS DANS LA FILE (une fois par
+       amélioration, quatre au plus) : 4N de chaque côté, pas N. Le tas de `townNav`
+       a payé l'autre version (428) — écrire hors bornes d'un tableau typé ne lève
+       rien, la case est simplement perdue. */
+    const dq = new Int32Array(8 * N + 2);
+    let head = 4 * N + 1, tail = 4 * N + 1;
+    const s0 = id(Math.round(C.TOWN_SPAWN.x), Math.round(C.TOWN_SPAWN.y));
+    cost[s0] = 0; dq[tail++] = s0;
+    const step = (i, k) => {
+      const x = i % W, y = (i / W) | 0;
+      const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) return -1;
+      const j = ny * W + nx;
+      return Math.abs(elev[j] - elev[i]) > C.TOWN_STEP_MAX ? -1 : j;
+    };
+    while (head < tail) {
+      const i = dq[head++];
+      for (let k = 0; k < 4; k++) {
+        const j = step(i, k);
+        if (j < 0) continue;
+        const c = free(j) ? 0 : westWoodTrees.has(j) ? 1 : -1;
+        if (c < 0 || cost[i] + c >= cost[j]) continue;
+        cost[j] = cost[i] + c; from[j] = i;
+        if (c === 0) dq[--head] = j; else dq[tail++] = j;
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      if (cost[i] === 0 || cost[i] === INF || !free(i)) continue;
+      for (let j = i; j >= 0 && cost[j] > 0; j = from[j]) {
+        if (westWoodTrees.has(j) && objects[j] !== C.O_NONE) { objects[j] = C.O_NONE; objHp.delete(j); }
+      }
+      const st = [i]; cost[i] = 0;
+      while (st.length) {
+        const a = st.pop();
+        for (let k = 0; k < 4; k++) {
+          const b = step(a, k);
+          if (b >= 0 && cost[b] > 0 && cost[b] !== INF && free(b)) { cost[b] = 0; st.push(b); }
+        }
+      }
+    }
   }
 
   return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY, gates, plots };
@@ -10439,6 +10633,26 @@ export function townWoodNorthDepth(x, y) {
          + (y - C.TOWN_WOOD_NORTH_ORIGIN.y) * C.TOWN_WOOD_NORTH_SLOPE_Y;
   for (const o of C.TOWN_WOOD_NOISE) dn += o.a * townNoise(x, y, o.p, C.TOWN_WOOD_NORTH_SALT);
   return dn;
+}
+/* 2026-10-04 — LA PROFONDEUR DANS UN BOIS DE L'OUEST (`C.TOWN_WOODS_WEST`) : la
+   distance signée au tracé (> 0 dedans, mesurée au CENTRE de la case) plus les
+   trois octaves du sud-est, sous le sel du bois. Exportée pour la même raison
+   que `townWoodDepth` : un banc qui mesure la lisière doit lire CE champ-ci,
+   pas une copie. Hachage pur, aucun `rnd()`. */
+export function townWoodPolyDepth(wood, x, y) {
+  const poly = wood.poly, px = x + 0.5, py = y + 0.5;
+  let inside = false, dmin = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+    const vx = xj - xi, vy = yj - yi;
+    const t = Math.max(0, Math.min(1, ((px - xi) * vx + (py - yi) * vy) / (vx * vx + vy * vy)));
+    const d = Math.hypot(px - (xi + t * vx), py - (yi + t * vy));
+    if (d < dmin) dmin = d;
+  }
+  let d = inside ? dmin : -dmin;
+  for (const o of C.TOWN_WOOD_NOISE) d += o.a * townNoise(x, y, o.p, wood.salt);
+  return d;
 }
 export function townArchRise(tw) {
   if (!tw) return null;

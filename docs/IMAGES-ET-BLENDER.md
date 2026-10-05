@@ -8,6 +8,21 @@
 
 ### Notes qui restent vraies d'une reprise à l'autre (commerces, intégration d'images)
 
+**⏳ PROMPT GEMINI EN ATTENTE (2026-10-05) — LE CHALET DES PATINS DU LAC.** Le chalet en jeu est PROCÉDURAL et provisoire
+(`townSkateChaletSprite`, fermeArt.js ; planche `tools/out/chalet-patins.png`, ouvert à gauche, fermé à droite). Images de référence à
+joindre : `tools/out/chalet-patins.png` (la composition et l'emprise), `refs/boutique-garfield.jpg` (le niveau de finition accepté). Il en
+faut DEUX états (ouvert l'hiver, volets clos le reste de l'année), même cadre au pixel près — même règle que les lampadaires. À coller :
+> *A small, very elegant covered winter kiosk for renting and selling ice skates, for a cozy top-down 3/4 pixel-art farming game (same
+> style and light as the reference shop: light from the upper left, soft blue-tinted shadows). Footprint 4 tiles wide by 2 tiles deep
+> (wide rectangle), seen from slightly above. Forest-green painted wood boarding with cream trim, a slate-shingle roof with a small
+> central gable carrying a gold skate emblem (NO lettering, no text anywhere), a wide serving counter under a scalloped burgundy-and-cream
+> striped valance, white figure skates hanging on a rail inside the warmly lit window, a fir garland with red bows and warm bulbs along
+> the eaves, a black lantern on each front corner post, a stone plinth. Second image, exact same framing: same kiosk closed for the season —
+> green wooden shutters over the counter, valance rolled up, no garland, lanterns unlit. Plain flat magenta background (#FF00FF), no ground,
+> no shadow beyond the building's own contact shadow.*
+L'intégration suit la règle des bitmaps (§9) : regardé à l'écran le jour même, sous la neige (les toits peints ont leur calque,
+`tools/build-snow-roofs.mjs`), et la nuit (les lanternes et la vitrine s'allument par `tools/lib-glow.mjs`, comme la Maison Garfield).
+
 **⚠️ PRIORITÉ DE DOCUMENTATION, PAS À FAIRE TOUT DE SUITE — LES COMMERCES DE LA GRAND-RUE (décidé avec lui le
 2026-09-29) : LE CAFÉ « CHEZ JULIETTE » ET LE RESTAURANT.** Il faut être PRÊT : une séance de conception à part (§2 :
 LISTER les décisions structurantes et ATTENDRE). Le café : un intérieur « superbe, cosy, bobo » où l'on vend des

@@ -96,6 +96,22 @@ export const NEIGE = {
   ICE_NIGHT: 0.05, ICE_NIGHT_CLEAR: 0.08, ICE_DAY: 0.02, ICE_SNOW: 0.03,
   ICE_SUN: 0.12, ICE_RAIN: 0.6, ICE_WARM: { winter: 0, spring: 0.8, summer: 3, autumn: 0.5 }, ICE_MAX: 12,
   ICE_T0: 0.12, ICE_T1: 1.6,
+  /* ⚠️⚠️ 2026-10-04 — LE LAC DU SUD NE LIT PAS `ice`, ET C'EST UNE MESURE, PAS UN GOÛT
+     (Guillaume : « gelé occasionnellement » ; tranché : « rarement, depuis la rive »).
+     `ice` est intégré sur la fenêtre du manteau, qui REPART DE ZÉRO quatre jours plus
+     tôt à 6 h : il monte tout le jour et perd ~1,2 cm d'un coup à chaque changement
+     de jour. Seuillé, il faisait geler et dégeler le lac TOUS LES JOURS, quatre
+     minutes réelles à chaque fois (mesuré sur 900 jours d'hiver) — une dent de scie
+     de la fenêtre, pas une vague de froid.
+     Le lac lit donc `lakeCold` : le gain net de glace (la MÊME formule que l'étang,
+     `iceRate`) sommé sur les QUATRE DERNIERS JOURS ENTIERS, de cette heure-ci à
+     cette heure-ci — une fenêtre glissante calée sur la journée n'oscille plus,
+     elle ne bouge qu'avec le temps qu'il fait. Mesuré sur 1 200 jours d'hiver :
+     p75 5,14, p90 5,54, p95 5,75, p99 6,25, au plus 6,92. Seuils : la rive prend à
+     `LAKE_K0`, le large (au-delà de `LAKE_DREF` cases de toute terre) à `LAKE_K1`.
+     `verify-neige` imprime ce que ça donne : la part de l'hiver où l'on peut patiner,
+     la fréquence et la durée des vagues. */
+  LAKE_K0: 5.35, LAKE_K1: 6.35, LAKE_DREF: 7,
 };
 /* Les secondes RÉELLES par heure de jeu : le « retard » des carpes (`iceLag`) se compte
    dans le temps de la faune, qui est le temps réel (faune.js, `env.t`). */
@@ -138,6 +154,24 @@ function relax(v, gain, unload, dtH) {
   const eq = gain / k;
   return eq + (v - eq) * Math.exp(-k * dtH);
 }
+/* La glace (voir `NEIGE.ICE_*`) : ce qu'elle gagne (cm/h) sous le temps `W` à l'heure
+   `hour`. La nuit se lit au soleil BRUT (avant les nuages) ; la clarté du ciel, à
+   `dark`. 2026-10-04 : sortie de `packStep` pour que le lac (`lakeCold`) somme la
+   MÊME grandeur que l'étang intègre — deux formules auraient divergé au premier
+   réglage. Les opérations sont celles d'avant, dans le même ordre : l'étang n'a pas
+   bougé d'un bit (`render-glace`). */
+export function iceRate(W, hour, season) {
+  const N = NEIGE;
+  const sun = sunAt(hour, season) * Math.max(0, 1 - 1.25 * W.dark) * Math.max(0, 1 - 3 * W.snow);
+  const sun0 = sunAt(hour, season);
+  let grow = 0;
+  if (season === "winter") {
+    grow = sun0 <= 0 ? N.ICE_NIGHT + N.ICE_NIGHT_CLEAR * Math.max(0, 1 - W.dark) : N.ICE_DAY * (1 - sun0);
+    if (W.snow > 0.05) grow += N.ICE_SNOW;
+  }
+  const iceMelt = sun * N.ICE_SUN + W.rain * N.ICE_RAIN + (N.ICE_WARM[season] || 0);
+  return grow - iceMelt;
+}
 /* Un pas de `dtH` heures sous le temps `W`, à l'heure `hour`. */
 export function packStep(st, W, dtH, hour, season) {
   const N = NEIGE;
@@ -159,16 +193,7 @@ export function packStep(st, W, dtH, hour, season) {
   st.tl = relax(st.tl, gain, N.TREE_BASE + unl, dtH);
   st.tc = relax(st.tc, gain, N.TREE_BASE_CONIFER + unl, dtH);
   st.since = f > 0.25 ? 0 : st.since + dtH * 60;
-  /* La glace (voir `NEIGE.ICE_*`). La nuit se lit au soleil BRUT (avant les nuages) ;
-     la clarté du ciel, à `dark`. */
-  const sun0 = sunAt(hour, season);
-  let grow = 0;
-  if (season === "winter") {
-    grow = sun0 <= 0 ? N.ICE_NIGHT + N.ICE_NIGHT_CLEAR * Math.max(0, 1 - W.dark) : N.ICE_DAY * (1 - sun0);
-    if (W.snow > 0.05) grow += N.ICE_SNOW;
-  }
-  const iceMelt = sun * N.ICE_SUN + W.rain * N.ICE_RAIN + (N.ICE_WARM[season] || 0);
-  st.ice = Math.min(N.ICE_MAX, Math.max(0, st.ice + (grow - iceMelt) * dtH));
+  st.ice = Math.min(N.ICE_MAX, Math.max(0, st.ice + iceRate(W, hour, season) * dtH));
   const cov = iceCover(st.ice);
   /* La neige sur la glace : ce qui tombe sur la part gelée, fondu comme le sol ouvert,
      jamais plus que le sol (elle ne s'y accumule pas mieux) ; une glace qui s'en va
@@ -226,6 +251,50 @@ export function snowPack(day, tm, seasonOfDay, force, place) {
     packStep(out, W, (t - rec.at) / 60, ((rec.at + t) / 2) / 60, season);
   }
   return out;
+}
+
+/* ── 2 bis. LE FROID DU LAC (2026-10-04) ─────────────────────────────────────
+   Le gain net de glace (`iceRate`, cm) sommé sur les QUATRE DERNIERS JOURS ENTIERS,
+   de l'heure `tm` du jour `day − 4` à l'heure `tm` du jour `day` — le pourquoi est
+   sur `NEIGE.LAKE_K0`. Non borné (un dégel le fait descendre sous zéro) : c'est
+   une mesure du froid, pas une épaisseur.
+   ⚠️ MÉMOÏSÉ PAR JOUR : la somme cumulée d'une journée (un pas par `STEP_MIN`) ne
+   dépend que de sa météo, de sa saison et du forçage s'il la touche ; une image
+   n'en lit que cinq entrées et une interpolation. Deux joueurs lisent donc le même
+   nombre au bit près, comme le manteau (§3). */
+const lakeMemo = new Map();
+function lakeDayCum(d, season, force, place) {
+  const forced = force && force.day === d;
+  const fk = forced ? `${force.kind}:${Math.round(force.at * 10)}` : "";
+  const key = `${d}|${season}|${fk}|${place === "farm" ? "farm" : "town"}`;
+  let cum = lakeMemo.get(key);
+  if (!cum) {
+    const S = NEIGE.STEP_MIN, n = Math.round((DAY_B - DAY_A) / S);
+    cum = new Float64Array(n + 1);
+    for (let k = 0; k < n; k++) {
+      const tm = DAY_A + (k + 0.5) * S;
+      cum[k + 1] = cum[k] + iceRate(WX.weatherAt(d, tm, season, forced ? force : null, place), tm / 60, season) * (S / 60);
+    }
+    if (lakeMemo.size > 48) lakeMemo.clear();
+    lakeMemo.set(key, cum);
+  }
+  return cum;
+}
+export function lakeCold(day, tm, seasonOfDay, force, place) {
+  day = Math.max(1, day | 0);
+  const S = NEIGE.STEP_MIN;
+  const u = (Math.max(DAY_A, Math.min(DAY_B, tm)) - DAY_A) / S;
+  const k = Math.min(Math.floor(u), Math.round((DAY_B - DAY_A) / S) - 1), f = u - k;
+  const at = (cum) => cum[k] + (cum[k + 1] - cum[k]) * f;     // la somme du jour jusqu'à `tm`
+  let sum = 0;
+  for (let d = day - 4; d <= day; d++) {
+    if (d < 1) continue;
+    const cum = lakeDayCum(d, seasonOfDay(d), force, place);
+    if (d === day - 4) sum += cum[cum.length - 1] - at(cum);   // ce qui reste de ce jour-là après `tm`
+    else if (d === day) sum += at(cum);
+    else sum += cum[cum.length - 1];
+  }
+  return sum;
 }
 /* L'état d'un arbre (0 nu, 1 légèrement enneigé, 2 alourdi) et le fondu entre
    deux états. `jit` (0..1, un hachage de la case) décale les seuils d'un arbre

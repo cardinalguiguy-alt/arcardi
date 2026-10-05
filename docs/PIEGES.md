@@ -195,6 +195,18 @@ dépôt.
   calque de sol neuf publie ce que la météo lit (ses joints : `c.joints`, comme l'opus publie `c.stones`)
   ou se déclare d'une autre classe. Ça ne se voit qu'en jeu, sous l'orage : aucun banc ne compare le
   dessin sec et le dessin mouillé.
+- ⚠️⚠️ **UNE GRANDEUR INTÉGRÉE SUR UNE FENÊTRE QUI REPART DE ZÉRO MONTE EN DENT DE SCIE : SEUILLÉE, ELLE BASCULE
+  CHAQUE JOUR** (2026-10-05, le lac du sud). L'épaisseur de glace du manteau (`ice`, neige.js) s'intègre depuis
+  « quatre jours plus tôt à 6 h » : elle monte toute la journée et perd d'un coup la journée qui sort de la fenêtre
+  (~1,2 cm). Pour l'étang, peu importe (il gèle à moins de 2 cm, tout l'hiver) ; un seuil HAUT posé dessus pour
+  faire geler le lac « rarement » le faisait geler et dégeler tous les jours, quatre minutes réelles à chaque fois —
+  mesuré sur 900 jours d'hiver, jamais vu en relisant. Un seuil rare se pose sur une grandeur LISSE : une fenêtre
+  glissante de jours ENTIERS, d'heure à heure (`lakeCold`), n'oscille plus qu'avec la météo.
+- ⚠️⚠️ **UN CHAMP `id` DANS UNE `req` EST ÉCRASÉ PAR L'EXPÉDITEUR** (2026-10-05, le bonhomme de neige). `sendReq`
+  construit `{ ...payload, id: me.id, … }` : l'hôte lit l'auteur dans `req.id`, donc l'`id` d'un objet visé est
+  remplacé sans erreur. Le décor du bonhomme était envoyé par `id`, l'hôte cherchait un bonhomme nommé comme le
+  joueur et répondait « introuvable » — un panneau qui s'ouvre, des choix qui s'allument, et rien ne change. Nommer
+  la cible autrement (`sid`, `targetId`, `fromId`).
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN

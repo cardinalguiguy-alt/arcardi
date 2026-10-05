@@ -47,16 +47,52 @@ export function iceThreshold(dCases, n) {
   const k = smooth01(dCases / ICE_DREF);
   return Math.max(0.06, NEIGE.ICE_T0 + (NEIGE.ICE_T1 - NEIGE.ICE_T0) * k + (n - 0.5) * 0.3);
 }
-/* Le point (px monde) est-il pris par la glace ? Hors de l'eau cuite d'un étang : non. */
-export function pondFrozenAt(bake, wx, wy, ice) {
-  if (!(ice > 0.05)) return false;
+/* ⚠️⚠️ 2026-10-04 — LE LAC DU SUD GÈLE PAR LA MÊME RÈGLE, ÉTIRÉE. Guillaume : « des
+   patins pour monter sur le lac gelé et le body of water au sud, qui pourrait être
+   gelé occasionnellement ». Le lac n'a pas sa règle à lui : c'est `iceThreshold`,
+   lu à une distance ÉTIRÉE (`dsh × ICE_DREF / LAKE_DREF` : le lac fait dix cases
+   de large, l'étang quatre) et comparé à une épaisseur ÉQUIVALENTE tirée du froid
+   du lac (`lakeIceEq`, `neige.js` : `lakeCold`) — la rive prend à `LAKE_K0`, le
+   large à `LAKE_K1`, exactement comme l'étang prend de `ICE_T0` à `ICE_T1`. Le
+   front, les fêlures, les bulles, la neige posée sont donc ceux de l'étang, sans
+   une ligne de dessin de plus.
+   ⚠️ LE FLEUVE NE GÈLE PAS : le courant l'en empêche. Le seuil monte sur les
+   `LAKE_RIVER_RAMP` dernières cases du bassin et devient infini au-delà de
+   `TOWN_RIVER_X` — le front s'efface en pointe dans le goulet au lieu de s'arrêter
+   sur une colonne. */
+export const LAKE_RIVER_RAMP = 8;
+export function lakeIceEq(K) {
+  if (!(K > NEIGE.LAKE_K0 - 0.2)) return 0;
+  return NEIGE.ICE_T0 + (K - NEIGE.LAKE_K0) * (NEIGE.ICE_T1 - NEIGE.ICE_T0) / (NEIGE.LAKE_K1 - NEIGE.LAKE_K0);
+}
+/* Ce que la région ajoute au seuil d'un pixel du lac, en colonne de cases `xC` :
+   0 dans le bassin, une rampe vers le fleuve, l'infini dans le fleuve. */
+function riverLift(xC) {
+  const x1 = C.TOWN_RIVER_X, x0 = x1 - LAKE_RIVER_RAMP;
+  return xC <= x0 ? 0 : xC >= x1 ? Infinity : (xC - x0) * 0.45;
+}
+/* Le seuil d'un pixel mouillé d'une région (étang ou lac), en cm d'étang. */
+function pixelThreshold(R, i, wx, wy) {
+  if (R.isLake) return iceThreshold(R.dsh[i] * (ICE_DREF / NEIGE.LAKE_DREF), iceNoise(wx / T, wy / T)) + riverLift(wx / T);
+  return iceThreshold(R.dsh[i], iceNoise(wx / T, wy / T));
+}
+/* Le point (px monde) est-il pris par la glace ? `ice` : l'épaisseur de l'étang (cm) ;
+   `lakeEq` : celle du lac, en cm d'étang (`lakeIceEq`). Hors de l'eau cuite d'un
+   étang ou du lac : non. */
+export function frozenAt(bake, wx, wy, ice, lakeEq) {
   const R = bakeRegionAt(bake, (wx / T) | 0, (wy / T) | 0);
-  if (!R || !R.isPond || !R.dsh) return false;
+  if (!R || !R.dsh) return false;
+  const v = R.isPond ? ice : R.isLake ? lakeEq : 0;
+  if (!(v > 0.05)) return false;
   const xx = Math.floor(wx - R.ox), yy = Math.floor(wy - R.oy);
   if (xx < 0 || yy < 0 || xx >= R.RW || yy >= R.RH) return false;
   const i = yy * R.RW + xx;
   if (R.lvl[i] === 255) return false;
-  return ice >= iceThreshold(R.dsh[i], iceNoise(wx / T, wy / T));
+  return v >= pixelThreshold(R, i, wx, wy);
+}
+/* L'étang seul — la lecture de la faune du parc depuis le 2026-09-30, inchangée. */
+export function pondFrozenAt(bake, wx, wy, ice) {
+  return frozenAt(bake, wx, wy, ice, 0);
 }
 
 /* ── 2. LES COULEURS ─────────────────────────────────────────────────────────
@@ -135,49 +171,81 @@ function marks(R) {
 }
 
 /* ── 4. LA CUISSON ───────────────────────────────────────────────────────────
-   `ice` : l'épaisseur (cm, le manteau) ; `snow` : la neige posée sur la glace (cm,
-   `si` du manteau). Rend { px (RGBA, RW × RH, à poser en (ox, oy)), cell (cw × ch :
-   0 rien, 1 en partie, 2 toute l'eau de la case est prise), frozen (RW × RH, 1 = pris :
-   ce que lit le banc — l'alpha ne le dit pas, une glace jeune est presque transparente) }. */
+   `ice` : l'épaisseur (cm, le manteau ; pour le lac, l'équivalent `lakeIceEq`) ;
+   `snow` : la neige posée sur la glace (cm, `si` du manteau). Rend { px (RGBA, RW × RH,
+   à poser en (ox, oy)), cell (cw × ch : 0 rien, 1 en partie, 2 toute l'eau de la case
+   est prise), frozen (RW × RH, 1 = pris : ce que lit le banc — l'alpha ne le dit pas,
+   une glace jeune est presque transparente) }.
+   ⚠️⚠️ 2026-10-04 — CE QUI NE DÉPEND PAS DE L'ÉPAISSEUR EST CALCULÉ UNE FOIS PAR
+   RÉGION (`iceStatics`) : le seuil de chaque pixel, sa teinte, sa fenêtre claire, son
+   éclat, la prise de la neige. Le lac fait quarante fois l'étang (≈ 450 000 pixels
+   gelables) et se recuit à chaque cran de son front : trois bruits par pixel et par
+   cuisson auraient coûté une image sur dix. Les opérations sont celles d'avant,
+   dans le même ordre et en double précision — l'étang sort au bit près
+   (`render-glace` compare). Le lac s'arrête au fleuve (`xCut`) : rien au-delà ne gèle. */
+function iceStatics(R) {
+  if (R._iceStatics) return R._iceStatics;
+  const { RW, RH, ox, oy, lvl, dsh } = R;
+  const dScale = R.isLake ? ICE_DREF / NEIGE.LAKE_DREF : 1;
+  const wCut = R.isLake ? Math.max(0, Math.min(RW, Math.ceil(C.TOWN_RIVER_X * T - ox))) : RW;
+  const n = wCut * RH;
+  const thr = new Float64Array(n), sv = new Float64Array(n), idx = new Uint8Array(n).fill(255);
+  for (let yy = 0; yy < RH; yy++) for (let xx = 0; xx < wCut; xx++) {
+    const i = yy * RW + xx, j = yy * wCut + xx;
+    const l = lvl[i];
+    if (l === 255) continue;
+    const wx = ox + xx, wy = oy + yy, d = dsh[i], de = d * dScale;
+    const grain = (h32(wx, wy, 7) / 4294967296 - 0.5) * 0.06;
+    thr[j] = pixelThreshold(R, i, wx, wy) + grain;
+    // La teinte : la profondeur, un bruit lent, un tramage ordonné (pas de bandes).
+    const v = clamp01(0.55 * l / 15 + 0.45 * smooth01(de / ICE_DREF) + 0.12 * townNoise(wx / T, wy / T, 3.1, 223));
+    let k = Math.max(0, Math.min(ICE_RAMP.length - 1, Math.floor(v * (ICE_RAMP.length - 1) + BAYER[(yy & 3) * 4 + (xx & 3)] / 16)));
+    // Une fenêtre de glace claire ? (un bruit lent, et jamais contre la berge)
+    const clear = smooth01((0.5 + 0.5 * townNoise(wx / T, wy / T, 2.6, 241) - 0.47) / 0.12) * smooth01((d - 0.35) / 0.7);
+    if (clear > 0.5) k = 7 + Math.min(2, Math.floor((clear - 0.5) * 6 + BAYER[(yy & 3) * 4 + (xx & 3)] / 16));
+    if (d < 0.13) k = 10;                                               // le givre au ras de la berge
+    else if (d > 0.9 && h32(wx, wy, 19) % 131 === 0) k += 16;           // un éclat, sur la glace noire
+    idx[j] = k;
+    const xC = wx / T, yC = wy / T, A = 0.6, ca = Math.cos(A), sa = Math.sin(A);
+    const u = (xC * ca + yC * sa) / 2.4, vv = (-xC * sa + yC * ca) / 0.7;
+    const dn = 0.5 + 0.5 * townNoise(u, vv, 1, 229);
+    const shore = (1 - smooth01(d / 1.2)) * 0.35;
+    const g = (h32(wx, wy, 31) / 4294967296 - 0.5) * 0.08;
+    sv[j] = dn + shore + g;
+  }
+  R._iceStatics = { wCut, thr, sv, idx, dScale };
+  return R._iceStatics;
+}
 export function bakePondIce(R, ice, snow) {
-  const { RW, RH, ox, oy, lvl, dsh, cw, ch } = R;
+  const { RW, RH, lvl, dsh, cw, ch } = R;
   const px = new Uint8ClampedArray(RW * RH * 4);
   const frozen = new Uint8Array(RW * RH);
-  // La même garde que `pondFrozenAt` : sous 0,05 cm, pas de glace (render-glace §2 l'a trouvée absente).
+  // La même garde que `frozenAt` : sous 0,05 cm, pas de glace (render-glace §2 l'a trouvée absente).
   if (!(ice > 0.05)) return { px, cell: new Uint8Array(cw * ch), frozen };
   const cellWet = new Uint16Array(cw * ch), cellIce = new Uint16Array(cw * ch);
-  const M = marks(R);
+  const M = marks(R), ST = iceStatics(R), { wCut, thr, idx, dScale } = ST;
   const put = (i, c, a) => { const o = i * 4; px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = Math.round(a * 255); };
   /* 4.1 — la glace. */
   for (let yy = 0; yy < RH; yy++) for (let xx = 0; xx < RW; xx++) {
     const i = yy * RW + xx;
-    const l = lvl[i];
-    if (l === 255) continue;
+    if (lvl[i] === 255) continue;
     const ci = ((yy / T) | 0) * cw + ((xx / T) | 0);
     cellWet[ci]++;
-    const wx = ox + xx, wy = oy + yy, d = dsh[i];
-    const grain = (h32(wx, wy, 7) / 4294967296 - 0.5) * 0.06;
-    const thr = iceThreshold(d, iceNoise(wx / T, wy / T)) + grain;
-    const age = ice - thr;
+    if (xx >= wCut) continue;                                         // le fleuve : jamais pris
+    const j = yy * wCut + xx;
+    const age = ice - thr[j];
     if (age < 0) {
       // Le front qui avance : une frange de glace-aiguille, à peine visible, devant la plaque.
       if (age > -0.07 && ice > 0.05) put(i, ICE_YOUNG, 0.26);
       continue;
     }
     frozen[i] = 1; cellIce[ci]++;
-    if (d < 0.13) { put(i, RIME, 0.96); continue; }                 // le givre au ras de la berge
+    const k0 = idx[j], kk = k0 & 15;
+    if (kk === 10) { put(i, RIME, 0.96); continue; }                  // le givre au ras de la berge
     if (age < 0.05) { put(i, FRONT, 0.82); continue; }               // le bord de la plaque qui avance
-    // La teinte : la profondeur, un bruit lent, un tramage ordonné (pas de bandes).
-    const v = clamp01(0.55 * l / 15 + 0.45 * smooth01(d / ICE_DREF) + 0.12 * townNoise(wx / T, wy / T, 3.1, 223));
-    const k = Math.max(0, Math.min(ICE_RAMP.length - 1, Math.floor(v * (ICE_RAMP.length - 1) + BAYER[(yy & 3) * 4 + (xx & 3)] / 16)));
-    let c = ICE_RAMP[k];
-    let a = A_SHORE + (A_DEEP - A_SHORE) * smooth01(d / ICE_DREF);
-    // Une fenêtre de glace claire ? (un bruit lent, et jamais contre la berge)
-    const clear = smooth01((0.5 + 0.5 * townNoise(wx / T, wy / T, 2.6, 241) - 0.47) / 0.12) * smooth01((d - 0.35) / 0.7);
-    if (clear > 0.5) {
-      c = CLEAR[Math.min(2, Math.floor((clear - 0.5) * 6 + BAYER[(yy & 3) * 4 + (xx & 3)] / 16))];
-      a = 0.5;
-    }
+    let c, a;
+    if (kk >= 7) { c = CLEAR[kk - 7]; a = 0.5; }
+    else { c = ICE_RAMP[kk]; a = A_SHORE + (A_DEEP - A_SHORE) * smooth01(dsh[i] * dScale / ICE_DREF); }
     if (age < 0.35) {                                                 // la glace jeune : grise et claire-voie
       const u = age / 0.35;
       c = [c[0] + (ICE_YOUNG[0] - c[0]) * (1 - u), c[1] + (ICE_YOUNG[1] - c[1]) * (1 - u), c[2] + (ICE_YOUNG[2] - c[2]) * (1 - u)];
@@ -188,7 +256,7 @@ export function bakePondIce(R, ice, snow) {
     if (need != null && ice >= need) { put(i, CRACK, 0.9); continue; }
     const bub = M.bubble.get(i);
     if (bub != null && ice >= bub) { put(i, BUBBLE, 0.85); continue; }
-    if (d > 0.9 && h32(wx, wy, 19) % 131 === 0) { put(i, GLINT, 0.55); continue; }   // un éclat, sur la glace noire
+    if (k0 & 16) { put(i, GLINT, 0.55); continue; }                   // un éclat, sur la glace noire
     put(i, c, a);
   }
   // L'ombre d'une fêlure : le pixel juste dessous, plus sombre (la lèvre de la fente).
@@ -204,19 +272,13 @@ export function bakePondIce(R, ice, snow) {
     /* La part couverte : ~45 % à 4 cm, jamais plus de 90 % — le vent balaie la glace
        par plaques (premier jet : tout blanc dès 4 cm, l'étang disparaissait). */
     const k = smooth01((snow - 0.1) / 8) * 0.9;
-    const A = 0.6, ca = Math.cos(A), sa = Math.sin(A);
-    const sm = new Uint8Array(RW * RH);
-    for (let yy = 0; yy < RH; yy++) for (let xx = 0; xx < RW; xx++) {
+    const sm = new Uint8Array(RW * RH), sv = ST.sv;
+    for (let yy = 0; yy < RH; yy++) for (let xx = 0; xx < wCut; xx++) {
       const i = yy * RW + xx;
       if (!frozen[i]) continue;
-      const wx = ox + xx, wy = oy + yy, xC = wx / T, yC = wy / T;
-      const u = (xC * ca + yC * sa) / 2.4, v = (-xC * sa + yC * ca) / 0.7;
-      const dn = 0.5 + 0.5 * townNoise(u, v, 1, 229);
-      const shore = (1 - smooth01(dsh[i] / 1.2)) * 0.35;
-      const g = (h32(wx, wy, 31) / 4294967296 - 0.5) * 0.08;
-      if (dn + shore + g > 1.05 - k * 0.85) sm[i] = 1;
+      if (sv[yy * wCut + xx] > 1.05 - k * 0.85) sm[i] = 1;
     }
-    const S = SNOW_TONES;
+    const S = SNOW_TONES, { ox, oy } = R;
     for (let yy = 0; yy < RH; yy++) for (let xx = 0; xx < RW; xx++) {
       const i = yy * RW + xx;
       if (!sm[i]) continue;

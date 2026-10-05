@@ -373,6 +373,51 @@ console.log("\n=== la ligne blanche ===\n");
   ok(fam(cx, yS) === "civic", "le parvis du tribunal est civique jusqu'à sa dernière rangée", `rangée ${yS} : ${fam(cx, yS)}`);
 }
 
+/* ═══════════════ 2026-10-04 (nuit) — L'OBÉLISQUE, SON ENCLOS, SES VOISINS ═════
+   Guillaume : « l'obélisque est cheap ». Repeint au pixel d'écran (`plazaMonumentHi`),
+   dans un enclos de bornes et de chaînes qui EST la collision (`TOWN_MONUMENT_FOOT`),
+   bancs reculés et lampadaires avancés en passe finale. On exige ce dont le rendu
+   dépend, pas « est-il beau » :
+   · l'enclos est solide, et le dessin opaque tient dans sa largeur (on ne voit pas
+     une borne là où l'on peut marcher) — alpha ≥ 200 : les ombres ne comptent pas ;
+   · le FÛT est plus sombre que le dallage civique (l'ancien était plus PÂLE que le
+     sol, il ne s'en détachait pas : c'était ça, le « cheap ») ;
+   · les bancs et les lampadaires restent par paires sur l'axe de la place (la
+     porte de l'hôtel de ville, règle du 436) ;
+   · sous la neige, l'enclos n'ombre pas en BLOC : une chaîne ne porte rien, le fût
+     porte (vu en jeu au premier jet : un pavé bleu de 4 cases).
+   ⚠️ Falsifié (lancé) : l'ancien fût (#cfcabc) vaut L 202 contre 163 au dallage ; sans
+   `obeliskCasterCell`, la neige donne 40 px sous la chaîne comme sous le fût. */
+{
+  const FT = C.TOWN_MONUMENT_FOOT, mo = C.TOWN_MONUMENT, G = S.monumentGeo;
+  let solidN = 0;
+  for (let y = FT.y; y < FT.y + FT.h; y++) for (let x = FT.x; x < FT.x + FT.w; x++) if (tw.solid[y * tw.w + x]) solidN++;
+  ok(solidN === FT.w * FT.h, "l'enclos de l'obélisque est solide, case pour case", `${solidN}/${FT.w * FT.h}`);
+  const nat = S.plazaMonument, d = nat.__px || nat.px;
+  let minX = 1e9, maxX = -1e9;
+  for (let y = nat.height - FT.h * T; y < nat.height; y++) for (let x = 0; x < nat.width; x++) if (d[(y * nat.width + x) * 4 + 3] >= 200) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); }
+  const half = FT.w * T / 2, c0 = nat.width / 2;
+  ok(minX >= c0 - half && maxX < c0 + half, "le dessin de l'enclos tient dans la collision", `opaque de ${minX - c0} à ${maxX + 1 - c0} px, emprise ±${half}`);
+  const hi = S.plazaMonumentHi(2), hd = hi.__px || hi.px;
+  ok(hi.width === G.W * 2 && hi.height === G.H * 2 && nat.width === G.W && nat.height === G.H, "un canevas par cran, à la taille des cotes", `cran 2 : ${hi.width} × ${hi.height}`);
+  // le fût : la colonne du milieu, sur la moitié haute du fût (hors pyramidion et socle)
+  let sL = 0, sN = 0;
+  for (let y = Math.round((G.gy - 70) * 2); y < Math.round((G.gy - 45) * 2); y++) for (let x = Math.round(G.cx * 2) - 3; x < Math.round(G.cx * 2) + 3; x++) {
+    const i = (y * hi.width + x) * 4; if (hd[i + 3] < 250) continue; sL += lum(hd[i], hd[i + 1], hd[i + 2]); sN++;
+  }
+  const fl = RS.flag, fd = fl.__px || fl.px; let pL = 0, pN = 0;
+  for (let i = 0; i < fl.width * fl.height; i++) { pL += lum(fd[i * 4], fd[i * 4 + 1], fd[i * 4 + 2]); pN++; }
+  ok(sN > 50 && sL / sN < pL / pN - 8, "le fût se détache du dallage : plus sombre que lui", `fût L ${(sL / Math.max(1, sN)).toFixed(0)} · dallage L ${(pL / pN).toFixed(0)}`);
+  const at = (kind, x, y) => tw.props.some((p) => p.kind === kind && p.x === x && p.y === y);
+  ok(at("bench", mo.x - 2, mo.y - 3) && at("bench", mo.x + 3, mo.y - 3) && at("lamp", mo.x - 3, mo.y + 2) && at("lamp", mo.x + 4, mo.y + 2),
+     "bancs reculés et lampadaires avancés, par paires sur l'axe de la place",
+     `bancs ${mo.x - 2}/${mo.x + 3} · lampadaires ${mo.x - 3}/${mo.x + 4} — axe ${mo.x + 1}`);
+  const env = A.townSnowEnv(tw, S, () => false);
+  const mcx = (FT.x + FT.w / 2) * T, mcy = (FT.y + FT.h / 2) * T;
+  const ring = env.casterAt(mcx - G.postX + 4, mcy), shaft = env.casterAt(mcx, mcy);
+  ok(ring === 0 && shaft > 40, "sous la neige, une chaîne ne porte pas d'ombre, le fût si", `entre chaîne et marches ${ring} px · fût ${shaft} px`);
+}
+
 console.log("\nImages : tools/out/rues-surfaces.png, rues-artere.png, rues-carrefour.png, rues-cimetiere.png, rues-esplanade.png");
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC\n` : "\nTout est bon.\n");
 process.exit(fail ? 1 : 0);

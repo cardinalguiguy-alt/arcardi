@@ -126,7 +126,9 @@ console.log(`pixels d'eau de l'étang : ${wetN}`);
     }
   }
   ok(tot > 300 && dis / tot < 0.05, "le canard sait où est la glace qu'on voit (sur le front)", `${dis} désaccord(s) sur ${tot} points du front (${(100 * dis / tot).toFixed(1)} %)`);
-  ok(!GL.pondFrozenAt(BAKE, C.TOWN_LAKE.x * T + 40, (C.TOWN_LAKE.y + 3) * T, 9), "le port ne gèle jamais", "");
+  /* 2026-10-04 : le port PEUT geler désormais (§8, le lac) — mais pas par la règle de
+     l'étang : `pondFrozenAt` reste la lecture de l'étang seul (la faune du parc). */
+  ok(!GL.pondFrozenAt(BAKE, C.TOWN_LAKE.x * T + 40, (C.TOWN_LAKE.y + 3) * T, 9), "la règle de l'étang ne lit pas le port (le lac a la sienne, §8)", "");
 }
 
 /* ═══ §4 — LA NEIGE SUR LA GLACE ════════════════════════════════════════════
@@ -204,6 +206,85 @@ console.log(`pixels d'eau de l'étang : ${wetN}`);
   ok(JSON.stringify(f1) === JSON.stringify(f2), "sous la glace, les carpes sont figées", "dix minutes d'écart, mêmes positions");
 }
 
+/* ═══ §8 — LE LAC DU SUD (2026-10-04) ═══════════════════════════════════════════
+   Guillaume : « le body of water au sud, qui pourrait être gelé occasionnellement » ;
+   tranché : « rarement, depuis la rive ». Même règle que l'étang (`iceThreshold`),
+   distance étirée, épaisseur équivalente tirée de `lakeCold` (neige.js). Ce que ce
+   banc tient : la glace prend aussi contre le QUAI (sa distance part de toute terre),
+   elle part des rives et ne recule pas quand le froid monte, le fleuve ne gèle
+   jamais, le dessin et le pas lisent la même règle, et le froid du lac ne passe ses
+   seuils que RAREMENT — par vagues de froid, pas un peu chaque jour. */
+const lakes = BAKE ? BAKE.regions.filter((R) => R && R.isLake).sort((a, b) => b.RW * b.RH - a.RW * a.RH) : [];
+const LK = lakes[0];
+ok(!!(LK && LK.dsh), "le lac est cuit avec sa distance à la terre", LK ? `${LK.RW}×${LK.RH} px` : "absent");
+if (LK) {
+  /* Contre le quai : un pixel d'eau juste sous une case de quai (pavé) doit être à
+     moins d'une demi-case de la terre. Falsifié : `dsh` tiré de `dIn` (la berge
+     meuble seule, comme l'étang) → le pied du quai passe à plusieurs cases. */
+  let quayD = [], wetFree = 0;
+  for (let yy = 1; yy < LK.RH; yy++) for (let xx = 0; xx < LK.RW; xx++) {
+    const i = yy * LK.RW + xx;
+    if (LK.lvl[i] === 255 || LK.lvl[i - LK.RW] !== 255) continue;
+    /* La face du quai mord sur la case d'eau du dessous : le pavé est la première case
+       non-eau en remontant, une ou deux cases plus haut. */
+    const tx = ((LK.ox + xx) / T) | 0, ty = ((LK.oy + yy - 1) / T) | 0;
+    let up = ty; while (up > ty - 3 && up >= 0 && tw.ground[up * tw.w + tx] === C.G_WATER) up--;
+    if (up >= 0 && tw.ground[up * tw.w + tx] === C.G_PATH_STONE) quayD.push(LK.dsh[i]);
+  }
+  quayD.sort((a, b) => a - b);
+  ok(quayD.length > 50 && quayD[(quayD.length / 2) | 0] < 0.5, "la glace prend aussi contre le quai", `${quayD.length} pixels au pied du quai, distance médiane ${quayD.length ? quayD[(quayD.length / 2) | 0].toFixed(2) : "?"} case`);
+  const fr = (K) => GL.bakePondIce(LK, GL.lakeIceEq(K), 0).frozen;
+  const cnt = (m) => { let n = 0; for (let i = 0; i < m.length; i++) n += m[i]; return n; };
+  const below = fr(NG.NEIGE.LAKE_K0 - 0.25), a1 = fr(5.6), a2 = fr(6.0), a3 = fr(6.4), aMax = fr(7.5);
+  ok(cnt(below) === 0, "sous LAKE_K0, le lac est libre");
+  let mono = true; for (let i = 0; i < a1.length; i++) if ((a1[i] && !a2[i]) || (a2[i] && !a3[i])) { mono = false; break; }
+  ok(cnt(a1) > 0 && cnt(a1) < cnt(a2) && cnt(a2) < cnt(a3) && mono, "la glace gagne avec le froid et ne recule jamais", `${cnt(a1)} → ${cnt(a2)} → ${cnt(a3)} pixels`);
+  let sF = 0, nF = 0, sW = 0, nW = 0;
+  for (let i = 0; i < a1.length; i++) {
+    if (LK.lvl[i] === 255 || LK.ox + (i % LK.RW) >= C.TOWN_RIVER_X * T) continue;
+    sW += LK.dsh[i]; nW++;
+    if (a1[i]) { sF += LK.dsh[i]; nF++; }
+  }
+  ok(nF > 0 && sF / nF < 0.5 * (sW / nW), "elle part des rives", `distance moyenne du pris ${(sF / nF).toFixed(2)} case, du bassin ${(sW / nW).toFixed(2)}`);
+  let river = 0;
+  for (let i = 0; i < aMax.length; i++) if (aMax[i] && LK.ox + (i % LK.RW) >= C.TOWN_RIVER_X * T) river++;
+  // Falsifié : `riverLift` ramené à 0 → des milliers de pixels du fleuve gèlent au froid le plus vif.
+  ok(river === 0, "le fleuve ne gèle jamais, même au plus froid", `${river} pixel(s) pris au-delà de x = ${C.TOWN_RIVER_X}`);
+  /* Le pas et le dessin : le dessin ajoute un grain de ±0,03 cm au seuil (l'étang le
+     tolère déjà, §3) ; HORS de ce grain, aucun désaccord n'est permis. Mesuré sur la
+     bande du front (le seuil à moins de 0,4 cm de l'épaisseur), là où un désaccord se
+     verrait. Falsifié : la distance non étirée dans `frozenAt` seul → des centaines. */
+  let dis = 0, tot = 0, grainN = 0; const eq = GL.lakeIceEq(6.0);
+  for (let i = 0; i < a2.length; i += 7) {
+    if (LK.lvl[i] === 255 || LK.ox + (i % LK.RW) >= (C.TOWN_RIVER_X - GL.LAKE_RIVER_RAMP) * T) continue;
+    // Le coin du pixel, comme la cuisson (au centre, le bruit est lu un demi-pixel plus loin).
+    const wx = LK.ox + (i % LK.RW), wy = LK.oy + ((i / LK.RW) | 0);
+    const thr = GL.iceThreshold(LK.dsh[i] * GL.ICE_DREF / NG.NEIGE.LAKE_DREF, GL.iceNoise(wx / T, wy / T));
+    if (Math.abs(thr - eq) > 0.4) continue;
+    if (Math.abs(thr - eq) <= 0.031) { grainN++; continue; }
+    tot++;
+    if (!!GL.frozenAt(BAKE, wx, wy, 0, eq) !== !!a2[i]) dis++;
+  }
+  ok(tot > 1000 && dis === 0, "le pas (frozenAt) et le dessin lisent la même règle", `${dis} désaccord(s) sur ${tot} points du front (${grainN} dans le grain du dessin, laissés au §3)`);
+}
+{
+  /* Le froid du lac sur six cents jours d'hiver (la vraie météo) et quarante d'été.
+     « Rarement » : la rive prend moins d'un quart de l'hiver ; et c'est par VAGUES —
+     la plus longue dure plus d'un jour de jeu (un seuillage de `ice`, dent de scie de
+     la fenêtre du manteau, faisait des vagues de quatre minutes réelles). */
+  const K0 = NG.NEIGE.LAKE_K0, seq = [];
+  for (let d = 5; d < 605; d++) for (let t = C.DAY_START_MIN; t < C.DAY_END_MIN; t += 30) seq.push(NG.lakeCold(d, t, () => "winter", null, "town"));
+  const perDay = (C.DAY_END_MIN - C.DAY_START_MIN) / 30;
+  let on = 0, run = 0, best = 0, waves = 0;
+  for (const v of seq) { if (v >= K0) { on++; run++; if (run === 1) waves++; best = Math.max(best, run); } else run = 0; }
+  const share = on / seq.length;
+  ok(share > 0.04 && share < 0.25, "l'hiver, la rive du lac ne prend que rarement", `${(share * 100).toFixed(1)} % du temps d'hiver, ${waves} vagues en 600 jours`);
+  ok(best / perDay >= 1, "par vagues de froid, pas un peu chaque jour", `la plus longue : ${(best / perDay).toFixed(1)} jour(s) de jeu (${Math.round(best / perDay * 16)} min réelles)`);
+  let summer = 0;
+  for (let d = 5; d < 45; d++) for (let t = C.DAY_START_MIN; t < C.DAY_END_MIN; t += 60) summer = Math.max(summer, NG.lakeCold(d, t, () => "summer", null, "town"));
+  ok(summer < K0, "jamais l'été", `au plus ${summer.toFixed(2)}`);
+}
+
 /* ═══ LA PLANCHE ════════════════════════════════════════════════════════════ */
 function paint(sh, v, ice, snow) {
   for (let y = v.y; y < v.y + v.h; y++) for (let x = v.x; x < v.x + v.w; x++) {
@@ -240,6 +321,29 @@ STATES.forEach(([ice, snow], k) => {
 const up = scale(board.px, VP.w * T * STATES.length, VP.h * T, 2);
 writePNG(path.join(OUT, "glace-etang.png"), up.px, up.W, up.H);
 console.log("planche : tools/out/glace-etang.png (libre · prend · presque pris · gelé · sous 4 cm · sous 12 cm)");
+
+/* La planche du lac : la promenade, le ponton et l'ouest du bassin, du libre au froid
+   le plus vif mesuré, puis pris sous la neige. */
+if (LK) {
+  const VL = { x: 60, y: 148, w: 52, h: 20 };
+  const LSTATES = [[5.2, 0], [5.6, 0], [6.0, 0], [6.5, 0], [6.5, 6]];
+  const lb = makeCanvas(VL.w * T, VL.h * T * LSTATES.length);
+  LSTATES.forEach(([K, snow], k) => {
+    const sh = makeCanvas(VL.w * T, VL.h * T);
+    paint(sh, VL, 0, 0);
+    const eq = GL.lakeIceEq(K);
+    if (eq > 0.05) for (const R of lakes) {
+      const r = GL.bakePondIce(R, eq, snow);
+      const cv = makeCanvas(R.RW, R.RH);
+      const id = cv.ctx.createImageData ? cv.ctx.createImageData(R.RW, R.RH) : { data: new Uint8ClampedArray(R.RW * R.RH * 4), width: R.RW, height: R.RH };
+      id.data.set(r.px); cv.ctx.putImageData(id, 0, 0);
+      sh.ctx.drawImage(cv.canvas || cv, R.ox - VL.x * T, R.oy - VL.y * T);
+    }
+    lb.ctx.drawImage(sh.canvas || sh, 0, k * VL.h * T);
+  });
+  writePNG(path.join(OUT, "glace-lac.png"), lb.px, VL.w * T, VL.h * T * LSTATES.length);
+  console.log("planche : tools/out/glace-lac.png (froid du lac 5,2 libre · 5,6 la rive · 6,0 · 6,5 · 6,5 sous 6 cm de neige)");
+}
 
 console.log(`\n${n - fail}/${n} contrôles passent.`);
 process.exit(fail ? 1 : 0);

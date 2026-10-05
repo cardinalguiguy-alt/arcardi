@@ -948,6 +948,12 @@ export const RUN_INJURED_MS = 10 * 60 * 1000;
    dans `quete.js` (`starCraterBurns`), parce qu'elle dépend de l'état de la
    quête et qu'un banc de logique doit pouvoir l'appeler. */
 export const BURN_INJURED_MS = 10 * 60 * 1000;
+/* 2026-10-04 — LA CHUTE SUR LA GLACE, SANS PATINS (Guillaume : « on glisse et se
+   blesse (même blessure prévue, temps de 15 vraies minutes) »). Même famille que
+   la brûlure : optimiste chez soi, gardée et rediffusée par l'hôte (`iceFall`),
+   retour à la maison, soignable au pansement par un coéquipier. La glissade qui y
+   mène est dans `patin.js`. */
+export const ICE_INJURED_MS = 15 * 60 * 1000;
 
 // Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
 // DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter
@@ -3469,7 +3475,15 @@ export const TOWN_FOUNTAIN = { x: 92, y: 63 };      // 2x2 fountain, top-left ti
    posait tout le poids visuel au nord et la moitié sud paraissait vide. Deux
    masses symétriques de part et d'autre de la rue font une PLACE ; une seule
    fait un carrefour avec une fontaine dessus. */
-export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
+export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, l'obélisque (son socle)
+/* ⚠️⚠️ 2026-10-04 (nuit) — L'ENCLOS DE L'OBÉLISQUE : QUATRE BORNES ET DES CHAÎNES,
+   SUR 4 × 2 CASES (une de plus de chaque côté du socle). Guillaume a choisi « bornes
+   et chaînes » : on ne doit pas pouvoir marcher À TRAVERS une chaîne, donc l'enclos
+   EST la collision. C'est la SEULE source de cette emprise : le générateur la rend
+   solide (en passe FINALE — CLAUDE.md §4, une case de `solid` changée en cours de
+   génération déplace autant qu'un tirage), le dessin y pose ses bornes
+   (`plazaMonumentHi`), `verify-vallee` la marque comme expliquée. */
+export const TOWN_MONUMENT_FOOT = { x: TOWN_MONUMENT.x - 1, y: TOWN_MONUMENT.y, w: 4, h: 2 };
 /* ⚠️ 425 — LES QUARTIERS. Sans eux, une carte neuf fois plus grande n'est pas
    une ville neuf fois plus riche : c'est la même petite ville posée au milieu
    d'un très grand pré, et c'est EXACTEMENT ce que le premier jet a donné à
@@ -4095,6 +4109,45 @@ export const TOWN_WOOD_NORTH_ORIGIN = { x: 205, y: 132 };
 export const TOWN_WOOD_NORTH_SLOPE_X = 0.55;
 export const TOWN_WOOD_NORTH_SLOPE_Y = 0.35;
 export const TOWN_WOOD_NORTH_SALT = 141;
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-04 — LES BOIS DES COINS OUEST (Guillaume : « des forêts comme au sud
+   est, mais dans la zone sud ouest », et le coin nord-ouest épaissi).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ UN POLYGONE, PAS UNE PENTE. Le bois du sud-est vit contre deux bords de
+   carte et rien d'autre : un plan incliné y suffit. Ceux de l'ouest ont des
+   VOISINS — la rue du sud-ouest (y 147-149) et sa maison (x 25-34), les maisons
+   de y 102 et y 28, le bout ouest du lac — et une pente ne sait pas contourner
+   une maison. La profondeur est donc la DISTANCE SIGNÉE au tracé (en cases,
+   > 0 dedans) plus les trois octaves de `TOWN_WOOD_NOISE` : le tracé dit où
+   passe la lisière, le bruit lui donne ses golfes et ses caps, et la rampe
+   (`TOWN_WOOD_DEPTH`, `TOWN_WOOD_DENSITY`, le sous-bois et sa frange) est
+   CELLE DU SUD-EST — « comme au sud-est » se tient en lisant les mêmes nombres.
+   ⚠️ LES CÔTÉS POSÉS SUR UN BORD DE CARTE SORTENT DE LA CARTE (x −12, y −12,
+   y 180) : sinon la distance au tracé retombe à zéro contre le bord, et le bois
+   s'éclaircit précisément là où il doit être le plus épais (vu au premier essai
+   du nord-ouest : un coin plus clair que sa lisière).
+   ⚠️ LE COULOIR DU TRAIN RESTE DÉGAGÉ : rien ne pousse sur x ≤ `TOWN_RAIL_X` + 2
+   (les rails, et une case de talus de part et d'autre) — une voie ferrée en
+   forêt est une tranchée déboisée, et un feuillage sur les rails se dessinerait
+   par-dessus le train.
+   ⚠️ LE NORD-OUEST A PLUS DE CONIFÈRES (`coniferShare`) : c'est le coin froid
+   et ombragé de la ville, et c'est lui qui gardera du vert sous la neige ; le
+   sud-ouest garde la part du sud-est (0,42), pour lui ressembler. L'essence se
+   déduit ensuite à l'affichage (`townTreeKind`, fermeArt.js), sans rien de plus.
+   ⚠️⚠️ PLANTÉS EN PASSE FINALE, SANS UN TIRAGE (`townWoodPolyDepth`, hachages
+   seuls) — l'histoire du prolongement nord (`TOWN_WOOD_NORTH_AREA`) vaut ici
+   mot pour mot. Et les clairières qu'une futaie à 50 % referme fatalement sont
+   ROUVERTES après coup, au plus court, en ne retirant que des arbres de ces
+   deux bois (`generateTownWorld`, fin de fonction) : sur la première maquette,
+   41 arbres sur 475 suffisaient au sud-ouest pour que plus aucune poche ne
+   reste enfermée (`verify-vallee` : « la ville tient dans une seule poche »). */
+export const TOWN_WOODS_WEST = [
+  { key: "sw", salt: 301, coniferShare: 0.42, box: { x: 0, y: 104, w: 64, h: 64 },
+    poly: [[-12, 113], [11, 113], [16, 117], [18, 126], [17, 137], [13, 146], [16, 151],
+           [30, 152], [44, 152], [53, 155], [58, 160], [60, 180], [-12, 180]] },
+  { key: "nw", salt: 307, coniferShare: 0.58, box: { x: 0, y: 0, w: 60, h: 30 },
+    poly: [[-12, -12], [50, -12], [47, 3], [39, 9], [29, 14], [19, 19], [10, 22], [-12, 23]] },
+];
 /* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
    quatre fois au 437 (« une allée d'une case de large ne montre que ses
    marches ») : un chemin qui s'efface en passant de deux cases à une redevient
@@ -4119,6 +4172,16 @@ export const TOWN_TRAIL_EAST_WAVE = [{ p: 37, a: 2.6, ph: 0.9 }, { p: 17, a: 1.1
 export const TOWN_TRAIL_EAST_DIVE = 0.10;   // cases de descente vers le sud par case vers l'est
 export const TOWN_TRAIL_FADE_FROM = 0.9;    // profondeur de bois où le sentier commence à se trouer
 export const TOWN_TRAIL_FADE_TO = 4.2;      // ...et où il a définitivement disparu
+/* 2026-10-04 — LE CHALET DES PATINS, au pied du ponton, côté ouest, sur la bande
+   d'herbe entre la rue du lac et la promenade : son comptoir regarde le quai, à deux
+   pas de la glace. 4 × 2 cases d'emprise (la toiture déborde au nord, sur l'herbe).
+   ⚠️ C'EST UNE PLACE DE REPLI QUI DÉCIDE, PAS UN TIRAGE : le générateur prend le
+   premier emplacement de `TOWN_SKATE_CHALET_SITES` dont toute l'emprise est de l'herbe
+   libre (aucun `rnd()`, voir `generateTownWorld`) — si un réglage du mobilier de la
+   promenade occupait la première, le chalet se déplace au lieu de se poser dessus. */
+export const TOWN_SKATE_CHALET_W = 4, TOWN_SKATE_CHALET_H = 2;
+export const TOWN_SKATE_CHALET_SITES = [{ x: 84, y: 152 }, { x: 99, y: 152 }, { x: 108, y: 152 }, { x: 72, y: 152 }];
+export const TOWN_SKATE_CHALET_REACH = 1.6;   // cases, de la semelle au bord de l'emprise, pour lui parler
 export const TOWN_KIOSK = { x: TOWN_PARK.x + 14, y: TOWN_PARK.y + 10 };  // kiosque à musique du parc (3×3, case nord-ouest) — DÉRIVÉ du parc depuis le 437
 export const TOWN_ARTISANS = { x: 190, y: 36, w: 32, h: 96 }; // le quartier de l'est, le long de l'artère x=196
 /* Le CŒUR URBAIN : au-dedans, on ne sème PAS d'arbres au hasard. C'est la
@@ -8536,6 +8599,10 @@ export const CAT_BOND_DAYS = 3;          // trois jours DIFFÉRENTS de lait : le
 export const CAT_GIFT_ODDS = 0.5;        // un chat fidèle qui vient vous voir rapporte un gardon une fois sur deux…
 export const CAT_GIFT_FISH = 0;          // … le gardon (FISH[0]) : un geste, pas une rente — une fois par jour et par chat
 export const NET_PRICE = 300;            // l'épuisette, au marché (or de la caisse commune, comme tout achat)
+/* 2026-10-04 — LES PATINS, au chalet du lac (`TOWN_SKATE_CHALET`), l'hiver seulement :
+   une paire par fermier, pour toujours (comme l'épuisette). Plus cher qu'elle : c'est
+   la boutique « très chic » de la demande, et c'est le seul objet qui ouvre un lieu. */
+export const SKATES_PRICE = 450;
 export const NET_COOLDOWN_MS = 2200;     // un coup d'épuisette toutes les 2,2 s au plus (arbitré par l'hôte)
 export const NET_ODDS = { carp: 0.4, bfly: 0.55 };   // chance d'attraper (tirée par l'hôte)
 export const NET_REACH = { carp: 2.6, bfly: 1.3 };   // portée, en cases, du pied du joueur à la bête (carpe : 1,9 au premier jet — vu en jeu, les carpes gardent le large, jamais à portée depuis la berge)

@@ -317,6 +317,14 @@ export function buildTownPlan(tw, makeCanvasEl) {
       case "bench": case "stoneBench": g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(cx - 4 + 0.8, cy - 1.5 + 1, 8, 3); g.fillStyle = p.kind === "bench" ? "rgb(128,92,60)" : "rgb(170,168,160)"; g.fillRect(cx - 4, cy - 1.5, 8, 3); g.fillStyle = "rgba(255,255,255,0.18)"; g.fillRect(cx - 4, cy - 1.5, 8, 0.8); break;
       case "townWell": dot(cx + 0.7, cy + 0.9, 4, "rgba(0,0,0,0.22)"); dot(cx, cy, 4, [160, 156, 148]); dot(cx, cy, 2.6, [64, 110, 160]); dot(cx - 0.6, cy - 0.7, 0.9, [160, 206, 236]); break;
       case "statue": dot(cx + 0.9, cy + 1, 3.6, "rgba(0,0,0,0.25)"); dot(cx, cy, 3.4, [176, 174, 168]); dot(cx, cy, 1.8, [128, 126, 120]); break;
+      /* 2026-10-04 — le chalet des patins : son emprise de 4 × 2 cases (l'ancre est la
+         case à droite de son axe, `ox` = −½ case), toit d'ardoise, pignon doré. */
+      case "skateChalet": { const x0 = cx - S * 2.5, y0 = cy - S * 1.5, w = S * 4, h = S * 2;
+        g.fillStyle = "rgba(0,0,0,0.24)"; g.fillRect(x0 + 1, y0 + 1.2, w, h);
+        g.fillStyle = "rgb(43,90,70)"; g.fillRect(x0, y0, w, h);
+        g.fillStyle = "rgb(59,70,88)"; g.fillRect(x0 - 0.6, y0 - 0.6, w + 1.2, h * 0.62);
+        g.fillStyle = "rgb(232,223,200)"; g.fillRect(cx - S * 0.5 - 2, y0 + h * 0.62 - 0.8, 4, 1.4);
+        dot(cx - S * 0.5, y0 + h * 0.36, 1.2, [227, 194, 106]); break; }
       case "kiosk": case "newsBoard": g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(cx - 3.4 + 0.9, cy - 3 + 1, 6.8, 6); g.fillStyle = "rgb(94,126,98)"; g.fillRect(cx - 3.4, cy - 3, 6.8, 6); g.fillStyle = "rgb(210,84,76)"; g.fillRect(cx - 3.4, cy - 3, 6.8, 2); break;
       case "flowerCart": g.fillStyle = "rgb(144,100,66)"; g.fillRect(cx - 4, cy - 2.6, 8, 5.2); for (let k = 0; k < 5; k++) dot(cx - 3 + k * 1.5, cy - 0.4 + (k & 1) * 0.8, 1, [[232, 96, 120], [248, 208, 88], [250, 250, 246], [170, 120, 220], [240, 140, 70]][k]); break;
       case "stall": {
@@ -451,7 +459,7 @@ function collectBuildings(tw, C) {
   // Tout ce qui bloque sans être connu (la scierie, l'atelier de verre, les remises…) : un bâtiment générique par
   // composante connexe de cases pleines, hors eau, arbres, haies et décor de sol.
   const W = tw.w, H = tw.h, lump = new Uint8Array(W * H);
-  const knownProp = new Set(["lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass"]);
+  const knownProp = new Set(["skateChalet", "lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass"]);
   const propAt = new Set(); for (const p of tw.props) if (knownProp.has(p.kind)) propAt.add(p.y * W + p.x);
   for (let i = 0; i < W * H; i++) {
     if (!tw.solid[i] || seen.has(i) || tw.ground[i] === C.G_WATER) continue;

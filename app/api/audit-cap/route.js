@@ -2,7 +2,7 @@
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 const ROOT = path.join(process.cwd(), "tools/out/audit-2026-10");
-const SCR = "/private/tmp/claude-501/-Users-guillaume-Documents-GitHub-arcardi/0bddd21e-efc9-46b8-83e7-cd3b7cee0369/scratchpad/cap";
+const SCR = "/private/tmp/claude-501/-Users-guillaume-Documents-GitHub-arcardi/4e571a69-c61f-4444-a690-f74bbdfae763/scratchpad/cap";
 export async function POST(req) {
   const { name, data, scratch } = await req.json();
   if (!/^[\w.-]+$/.test(name)) return new Response("bad", { status: 400 });

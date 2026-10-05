@@ -82,7 +82,9 @@ import * as PL from "./pluie";      // 2026-09-29 (phase 12b) — la pluie : le 
 import * as NG from "./neige";      // 2026-09-28 (phase 12a) — la neige : le manteau (pure fonction de la météo passée), le sol, les traces locales
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute, le tapis au pied des arbres, ce qui vole au vent
 import * as PO from "./poussiere"; // 2026-10-04 — la poussière soulevée par les pieds (terre battue, sable, labour sec), locale
-import * as GL from "./glace";      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
+import * as GL from "./glace";
+import * as PT from "./patin";
+import * as BN from "./bonhomme";   // 2026-10-05 — le bonhomme de neige : croissance des boules, empilement, décor, dégel (pur)      // 2026-10-04 — le patin à glace : la machine d'état du patineur (pure)      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
 import { buildTownPlan } from "./planVille";   // 2026-10-03 — le plan illustré de Valley Town (carte ouverte) : toits, berges, relief, arbres
@@ -477,10 +479,14 @@ const TG_TINTS = new Map();
    clé change (`GL.iceBakeKey` : l'épaisseur au 1/25 de cm pendant que le front bouge,
    la neige au dixième). Au niveau du MODULE, indexée par la région cuite (`eau.js`) :
    une nouvelle cuisson de l'eau oublie d'elle-même les anciennes couches. */
+/* ⚠️ 2026-10-04 — ET CELLE DU LAC DU SUD : même couche, même cuisson, son épaisseur
+   équivalente (`pk.lkEq`) au lieu de celle de l'étang. */
 const POND_ICE = new WeakMap();
-function pondIceLayer(bake, x, y, ice, snow) {
+function pondIceLayer(bake, x, y, pk) {
   const R = EAU.bakeRegionAt(bake, x, y);
-  if (!R || !R.isPond || !R.dsh) return null;
+  if (!R || !R.dsh || !(R.isPond || R.isLake)) return null;
+  const ice = R.isPond ? pk.ice : pk.lkEq, snow = pk.si;
+  if (!(ice > 0.05)) return null;
   const key = GL.iceBakeKey(ice, snow);
   let L = POND_ICE.get(R);
   if (!L || L.key !== key) {
@@ -1127,13 +1133,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const wetFrameRef = useRef(null);                       // ce que la pluie sait du sol, cette image (les ronds des flaques)
   const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
   const wetStepsRef = useRef(new Map());                 // 2026-09-29 (audit pluie) : la foulée de chaque marcheur, pour ses éclaboussures
-  const snowDevRef = useRef({ depth: null, trees: null, ice: null });
+  const snowDevRef = useRef({ depth: null, trees: null, ice: null, lake: null });
+  /* 2026-10-04 — LE PATIN (`patin.js`). `skateRef` : ma machine d'état tant que je suis
+     sur la glace (null ailleurs) ; `skateMarksRef` : les traces de lames, LOCALES comme
+     les empreintes dans la neige (chacun creuse ce qu'il voit glisser) ; `skateSprayRef` :
+     la gerbe de glace d'un arrêt ou d'un choc ; `skateWarnRef` : l'avertissement de la
+     berge, une fois par session ; `skateSeenRef` : la foulée des autres, déduite de leur
+     distance parcourue (rien ne circule de plus). */
+  const skateRef = useRef(null);
+  const skateMarksRef = useRef([]);
+  const skateSprayRef = useRef([]);
+  const skateWarnRef = useRef(0);
+  const skateSeenRef = useRef(new Map());
+  const [skateShopOpen, setSkateShopOpen] = useState(false);
+  /* 2026-10-05 — LE BONHOMME DE NEIGE (`bonhomme.js`). `snowRollRef` : la boule que JE pousse
+     ({ r, zone, ux, uy, bx, by, at, trail }) — locale, optimiste ; `snowRemoteRef` : celle des
+     autres, estimée chez moi (`BN.rollGrow` sur la distance qu'on leur voit parcourir) ;
+     `snowGhostRef` : la boule que je viens de poser, dessinée le temps que l'hôte réponde ;
+     `snowIdleRef` : depuis quand je me tiens sur la neige (l'invite « rouler » ne vient qu'à
+     l'arrêt, sinon elle couvrirait toutes les autres tout l'hiver). `snowDecoFor` : le bonhomme
+     dont j'ai ouvert le choix des accessoires. */
+  const snowRollRef = useRef(null);
+  const snowRemoteRef = useRef(new Map());
+  const snowGhostRef = useRef(null);
+  const snowIdleRef = useRef({ at: 0, x: 0, y: 0 });
+  const [snowDecoFor, setSnowDecoFor] = useState(null);
+  const [snowDecoDraft, setSnowDecoDraft] = useState(null);
   /* 2026-09-30 — les feuilles mortes : l'avancée de la saison forcée au menu dev (locale,
      `null` = la vraie), et les feuilles qui volent (locales, comme les flocons). */
   const leafDevRef = useRef(null);
   const [leafDevUi, setLeafDevUi] = useState(null);
   const leafFlurryRef = useRef(null);
-  const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null });
+  const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null, lake: null });
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
@@ -2856,6 +2887,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // 2026-09-16 : repousse des buissons taillés — même chemin que townChop
         // (426)/wardrobe (427) : un champ de plus dans le JSON, aucune migration.
         bushTrim: (saved && saved.bushTrim) || {},
+        /* 2026-10-05 — LES BONSHOMMES DE NEIGE (`bonhomme.js`) : un champ de plus dans le JSON
+           de `ferme_saves`, comme `townChop`. AUCUNE MIGRATION. `snowRoll` (ce que chacun
+           pousse) repart vide : une boule qu'on roulait au moment de la sauvegarde est perdue. */
+        snowmen: BN.normalizeSnowmen(saved && saved.snowmen), snowRoll: {},
         /* ZIP 427 — LA GARDE-ROBE ACHETÉE À LA MAISON GARFIELD, par joueur.
            ⚠️ AUCUNE MIGRATION SQL : c'est un champ de plus dans le JSON de
            `ferme_saves`, exactement comme `townChop` au 426 et `forcedWorld` au
@@ -3160,6 +3195,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
+      snowmen: BN.normalizeSnowmen(payload.snowmen), snowRoll: payload.snowRoll || {},   // 2026-10-05
       wardrobe: payload.wardrobe || {},  // zip 427
       star: Q.migrateStar(payload.star), // zip 444
       medals: MD.migrateMedals(payload.medals), // 2026-10-04
@@ -3787,6 +3823,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
       bushTrim: s.bushTrim || {},
+      // 2026-10-05 : les bonshommes de neige, par le même chemin (et ce que chacun pousse, pour un invité qui arrive).
+      snowmen: s.snowmen || [], snowRoll: s.snowRoll || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
       wardrobe: s.wardrobe || {},
       // Zip 444 : la quête de l'étoile aussi. Un état partagé qui prendrait un
@@ -5564,6 +5602,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveBuyNet(f, s.money);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "netBought" : "net_" + r.reason, n: C.NET_PRICE };
+    } else if (req.kind === "snowTake" || req.kind === "snowDrop" || req.kind === "snowDeco") {
+      /* 2026-10-05 — LE BONHOMME DE NEIGE (`bonhomme.js`). Prendre une boule (façonnée au
+         sol, ou celle du haut d'un tas pas fini), la poser (seule, ou EMPILÉE si un tas
+         l'attend), décorer un bonhomme fini. L'hôte borne la taille annoncée par le temps
+         écoulé depuis la prise (`resolveSnowDrop`) ; la neige sous la boule, elle, est
+         une pure fonction de la météo que le joueur a lue chez lui (§3) — l'hôte ne la
+         relit pas. Une seule diffusion par geste : la liste (courte) et les rouleurs. */
+      const zone = req.zone === "town" ? "town" : "farm", nowS = Date.now();
+      const st = sharedRef.current;
+      let r;
+      if (req.kind === "snowTake") r = BN.resolveSnowTake(st, f.id, zone, req.fromId || null, nowS);
+      else if (req.kind === "snowDrop") r = BN.resolveSnowDrop(st, f.id, zone, +req.x || 0, +req.y || 0, +req.r || 0, nowS, C.PLAYER_SPEED, () => "sm" + nowS.toString(36) + Math.floor(Math.random() * 1e6).toString(36));
+      // ⚠️ `sid`, PAS `id` : `sendReq` écrase `id` par l'expéditeur — premier jet, l'hôte cherchait un bonhomme nommé comme le joueur (vu en jeu : le décor ne prenait jamais).
+      else r = BN.resolveSnowDeco(st, String(req.sid || ""), req.deco);
+      if (r.ok) {
+        dirtyRef.current = true;
+        const pay = { snowmen: st.snowmen || [], snowRoll: st.snowRoll || {} };
+        if (r.done) pay.snowDone = { id: r.id, by: f.id };
+        hostSend({ type: "broadcast", event: "apply", payload: pay });
+        if (r.tooBig) out.toast = { id: f.id, key: "snowTooBig" };
+      } else {
+        // Le refus défait la boule que le joueur a prise chez lui en optimiste (voir `snowAct`).
+        hostSend({ type: "broadcast", event: "apply", payload: { snowmen: st.snowmen || [], snowRoll: st.snowRoll || {} } });
+        out.toast = { id: f.id, key: "snow_" + r.reason };
+      }
+    } else if (req.kind === "buySkates") {
+      /* 2026-10-04 — LES PATINS, au comptoir du chalet du lac (`E.resolveBuySkates`). La
+         portée se lit sur la dernière position que l'hôte connaît du fermier (les
+         paquets `pos`) — avec une case de marge pour la latence : la carte de la ferme
+         s'arrête bien avant la rangée du lac, donc une position de ferme ne peut pas
+         passer pour « au comptoir ». La saison est la saison RÉELLE, lue par l'hôte. */
+      const twS = getTownWorldCached(E);
+      const nearS = E.townSkateChaletDist(twS, C.footX(f.x || 0), C.footY(f.y || 0)) <= C.TOWN_SKATE_CHALET_REACH + 1;
+      const r = E.resolveBuySkates(f, s.money, E.seasonOf().key, nearS);
+      if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
+      out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: C.SKATES_PRICE };
+    } else if (req.kind === "iceFall") {
+      /* 2026-10-04 — LA CHUTE SUR LA GLACE SANS PATINS. Calque exact de « starBurn » :
+         la glissade se joue chez le joueur (sa position, sa glace — une pure fonction
+         de la météo), l'hôte garde la blessure et la rediffuse en `injured` seul (un
+         paquet `farmer` le ramènerait une seconde fois chez lui). Bornée comme les autres. */
+      const nowI = Date.now();
+      const untilI = (typeof req.until === "number" && req.until > nowI && req.until <= nowI + C.ICE_INJURED_MS + 5000) ? req.until : nowI + C.ICE_INJURED_MS;
+      f.injuredUntil = untilI;
+      f.injuryKind = "ice";   // même famille que "burn" : soignable au pansement (req "heal")
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: { injured: { id: f.id, until: f.injuredUntil } },
+      });
     } else if (req.kind === "netCatch") {
       const r = E.resolveNetCatch(f, req.what, req.sp, Date.now(), Math.random);
       if (r.ok) {
@@ -8624,7 +8712,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function snowPackNow(place) {
     const sh = sharedRef.current, now = Date.now(), mm = snowPackMemoRef.current;
     const dev = snowDevRef.current, pl = place === "farm" ? "farm" : "town";
-    const key = `${pl}|${dev.depth}|${dev.trees}|${dev.ice}`;
+    const key = `${pl}|${dev.depth}|${dev.trees}|${dev.ice}|${dev.lake}`;
     if (mm.pack && now - mm.at < 150 && mm.key === key) return mm.pack;
     const day = sh.day || 1, ds = sh.dayStartAt || now;
     const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
@@ -8638,6 +8726,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        et la neige posée dessus suit celle du sol dès que la glace couvre tout. */
     if (dev.ice != null) pk.ice = dev.ice;
     if (dev.ice != null || dev.depth != null) pk.si = NG.iceCover(pk.ice) > 0.9 ? pk.g : 0;
+    /* 2026-10-04 — LE FROID DU LAC DU SUD (`NG.lakeCold`, ses seuils : `NEIGE.LAKE_K0`),
+       et `lkEq`, ce qu'il vaut en cm d'étang (`GL.lakeIceEq`) : la seule grandeur que
+       lisent le dessin, la faune et le patin. Forcé au menu dev (local, comme l'étang). */
+    pk.lk = dev.lake != null ? dev.lake : NG.lakeCold(day, tm, (d) => E.seasonAt(ds - (day - d) * C.DAY_REAL_MS).key, sh.forcedWeather || null, pl);
+    pk.lkEq = pl === "town" ? GL.lakeIceEq(pk.lk) : 0;
     mm.at = now; mm.pack = pk; mm.key = key;
     return pk;
   }
@@ -8803,6 +8896,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (v) s4.bushTrim[k] = v; else delete s4.bushTrim[k];
       }
     }
+    // 2026-10-05 — les bonshommes de neige : la liste entière (elle est courte, `MAX_PER_ZONE`), et ce que chacun pousse.
+    if (p.snowmen) sharedRef.current.snowmen = BN.normalizeSnowmen(p.snowmen);
+    if (p.snowRoll) sharedRef.current.snowRoll = p.snowRoll;
+    if (p.snowDone && p.snowDone.by === me.id) { setSnowDecoDraft(null); setSnowDecoFor(p.snowDone.id); }
     if (p.townChop) {
       const s3 = sharedRef.current;
       if (!s3.townChop) s3.townChop = {};
@@ -8830,6 +8927,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
     // qui purge les breloques, les monstres et le cache de carte toute seule.
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    // 2026-10-04 — leurs patins, pour la pose qu'on leur voit sur la glace (`remoteHasSkates`).
+    if (p.farmer && p.farmer.id !== me.id && p.farmer.inv) {
+      const rs = playersRef.current.get(p.farmer.id);
+      if (rs) rs.skates = (p.farmer.inv.skates | 0) > 0;
+    }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
       if (r) r.pets = p.farmer.pets; // zip 247: everyone sees everyone's pets, not just the owner
@@ -9154,6 +9256,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (key === "catMilk_noMilk") return L.catMilkNone;
       return L.catMilkNone;
     }
+    if (key === "snowTooBig") return L.snowTooBigToast;
+    if (key && key.startsWith("snow_")) return L.snowRefuse(key.slice(5));
+    if (key === "skatesBought") return L.skatesBoughtToast(n | 0);
+    if (key === "skates_have") return L.skatesHaveToast;
+    if (key === "skates_closed") return L.skatesClosedToast;
+    if (key === "skates_far") return L.skatesFarToast;
+    if (key === "skates_noGold") return L.skatesNoGoldToast(n | 0);
     if (key === "netBought") return L.netBoughtToast(n | 0);
     if (key === "net_have") return L.netHaveToast;
     if (key === "net_noGold") return L.netNoGoldToast(n | 0);
@@ -9308,6 +9417,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const delta = {};
           for (const i of back) delta[i] = null;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { townChop: delta } });
+        }
+      }
+      /* 2026-10-05 — LE DÉGEL DES BONSHOMMES (`BN.snowmenTick`) : la neige au sol de leur
+         carte (le manteau, une pure fonction de la météo), l'hiver ; ce qu'un joueur parti
+         poussait s'oublie. Une diffusion seulement quand quelque chose a changé. */
+      {
+        const sc = sharedRef.current;
+        if ((sc.snowmen && sc.snowmen.length) || (sc.snowRoll && Object.keys(sc.snowRoll).length)) {
+          const alive = (pid) => pid === me.id || playersRef.current.has(pid);
+          if (BN.snowmenTick(sc, Date.now(), (z) => snowPackNow(z).g, E.seasonOf().key === "winter", alive)) {
+            dirtyRef.current = true;
+            channelRef.current?.send({ type: "broadcast", event: "apply", payload: { snowmen: sc.snowmen || [], snowRoll: sc.snowRoll || {} } });
+          }
         }
       }
       const s = sharedRef.current, w = worldRef.current;
@@ -11381,6 +11503,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (tt.x < 0 || tt.y < 0 || tt.x >= tw.w || tt.y >= tw.h || tw.ground[tt.y * tw.w + tt.x] !== C.G_WATER) {
       pushToast(L.toastNeedWater); return;
     }
+    // 2026-10-04 — l'eau gelée ne se pêche pas : la ligne rebondirait sur la glace.
+    if (townIceAt(tw, tt.x + 0.5, tt.y + 0.5)) { pushToast(L.fishFrozen); return; }
     let total = 0; for (const fs of C.FISH) total += fs.weight;
     let r = Math.random() * total, ft = 0;
     for (let i = 0; i < C.FISH.length; i++) { r -= C.FISH[i].weight; if (r <= 0) { ft = i; break; } }
@@ -18561,6 +18685,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       // 2026-09-13 : les autres joueurs couchent eux aussi les buissons de la ferme (leur vitesse circule déjà, §3).
+      snowDrawEntries("farm", (wy, x, fn) => draws.push({ y: wy, fn }));   // 2026-10-05 — les bonshommes de neige et les boules
       for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { farmBushPress(w, p.x, p.y, p.vx || 0, p.vy || 0); draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 479 — LE PLAT SE VOIT DANS LES MAINS DE L'AUTRE, ET IL LE FAUT.
@@ -19203,6 +19328,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          est un bâtiment qu'on ne peut plus utiliser (règle du 427). */
       if (!pk && !rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
           && E.waterNearby(worldRef.current, meRef.current.x, meRef.current.y, C.ROD_PROMPT_RANGE)) pk = "rod";
+      // 2026-10-05 — le bonhomme, même règle qu'en ville.
+      { const sp = snowPrompt(meRef.current); if (sp && (snowRollRef.current || !pk)) pk = sp; else if (!pk && snowIdlePrompt(meRef.current)) pk = "snowStart"; }
       setPromptKeyThrottled(pk);
       // Invite cheval (monter/descendre) : plusieurs chevaux possibles.
       const hs = sharedRef.current.horses || []; let mp = null;
@@ -20380,6 +20507,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const fx = Math.floor(x), fy = Math.floor(y);
       if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
       if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true; // rails: only reachable along the platform
+      // 2026-10-05 : un bonhomme de neige (ou une boule posée) se contourne. Le joueur seul : `townNav` ne le voit pas.
+      if (BN.snowmanBlocks(sharedRef.current.snowmen, "town", x, y, Date.now())) return true;
       const i = fy * tw.w + fx;
       /* ⚠️ 425 : LES BÂTIMENTS ET LE MOBILIER SONT DANS `solid`, calculé une
          fois par le générateur (voir generateTownWorld). La boucle sur
@@ -20399,7 +20528,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ MÊME CLAUSE DANS `townNav` (fermeEngine.js), et `verify-collision`
          §5 compare les deux sur 20 000 points. */
       if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) return true;
-      if (tw.ground[i] === C.G_WATER) return true; // fountain pool
+      /* 2026-10-04 — L'EAU GELÉE PORTE (l'étang l'hiver, le lac par grand froid), au
+         point près : la même règle que le dessin (`townIceAt` → `GL.frozenAt`). Sans
+         patins on y glisse et on tombe (`patin.js`) — c'est le pas sur la glace qui le
+         décide, pas la collision. ⚠️ `townNav` n'est PAS touché : les habitants ne
+         vont pas sur la glace. La fontaine n'est dans aucune région d'eau cuite : elle
+         ne gèle jamais, donc elle bloque comme avant. */
+      if (tw.ground[i] === C.G_WATER) return !townIceWalkable(tw, x, y); // fountain pool
       const o = tw.objects[i];
       if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return false;
       /* ⚠️ ZIP 426 — UN ARBRE ABATTU NE BLOQUE PLUS, et l'information ne vient
@@ -20869,6 +21004,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) starInputAtRef.current = performance.now();
+      /* ╔══════════════════════════════════════════════════════════════
+         ║ 2026-10-04 — SUR LA GLACE, ON PATINE (`patin.js`).
+         ╚══════════════════════════════════════════════════════════════
+         La semelle sur l'eau gelée (ou une glissade sans patins déjà entamée, qui va
+         jusqu'à la chute même si elle ressort sur la berge) : la machine d'état
+         remplace le pas. Elle part de la vitesse de marche (on entre sur la glace
+         lancé), et ses pas passent par `townStepOk`, axe par axe, comme la marche —
+         un axe qui bute rend sa vitesse en sens inverse (`skateBump`). Rien de nouveau
+         ne circule : les autres reçoivent la position, la pose se déduit.
+         ⚠️ CHAUSSÉ OU NON SE LIT DANS LE SAC (`invRef`, l'inventaire arbitré par
+         l'hôte), jamais dans un état local qu'on aurait pu oublier de remettre. */
+      const skCur = skateRef.current;
+      const onIceNow = townIceAt(tw, C.footX(m.x), C.footY(m.y));
+      const skating = onIceNow || !!(skCur && skCur.mode !== "glide");
+      if (!skating && skCur) skateRef.current = null;                  // on a quitté la glace chaussé : la lancée s'arrête à la berge
+      if (!skating) townIceWarn(tw, m, dx, dy);
+      if (skating) {
+        const st = skCur || (skateRef.current = PT.skateNew(m.vx || 0, m.vy || 0));
+        const hasSk = !!(invRef.current && invRef.current.skates > 0);
+        let ix = 0, iy = 0;
+        if (moving) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
+        PT.skateStep(st, ix, iy, dt, { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked) });
+        if (st.mode === "down") { iceFallNow(); return; }
+        const nx = m.x + st.vx * dt, ny = m.y + st.vy * dt;
+        if (st.vx && townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx;
+        else if (st.vx) skateSpray(m, PT.skateBump(st, "x"), st.vx < 0 ? 1 : -1, 0);
+        if (st.vy && townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny;
+        else if (st.vy) skateSpray(m, PT.skateBump(st, "y"), 0, st.vy < 0 ? 1 : -1);
+        m.vx = st.vx; m.vy = st.vy;
+        const spd = Math.hypot(st.vx, st.vy);
+        // Le cap suit la COURSE (on regarde où l'on file), à défaut l'ordre donné.
+        if (spd > 0.4) { if (Math.abs(st.vx) > Math.abs(st.vy)) m.dir = st.vx < 0 ? 2 : 3; else m.dir = st.vy < 0 ? 1 : 0; }
+        else if (moving) { if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else m.dir = 0; }
+        if (st.brake && spd > 1.2) skateSpray(m, spd, -st.vx / spd, -st.vy / spd);
+        if (hasSk && spd > 0.8) skateMarkStep(m, spd, !!st.brake);
+        m.animT = st.stride;
+      }
       /* ⚠️ ZIP 458 — LA PENTE SE LIT UNE FOIS PAR IMAGE, AVANT LE PAS, et elle
          sert DEUX fois : à ralentir la montée, puis à emporter la glissade. Deux
          lectures auraient échantillonné le creux à deux positions différentes
@@ -20892,8 +21064,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const slip = Q.starSlipStep(craterSlipRef.current || (craterSlipRef.current = Q.starSlipNew()),
                                   slideNow, slideNow ? slideNow.sink : 0, ix, iy, dt,
                                   starCraterCoolNow());
-      const slipping = slip.mode === "slide" || slip.mode === "recover" || slip.mode === "climb";
-      if (moving && !slipping) {
+      const slipping = !skating && (slip.mode === "slide" || slip.mode === "recover" || slip.mode === "climb");
+      if (!skating && moving && !slipping) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
         // Zip 250 (demande Guillaume : "mêmes déplacements qu'à la ferme, on
         // ne fait que marcher en ville") : on retire l'ancien bonus de vitesse
@@ -20936,9 +21108,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            la regarde ou qu'on la marche. Rend 1 (aucun effet) partout ailleurs
            en ville, donc s'applique sans garde ici. */
         spSec *= C.courtStairSlowMul(m.x, m.y);
+        if (snowRollRef.current) spSec *= BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — pousser une grosse boule ralentit
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
+        const snowPx = m.x, snowPy = m.y;
         /* ⚠️ 425 : L'ALTITUDE DE DÉPART EST RELUE AVANT CHAQUE AXE, et non une
            fois pour les deux. Un déplacement en diagonale sur une volée
            d'escalier change de marche sur l'axe X puis se voit refuser l'axe Y
@@ -20946,6 +21120,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            crabe, une case sur deux. Deux lectures d'un tableau ne coûtent rien. */
         if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx; else if (dx) noteTreeBump(tw, nx, m.y);
         if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny; else if (dy) noteTreeBump(tw, m.x, ny);
+        /* 2026-10-05 — LA BOULE QU'ON POUSSE : elle avance devant, grossit, creuse sa traînée ;
+           si elle bute (un mur, un arbre, l'eau), le pas est annulé — on ne la traverse pas. */
+        if (snowRollRef.current && !snowRollStep(m, snowPx, snowPy, (bx, by) => blockedTown(tw, bx, by))) { m.x = snowPx; m.y = snowPy; }
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
         /* ⚠️⚠️ ZIP 459 — LA RÈGLE DE JUSTICE DU 458 N'A PAS DISPARU, ELLE A REMONTÉ
@@ -20957,7 +21134,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            éteindre : c'est la machine d'état ENTIÈRE qui est débranchée tant que
            `starCraterCoolNow()` est faux (voir son appel ci-dessus). Sur un trou
            chaud, on marche donc normalement, à la peine près. */
-      } else if (!slipping) { m.animT = 0; m.vx = 0; m.vy = 0; }
+      } else if (!skating && !slipping) { m.animT = 0; m.vx = 0; m.vy = 0; }
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 459 — ON DÉVALE, ON SE RÉTABLIT, ON GRIMPE. Le pas que la machine
          ║ d'état décide, appliqué exactement comme la marche.
@@ -20985,7 +21162,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.animT += dt * (slip.mode === "climb" ? 5 : 9);
         craterDustPuff(m, slideNow, performance.now());
       }
-      m.moving = !!moving || slipping;
+      m.moving = skating ? Math.hypot(m.vx || 0, m.vy || 0) > 0.1 : (!!moving || slipping);
       markWaterIdle(m.moving);
       /* HORS-ZIP 2026-09-02 — HORS DE LA BRANCHE « il marche », ET C'EST LA
          MOITIÉ DE L'EFFET : on couche le feuillage sur la PRÉSENCE. S'arrêter
@@ -22536,45 +22713,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de débordement tombe aux deux points `FOUNTAIN_GEO.spillX`, là où la
          margelle porte déjà sa tache de calcaire (fermeArt.js, même géométrie
          des deux côtés). */
+      /* 2026-10-04 — UNE PIERRE AU PIXEL D'ÉCRAN, un canevas par cran de zoom (la fontaine
+         `plazaFountainHi`, l'obélisque `plazaMonumentHi`). Même pose que les lampadaires
+         (`drawScreenLamp`) : au cran exact, bord arrondi et aucun lissage ; pendant un fondu
+         de zoom, le cran au-dessus réduit avec lissage. Le reflet et toute transformation
+         non diagonale gardent le sprite natif `im` (le miroir d'`eau.js` a son propre
+         repère). `snowLv` : les [niveau, alpha] de neige à coiffer.
+         ⚠️ ÉCRITE UNE FOIS, sortie de la fontaine le jour où l'obélisque l'a demandée :
+         recopiée, la règle du fondu aurait divergé à la première retouche. */
+      const drawScreenStone = (im, hiFn, x0, by, snowLv) => {
+        const M = ctx.getTransform();
+        if (reflecting || !hiFn || Math.abs(M.b) > 1e-6 || Math.abs(M.c) > 1e-6) {
+          ctx.drawImage(im, x0, by - im.height);
+          for (const [lv, a] of snowLv || []) {
+            const cv = lv && a > 0.01 ? snowCapCanvas(im, lv, 0) : null;
+            if (cv) { ctx.globalAlpha = a; ctx.drawImage(cv, x0, by - im.height - cv.pad); ctx.globalAlpha = 1; }
+          }
+          return;
+        }
+        const zf = M.a, zi = Math.round(zf), exact = Math.abs(zf - zi) < 0.02;
+        const z = exact ? zi : Math.ceil(zf);
+        const hi = hiFn(z);
+        const sx = M.a * x0 + M.e, sy = M.d * (by - im.height) + M.f;
+        const k = zf / z;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.imageSmoothingEnabled = !exact;
+        if (!exact) ctx.imageSmoothingQuality = "high";
+        const put = (cvs, padPx) => exact ? ctx.drawImage(cvs, Math.round(sx), Math.round(sy) - padPx)
+                                           : ctx.drawImage(cvs, sx, sy - padPx * k, cvs.width * k, cvs.height * k);
+        put(hi, 0);
+        for (const [lv, a] of snowLv || []) {
+          const cv = lv && a > 0.01 ? snowCapCanvas(hi, lv, 0, z) : null;
+          if (cv) { ctx.globalAlpha = a; put(cv, cv.pad); ctx.globalAlpha = 1; }
+        }
+        ctx.restore();
+      };
       if (sprites.plazaFountain) {
         const fo = C.TOWN_FOUNTAIN, fBy = (fo.y + 2) * T, fCx = fo.x * T + T;
         pushE(fBy, elAt(fo.x, fo.y), () => {
           const im = sprites.plazaFountain;
           const FG = sprites.fountainGeo, WR = sprites.waterRamp;
           const wob = 0.5 + Math.sin(now / 900) * 0.5;
-          /* 2026-10-04 — LA PIERRE AU PIXEL D'ÉCRAN (`sprites.plazaFountainHi`, un canevas
-             par cran de zoom). Même pose que les lampadaires (`drawScreenLamp`) : au cran
-             exact, bord arrondi et aucun lissage ; pendant un fondu de zoom, le cran
-             au-dessus réduit avec lissage. Le reflet garde le sprite natif (le miroir
-             d'`eau.js` a son propre repère). `snow` : les niveaux de neige à coiffer. */
-          const drawStone = (snowLv) => {
-            const M = ctx.getTransform();
-            if (reflecting || !sprites.plazaFountainHi || Math.abs(M.b) > 1e-6 || Math.abs(M.c) > 1e-6) {
-              ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
-              for (const [lv, a] of snowLv || []) {
-                const cv = lv && a > 0.01 ? snowCapCanvas(im, lv, 0) : null;
-                if (cv) { ctx.globalAlpha = a; ctx.drawImage(cv, fCx - im.width / 2, fBy - im.height - cv.pad); ctx.globalAlpha = 1; }
-              }
-              return;
-            }
-            const zf = M.a, zi = Math.round(zf), exact = Math.abs(zf - zi) < 0.02;
-            const z = exact ? zi : Math.ceil(zf);
-            const hi = sprites.plazaFountainHi(z);
-            const sx = M.a * (fCx - im.width / 2) + M.e, sy = M.d * (fBy - im.height) + M.f;
-            const k = zf / z;
-            ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.imageSmoothingEnabled = !exact;
-            if (!exact) ctx.imageSmoothingQuality = "high";
-            const put = (cvs, padPx) => exact ? ctx.drawImage(cvs, Math.round(sx), Math.round(sy) - padPx)
-                                               : ctx.drawImage(cvs, sx, sy - padPx * k, cvs.width * k, cvs.height * k);
-            put(hi, 0);
-            for (const [lv, a] of snowLv || []) {
-              const cv = lv && a > 0.01 ? snowCapCanvas(hi, lv, 0, z) : null;
-              if (cv) { ctx.globalAlpha = a; put(cv, cv.pad); ctx.globalAlpha = 1; }
-            }
-            ctx.restore();
-          };
+          /* 2026-10-04 — LA PIERRE AU PIXEL D'ÉCRAN (`sprites.plazaFountainHi`) : la pose
+             vit dans `drawScreenStone` depuis que l'obélisque l'emprunte (2026-10-04, nuit). */
+          const drawStone = (snowLv) => drawScreenStone(im, sprites.plazaFountainHi, fCx - im.width / 2, fBy, snowLv);
           // Ombre au sol : deux disques, pour un bord qui s'éteint au lieu de
           // s'arrêter net.
           ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.22)" : "rgba(20,26,16,0.22)";
@@ -23506,13 +23689,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
 
       /* L'OBÉLISQUE de la place. Ancré par le bas comme les bâtiments, centré
-         sur son emprise de deux cases. */
+         sur son emprise.
+         2026-10-04 (nuit) — au pixel d'écran (`plazaMonumentHi`, la pose de la
+         fontaine), dans son ENCLOS : le bas du sprite est le bord sud de
+         `TOWN_MONUMENT_FOOT` (la chaîne de devant), son milieu l'axe de la place.
+         ⚠️ PLUS D'ELLIPSE D'OMBRE (`drawBuildingShadowConnected`) : posée au bord
+         sud de l'emprise, elle tombait maintenant SOUS LA CHAÎNE, une tache sombre
+         devant les marches. Les ombres de contact sont dans le dessin (marches,
+         bornes, chaînes), à leur place. */
       if (sprites.plazaMonument) {
-        const mo = C.TOWN_MONUMENT, moBy = (mo.y + 2) * T;
-        pushE(moBy, elAt(mo.x, mo.y), () => {
-          const mcx = mo.x * T + T;
-          drawBuildingShadowConnected(ctx, mcx, moBy, 20);
-          ctx.drawImage(sprites.plazaMonument, mcx - sprites.plazaMonument.width / 2, moBy - sprites.plazaMonument.height);
+        const FT = C.TOWN_MONUMENT_FOOT, moBy = (FT.y + FT.h) * T, mcx = (FT.x + FT.w / 2) * T;
+        pushE(moBy, elAt(C.TOWN_MONUMENT.x, C.TOWN_MONUMENT.y), () => {
+          const im = sprites.plazaMonument;
+          const mx = snowF ? NG.depthSnowMix(snowF.depthAt(mcx, moBy - 16), 0.5) : null;
+          drawScreenStone(im, sprites.plazaMonumentHi, mcx - im.width / 2, moBy, mx ? [[mx.a, 1], [mx.b, mx.k]] : null);
         });
       }
 
@@ -23818,6 +24008,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      défaut du 425, créé par une constante recopiée. */
                   : pr.kind === "stall" ? ((pr.alt ? sprites.townStallsAlt : sprites.townStalls) || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
                   : pr.kind === "kiosk" ? sprites.townKiosk
+                  // 2026-10-04 — le chalet des patins : ouvert l'hiver, volets clos le reste de l'année.
+                  : pr.kind === "skateChalet" ? (snowSeason === "winter" ? sprites.townSkateChalet : sprites.townSkateChaletClosed)
                   : pr.kind === "grave" ? sprites.townGrave
                   : pr.kind === "planter" ? sprites.townPlanter3[snowSeason === "winter" ? 1 : 0]     // 2026-09-29 (phase 7b) : été / hiver de la planche 3
                   : pr.kind === "urn" ? sprites.townUrn3[snowSeason === "winter" ? 1 : 0]
@@ -24738,9 +24930,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              temps passé sous la glace (`iceLag`, le manteau) — elles ralentissent quand
              la glace gagne et se figent quand elle couvre tout, sans jamais sauter.
              Forcée au menu dev, la glace n'a pas d'histoire : figées si tout est pris. */
-          if (snowPk.ice > 0.05) {
-            const bkI = EAU.townWaterBakeReady(tw), iceNow = snowPk.ice;
-            if (bkI) env.iceAt = (x, y) => GL.pondFrozenAt(bkI, x * T, y * T, iceNow);
+          if (snowPk.ice > 0.05 || snowPk.lkEq > 0.05) {
+            // 2026-10-04 : le lac aussi (`GL.frozenAt`) — un colvert du port marche sur sa glace.
+            const bkI = EAU.townWaterBakeReady(tw), iceNow = snowPk.ice, lkNow = snowPk.lkEq;
+            if (bkI) env.iceAt = (x, y) => GL.frozenAt(bkI, x * T, y * T, iceNow, lkNow);
           }
           env.fishT = snowDevRef.current.ice != null
             ? (NG.iceCover(snowPk.ice) > 0.99 ? (sharedRef.current.dayStartAt || 0) / 1000 : env.t)
@@ -25014,6 +25207,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Remote players in town: their pos broadcast carries real town coords
       // (zone "town"); lerp locally exactly like the farm loop does — the
       // farm loop early-returns before its own lerp while we are here.
+      // 2026-10-05 — les bonshommes de neige et les boules (reflétés dans l'eau et sur la glace comme tout décor posé).
+      snowDrawEntries("town", (wy, x, fn) => { const tx = Math.floor(x), ty = Math.floor(wy / T); pushE(wy, (tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h) ? tw.elev[ty * tw.w + tx] : 0, fn, 0, tx); });
       for (const p of playersRef.current.values()) {
         if (p.zone !== "town" || p.sleeping) continue;
         advanceRemote(p); // FIX 243
@@ -25049,7 +25244,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            aucune donnée de véhicule ne circule, et personne ne voit un camarade
            traverser la ville debout à vitesse de cheval. */
         if (p.taxi) pushE((p.y + 0.5) * T, pe, () => drawTaxiAt(p, p.taxi, null), pl);
-        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false), pl, Math.floor(p.x + 0.5));
+        /* 2026-10-04 — sur la glace, la pose du patin, DÉDUITE (`skateDraw`) : la ville
+           dessine ses camarades ici, pas par `drawRemote` (la ferme) — premier jet branché
+           là-bas seulement, donc invisible en ville, là où la glace existe. */
+        else pushE((p.y + 1) * T, pe, () => { const sk = skateDraw(p, false); drawCharacter(sk.skate ? { ...p, ...sk } : p, false); }, pl, Math.floor(p.x + 0.5));
       }
       /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ; la
          cloche, elle, est une hauteur d'IMAGE et part dans `myLift` — c'est la
@@ -25385,7 +25583,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const bakeW = EAU.townWaterBakeReady(tw);
         if (bakeW) {
-          const iceOn = snowPk.ice > 0.05;
+          const iceOn = snowPk.ice > 0.05 || snowPk.lkEq > 0.05;
           for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
             const isW = tw.ground[y * tw.w + x] === C.G_WATER;
             /* 2026-09-30 — l'eau cuite de l'étang déborde sur les cases de BERGE (le trait
@@ -25401,11 +25599,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             /* 2026-09-30 — LA GLACE DE L'ÉTANG, par-dessus la surface (les carpes et les
                reflets, peints avant, se voient à travers la glace noire du creux). Une
                case toute prise ne reçoit plus la houle ni les éclats. */
-            const iceL = iceOn ? pondIceLayer(bakeW, x, y, snowPk.ice, snowPk.si) : null;
+            const iceL = iceOn ? pondIceLayer(bakeW, x, y, snowPk) : null;
             if (isW && (!iceL || iceL.state !== 2)) EAU.drawWaterSurface(ctx, sprites, tw, bakeW, x, y, px, py, now, snowSeason === "winter");
             if (iceL && iceL.state) ctx.drawImage(iceL.cv, (x - iceL.R.bx0) * T, (y - iceL.R.by0) * T, T, T, px, py, T, T);
           }
           if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
+          if (iceOn) drawSkateMarks(tw, x0 * T - T, y0 * T - T, (x1 + 2) * T, (yBot + 2) * T);   // 2026-10-04 — les lames, sur la glace
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -25706,6 +25905,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
       else if (starNearby()) tpk = "star:" + starNearby().p;   // zip 444 — même ordre que la touche E
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
+      else if (nearSkateChalet()) tpk = "townSkates";                    // 2026-10-04 — le chalet des patins
       else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
       else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
       else if (nearTownRect(C.TOWN_BELVEDERE.x, C.TOWN_BELVEDERE.y, C.TOWN_BELVEDERE.w, C.TOWN_BELVEDERE.h)) tpk = "townView";
@@ -25734,6 +25934,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      // 2026-10-05 — le bonhomme : tenir une boule passe devant tout ; « rouler » ne vient qu'à l'arrêt sur la neige, en dernier.
+      { const sp = snowPrompt(m); if (sp && (snowRollRef.current || !tpk)) tpk = sp; else if (!tpk && snowIdlePrompt(m)) tpk = "snowStart"; }
       setPromptKeyThrottled(tpk);
       setMountPromptThrottled(null); // zip 234 debug fix: clear a stale farm mount hint while in town
     }
@@ -26616,6 +26818,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dans la collision (§4, une grandeur de décor n'entre pas dans
            `canStand`). Il se cumule au galop, comme en ville. */
         if (E.farmBushSoftAt(w, m.x, m.y)) spSec *= C.TOWN_BUSH_SLOW;
+        if (snowRollRef.current && !mounted) spSec *= BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — la boule ralentit
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -26625,8 +26828,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // blocked rectangle), collision is waived so the player can simply
         // walk out instead of being stuck forever.
         const stuck = !stand(w, m.x, m.y);
+        const snowPx = m.x, snowPy = m.y;
         if (stuck || stand(w, nx, m.y)) m.x = nx;
         if (stuck || stand(w, m.x, ny)) m.y = ny;
+        // 2026-10-05 — la boule qu'on pousse (voir la ville) : elle bute, on s'arrête.
+        if (snowRollRef.current && !snowRollStep(m, snowPx, snowPy, (bx, by) => blocked(w, bx, by))) { m.x = snowPx; m.y = snowPy; }
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         // Cadence d'animation ralentie à la nage (le cycle de galop devient
         // un battement de nage, voir drawCharacter/horseRun).
@@ -26921,7 +27127,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          position et le sac — et c'est ce mélange qui, au 441, a fait porter deux
          sens au même nombre. */
       drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null,
-                      ...craterSlipDraw(m, true), ...selfDigDraw(), ...selfCastDraw(), ...selfHaulDraw() }, true);
+                      ...craterSlipDraw(m, true), ...skateDraw(m, true), ...selfDigDraw(), ...selfCastDraw(), ...selfHaulDraw() }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -26931,6 +27137,114 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     function drawRemote(p) { drawCharacter({ ...p, ...craterSlipDraw(p, false) }, false); }
+    /* 2026-10-04 — LA POSE DU PATIN, en champs de DESSIN seulement (le contrat de
+       `craterSlipDraw`) : objet vide hors de la glace, donc les vingt autres appelants
+       de `drawCharacter` ne changent pas. La mienne se lit sur ma machine ; celle des
+       autres se DÉDUIT — sur la glace, chaussés ou non, leur vitesse — et leur foulée
+       suit la distance qu'ils parcourent (`skateSeenRef`). Leurs lames creusent aussi
+       leurs traces chez moi : chacun voit glisser tout le monde. */
+    /* 2026-10-05 — LES BONSHOMMES ET LES BOULES DANS LA FILE DE DESSIN de la carte `zone`
+       (`push(wy, x, fn)` : la clé de tri en px, la colonne, le dessin). Les tas de l'état
+       partagé (qui fondent : `BN.slumpAt`), la boule que je viens de poser (le temps que
+       l'hôte réponde), celle que je pousse, et celles des AUTRES — estimées ici : devant eux,
+       dans le sens où on les voit marcher, grossies de ce qu'on leur voit rouler sur la
+       neige, et leur traînée creusée chez moi comme la mienne. Rien de tout cela ne circule. */
+    function snowDrawEntries(zone, push) {
+      snowRollReconcile();
+      const nowD = Date.now(), list = sharedRef.current.snowmen || [];
+      for (const sm of list) {
+        if (sm.zone !== zone) continue;
+        const k = BN.slumpAt(sm, nowD);
+        push(sm.y * T, sm.x, () => A.drawSnowman(ctx, sm.x * T, sm.y * T, sm.balls, sm.deco, k, T));
+      }
+      const g = snowGhostRef.current;
+      if (g && g.zone === zone) push(g.y * T, g.x, () => A.drawSnowman(ctx, g.x * T, g.y * T, [g.r], null, 0, T));
+      const me0 = meRef.current, roll = snowRollRef.current;
+      if (roll && roll.zone === zone && me0 && snowZoneOf(me0) === zone) {
+        const rb = { x: roll.bx, y: roll.by, r: roll.r };
+        push(rb.y * T, rb.x, () => A.drawSnowman(ctx, rb.x * T, rb.y * T, [rb.r], null, 0, T));
+      }
+      const rolls = sharedRef.current.snowRoll || {}, est = snowRemoteRef.current;
+      for (const pid of Object.keys(rolls)) {
+        const h = rolls[pid];
+        if (pid === me.id || !h || h.zone !== zone) continue;
+        const p = playersRef.current.get(pid);
+        if (!p || (p.zone || "farm") !== zone) { est.delete(pid); continue; }
+        let e = est.get(pid);
+        if (!e || e.at !== h.at) { e = { at: h.at, r: h.r, ux: [0, 0, -1, 1][p.dir] || 0, uy: [1, -1, 0, 0][p.dir] || 0, px: p.x, py: p.y, bx: null, by: null, trail: 0 }; est.set(pid, e); }
+        const dx = p.x - e.px, dy = p.y - e.py, d = Math.hypot(dx, dy);
+        if (d > 1e-3 && d < 2) { e.ux = dx / d; e.uy = dy / d; }
+        e.px = p.x; e.py = p.y;
+        const bp = BN.rollBallPos(C.footX(p.x), C.footY(p.y), e.ux, e.uy, e.r);
+        if (e.bx != null) {
+          const mv = Math.hypot(bp.x - e.bx, bp.y - e.by);
+          if (mv > 1e-3 && mv < 2) { e.r = BN.rollGrow(e.r, mv, BN.snowK(snowDepthAt(zone, bp.x, bp.y))); snowTrailStamp(zone, bp.x, bp.y, e.ux, e.uy, e.r, mv, e); }
+        }
+        e.bx = bp.x; e.by = bp.y;
+        const rr = e.r;
+        push(bp.y * T, bp.x, () => A.drawSnowman(ctx, bp.x * T, bp.y * T, [rr], null, 0, T));
+      }
+      for (const pid of [...est.keys()]) if (!rolls[pid]) est.delete(pid);
+    }
+    function skateDraw(p, isSelf) {
+      if (!p || (p.zone || "farm") !== "town") return {};
+      if (isSelf) {
+        const st = skateRef.current; if (!st) return {};
+        const pose = PT.skatePose(st); if (!pose) return {};
+        return { skate: pose, skPh: pose === "glide" ? st.stride : pose === "slip" ? st.t * 3.2 : st.t };
+      }
+      const twR = townWorldRef.current;
+      if (!twR || !townIceAt(twR, C.footX(p.x), C.footY(p.y))) return {};
+      const has = remoteHasSkates(p.id), pose = PT.skateSeen(has, p.vx, p.vy);
+      const seen = skateSeenRef.current;
+      let e = seen.get(p.id);
+      if (!e) { e = { x: p.x, y: p.y, d: 0 }; seen.set(p.id, e); }
+      e.d += Math.min(1, Math.hypot(p.x - e.x, p.y - e.y)); e.x = p.x; e.y = p.y;
+      if (has && Math.hypot(p.vx || 0, p.vy || 0) > 0.8) skateMarkStep(p, 0, false, p.id);
+      const tS = performance.now() / 1000;
+      return { skate: pose, skPh: pose === "glide" ? PT.skateSeenStride(e.d) : pose === "slip" ? tS * 3.2 : tS };
+    }
+    /* 2026-10-04 — LES TRACES DE LAMES ET LA GERBE DE GLACE, posées sur la glace, sous
+       les personnages (appelé juste après la couche de glace). Les traces : des traits
+       d'un pixel (deux à l'arrêt en travers), blancs et à demi transparents — sur la
+       glace noire, une rayure est plus claire que la glace. La neige tombée depuis les
+       couvre (`si`, le manteau) ; la glace qui part les emporte : on purge toutes les
+       deux secondes les traces dont le milieu n'est plus pris. */
+    function drawSkateMarks(tw, cx0, cy0, cx1, cy1) {
+      const M2 = skateMarksRef.current, SP = skateSprayRef.current;
+      if (!M2.length && !SP.length) return;
+      const tN = performance.now(), seenM = skateSeenRef.current;
+      if (M2.length && tN > (seenM.get("purgeAt") || 0)) {
+        seenM.set("purgeAt", tN + 2000);
+        const keep = M2.filter(k => townIceAt(tw, (k.x0 + k.x1) / 2 / T, (k.y0 + k.y1) / 2 / T));
+        if (keep.length !== M2.length) skateMarksRef.current = keep;
+      }
+      const siNow = snowPackNow("town").si || 0;
+      for (const [lo, hi, a] of [[0.66, 9, 0.5], [0.33, 0.66, 0.3], [0.05, 0.33, 0.14]]) {
+        ctx.beginPath();
+        let any = false;
+        for (const k of skateMarksRef.current) {
+          const vis = Math.max(0, 1 - Math.max(0, siNow - k.si) / 0.8);
+          if (vis < lo || vis >= hi) continue;
+          if (k.x1 < cx0 || k.x0 > cx1 || k.y1 < cy0 || k.y0 > cy1) continue;
+          ctx.moveTo(Math.round(k.x0) + 0.5, Math.round(k.y0) + 0.5); ctx.lineTo(Math.round(k.x1) + 0.5, Math.round(k.y1) + 0.5);
+          any = true;
+        }
+        if (any) { ctx.strokeStyle = `rgba(246,251,255,${a})`; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+      if (SP.length) {
+        const live = [];
+        for (const q of SP) {
+          const age = (tN - q.t0) / 1000;
+          if (age > 0.45) continue;
+          live.push(q);
+          const x = q.x + q.vx * age, y = q.y + q.vy * age + 60 * age * age;
+          ctx.fillStyle = `rgba(250,253,255,${(0.9 * (1 - age / 0.45)).toFixed(3)})`;
+          ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+        }
+        skateSprayRef.current = live;
+      }
+    }
     /* Ma propre pose de fouille. ⚠️ ELLE REND UN OBJET VIDE QUAND ON NE CREUSE
        PAS, donc les vingt autres appelants de `drawCharacter` ne changent pas. */
     function selfDigDraw() {
@@ -28389,6 +28703,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const drawDig = (ox, mir) => A.drawStarDig(ctx, sheet, row, ox, py, ph, (p.digFx || 1) * mir);
         if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawDig(0, -1); }
         else drawDig(px, 1);
+      } else if (p.skate) {
+        /* ╔══════════════════════════════════════════════════════════════
+           ║ 2026-10-04 — LES POSES DU PATIN. Même contrat que les poses du cratère :
+           ║ le dessin vit dans `fermeArt` (`A.drawSkate`), ici le choix et le miroir.
+           ╚══════════════════════════════════════════════════════════════
+           `p.skate` vient de ma machine (`PT.skatePose`) ou se déduit chez les autres
+           (`PT.skateSeen`) — jamais un champ diffusé. `p.gender === "f"` : sous une
+           robe, seul le pied bouge (voir `drawSkate`). */
+        const drawSk = (ox) => A.drawSkate(ctx, sheet, row, ox, py, p.skate, p.skPh || 0, p.gender === "f");
+        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); }
+        else drawSk(px);
       } else if (p.slip && (p.slip !== "climb" || p.dir === 1) && (p.slip !== "slide" || p.dir !== 3)) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 459 — LES TROIS POSES DU CRATÈRE.
@@ -29603,7 +29928,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (inMapEvil(tx, ty) && Math.abs(wx - C.footX(m.x)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - C.footY(m.y)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
     return facingTile();
   }
-  function blocked(w, x, y) { return E.blockedTile(w, x, y, Date.now()); }
+  // 2026-10-05 : un bonhomme de neige (ou une boule posée) se contourne (`BN.snowmanBlocks`).
+  function blocked(w, x, y) { return E.blockedTile(w, x, y, Date.now()) || BN.snowmanBlocks(sharedRef.current.snowmen, "farm", x, y, Date.now()); }
   function canStand(w, x, y) {
     // 2026-09-01 — une seule description de la semelle, pour la ferme comme
     // pour la ville et le tribunal. Voir C.bodyPoints.
@@ -30343,6 +30669,227 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      Même discipline que `nearCivicDoor` (426) : UNE définition par question,
      lue par l'invite ET par la touche E. Deux copies d'un seuil de proximité,
      c'est un jeu qui propose puis refuse. */
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-04 — LA GLACE EN VILLE, LE PATIN, LE CHALET.
+     ╚══════════════════════════════════════════════════════════════════════
+     ⚠️ AU NIVEAU DU COMPOSANT, PAS DANS LA BOUCLE : la collision, le pas sur la glace,
+     la pose des autres (dans la boucle) ET la canne, le comptoir (hors boucle) les
+     appellent — une fonction de la boucle n'existe pas pour le composant (§4). */
+  /* Le point (cases) est-il de l'eau gelée ? L'étang et le lac : la MÊME règle que le
+     dessin et la faune (`GL.frozenAt`), sur la même cuisson et le même manteau. */
+  function townIceAt(tw, x, y) {
+    if (!tw) return false;
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h || tw.ground[fy * tw.w + fx] !== C.G_WATER) return false;
+    const pk = snowPackNow("town");
+    if (!(pk.ice > 0.05) && !(pk.lkEq > 0.05)) return false;
+    const bake = EAU.townWaterBakeReady(tw);
+    return !!bake && GL.frozenAt(bake, x * C.TILE, y * C.TILE, pk.ice, pk.lkEq);
+  }
+  /* LA COLLISION SUR LA GLACE, UN CRAN PLUS LARGE QUE `townIceAt` : la face du quai
+     (et le liseré d'une berge) mord sur le haut de la case d'eau, et ses pixels ne sont
+     pas de l'eau — refusés, on butait au pied du quai sans jamais descendre sur la glace
+     (vu en jeu au premier essai, devant le chalet). Un point qui n'est pas de l'eau, dans
+     une case d'eau, passe si la glace est prise juste sous lui (six pixels au plus) :
+     on descend du quai sur la glace et on y remonte. La POSE et la canne, elles, lisent
+     `townIceAt` : sur la face, on marche encore. */
+  function townIceWalkable(tw, x, y) {
+    for (let k = 0; k <= 6; k++) if (townIceAt(tw, x, y + k / C.TILE)) return true;
+    return false;
+  }
+  /* L'avertissement de la berge : la première fois qu'on s'apprête à poser le pied sur
+     la glace SANS patins, on le dit — une fois par session. La chute reste inévitable
+     si l'on y va (c'est la demande), mais personne ne doit la découvrir sans savoir. */
+  function townIceWarn(tw, m, dx, dy) {
+    if (skateWarnRef.current || !(dx || dy)) return;
+    if (invRef.current && invRef.current.skates > 0) return;
+    const l = Math.hypot(dx, dy);
+    if (!townIceWalkable(tw, C.footX(m.x) + (dx / l) * 0.7, C.footY(m.y) + (dy / l) * 0.7)) return;
+    skateWarnRef.current = 1;
+    pushToast(L.iceNoSkatesWarn);
+  }
+  /* La gerbe de glace : quelques éclats qui partent du pied, dans le sens `(ux, uy)`
+     (à l'opposé de la course pour un arrêt, de la berge pour un choc). Locale. */
+  function skateSpray(m, v, ux, uy) {
+    if (!(v > 1.2)) return;
+    const L2 = skateSprayRef.current, t = performance.now();
+    const n = Math.min(4, 1 + Math.round(v / 3));
+    for (let k = 0; k < n; k++) {
+      const a = Math.atan2(uy, ux) + (Math.random() - 0.5) * 1.6, sp = 1.5 + Math.random() * 2.2;
+      L2.push({ x: C.footX(m.x) * C.TILE, y: C.footY(m.y) * C.TILE - 1, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 9 - 10, t0: t });
+    }
+    if (L2.length > 160) L2.splice(0, L2.length - 160);
+  }
+  /* Les traces de lames : deux sillons parallèles (une lame par pied, à ±1,5 px du
+     centre, en travers de la course), un segment par pas de 3 px — plus larges à
+     l'arrêt en travers. Locales, comme les empreintes : chacun creuse ce qu'il voit
+     glisser. Elles ne s'effacent pas avec le temps ; la glace qui part les emporte
+     (purge dans le dessin), et la neige fraîche les couvre (le dessin les estompe). */
+  function skateMarkStep(p, spd, brake, key) {
+    const k = key || "me", fx = C.footX(p.x) * C.TILE, fy = C.footY(p.y) * C.TILE;
+    const seen = skateSeenRef.current;
+    const e = seen.get("mk:" + k);
+    if (!e) { seen.set("mk:" + k, { x: fx, y: fy }); return; }
+    const ddx = fx - e.x, ddy = fy - e.y, d = Math.hypot(ddx, ddy);
+    if (d < 3) return;
+    if (d > 24) { e.x = fx; e.y = fy; return; }                        // un saut (téléportation, reprise de réseau) n'est pas un sillon
+    const nx = -ddy / d, ny = ddx / d;
+    const M2 = skateMarksRef.current, si = snowPackNow("town").si || 0;
+    for (const o of [-1.5, 1.5]) M2.push({ x0: e.x + nx * o, y0: e.y + ny * o, x1: fx + nx * o, y1: fy + ny * o, w: brake ? 2 : 1, si });
+    if (M2.length > 2400) M2.splice(0, M2.length - 2400);
+    e.x = fx; e.y = fy;
+  }
+  /* Les autres ont-ils des patins ? Leur sac quand l'hôte l'a diffusé (achat), sinon
+     l'instantané d'arrivée (`farmersRef`). */
+  function remoteHasSkates(id) {
+    const r = playersRef.current.get(id);
+    if (r && typeof r.skates === "boolean") return r.skates;
+    const f = farmersRef.current && farmersRef.current[id];
+    return !!(f && f.inv && f.inv.skates > 0);
+  }
+  /* LA CHUTE : la blessure de quinze minutes, le retour à la maison — le contrat exact
+     de la brûlure (`starTryBurn`) : optimiste ici, gardée par l'hôte (`iceFall`), et la
+     zone remise à `farm` EN MÊME TEMPS que x/y (le piège des deux cartes, §4). */
+  function iceFallNow() {
+    const m = meRef.current; skateRef.current = null;
+    if (!m || (m.zone || "farm") !== "town" || isInjured()) return;
+    const until = Date.now() + C.ICE_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "iceFall", until });
+    m.zone = "farm"; m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false; m.vx = 0; m.vy = 0;
+    sendPos();
+    pushToast(L.iceFallToast);
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-05 — LE BONHOMME DE NEIGE, CÔTÉ JOUEUR (`bonhomme.js` pour les règles).
+     ╚══════════════════════════════════════════════════════════════════════
+     ⚠️ AU NIVEAU DU COMPOSANT : la touche E, le pas (dans la boucle) et le dessin les lisent. */
+  /* La carte où l'on peut bâtir : la ferme et Valley Town (ni le monde maléfique, ni le tribunal). */
+  function snowZoneOf(m) { const z = m && (m.zone || "farm"); return z === "town" || z === "farm" ? z : null; }
+  /* La neige (cm) au point (cases) d'une carte : le champ de neige de cette carte s'il existe
+     (il porte l'abri des arbres, l'ombre, les rues déneigées), sinon rien. */
+  function snowDepthAt(zone, x, y) {
+    const rec = zone === "town" ? snowFieldRef.current : farmSnowFieldRef.current;
+    if (!rec || !rec.f) return 0;
+    if (zone === "town" && (!townWorldRef.current || rec.tw !== townWorldRef.current)) return 0;
+    return rec.f.depthAt(x * C.TILE, y * C.TILE);
+  }
+  function snowList() { return sharedRef.current.snowmen || []; }
+  /* Le tas à portée de ma semelle (le plus proche), ou null. */
+  function snowmanNear(m) {
+    const zone = snowZoneOf(m); if (!zone) return null;
+    const n = BN.nearestSnowman(snowList(), zone, C.footX(m.x), C.footY(m.y));
+    return n && n.d <= BN.SNOWMAN.PICK_REACH ? n.s : null;
+  }
+  /* Je prends une boule : celle du haut d'un tas (`fromId`), ou j'en façonne une au sol.
+     OPTIMISTE : je la pousse aussitôt ; si l'hôte refuse, elle disparaît (`snowRollReconcile`). */
+  function snowTake(m, zone, fromId, r) {
+    const ux = [0, 0, -1, 1][m.dir] || 0, uy = [1, -1, 0, 0][m.dir] || 0;
+    const p = BN.rollBallPos(C.footX(m.x), C.footY(m.y), ux, uy, r);
+    snowRollRef.current = { r, zone, ux, uy, bx: p.x, by: p.y, at: performance.now(), trail: 0 };
+    sendReq({ kind: "snowTake", zone, fromId: fromId || null });
+  }
+  /* Je pose ma boule là où elle est. L'hôte décide si elle s'empile. */
+  function snowDrop(m) {
+    const roll = snowRollRef.current; if (!roll) return;
+    snowRollRef.current = null;
+    snowGhostRef.current = { zone: roll.zone, x: roll.bx, y: roll.by, r: roll.r, until: performance.now() + 2500, n: snowList().length };
+    sendReq({ kind: "snowDrop", zone: roll.zone, x: roll.bx, y: roll.by, r: roll.r });
+  }
+  /* La touche E pour le bonhomme : poser ce qu'on pousse (prioritaire sur tout), reprendre la
+     boule du haut d'un tas, décorer un bonhomme fini. Rend `true` si elle a servi. Façonner
+     une boule au sol est À PART (`snowStartAct`), en tout dernier recours de la touche. */
+  function snowAct() {
+    const m = meRef.current, zone = snowZoneOf(m); if (!zone) return false;
+    if (snowRollRef.current) { snowDrop(m); return true; }
+    const s = snowmanNear(m); if (!s) return false;
+    if (s.deco) { if (!s.thawAt) { setSnowDecoDraft({ ...s.deco }); setSnowDecoFor(s.id); } else pushToast(L.snowThawing); return true; }
+    snowTake(m, zone, s.id, s.balls[s.balls.length - 1]);
+    return true;
+  }
+  function snowStartAct() {
+    const m = meRef.current, zone = snowZoneOf(m); if (!zone || m.sitOn) return false;
+    if ((sharedRef.current.horses || []).some((h) => h.rider === me.id || h.rider2 === me.id)) return false;   // à cheval, on ne roule pas de boule
+    if (snowDepthAt(zone, C.footX(m.x), C.footY(m.y)) < BN.SNOWMAN.MIN_CM) return false;
+    snowTake(m, zone, null, BN.SNOWMAN.R0);
+    return true;
+  }
+  /* Ce que dit l'invite pour le bonhomme, ou null. */
+  function snowPrompt(m) {
+    const zone = snowZoneOf(m); if (!zone) return null;
+    const roll = snowRollRef.current;
+    if (roll) {
+      const n = BN.nearestSnowman(snowList(), zone, roll.bx, roll.by);
+      if (n && n.d <= BN.SNOWMAN.STACK_REACH && !n.s.deco && n.s.balls.length < 3)
+        return roll.r > n.s.balls[n.s.balls.length - 1] * BN.SNOWMAN.STACK_RATIO ? "snowTooBig" : "snowStack";
+      return "snowDrop";
+    }
+    const s = snowmanNear(m);
+    if (s) return s.deco ? (s.thawAt ? null : "snowDeco") : "snowTakeTop";
+    return null;
+  }
+  /* L'invite « rouler une boule » : à l'arrêt depuis 1,2 s sur une neige assez épaisse, les
+     mains libres. Sur la neige en marchant, elle couvrirait toutes les autres tout l'hiver. */
+  function snowIdlePrompt(m) {
+    const zone = snowZoneOf(m); if (!zone || snowRollRef.current || m.sitOn) return false;
+    const id = snowIdleRef.current, nowP = performance.now();
+    if (Math.abs(m.x - id.x) > 0.02 || Math.abs(m.y - id.y) > 0.02) { id.x = m.x; id.y = m.y; id.at = nowP; return false; }
+    return nowP - id.at >= 1200 && snowDepthAt(zone, C.footX(m.x), C.footY(m.y)) >= BN.SNOWMAN.MIN_CM;
+  }
+  /* La réconciliation, une fois par image : ma boule optimiste que l'hôte n'a pas confirmée
+     au bout de 2,5 s (refus, perte) s'efface ; la boule fantôme s'efface dès que la liste a
+     changé, ou au bout de son délai. */
+  function snowRollReconcile() {
+    const roll = snowRollRef.current, nowP = performance.now();
+    /* On change de carte (le train, une porte) une boule devant soi : on la LAISSE derrière,
+       posée là où elle était, sur sa carte — sinon elle nous suivrait et se poserait avec les
+       coordonnées d'une carte dans l'autre (le piège des deux cartes, §4 ; vu en jeu). */
+    if (roll && snowZoneOf(meRef.current) !== roll.zone) {
+      snowRollRef.current = null;
+      sendReq({ kind: "snowDrop", zone: roll.zone, x: roll.bx, y: roll.by, r: roll.r });
+      return;
+    }
+    if (roll && nowP - roll.at > 2500 && !((sharedRef.current.snowRoll || {})[me.id])) snowRollRef.current = null;
+    const g = snowGhostRef.current;
+    if (g && (nowP > g.until || snowList().length !== g.n || snowList().some((q) => Math.hypot(q.x - g.x, q.y - g.y) < 0.05))) snowGhostRef.current = null;
+  }
+  /* LE PAS AVEC UNE BOULE : appelé après le pas de la marche (ville ou ferme), avec la
+     position d'avant. La boule se tient devant la semelle, dans le sens de la marche ; elle
+     grossit de ce qu'elle a roulé sur la neige (`BN.rollGrow`, la neige SOUS ELLE) et creuse
+     sa traînée dans le champ de neige — une auge de sa largeur, jusqu'au sol (elle ramasse
+     ce qu'elle roule). Rend `false` si la boule bute (le pas est alors annulé par l'appelant). */
+  function snowRollStep(m, px, py, ballBlocked) {
+    const roll = snowRollRef.current; if (!roll) return true;
+    const dx = m.x - px, dy = m.y - py, d = Math.hypot(dx, dy);
+    if (d > 1e-4) { roll.ux = dx / d; roll.uy = dy / d; }
+    const p = BN.rollBallPos(C.footX(m.x), C.footY(m.y), roll.ux, roll.uy, roll.r);
+    if (d > 1e-4 && ballBlocked && ballBlocked(p.x, p.y)) return false;
+    const moved = Math.hypot(p.x - roll.bx, p.y - roll.by);
+    roll.bx = p.x; roll.by = p.y;
+    if (moved > 1e-4 && moved < 2) {
+      const depth = snowDepthAt(roll.zone, p.x, p.y);
+      roll.r = BN.rollGrow(roll.r, moved, BN.snowK(depth));
+      snowTrailStamp(roll.zone, p.x, p.y, roll.ux, roll.uy, roll.r, moved, roll);
+    }
+    return true;
+  }
+  /* L'auge d'une boule : un tampon tous les deux pixels, de la largeur de la boule. Locale,
+     comme les empreintes : chacun creuse ce qu'il voit rouler (la sienne et celle des autres). */
+  function snowTrailStamp(zone, x, y, ux, uy, r, moved, acc) {
+    const rec = zone === "town" ? snowFieldRef.current : farmSnowFieldRef.current;
+    if (!rec || !rec.f || !rec.f.stamp) return;
+    acc.trail = (acc.trail || 0) + moved * C.TILE;
+    if (acc.trail < 2) return;
+    acc.trail = 0;
+    const print = { a: 1.6, b: Math.max(1.2, r * C.TILE * 0.72), gap: 0, stride: 0, k: 1, rim: 0.35 };
+    rec.f.stamp(print, x * C.TILE, y * C.TILE, ux, uy, 1);   // (x, y) : le point où la boule touche le sol
+  }
+  /* Le comptoir du chalet : la semelle à `TOWN_SKATE_CHALET_REACH` cases de son emprise. */
+  function nearSkateChalet() {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || m.zone !== "town") return false;
+    return E.townSkateChaletDist(tw, C.footX(m.x), C.footY(m.y)) <= C.TOWN_SKATE_CHALET_REACH;
+  }
   function nearTownProp(kind, r) {
     const m = meRef.current, tw = townWorldNow();
     if (!m || !tw || m.zone !== "town") return null;
@@ -34454,6 +35001,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        cette priorité, appuyer sur E devant un taxi qui attend ouvrirait la
        boutique d'à côté. `taxiBoard` refuse tout seul s'il n'attend pas. */
     if (taxiBoard()) return;
+    /* 2026-10-05 — LA BOULE QU'ON POUSSE SE POSE AVANT TOUT : E est la touche qui l'a prise,
+       et la laisser tomber dans la suite ouvrirait la vitrine d'à côté au lieu de la poser. */
+    if (snowRollRef.current && snowAct()) return;
     /* ---- INTÉRIEUR DU TRIBUNAL (zip 426). Sortie anticipée, comme la carte
        maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
@@ -34573,6 +35123,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          devant, c'est-à-dire agir sans s'être levé. Une sortie unique et
          évidente vaut mieux qu'une sortie exacte. */
       if (m0.sitOn) { standUpTown(); return; }
+      if (snowAct()) return;   // 2026-10-05 — un bonhomme à portée : reprendre sa boule du haut, ou le décorer
       // Valley Town (zip 234): E at the sign rides the train home; E at a
       // house door just introduces the place (interiors deferred).
       if (nearTile(C.TOWN_STATION_SIGN)) { rideTrain(false); return; }
@@ -34651,6 +35202,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          d'un mode « je ne pilote plus », et il se paie d'un appui. */
       if (starGreenGuideOn()) { starGreenWalkToggle(); return; }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
+      if (nearSkateChalet()) { setSkateShopOpen(true); return; }        // 2026-10-04 — le chalet des patins
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
         // quand un résident traîne dans le parc. Sinon, on l'admet.
@@ -34685,11 +35237,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          dernier recours — voir le `tpk` correspondant plus haut. */
       if (!rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
           && E.waterNearby(townWorldRef.current, m0.x, m0.y, C.ROD_PROMPT_RANGE)) { armRod(); return; }
+      snowStartAct();   // 2026-10-05 — rien d'autre ici, et de la neige sous les pieds : on façonne une boule
       return;
     }
     // Zip 235: berry bush / fruit tree pick (spring). Checked BEFORE the
     // heavy shop/bin/nearest logic so it stays cheap when nothing is near.
     if (m0 && m0.zone === "farm") {
+      if (snowAct()) return;   // 2026-10-05 — un bonhomme à portée : reprendre sa boule du haut, ou le décorer
       /* ZIP 442 — LA BORNE D'ORIGINE DU CADASTRE, au pied de la gare. C'est le
          seul morceau de l'enquête qui vive à la ferme, et c'est délibéré : le
          chapitre 2 oblige à reprendre le train, donc à traverser les deux
@@ -34756,7 +35310,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        dernier recours — voir le `pk` correspondant plus haut. */
     else if (!rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
              && E.waterNearby(worldRef.current, m0.x, m0.y, C.ROD_PROMPT_RANGE)) armRod();
-    else { const ct = findCauldronTile(); if (ct && nearTile(ct)) cauldronInteract(); }
+    else { const ct = findCauldronTile(); if (ct && nearTile(ct)) cauldronInteract(); else if (m0 && m0.zone === "farm") snowStartAct(); }   // 2026-10-05 — dernier recours : une boule de neige
   }
 
   function spawnFx(m) {
@@ -35749,7 +36303,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -37955,6 +38509,76 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </div>
             </div>
           </div>
+        );
+      })()}
+      {/* 2026-10-04 — LE CHALET DES PATINS. Un achat, donc une `req` arbitrée par l'hôte
+          (`buySkates`, portée et saison comprises). Hors de l'hiver, le chalet est fermé :
+          le panneau le dit et ne vend rien. Une fois chaussé, la ligne devient un rappel
+          de ce que les patins ouvrent — de l'information, rien à gagner (§4). */}
+      {/* 2026-10-05 — LE CHOIX DES ACCESSOIRES DU BONHOMME. Ouvert pour celui qui pose la
+          troisième boule (`snowDone`), ou par E devant un bonhomme fini (le sien ou celui d'un
+          autre : c'est un jeu à plusieurs). L'aperçu se dessine avec LE MÊME `drawSnowman`
+          que le jeu. Valider envoie une `req` (`snowDeco`), l'hôte la ramène au catalogue. */}
+      {snowDecoFor && (() => {
+        const sm = (sharedRef.current.snowmen || []).find(q => q.id === snowDecoFor);
+        const close = () => { setSnowDecoFor(null); setSnowDecoDraft(null); };
+        if (!sm || !sm.deco) return null;
+        const d = snowDecoDraft || sm.deco;
+        let preview = null;
+        try {
+          const pc = document.createElement("canvas"); pc.width = 48; pc.height = 56;
+          const pg = pc.getContext("2d"); pg.imageSmoothingEnabled = false;
+          A.drawSnowman(pg, 24, 52, sm.balls, d, 0, C.TILE);
+          preview = pc.toDataURL();
+        } catch (e) { preview = null; }
+        return (
+        <div className="ferme-modal open" onClick={close}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={close}>✕</button>
+            <h2>☃️ {L.snowDecoTitle}</h2>
+            <div className="ferme-hint">{L.snowDecoHint}</div>
+            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+              {preview && <img src={preview} alt="" width={144} height={168} style={{ imageRendering: "pixelated", flex: "0 0 auto", background: "#e9eef5", borderRadius: 6 }} />}
+              <div style={{ flex: 1 }}>
+                {Object.keys(BN.SNOWMAN_DECO).map(slot => (
+                  <div key={slot} className="ferme-shop-row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    <b style={{ minWidth: 86 }}>{L.snowDecoSlot(slot)}</b>
+                    {BN.SNOWMAN_DECO[slot].map(v => (
+                      /* Le choix en cours se VOIT : le `.on` des boutons du menu dev n'a de style que dans ce menu (vu en jeu : toutes les options pareilles). */
+                      <button key={v} className="ferme-dev-btn" aria-pressed={d[slot] === v} onClick={() => setSnowDecoDraft(prev => ({ ...(prev || sm.deco), [slot]: v }))}
+                        style={d[slot] === v ? { background: "#3a3226", color: "#ffeec8", boxShadow: "inset 0 0 0 2px #ffeec8" } : null}>{L.snowDecoOpt(slot, v)}</button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="ferme-shop-row" style={{ justifyContent: "flex-end" }}>
+              <button onClick={() => { sendReq({ kind: "snowDeco", zone: sm.zone, sid: sm.id, deco: d }); close(); }}>{L.snowDecoOk}</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+      {skateShopOpen && (() => {
+        const owned = ((myInv || {}).skates | 0) > 0, winter = E.seasonOf().key === "winter";
+        const close = () => setSkateShopOpen(false);
+        return (
+        <div className="ferme-modal open" onClick={close}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={close}>✕</button>
+            <h2>⛸️ {L.skateShopTitle}</h2>
+            <div className="ferme-hint">{winter ? L.skateShopHint : L.skateShopClosed}</div>
+            <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+              <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>⛸️</span>
+              <div className="info">
+                <b>{L.skatesTitle}</b>
+                <span>{owned ? L.skatesOwnedDesc : L.skatesDesc}</span>
+              </div>
+              {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesOwned}</span>
+                : <button disabled={!winter || (hud.money | 0) < C.SKATES_PRICE} onClick={() => sendReq({ kind: "buySkates" })}>{L.skatesBuy(C.SKATES_PRICE)}</button>}
+            </div>
+          </div>
+        </div>
         );
       })()}
       {marketOpen && (() => {
@@ -40222,6 +40846,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
                   {[null, 0, 0.5, 1.1, 4].map(v => (
                     <button key={"device-" + v} className={"ferme-dev-btn" + (snowDevUi.ice === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, ice: v }; setSnowDevUi(u => ({ ...u, ice: v })); }}>{L.devIce(v)}</button>
+                  ))}
+                </div>
+                {/* 2026-10-04 — LE FROID DU LAC DU SUD, LOCAL (`snowDevRef.lake`, lu par `snowPackNow`) :
+                    libre, la rive prise (p90 de l'hiver), la moitié, presque tout (le froid le plus vif mesuré). */}
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, 5.0, 5.55, 6.0, 6.5].map(v => (
+                    <button key={"devlake-" + v} className={"ferme-dev-btn" + (snowDevUi.lake === v ? " on" : "")} onClick={() => { snowDevRef.current = { ...snowDevRef.current, lake: v }; setSnowDevUi(u => ({ ...u, lake: v })); }}>{L.devLake(v)}</button>
                   ))}
                 </div>
                 {/* 2026-09-30 — LES FEUILLES MORTES : l'avancée de la saison, locale (`leafDevRef`, lue par `seasonProgressAt`). */}
