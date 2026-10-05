@@ -11,36 +11,35 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 (nuit, suite) — LAPINS À LA TAILLE DU PIGEON + ESSAI « PETITS PERSONNAGES » — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-05 (nuit, fin ter) — PATINOIRE + COURSE + CONTRE-LA-MONTRE, MARCHÉ D'HIVER, OMBRES DU SOLEIL — DANS L'ARBRE, NON COMMITÉ
 
-Récit : README de la ferme, journal du même nom. **Supabase : rien.** (1) **Lapins de VT redessinés à la taille du pigeon** (« à réduire à la taille
-des pigeons ») : 20 poses au pixel natif (assis 7×7, en course 8×4 ; pigeon 8×6), bond ×0,75 (`RAB_LIFT_K`), ombre 6 px ; `verify-faune` 105/105 dont
-2 contrôles neufs PAR COMPARAISON au pigeon (falsifiés sur l'ancien dessin), `render-lapins` OK ; vus en jeu au terrier (17, 56). (2) **Essai réversible
-« petits personnages »** : menu dev, interrupteur LOCAL éteint par défaut (`SMALL_FOLK`, retenu dans `localStorage`) — tout le monde à ×0,68, sa marche à
-×0,5, nombres DÉRIVÉS du perron du tribunal ; mesuré en jeu 5,19 → 2,59 cases/s, capture de la place. (3) **Défaut trouvé, PAS corrigé** : `courtDepthFrac`
-(`fermeConstants.js`) n'a pas de borne au nord — toute la bande x ≈ 59-76 au nord du palier rapetisse et ralentit (c'est ce que Guillaume a vu sur la route
-y = 35). `verify-strings` 1234 clés, bundle esbuild et `no-undef` propres. Le travail (A) d'avant (fin de saison, température, gelée, bourgeons) est commité
-(`temps`) ; il reste à JUGER (voir ci-dessous).
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; `?room=` unique (un autre agent peut
-partager le relais 54321). ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git) : un diff là n'est pas un changement de code. ⚠️ Vu en passant, pas
-corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore pas `translate` ; `TOWN_SPEED_MULT` est mort depuis le zip 250 et
-son commentaire ment. ⚠️ Serveur de dev figé sur « Compiling » : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
+Récits : README de la ferme, journaux « (nuit, suite) », « (nuit, fin) », « (nuit, fin bis) », « (nuit, fin ter) ». **Supabase : rien**
+(records de course dans la sauvegarde JSON, `rinkRec`). (1) Essai « petits personnages » ×0,8 ; `courtDepthFrac` borné au nord ; la
+neige lit la rue pavée au pixel. (2) **Le marché hiverne dans la prairie** : un SECOND MONDE dérivé (`townWinterWorld`), pris l'hiver
+par `getTownWorldCached`. (3) **Ombres portées du soleil** (`ombres.js`, `sunShadowPass`), ville et ferme. (4) **La patinoire** sur
+l'esplanade (glace arrondie, bande, mâts, guirlandes, chalet ; portillon : message, puis chute si l'on insiste). (5) **La course**
+(`course.js` pur, `CourseHud.js`, `hostRinkReq` & co.) : privatiser au chalet (40 or), grille de 30 s, 4 au départ (résidents
+DÉTERMINISTES, zéro message), 5 tours, aspiration, chute contre la bande ; le contre-la-montre contre le fantôme du record. Vue en jeu
+seul ET À DEUX (`audit-duo`) : résultats identiques au centième. (6) **Réseau, hors course** : deux clients qui se balayaient l'un
+l'autre ne se retrouvaient jamais (piège neuf du §4) — corrigé ; le classement en direct lit le dernier paquet, pas l'avatar dessiné.
+Bancs relancés : `verify-vallee` 319/319, `verify-course` 30/30 (falsifié), `verify-ombres` 27/27, `verify-patin` 23/23,
+`verify-neige` 17/17, `verify-pluie` 34/34, `verify-faune` 105/105, `verify-meteo` 76/76, `verify-collision`, `verify-strings` 1252
+clés, `render-patinoire` 4/4, `render-marche-hiver` 3/3, bundle et `no-undef` propres.
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; `?room=` unique ;
+`audit-cap` écrit dans `tools/out/audit-2026-10/`. Le harnais avance `Date.now` pour régler l'heure : à deux, ça balaie l'autre client
+(il revient au ping suivant, ≤ 20 s). `.claude/launch.json` a gagné `fake-supabase-verbose` (le relais qui journalise chaque message).
+⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git). ⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas
+(`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore ni `translate` ni le remplissage des chemins ; `TOWN_SPEED_MULT` est mort depuis
+le zip 250. ⚠️ La bascule de saison du monde de la ville est instantanée : un étal peut apparaître sous un joueur.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER (lapins, essai, saison), PUIS LA PATINOIRE ET LE MARCHÉ D'HIVER (B)
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER LA PATINOIRE ET SA COURSE, PUIS LES RÉSIDENTS QUI PATINENT
 
-(1) Juger en jeu : les lapins à la taille du pigeon ; l'essai « petits personnages » (garder ? résidents aussi ? au cran 2 le perso tombe à ~16 px —
-s'il est gardé, le vrai chantier est un dessin natif, la cadence des pas à 9 images/s, les portées, les bancs) ; la saison (A) : menu dev « ❄️ Hiver » +
-« 📅 Saison à 97 % » + « 🌦️ Giboulées » en ville, « 🍂 Automne » + 84/97 % à 8 h (gelée qui recule vers 10 h) ; ⚠️ la gelée d'HIVER suit désormais la
-température. Puis borner `courtDepthFrac` au nord. (2) **(B), décisions DÉJÀ PRISES avec Guillaume** : l'hiver, l'esplanade du champ de foire
-(`TOWN_MARKET`) devient une GRANDE patinoire, ouverte tout l'hiver ; le chalet des patins va à côté ; la bande BLOQUE sans patins avec un message
-(« chaussez des patins »), mais **si on insiste on entre et on tombe** ; les résidents patinent à l'occasion ; le marché déménage dans la **prairie à l'ouest
-de la Maison Garfield** (x≈80-115, y≈2-27, au pied de l'escalier ouest de la Haute-Ville) « ou ailleurs si plus approprié » — exigence : **pas posé là,
-cohérent avec l'environnement, une vraie installation vivante** ; les étals actuels pour l'instant. **Montrer un plan AVANT de construire.** Plus tard :
-marché de Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place. Contrainte : ville tirée d'une graine (aucun `rnd()` de plus) → calque
-saisonnier (cases solides à basculer, chemins des résidents). (3) Ensuite : sols de VT (FIX-004), boutique d'hiver peinte, lots B/C0, intérieurs.
-Restent à juger d'avant : patins loués, canne qui se range, bonhomme cassable (`docs/A-JUGER.md`) ; pas de touche tactile K/R ; tout le monde peut casser
-le bonhomme de tout le monde (dit, pas décidé). L'avancée de saison du menu dev est PARTAGÉE (`forcedSeasonP`). Idée en attente : l'horloge qui ne roule
-qu'avec un hôte (`docs/AUDIT-2026-10.md`, partie 3).
+(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : la course — ⚠️ le résident le plus fort est à 0,2 % de la ligne idéale du banc, très
+dur à battre —, 5 tours, le prix, la chute ; la patinoire de jour et de nuit, la chute du portillon (blessure du lac : trop dur ?) ; le
+marché d'hiver ; les ombres ; l'essai ×0,8 ; la neige des rues. (2) Puis le dernier morceau DÉCIDÉ de la patinoire : **les résidents
+qui patinent à l'occasion** (hors session ; aucun `rnd()` de plus dans la graine de la ville), et les reflets des patineurs sur la
+glace. (3) Ensuite : marché de Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place ; sols de VT (FIX-004),
+boutique d'hiver peinte, lots B/C0, intérieurs. Idée en attente : l'horloge qui ne roule qu'avec un hôte (`docs/AUDIT-2026-10.md`, 3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -70,6 +69,9 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
+| Course de la patinoire, contre-la-montre | `components/ferme/course.js`, `CourseHud.js` ; `hostRinkReq` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Rink`) ; README ferme (journal 2026-10-05 nuit, fin ter) | `verify-course`, `render-patinoire` ; à deux : `app/audit-duo` |
+| Ombres portées du soleil (heure, saison, ciel) | `components/ferme/ombres.js` ; `sunShadowPass` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js sunShadowPass`) | `verify-ombres` |
+| Marché d'hiver, monde d'hiver de la ville (calque saisonnier) | `townWinterWorld` dans fermeEngine.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journal 2026-10-05 nuit, fin) | `verify-vallee`, `render-marche-hiver` |
 | Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |
 | Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
 | Sols de VT (pavements, herbe), arbres, intégrer une image Gemini de sol ou d'arbre | `refs/lot-gemini/00-LISEZ-MOI.md`, puis `refs/lot-gemini/A-sols-vt.md` ou `refs/lot-gemini/B-arbres.md` ; `tools/lib-mip.mjs`, `tools/build-lampadaires.mjs` (le modèle) | `render-rues`, `render-arbres`, `verify-densite` |
@@ -270,6 +272,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN DESSIN POSÉ PAR-DESSUS LE SOL N'EXISTE PAS POUR LA MÉTÉO TANT QU'IL NE PUBLIE PAS SES CREUX
 - UNE GRANDEUR INTÉGRÉE SUR UNE FENÊTRE QUI REPART DE ZÉRO MONTE EN DENT DE SCIE : SEUILLÉE, ELLE BASCULE CHAQUE JOUR
 - UN CHAMP `id` DANS UNE `req` EST ÉCRASÉ PAR L'EXPÉDITEUR
+- UNE GARDE D'AUDIENCE À L'ÉMISSION ET UNE INSCRIPTION QUI NE SE FAIT QU'À LA RÉCEPTION FONT UN SILENCE MUTUEL QUI NE SE ROMPT JAMAIS
 
 **JavaScript / three.js / canevas**
 

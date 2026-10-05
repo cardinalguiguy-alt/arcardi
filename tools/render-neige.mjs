@@ -32,14 +32,22 @@ const T = C.TILE;
 const PLACES = {
   rue: { x: 6, y: 58, w: 22, h: 14 },        // une rue, des jardins, des haies, un peu de dallage
   jardins: { x: 12, y: 30, w: 22, h: 14 },   // des jardins et des arbres
+  /* 2026-10-05 (nuit) — DEUX RUES PAVÉES EN BIAIS (à bord libre, `townRoadField`) : Guillaume, en jeu, à la fonte :
+     « un bug autour des routes, c'est trop carré ». La neige classait la rue CASE PAR CASE alors que le pavé est
+     peint au contour — ces deux lieux montrent la lisière, la raide (rue de l'ouest) et la douce (rue du nord). */
+  biais: { x: 33, y: 118, w: 20, h: 18 },
+  nord: { x: 14, y: 31, w: 30, h: 11 },
 };
 const argPlace = process.argv[2], argCm = process.argv[3], argSky = process.argv[4];
 const places = argPlace ? [argPlace] : Object.keys(PLACES);
 const depths = argCm ? [Number(argCm)] : [3, 12, 30];
 const skies = argSky ? [argSky] : ["soleil"];
 
+/* `FONTE=1` (2026-10-05, nuit) : l'état de la capture de Guillaume — le pré encore blanc, la chaussée déjà nue et
+   sans congère (la rue fond la première). Planche : neige-<lieu>-<cm>-<ciel>-fonte.png. */
+const FONTE = process.env.FONTE === "1";
 function packFor(cm) {
-  return { g: cm, s: cm * 1.25 + (cm > 0 ? 1.5 : 0), r: Math.min(NG.NEIGE.ROAD_CAP, cm * 0.3), berm: cm * 1.1, rh: cm * 0.8, rc: cm, tl: cm > 8 ? 0.8 : cm > 1 ? 0.3 : 0, tc: cm > 8 ? 0.8 : cm > 1 ? 0.3 : 0, since: 0 };
+  return { g: cm, s: cm * 1.25 + (cm > 0 ? 1.5 : 0), r: FONTE ? 0 : Math.min(NG.NEIGE.ROAD_CAP, cm * 0.3), berm: FONTE ? 0 : cm * 1.1, rh: cm * 0.8, rc: cm, tl: cm > 8 ? 0.8 : cm > 1 ? 0.3 : 0, tc: cm > 8 ? 0.8 : cm > 1 ? 0.3 : 0, since: 0 };
 }
 
 const env = A.townSnowEnv(tw, S, (wx, wy) => {
@@ -143,7 +151,7 @@ for (const name of places) {
   for (const cm of depths) for (const sky of skies) {
     const r = paintPlace(P, cm, sky);
     const big = scale(r.px, r.W, r.H, 3);
-    const file = path.join(OUT, `neige-${name}-${cm}cm-${sky}.png`);
+    const file = path.join(OUT, `neige-${name}-${cm}cm-${sky}${FONTE ? "-fonte" : ""}.png`);
     writePNG(file, big.px, big.W, big.H);
     console.log("écrit", path.relative(ROOT, file));
   }

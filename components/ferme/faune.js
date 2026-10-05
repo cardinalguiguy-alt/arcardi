@@ -1237,7 +1237,7 @@ function catSpots(tw, nav, home, fishStalls) {
   };
   const inR = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
   if (home === "market") {
-    const R = C.TOWN_MARKET;
+    const R = E.townMarketRect(tw);   // 2026-10-05 : l'hiver, le chat suit le marché dans la prairie
     for (const p of props) {
       if (!inR(p, R)) continue;
       if (p.kind === "stall") add(p.x, p.y, "stall", { fish: fishStalls.includes(p) });

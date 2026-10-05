@@ -72,30 +72,9 @@ function shadow(g, cx, by, rx) {
   g.beginPath(); g.ellipse(cx, by - 2, rx, 3.5, 0, 0, 7); g.fill();
 }
 
-/* ⚠️ RECOPIE ASSUMÉE DE drawTownFrame (zip 431) — voir l'en-tête. Les deux
-   courbes doivent rester identiques : sinon ce banc validerait une guirlande
-   que le jeu ne dessine pas. */
-const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
-function bunting(g, ax, bx, topY, k, mastTo) {
-  const seg = 14, sag = 8;
-  g.fillStyle = "#6a4726";
-  for (const mx of [ax, bx]) g.fillRect(mx - 1, topY, 2, mastTo - topY);
-  g.fillStyle = "#d8b45a";
-  for (const mx of [ax, bx]) g.fillRect(mx - 1, topY - 2, 2, 2);
-  g.strokeStyle = "rgba(80,66,44,0.85)"; g.lineWidth = 1;
-  g.beginPath();
-  for (let s = 0; s <= seg; s++) {
-    const t = s / seg, cx = ax + (bx - ax) * t, cy = topY + Math.sin(Math.PI * t) * sag;
-    if (s === 0) g.moveTo(cx, cy); else g.lineTo(cx, cy);
-  }
-  g.stroke();
-  for (let s = 1; s < seg; s++) {
-    const t = s / seg, cx = ax + (bx - ax) * t, cy = topY + Math.sin(Math.PI * t) * sag;
-    g.fillStyle = FLAGS[(k * 3 + s) % FLAGS.length];
-    g.beginPath(); g.moveTo(cx - 2.5, cy); g.lineTo(cx + 2.5, cy); g.lineTo(cx, cy + 6); g.fill();
-    g.fillStyle = "rgba(255,255,255,0.25)"; g.fillRect(cx - 2.5, cy, 5, 1);
-  }
-}
+/* 2026-10-05 (nuit) — PLUS UNE RECOPIE : le dessin des fanions vit dans `A.drawStallBunting` (fermeArt.js), que le
+   jeu appelle aussi. Ce banc regarde donc la guirlande que le jeu dessine, pas une copie qui pourrait diverger. */
+const bunting = (g, ax, bx, topY, k, mastTo) => A.drawStallBunting(g, ax, bx, topY, mastTo, k, null);
 
 /* ---- PLANCHE 1 : la rangée, comme le générateur la pose (un étal tous les
    QUATRE pas), avec ses guirlandes et trois passants. */

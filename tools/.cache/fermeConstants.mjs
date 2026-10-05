@@ -3695,6 +3695,90 @@ export const TOWN_WATER_SWELL_PERIOD_FAR_MS = 7500;
 export const TOWN_WATER_SWELL_AMP_FAR_CUT = 1 / 3;
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LE MARCHÉ D'HIVER, DANS LA PRAIRIE DU NORD.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décidé avec Guillaume : l'hiver, l'esplanade du champ de foire devient une
+   GRANDE patinoire ; le marché « hiverne » dans la prairie à l'ouest de la Maison
+   Garfield — « pas posé là, cohérent avec l'environnement, une vraie
+   installation vivante », les étals actuels pour l'instant — et revient au
+   printemps. ⚠️ LA VILLE EST TIRÉE D'UNE GRAINE : aucun `rnd()` de plus. Le marché
+   d'hiver n'est donc pas une passe du générateur, c'est un CALQUE posé sur la
+   carte finie (`townWinterWorld`, fermeEngine.js) — un second monde, dérivé du
+   premier, que le jeu prend l'hiver. Tous les caches de la ville étant indexés
+   par l'identité du monde, chacun se reconstruit seul au changement de saison.
+   ⚠️ CE QUI EN FAIT UN LIEU ET PAS UN DÉPÔT, et tout se lit sur la carte :
+   · l'ALLÉE court d'ouest en est, droit vers le pied de l'escalier ouest de la
+     Haute-Ville (x 116-119, y 18-21) : on descend des terrasses DANS le marché ;
+   · l'ARCHE ouvre sur le boulevard du Nord, ENTRE deux tilleuls de son
+     alignement (x 83 et 89) — l'entrée est là où la rue le permet ;
+   · un CAILLEBOTIS (planches posées sur la neige) relie l'arche à l'allée et
+     l'allée à l'escalier : c'est ce qu'on installe pour un marché de plein champ ;
+   · un BRASERO au bout de l'allée (le coin du feu), sur sa dalle ; et des ampoules sur la corde des fanions
+     (`drawStallBunting`, fermeArt.js), qui s'allument avec les lanternes.
+   L'axe (`AX`, une colonne) et l'allée (`AXIS`) jouent le rôle de ceux du champ de
+   foire : tout le reste s'en DÉDUIT (les deux rangées, l'arche, le mobilier). */
+export const TOWN_WINTER_MARKET = { x: 68, y: 15, w: 49, h: 19 };   // l'emprise : vente, résidents, chat, taxi, carte
+/* ⚠️ L'AXE EST EN 86 ET PAS EN 92 (premier jet), vu en jeu : la maison rouge « À vendre » du boulevard (x ≈ 99-106)
+   monte son toit jusqu'à la rangée 23 — l'étal sud le plus à l'est disparaissait derrière. En 86, l'arche passe entre
+   les tilleuls 83 et 89, le marché tient le milieu de la prairie, et le caillebotis longe le jardin jusqu'à l'escalier. */
+export const TOWN_WINTER_MARKET_AX = 86;     // la colonne de l'arche et de l'étal central (entre les tilleuls 83 et 89)
+export const TOWN_WINTER_MARKET_AXIS = 22;   // l'allée (caillebotis AXIS ± 1) : rangée nord en AXIS − 3, rangée sud en AXIS + 4
+/* ⚠️ LA RANGÉE SUD EST PLUS LOIN QU'AU CHAMP DE FOIRE (+4 et pas +2) : un étal est une façade de 50 px de haut posée
+   par le bas — à +2, son dessin couvrait les deux tiers de l'allée et le caillebotis passait SOUS la marchandise
+   (vu au banc, `render-marche-hiver`). À +4, son faîte tombe juste au bord sud des planches. */
+export const TOWN_WINTER_MARKET_SOUTH = 4;
+export const TOWN_WINTER_MARKET_STAIR_X = 115;   // la case au pied de l'escalier ouest (le caillebotis y monte)
+export const TOWN_WINTER_MARKET_ARCH_Y = 31;     // l'arche, deux rangées au nord du trottoir du boulevard
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LA PATINOIRE DU CHAMP DE FOIRE (l'hiver, `townWinterWorld`).
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décidé avec Guillaume : une GRANDE glace OUVERTE sur l'esplanade (le marché a hiverné dans la prairie) ; la bande
+   bloque qui n'a pas de patins (un message), mais qui insiste entre — et tombe ; le chalet des patins à côté ; la piste
+   de course (plots, couloirs peints) n'apparaît que pendant une course privatisée.
+   ⚠️ TOUT SE DÉDUIT DU DALLAGE DU CHAMP DE FOIRE (`TOWN_MARKET`, 21 × 22 cases de pierre, x 40-60 / y 76-97) : l'anneau
+   extérieur de la pierre porte la BANDE (solide), l'intérieur est la GLACE, aux coins ARRONDIS (une case est de glace si
+   son centre est dans le rectangle arrondi, `rinkInside` — la même règle pour la collision et le dessin). Les quatre
+   lampadaires d'angle du champ de foire restent, juste dehors. Les PORTILLONS : au nord et au sud sur l'axe du dallage
+   (là où l'on arrivait au marché), à l'est vers le chalet. */
+const RINK_MK = TOWN_MARKET;
+export const TOWN_RINK = {
+  x0: RINK_MK.x + 3, y0: RINK_MK.y + 3,                                   // la première case de glace (41, 77)
+  x1: RINK_MK.x + 2 + (RINK_MK.w - 5) - 2, y1: RINK_MK.y + 2 + (RINK_MK.h - 4) - 2,   // la dernière (59, 96)
+  r: 3.5,                                                                 // le rayon des coins, en cases
+};
+export const TOWN_RINK_AX = RINK_MK.x + 2 + ((RINK_MK.w - 5) >> 1);       // la colonne médiane (50), celle des étals d'été
+export const TOWN_RINK_GATES = [
+  { side: "n", a: TOWN_RINK_AX - 1, b: TOWN_RINK_AX + 1 },
+  { side: "s", a: TOWN_RINK_AX - 1, b: TOWN_RINK_AX + 1 },
+  { side: "e", a: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1), b: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1) + 1 },
+];
+/* Le chalet des patins de la patinoire (le second : celui du lac reste), à l'est, face au portillon est. */
+export const TOWN_RINK_CHALET = { x: TOWN_RINK.x1 + 5, y: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1) - 1 };
+/* Un point (en CASES, réel) est-il sur la glace ? Le rectangle arrondi [x0, x1+1] × [y0, y1+1], coins de rayon r. */
+export function rinkInside(x, y) {
+  const R = TOWN_RINK, X0 = R.x0, X1 = R.x1 + 1, Y0 = R.y0, Y1 = R.y1 + 1;
+  if (x < X0 || x > X1 || y < Y0 || y > Y1) return false;
+  const dx = Math.max(X0 + R.r - x, 0, x - (X1 - R.r)), dy = Math.max(Y0 + R.r - y, 0, y - (Y1 - R.r));
+  return dx * dx + dy * dy <= R.r * R.r;
+}
+/* LES MÂTS ET LES GUIRLANDES AU-DESSUS DE LA GLACE (la nuit, c'est l'éclairage qui fait une patinoire de place) : trois
+   mâts sur l'allée qui longe chaque flanc, reliés d'ouest en est — le seul sens où un fil se LIT comme une guirlande dans
+   cette vue (il pend vers le bas de l'écran ; tendu du nord au sud, il barrerait la bande d'un trait, la leçon des
+   fanions du marché d'hiver). Le fil du milieu descend d'une rangée vers l'est : le mât d'en face laisse libre le
+   portillon est. `RINK_POLE_H` : la hauteur du mât (px), son sommet porte la lanterne et l'attache du fil. */
+export const TOWN_RINK_POLES = [
+  [[TOWN_RINK.x0 - 2, TOWN_RINK.y0 + 3], [TOWN_RINK.x1 + 2, TOWN_RINK.y0 + 3]],
+  [[TOWN_RINK.x0 - 2, TOWN_RINK.y0 + 9], [TOWN_RINK.x1 + 2, TOWN_RINK.y0 + 11]],
+  [[TOWN_RINK.x0 - 2, TOWN_RINK.y1 - 3], [TOWN_RINK.x1 + 2, TOWN_RINK.y1 - 3]],
+];
+export const RINK_POLE_H = 44;
+/* Le temps qu'il faut POUSSER contre un portillon, sans patins, pour passer quand même (et tomber), en secondes. */
+export const TOWN_RINK_INSIST_S = 1.1;
+
+/* Le dessin d'un étal (`townStallSprite`, fermeArt.js) — ses cotes, lues aussi par le banc du marché d'hiver (la
+   rangée sud ne doit pas dessiner sur l'allée) : écrites UNE fois. */
+export const TOWN_STALL_SPRITE = { w: 52, h: 50 };
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 431 — LES SIX MÉTIERS DU MARCHÉ.
    ⚠️ LA TABLE VIT ICI ET NULLE PART AILLEURS, et ce n'est pas de la coquetterie
@@ -6401,6 +6485,16 @@ const TOWN_COURT_DEPTH_MIN =
    au palier plutôt que 40 %) pour ne pas retomber dans l'excès inverse. */
 export const TOWN_COURT_STAIR_SLOW = 0.5; // vitesse au palier ; pleine vitesse au pied, fondu entre les deux
 
+/* ⚠️⚠️ 2026-10-05 (nuit) — « AU-DELÀ DU PALIER » AVAIT UN BOUT, ET LE CODE NE LE CONNAISSAIT PAS. Le `Math.min(1, t)`
+   du ter tenait le palier au plus petit… et TOUTE la bande de `K` au nord avec lui, jusqu'au bord de la carte : la
+   route y = 35, quatorze rangées derrière le palais, rendait le joueur aux deux tiers et à la moitié de sa vitesse
+   (vu en jeu par Guillaume — c'est même ce qui a donné l'essai « petits personnages »). La même famille que la note de
+   falsification du ter, à l'autre extrémité : « on reste au plus petit » ne vaut QUE jusqu'au mur nord du corps
+   (`b.y`, la première rangée solide), le seul endroit où le palier finit. Au-delà, on est DERRIÈRE le bâtiment, sur la
+   carte ordinaire : facteur 1. Le retour se fond sur `TOWN_COURT_DEPTH_MARGIN` rangée, comme les flancs — dans `K` les
+   rangées du corps sont solides (personne n'y passe), mais la bande latérale de fondu, elle, se longe du parvis
+   jusque derrière : sans ce fondu-ci, on y regrandirait d'un coup au pas qui franchit `b.y` (le défaut du 2026-09-23,
+   tourné d'un quart de tour). Mesuré par `verify-vallee` (section « profondeur du perron »). */
 function courtDepthFrac(x, y) {
   const b = TOWN_COURT, K = TOWN_COURT_COLL;
   const t = ((b.y + b.h) - y - 0.5) / TOWN_COURT_STEP_ROWS;
@@ -6409,7 +6503,10 @@ function courtDepthFrac(x, y) {
   const dOut = x < K.x0 ? K.x0 - x : (x > K.x1 ? x - K.x1 : 0);
   if (dOut >= TOWN_COURT_DEPTH_MARGIN) return 0;
   const fade = dOut <= 0 ? 1 : 1 - dOut / TOWN_COURT_DEPTH_MARGIN;
-  return tc * fade;
+  const dN = y < b.y ? b.y - y : 0;   // derrière le corps (voir la note du 2026-10-05 ci-dessus)
+  if (dN >= TOWN_COURT_DEPTH_MARGIN) return 0;
+  const fadeN = dN <= 0 ? 1 : 1 - dN / TOWN_COURT_DEPTH_MARGIN;
+  return tc * fade * fadeN;
 }
 export function courtDepthScale(x, y) {
   const f = courtDepthFrac(x, y);
@@ -6423,10 +6520,15 @@ export function courtStairSlowMul(x, y) {
 }
 /* ⚠️ 2026-10-05 (soir) — ESSAI RÉVERSIBLE « PETITS PERSONNAGES » EN VILLE (interrupteur LOCAL du menu dev,
    `SMALL_FOLK` dans FermeGame.js). Demande de Guillaume : retrouver PARTOUT en ville ce qu'il a vu par
-   accident sur la route au nord du tribunal — où `courtDepthFrac` ne s'arrête pas au palier (défaut connu,
-   pas encore corrigé) : tout le monde à la taille du haut du perron, et sa marche à la vitesse du palier.
-   Les deux nombres sont DÉRIVÉS de ceux du perron, jamais recopiés : l'essai montre exactement ce qu'il a aimé. */
-export const TOWN_SMALL_FOLK_SCALE = TOWN_COURT_DEPTH_MIN;   // ~0,68
+   accident sur la route au nord du tribunal — où `courtDepthFrac` ne s'arrêtait pas au palier (corrigé le
+   2026-10-05, nuit) : tout le monde plus petit, et sa marche à la vitesse du palier.
+   ⚠️ 2026-10-05 (nuit) — LA VITESSE RESTE DÉRIVÉE, LA TAILLE NE L'EST PLUS. Jugé en jeu : « la vitesse de
+   marche est parfaite », mais à la taille du palier (~0,68) le personnage est « un peu trop petit par
+   rapport aux pots, aux animaux » — « un peu moins petit, toujours moins grand que la taille par défaut ».
+   0,8 : un cran franc au-dessus (≈ 18 px de haut au lieu de 16, sur 23), loin de 1. C'est un CHOIX, plus
+   une mesure : il n'a plus à suivre le perron, qui garde son propre 0,68 (le `Math.min` du jeu laisse le
+   haut des marches rapetisser plus loin que l'essai, et c'est voulu — la profondeur reste lisible). */
+export const TOWN_SMALL_FOLK_SCALE = 0.8;
 export const TOWN_SMALL_FOLK_SPEED = TOWN_COURT_STAIR_SLOW;  // 0,5
 
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)

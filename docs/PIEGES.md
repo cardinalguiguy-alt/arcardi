@@ -207,6 +207,13 @@ dépôt.
   remplacé sans erreur. Le décor du bonhomme était envoyé par `id`, l'hôte cherchait un bonhomme nommé comme le
   joueur et répondait « introuvable » — un panneau qui s'ouvre, des choix qui s'allument, et rien ne change. Nommer
   la cible autrement (`sid`, `targetId`, `fromId`).
+- ⚠️⚠️ **UNE GARDE D'AUDIENCE À L'ÉMISSION ET UNE INSCRIPTION QUI NE SE FAIT QU'À LA RÉCEPTION FONT UN SILENCE MUTUEL QUI NE SE ROMPT JAMAIS**
+  (2026-10-05, la course à deux). `sendPos` et `hostSend` ne parlent que s'il y a quelqu'un dans la liste des joueurs (garde de
+  quota), et un joueur n'entre dans cette liste que par un `pos` ou un `join` reçu — un ping, lui, ne réinscrit personne. Que les
+  deux clients se retirent l'un l'autre au même moment (TTL de 60 s ; un portable hôte qui dort une minute, ou un harnais qui
+  avance l'horloge) et chacun attend que l'autre parle d'abord : l'invitée jouait seule, sans plus jamais recevoir un `apply`,
+  jusqu'au rechargement. Une garde qui coupe l'émission doit laisser passer CE QUI REMPLIT la condition de la garde : ici, un
+  ping d'inconnu déclenche l'annonce de sa position, un `pos` d'inconnu reçoit une réponse (trois messages, mesuré au relais).
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN

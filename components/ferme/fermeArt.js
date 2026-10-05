@@ -39,7 +39,7 @@ import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLega
 import { drawFarmBuis } from "./buis";
 import { drawCivicHDTile, drawCivicHDBorder } from "./solHD";   // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute au pixel des couronnes d'automne
-import { treeSnowMix, CL as SNOW_CL } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
+import { treeSnowMix, CL as SNOW_CL, blueNoise as snowBlueNoise } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
 
 /* ---------------------------------------------------------------- PALETTE ---
@@ -1153,6 +1153,12 @@ export function townRoadField(tw) {
   const sdf = new Float32Array(W1 * (H + 1)).fill(-9);
   const smooth = new Uint8Array(W * H);
   const touched = new Uint8Array(W1 * (H + 1));
+  /* 2026-10-05 (nuit) — la demi-largeur de la rue la plus proche de chaque coin (`half`) et l'écart SIGNÉ à son axe
+     (`lat`, en cases), pour la neige (`townRoadPixel` : les ornières se posent à une fraction de la largeur). ⚠️ Pas
+     `sdf` : `w/2 − |d|` fait un V sur l'axe, et l'interpolation bilinéaire d'un V entre deux coins qui l'enjambent
+     est fausse au milieu de la chaussée — les ornières y faisaient un zigzag d'une case (vu au banc). L'écart signé
+     est linéaire en travers : l'interpolation est exacte sur une rue droite. */
+  const best = new Float32Array(W1 * (H + 1)), half2 = new Float32Array(W1 * (H + 1)), lat = new Float32Array(W1 * (H + 1));
   for (const r of C.TOWN_ROADS) {
     if (r.surf !== C.TR_COBBLE) continue;
     for (const [x, y] of C.townRoadCells(r)) {
@@ -1174,17 +1180,19 @@ export function townRoadField(tw) {
         let t = vv > 0 ? (px * vx + py * vy) / vv : 0;
         if ((k === 0 && t < 0) || (k === last && t > 1)) continue;
         t = Math.max(0, Math.min(1, t));
-        const s = half - Math.hypot(px - t * vx, py - t * vy);
+        const dd = Math.hypot(px - t * vx, py - t * vy), s = half - dd;
         const c = cy * W1 + cx, o = own.get(c);
-        if (o === undefined || s > o) own.set(c, s);
+        // le côté (signe du produit vectoriel) : `lat` est LINÉAIRE en travers de l'axe, là où `s` fait un V
+        if (o === undefined || s > o[0]) own.set(c, [s, (vx * py - vy * px) >= 0 ? dd : -dd]);
       }
     }
-    for (const [c, s] of own) {
+    for (const [c, [s, la]] of own) {
+      if (!touched[c] || s > best[c]) { best[c] = s; half2[c] = half; lat[c] = la; }
       sdf[c] = touched[c] ? smax(sdf[c], s, ROAD_SMAX_K) : s;
       touched[c] = 1;
     }
   }
-  F = { sdf, smooth, cells: null };
+  F = { sdf, smooth, half: half2, lat, cells: null };
   ROAD_FIELDS.set(tw, F);
   return F;
 }
@@ -1196,55 +1204,99 @@ function roadCorners(F, tw, x, y) {
 const pavedGround = (g) => g === C.G_PATH || g === C.G_PATH_STONE || g === C.G_TOWN_STAIR || g === C.G_BRIDGE;
 /* La découpe d'une case, cuite à la demande dans l'atlas commun. `null` si la
    rue n'y met aucun pixel. */
+/* ⚠️⚠️ 2026-10-05 (nuit) — CE QU'EST UN PIXEL DE LA RUE À BORD LIBRE, ÉCRIT UNE FOIS : le dessin (`roadEdgeCell`) ET
+   la neige (`townRoadPixel`, lue par `neige.js` et `pluie.js`) le lisent ici. Guillaume, en jeu, à la fonte : « un bug
+   autour des routes, c'est trop carré, pas réaliste ». La neige classait la rue CASE PAR CASE (la case de rue entière
+   en chaussée, l'herbe voisine entière en pré) alors que le pavé est peint au contour depuis la phase 7 : elle
+   recouvrait le pavé qui déborde sur l'herbe et laissait à nu l'herbe des coins de chaque case de rue — la rue en
+   biais redevenait l'escalier de 16 px que la phase 7 avait effacé, avec des carrés verts à chaque marche. Deux
+   lectures du même bord divergent au premier réglage (§4) : il n'y en a plus qu'une.
+   `cs` : les quatre coins (`roadCorners`). Rend { inside, s, depth (px jusqu'au bord, < 0 dehors), gx, gy, gl, kerb,
+   paved (pavé hors du trait, contre une allée dallée) }. */
+function roadPixelInfo(F, tw, x, y, cs, px, py) {
+  const T = SPR_T, [c00, c10, c01, c11] = cs, W = tw.w, H = tw.h, G = tw.ground;
+  const gAt = (xx, yy) => (xx < 0 || yy < 0 || xx >= W || yy >= H ? C.G_GRASS : G[yy * W + xx]);
+  const u = (px + 0.5) / T, v = (py + 0.5) / T;
+  const s = c00 * (1 - u) * (1 - v) + c10 * u * (1 - v) + c01 * (1 - u) * v + c11 * u * v;
+  const gx = (c10 - c00) * (1 - v) + (c11 - c01) * v, gy = (c01 - c00) * (1 - u) + (c11 - c10) * u;
+  const gl = Math.hypot(gx, gy) || 1;
+  const depth = s / gl * T;                                   // px jusqu'au bord
+  if (s >= 0) {
+    /* `open` : le dehors, une demi-case au-delà du bord, n'est pas dallé — la bordure s'y pose (sur ses
+       ROAD_EDGE_KW px) ; lu jusqu'à 8 px plus loin pour le caniveau de la pluie (`gut`, neige.js). */
+    let open = false;
+    if (depth < ROAD_EDGE_KW + 8) {
+      const wx = x * T + px, wy = y * T + py;
+      const ox = (wx + 0.5) / T - (gx / gl) * (s / gl + 0.5), oy = (wy + 0.5) / T - (gy / gl) * (s / gl + 0.5);
+      open = !pavedGround(gAt(Math.floor(ox), Math.floor(oy)));
+    }
+    return { inside: true, s, depth, gx, gy, gl, kerb: open && depth < ROAD_EDGE_KW, open, paved: false };
+  }
+  if (F.smooth[y * W + x]) {
+    // hors du trait sur une case de rue : pavé si la voisine de ce côté est dallée
+    const dL = px, dR = T - 1 - px, dT = py, dB = T - 1 - py, m = Math.min(dL, dR, dT, dB);
+    const nx = m === dL ? x - 1 : m === dR ? x + 1 : x, ny = m === dT ? y - 1 : m === dB ? y + 1 : y;
+    const hardOther = pavedGround(gAt(nx, ny)) && !(nx >= 0 && ny >= 0 && nx < W && ny < H && F.smooth[ny * W + nx]);
+    if (hardOther) return { inside: true, s, depth: 99, gx, gy, gl, kerb: false, open: false, paved: true };
+  }
+  return { inside: false, s, depth, gx, gy, gl, kerb: false, open: false, paved: false };
+}
+/* 2026-10-05 (nuit) — LE PIXEL DE RUE PAVÉE À BORD LIBRE, POUR LA NEIGE ET LA PLUIE (voir `roadPixelInfo`). `null` :
+   la case n'est pas concernée (ni rue à bord libre, ni herbe que la rue mord) — la lecture à la case tient. Sinon
+   { inside, depth (px jusqu'au bord ; < 0 dehors), kerb, open (une bordure à ce bord), w (largeur de la rue, px),
+   fromEdge (px depuis le bord, par l'écart à l'axe : pour les ornières) }.
+   Mémo des coins par case (`memo`, une Map tenue par l'appelant). */
+export function townRoadPixel(tw, x, y, lx, ly, memo) {
+  if (x < 0 || y < 0 || x >= tw.w || y >= tw.h || !tw.road) return null;
+  const F = townRoadField(tw), i = y * tw.w + x;
+  let cs = memo ? memo.get(i) : undefined;
+  if (cs === undefined) {
+    const g = tw.ground[i];
+    const road = g === C.G_PATH && tw.road[i] === C.TR_COBBLE && F.smooth[i];
+    const corners = roadCorners(F, tw, x, y);
+    // l'herbe jusqu'à ~10 px du bord (−0,6 case) : la neige y lit sa lisière (neige.js), le dessin n'y peint rien (s < 0)
+    cs = road || ((g === C.G_GRASS || g === C.G_TOWN_LAWN) && Math.max(...corners) > -0.6) ? corners : null;
+    if (memo) memo.set(i, cs);
+  }
+  if (!cs) return null;
+  const P = roadPixelInfo(F, tw, x, y, cs, lx, ly);
+  const W1 = tw.w + 1, i00 = y * W1 + x, i10 = i00 + 1, i01 = i00 + W1, i11 = i01 + 1;
+  const hf = Math.max(F.half[i00], F.half[i10], F.half[i01], F.half[i11]) || 1;
+  const u = (lx + 0.5) / SPR_T, v = (ly + 0.5) / SPR_T, L = F.lat;
+  const la = L[i00] * (1 - u) * (1 - v) + L[i10] * u * (1 - v) + L[i01] * (1 - u) * v + L[i11] * u * v;
+  // `fromEdge` : px depuis le bord le plus proche, par l'écart à l'axe (exact) — `depth` reste la lecture du DESSIN
+  return { inside: P.inside, depth: P.depth, kerb: P.kerb, open: P.open, w: hf * 2 * SPR_T, fromEdge: (hf - Math.abs(la)) * SPR_T };
+}
 function roadEdgeCell(F, S, tw, x, y) {
   const i = y * tw.w + x;
   if (!F.cells) F.cells = new Map();
   if (F.cells.has(i)) return F.cells.get(i);
   const RS = S.townRoad, T = SPR_T;
   if (!F.cobblePx) F.cobblePx = RS.cobble.getContext("2d").getImageData(0, 0, RS.cobble.width, RS.cobble.height);
-  const [c00, c10, c01, c11] = roadCorners(F, tw, x, y);
-  const W = tw.w, H = tw.h, G = tw.ground;
-  const isRoadTile = !!F.smooth[i];
-  const gAt = (xx, yy) => (xx < 0 || yy < 0 || xx >= W || yy >= H ? C.G_GRASS : G[yy * W + xx]);
-  const hardOther = (xx, yy) => pavedGround(gAt(xx, yy)) && !(xx >= 0 && yy >= 0 && xx < W && yy < H && F.smooth[yy * W + xx]);
+  const cs = roadCorners(F, tw, x, y);
   const tone = RS.kerbTone, rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   const K = { top: rgb(tone.top), face: rgb(tone.face), alt: rgb(tone.faceAlt), dark: rgb(tone.dark), gut: rgb(tone.gutter) };
   const img = new Uint8ClampedArray(T * T * 4);
   const CP = F.cobblePx, CW = F.cobblePx.width, CH = F.cobblePx.height;
   let any = false;
   for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
-    const u = (px + 0.5) / T, v = (py + 0.5) / T;
-    const s = c00 * (1 - u) * (1 - v) + c10 * u * (1 - v) + c01 * (1 - u) * v + c11 * u * v;
     const wx = x * T + px, wy = y * T + py;
+    const P = roadPixelInfo(F, tw, x, y, cs, px, py);
+    if (!P.inside) continue;
     let col = null;
-    if (s >= 0) {
-      const gx = (c10 - c00) * (1 - v) + (c11 - c01) * v, gy = (c01 - c00) * (1 - u) + (c11 - c10) * u;
-      const gl = Math.hypot(gx, gy) || 1;
-      const depth = s / gl * T;                               // px jusqu'au bord
-      let kerb = depth < ROAD_EDGE_KW;
-      if (kerb) {
-        // le dehors, une demi-case au-delà du bord : déjà dallé → pas de bordure
-        const ox = (wx + 0.5) / T - (gx / gl) * (s / gl + 0.5), oy = (wy + 0.5) / T - (gy / gl) * (s / gl + 0.5);
-        if (pavedGround(gAt(Math.floor(ox), Math.floor(oy)))) kerb = false;
-      }
-      if (kerb) {
-        const d = Math.min(ROAD_EDGE_KW - 1, Math.floor(depth));
-        const along = Math.floor(wx * (-gy / gl) + wy * (gx / gl));   // coordonnée le long du bord
-        const a8 = ((along % 8) + 8) % 8;
-        const h = waterHash(wx, wy);
-        if (d === 0) col = K.top;
-        else if (d === ROAD_EDGE_KW - 1) col = a8 === 0 ? K.dark : K.gut;
-        else if (a8 === 0) col = K.dark;
-        else if (a8 === 1) col = K.alt;
-        else col = (h % 10) < 3 ? ((h >> 4) & 1 ? K.top : K.dark) : K.face;
-      }
-    } else if (isRoadTile) {
-      // hors du trait sur une case de rue : pavé si la voisine de ce côté est dallée
-      const dL = px, dR = T - 1 - px, dT = py, dB = T - 1 - py, m = Math.min(dL, dR, dT, dB);
-      const nx = m === dL ? x - 1 : m === dR ? x + 1 : x, ny = m === dT ? y - 1 : m === dB ? y + 1 : y;
-      if (hardOther(nx, ny)) col = "cobble";
-      else continue;
-    } else continue;
+    if (P.paved) col = "cobble";
+    else if (P.kerb) {
+      const { gx, gy, gl, depth } = P;
+      const d = Math.min(ROAD_EDGE_KW - 1, Math.floor(depth));
+      const along = Math.floor(wx * (-gy / gl) + wy * (gx / gl));   // coordonnée le long du bord
+      const a8 = ((along % 8) + 8) % 8;
+      const h = waterHash(wx, wy);
+      if (d === 0) col = K.top;
+      else if (d === ROAD_EDGE_KW - 1) col = a8 === 0 ? K.dark : K.gut;
+      else if (a8 === 0) col = K.dark;
+      else if (a8 === 1) col = K.alt;
+      else col = (h % 10) < 3 ? ((h >> 4) & 1 ? K.top : K.dark) : K.face;
+    }
     const o = (py * T + px) * 4;
     if (col === null || col === "cobble") {
       const q = ((((wy % CH) + CH) % CH) * CW + (((wx % CW) + CW) % CW)) * 4;
@@ -1278,6 +1330,517 @@ function roadEdgeKind(F, tw, x, y) {
   return m >= ROAD_EDGE_KW / SPR_T + 0.35 ? 1 : 2;
 }
 /* La découpe d'une rue sur une case d'herbe ou de pelouse voisine. */
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LE CAILLEBOTIS DU MARCHÉ D'HIVER (`tw.duck`, `townWinterWorld`).
+   ╚══════════════════════════════════════════════════════════════════════════
+   Des planches posées sur la neige : ce qu'on installe pour tenir un marché en plein
+   champ, et ce qui dit au premier regard « on a aménagé ici ». En TRAVERS du passage
+   (une planche de 3 px, un jour de 1 px : la période suit le MONDE, jamais la case —
+   sinon un joint tous les 16 px), le bout des planches éclairé au nord (la lumière du
+   jeu vient du nord-ouest) et, au sud, la TRANCHE du plancher (2 px) : c'est ce qui le
+   pose au-dessus de la neige au lieu de le peindre dessus. Une teinte par planche
+   (pin délavé, mouillé), le milieu plus sombre et plus lisse (on y marche), les clous
+   sur les traverses cachées. La neige (`townSnowEnv.duckAt`) ne pose qu'une poussière
+   sur les planches et garde ses flocons dans les jours.
+   ⚠️ CUIT UNE FOIS PAR CASE dans un atlas (le motif de `roadEdgeCell`) : 256 `fillRect`
+   par case et par image auraient coûté plus que tout le sol de la ville. */
+/* Pin délavé par l'hiver (gris-brun, pas le brun chaud d'une terrasse d'été : à côté de la neige, un bois sombre se
+   lisait comme une palissade — premier jet, au banc). */
+const DUCK_RGB = { base: [134, 112, 88], gap: [62, 51, 43], face: [94, 75, 58], faceLo: [72, 57, 45], end: [180, 160, 130], nail: [70, 62, 58] };
+const DUCK_CACHE = new WeakMap();
+const DUCK_P = 5;   // une planche de 4 px, un jour de 1 px
+/* Ce qu'est un pixel du caillebotis : null hors planches, sinon { board: 1 sur une planche, 0 dans un jour, edge : px
+   jusqu'au bord libre le plus proche (la neige balayée s'y accumule), rgb }. Lu par le DESSIN (la cuisson ci-dessous)
+   et par la NEIGE (`duckAt`) — une seule lecture. */
+export function townDuckPixel(tw, x, y, lx, ly) {
+  const d = tw && tw.duck;
+  if (!d || x < 0 || y < 0 || x >= tw.w || y >= tw.h) return null;
+  const W = tw.w, H = tw.h, k = d[y * W + x];
+  if (!k) return null;
+  const T = SPR_T, at = (xx, yy) => (xx >= 0 && yy >= 0 && xx < W && yy < H ? d[yy * W + xx] : 0);
+  const horiz = k === 1;   // l'allée court d'ouest en est : planches nord-sud, période le long de x
+  const wx = x * T + lx, wy = y * T + ly;
+  const along = horiz ? wx : wy;
+  // la bande (en travers) : les cases voisines du même sens
+  let a0 = horiz ? y : x, a1 = a0;
+  if (horiz) { while (at(x, a0 - 1) === 1 && y - a0 < 6) a0--; while (at(x, a1 + 1) === 1 && a1 - y < 6) a1++; }
+  else { while (at(a0 - 1, y) === 2 && x - a0 < 6) a0--; while (at(a1 + 1, y) === 2 && a1 - x < 6) a1++; }
+  const across = (horiz ? wy : wx) - a0 * T, width = (a1 - a0 + 1) * T;
+  const openLo = horiz ? !at(x, a0 - 1) : !at(a0 - 1, y);   // le bord nord (ouest) donne sur la neige
+  const openHi = horiz ? !at(x, a1 + 1) : !at(a1 + 1, y);   // le bord sud (est)
+  const pos = ((along % DUCK_P) + DUCK_P) % DUCK_P, idx = Math.floor(along / DUCK_P);
+  const h = waterHash(idx * 7 + (horiz ? 3 : 11), a0 * 13 + 5);
+  // les bouts des planches ne sont pas alignés au cordeau : chacune dépasse ou rentre d'un pixel
+  const jagLo = openLo ? (h >> 5) & 1 : 0, jagHi = openHi ? (h >> 6) & 1 : 0;
+  const faceH = horiz && openHi ? 2 : 0;
+  if (across < jagLo || across >= width - jagHi) return null;
+  const edge = Math.min(openLo ? across - jagLo : 99, openHi ? width - jagHi - 1 - across : 99);
+  // la TRANCHE du plancher au sud (on la voit : la lumière vient du nord-ouest et l'œil d'en haut, du sud)
+  if (faceH && across >= width - jagHi - faceH) return { board: 1, edge, rgb: across === width - jagHi - 1 ? DUCK_RGB.faceLo : DUCK_RGB.face };
+  if (!horiz && !at(x, y + 1) && ly >= T - 2) return { board: 1, edge: 0, rgb: ly === T - 1 ? DUCK_RGB.faceLo : DUCK_RGB.face };
+  if (pos === DUCK_P - 1) return { board: 0, edge, rgb: DUCK_RGB.gap };
+  const tone = ((h & 15) - 7) * 1.6;                                   // une teinte par planche
+  const mid = 1 - Math.min(1, Math.abs(across + 0.5 - width / 2) / (width / 2));   // 1 au milieu du passage (on y marche : plus sombre, plus lisse)
+  let dv = tone - mid * 9 + (pos === 0 ? 11 : pos === DUCK_P - 2 ? -7 : 0);   // l'arête nord-ouest éclairée, l'autre dans l'ombre
+  if (across === jagLo && openLo) return { board: 1, edge, rgb: DUCK_RGB.end.map((v) => Math.round(v + tone)) };
+  // les clous, par paires, sur les deux traverses cachées (à 4 px des bords)
+  if ((pos === 1 || pos === 2) && (across === 4 || across === width - 6 - faceH) && ((pos === 1) === ((idx & 1) === 0))) return { board: 1, edge, rgb: DUCK_RGB.nail };
+  // le fil du bois : un trait plus sombre de temps en temps, le long de la planche ; un nœud, plus rarement
+  const gh = waterHash(wx * 3 + (horiz ? 0 : 1), wy * 5 + idx);
+  if (gh % 29 === 0) dv -= 10;
+  else if (gh % 211 === 7) dv -= 22;
+  return { board: 1, edge, rgb: DUCK_RGB.base.map((v) => Math.max(0, Math.min(255, Math.round(v + dv)))) };
+}
+export function drawTownDuckboardTile(ctx, tw, x, y, px, py) {
+  if (!tw || !tw.duck || !tw.duck[y * tw.w + x]) return false;
+  let D = DUCK_CACHE.get(tw);
+  if (!D) { D = { cells: new Map(), atlas: null, g: null, n: 0 }; DUCK_CACHE.set(tw, D); }
+  const i = y * tw.w + x, T = SPR_T;
+  let cell = D.cells.get(i);
+  if (!cell) {
+    const img = new Uint8ClampedArray(T * T * 4);
+    for (let ly = 0; ly < T; ly++) for (let lx = 0; lx < T; lx++) {
+      const P = townDuckPixel(tw, x, y, lx, ly);
+      if (!P) continue;
+      const o = (ly * T + lx) * 4;
+      img[o] = P.rgb[0]; img[o + 1] = P.rgb[1]; img[o + 2] = P.rgb[2]; img[o + 3] = 255;
+    }
+    if (!D.atlas || D.n >= (512 / T) * (512 / T)) {
+      const c = document.createElement("canvas"); c.width = 512; c.height = 512;
+      D.atlas = c; D.g = c.getContext("2d"); D.n = 0;
+    }
+    const n = D.n++, cols = 512 / T, sx = (n % cols) * T, sy = Math.floor(n / cols) * T;
+    const id = typeof ImageData !== "undefined" ? new ImageData(img, T, T) : { width: T, height: T, data: img };
+    D.g.putImageData(id, sx, sy);
+    cell = { img: D.atlas, sx, sy };
+    D.cells.set(i, cell);
+  }
+  ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+  return true;
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LA PATINOIRE : LA GLACE ET LA BANDE (`TOWN_RINK`, `townWinterWorld`).
+   ╚══════════════════════════════════════════════════════════════════════════
+   « HYPER soignée et belle » (Guillaume). Une glace ENTRETENUE, pas l'eau gelée du lac :
+   · LA GLACE : un blanc bleuté qui n'est jamais un aplat — des voiles laiteux (deux bruits), des plages plus claires où
+     l'on voit le fond sombre sous la glace vive, une lisière de neige de lames le long de la bande (les arrêts y
+     projettent leur gerbe), un REFLET de la bande nord (sa face crème et sa rambarde rouge, à l'envers, pâlis) — c'est
+     lui qui dit « glace » au premier regard —, des lueurs obliques, et, peint SOUS la glace au centre, un grand flocon
+     bleu pâle. Tramée au bruit bleu sur une rampe de tons, comme la neige : un dégradé devient un grain, pas une courbe.
+   · LA BANDE : des planches crème sur une plinthe verte, une RAMBARDE ROUGE, épaisse de trois pixels ; côté glace, des
+     panneaux peints aux couleurs des commerçants du marché (le pain, le poisson, la fleur… — ils parrainent la
+     patinoire) ; côté rue, une guirlande de sapin aux nœuds rouges. Les portillons ont leurs poteaux. Dessinée en
+     suivant le RECTANGLE ARRONDI au pixel (la même règle que la collision, `rinkInside`), face visible là où elle
+     regarde vers nous (au nord, sa face intérieure ; au sud, l'extérieure), rambarde seule sur les flancs.
+   · ⚠️ CUITE UNE FOIS, et DÉCOUPÉE PAR RANGÉE DE SOL : chaque morceau se trie avec les patineurs à la rangée où il
+     touche le sol — on passe devant la bande nord et derrière la bande sud, jamais au travers.
+   Pur (géométrie des constantes) : `render-patinoire` le regarde. */
+const RINK_ART = {
+  H: 11, TH: 3,
+  ice: [[170, 192, 212], [188, 207, 224], [205, 220, 234], [218, 230, 241], [230, 239, 247], [242, 247, 251]],
+  emblem: [150, 182, 214], face: [239, 232, 218], faceOut: [228, 220, 204], seam: [212, 203, 186], faceHi: [252, 249, 240],
+  kick: [47, 90, 70], kickHi: [64, 112, 88], rail: [181, 51, 46], railHi: [218, 96, 84], railLo: [124, 34, 31],
+  fir: [44, 92, 58], firHi: [70, 128, 82], bow: [196, 52, 46], post: [126, 92, 62], postHi: [160, 122, 86], snow: [244, 247, 251],
+};
+/* La distance SIGNÉE au bord de la glace (px monde, négative dedans) et la normale sortante — la même figure que `rinkInside`. */
+function rinkSD(cx, cy) {
+  const R = C.TOWN_RINK, T = SPR_T;
+  const X0 = R.x0 * T, X1 = (R.x1 + 1) * T, Y0 = R.y0 * T, Y1 = (R.y1 + 1) * T, r = R.r * T;
+  const px = cx - (X0 + X1) / 2, py = cy - (Y0 + Y1) / 2, hx = (X1 - X0) / 2 - r, hy = (Y1 - Y0) / 2 - r;
+  const qx = Math.abs(px) - hx, qy = Math.abs(py) - hy;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+const RINK_PICTO = [   // 5 × 4 : le pain, le poisson, la fleur, le fromage, la carotte, le pot (l'ordre de TOWN_STALL_TRADES)
+  ["01110", "11111", "11111", "01110"], ["01100", "11111", "11111", "01100"], ["01010", "00100", "01110", "00100"],
+  ["00011", "00111", "01111", "11111"], ["00110", "01100", "11000", "10000"], ["01110", "11011", "11111", "01110"],
+];
+const RINK_PICTO_RGB = [[214, 160, 92], [120, 156, 196], [214, 98, 150], [232, 196, 92], [222, 120, 54], [168, 108, 72]];
+/* La couleur d'un pixel de glace (px monde), ou null hors de la glace. */
+export function rinkIcePixel(wx, wy) {
+  const cx = wx + 0.5, cy = wy + 0.5, sd = rinkSD(cx, cy);
+  if (sd > 0) return null;
+  const T = SPR_T, R = C.TOWN_RINK, A = RINK_ART, dEdge = -sd;
+  let v = 0.55;
+  const n1 = townNoise(wx / T, wy / T, 2.6, 401), n2 = townNoise(wx / T, wy / T, 0.9, 402), n3 = townNoise(wx / T, wy / T, 4.1, 403);
+  v += 0.12 * n1 + 0.05 * n2;
+  if (n3 > 0.22) v -= 0.2 * Math.min(1, (n3 - 0.22) / 0.4);                       // la glace vive, où l'on voit le fond
+  const sh = Math.sin((wx + wy * 0.55) / 21) * Math.sin((wx - wy * 0.3) / 57);
+  if (sh > 0.74) v += 0.12 * (sh - 0.74) / 0.26;                                   // les lueurs obliques
+  const spray = 7 + 3 * townNoise(wx / T, wy / T, 0.7, 404);
+  if (dEdge < spray) v += 0.36 * Math.pow(1 - dEdge / spray, 1.5);                  // la neige de lames contre la bande
+  /* LE FLOCON PEINT SOUS LA GLACE : six bras de 2 px, deux paires de ramilles en V tournées vers le dehors sur chacun,
+     un hexagone au cœur — sous la glace, donc voilé par elle (mêlé, pas posé). Raccourci vertical de la vue (0,86). */
+  const X0 = R.x0 * T, X1 = (R.x1 + 1) * T, Y0 = R.y0 * T, Y1 = (R.y1 + 1) * T, RF = 3.3 * T;
+  const ex = cx - (X0 + X1) / 2, ey = (cy - (Y0 + Y1) / 2) / 0.86, er = Math.hypot(ex, ey);
+  let emb = 0;
+  if (er < RF + 2) {
+    const a6 = Math.round(Math.atan2(ey, ex) / (Math.PI / 3)) * (Math.PI / 3), ca = Math.cos(a6), sa = Math.sin(a6);
+    const along = ex * ca + ey * sa, perp = Math.abs(-ex * sa + ey * ca);
+    if (along > 0.95 * T && along < RF && perp < 1.1) emb = 1;
+    const tg = Math.tan(0.85);
+    for (const k of [0.5, 0.74]) {
+      const b0 = k * RF, len = (k < 0.6 ? 0.95 : 0.7) * T;
+      const u = along - b0, w = perp;
+      if (u > 0 && u < len * Math.cos(0.85) && Math.abs(w - u * tg) < 1.0) emb = 1;
+    }
+    const hx = Math.max(Math.abs(ex), Math.abs(ex * 0.5 + ey * 0.866), Math.abs(-ex * 0.5 + ey * 0.866));
+    if (Math.abs(hx - 0.72 * T) < 0.9) emb = 1;
+  }
+  // le reflet de la bande nord (sa face, puis sa rambarde), à l'envers, sur les 14 px sous elle
+  const nyN = (rinkSD(cx, cy + 1) - rinkSD(cx, cy - 1)) / 2;
+  let refl = null, reflA = 0;
+  if (nyN < -0.45 && dEdge < A.H + 3) {
+    const hgt = dEdge;
+    refl = hgt > A.H - 0.5 ? A.rail : hgt < 2 ? A.kick : A.face;
+    reflA = 0.34 * (1 - hgt / (A.H + 3)) * (-nyN);
+  }
+  // la rampe, tramée au bruit bleu
+  const BN = snowBlueNoise(), b = BN[(wy & 63) * 64 + (wx & 63)] / 256;
+  const f = Math.max(0, Math.min(A.ice.length - 1.001, v * (A.ice.length - 1)));
+  const i0 = Math.floor(f), tq = f - i0, c = (tq > b ? A.ice[i0 + 1] : A.ice[i0]).slice();
+  if (emb) for (let k = 0; k < 3; k++) c[k] = Math.round(c[k] * 0.55 + A.emblem[k] * 0.45);
+  if (refl) for (let k = 0; k < 3; k++) c[k] = Math.round(c[k] * (1 - reflA) + refl[k] * reflA);
+  return c;
+}
+const RINK_CACHE = { cells: new Map(), atlas: null, g: null, n: 0, rows: null, rowsSnow: null };
+export function drawRinkIceTile(ctx, x, y, px, py) {
+  const T = SPR_T, key = y * 4096 + x;
+  let cell = RINK_CACHE.cells.get(key);
+  if (!cell) {
+    const img = new Uint8ClampedArray(T * T * 4);
+    for (let ly = 0; ly < T; ly++) for (let lx = 0; lx < T; lx++) {
+      const c = rinkIcePixel(x * T + lx, y * T + ly);
+      if (!c) continue;
+      const o = (ly * T + lx) * 4;
+      img[o] = c[0]; img[o + 1] = c[1]; img[o + 2] = c[2]; img[o + 3] = 255;
+    }
+    if (!RINK_CACHE.atlas || RINK_CACHE.n >= (512 / T) * (512 / T)) {
+      const cv2 = document.createElement("canvas"); cv2.width = 512; cv2.height = 512;
+      RINK_CACHE.atlas = cv2; RINK_CACHE.g = cv2.getContext("2d"); RINK_CACHE.n = 0;
+    }
+    const n = RINK_CACHE.n++, cols = 512 / T, sx = (n % cols) * T, sy = Math.floor(n / cols) * T;
+    RINK_CACHE.g.putImageData(typeof ImageData !== "undefined" ? new ImageData(img, T, T) : { width: T, height: T, data: img }, sx, sy);
+    cell = { img: RINK_CACHE.atlas, sx, sy };
+    RINK_CACHE.cells.set(key, cell);
+  }
+  ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+}
+/* La bande, découpée par rangée de sol : [{ row, cv, ox, oy }] (px monde). `snowy` : la rambarde porte un liseré de neige. */
+export function rinkBoardRows(snowy) {
+  const key = snowy ? "rowsSnow" : "rows";
+  if (RINK_CACHE[key]) return RINK_CACHE[key];
+  const R = C.TOWN_RINK, T = SPR_T, A = RINK_ART, H = A.H, TH = A.TH;
+  const X0 = R.x0 * T, X1 = (R.x1 + 1) * T, Y0 = R.y0 * T, Y1 = (R.y1 + 1) * T, r = R.r * T;
+  const bx0 = X0 - 12, bw = X1 - X0 + 24, rowH = T + H + 14;
+  const rows = new Map();
+  const put = (row, x, y, c) => {
+    let b = rows.get(row);
+    if (!b) { b = { row, oy: row * T - H - 10, px: new Uint8ClampedArray(bw * rowH * 4) }; rows.set(row, b); }
+    const lx = Math.round(x) - bx0, ly = Math.round(y) - b.oy;
+    if (lx < 0 || ly < 0 || lx >= bw || ly >= rowH) return;
+    const o = (ly * bw + lx) * 4;
+    b.px[o] = c[0]; b.px[o + 1] = c[1]; b.px[o + 2] = c[2]; b.px[o + 3] = 255;
+  };
+  const shade = (c, k) => c.map((v) => Math.max(0, Math.min(255, Math.round(v * k))));
+  const gateGap = (x, y, nx, ny) => C.TOWN_RINK_GATES.some((g) => {
+    if (g.side === "n" && ny < -0.9 && Math.abs(y - Y0) < 1) return x >= g.a * T && x < (g.b + 1) * T;
+    if (g.side === "s" && ny > 0.9 && Math.abs(y - Y1) < 1) return x >= g.a * T && x < (g.b + 1) * T;
+    if (g.side === "e" && nx > 0.9 && Math.abs(x - X1) < 1) return y >= g.a * T && y < (g.b + 1) * T;
+    if (g.side === "w" && nx < -0.9 && Math.abs(x - X0) < 1) return y >= g.a * T && y < (g.b + 1) * T;
+    return false;
+  });
+  // le contour, en pas de 0,3 px : les quatre droites et les quatre quarts de cercle, dans le sens horaire depuis le nord-ouest
+  const segs = [];
+  const line = (ax, ay, bx, by, nx, ny) => segs.push({ kind: "l", ax, ay, bx, by, nx, ny, len: Math.hypot(bx - ax, by - ay) });
+  const arc = (cx, cy, a0, a1) => segs.push({ kind: "a", cx, cy, a0, a1, len: Math.abs(a1 - a0) * r });
+  line(X0 + r, Y0, X1 - r, Y0, 0, -1); arc(X1 - r, Y0 + r, -Math.PI / 2, 0);
+  line(X1, Y0 + r, X1, Y1 - r, 1, 0); arc(X1 - r, Y1 - r, 0, Math.PI / 2);
+  line(X1 - r, Y1, X0 + r, Y1, 0, 1); arc(X0 + r, Y1 - r, Math.PI / 2, Math.PI);
+  line(X0, Y1 - r, X0, Y0 + r, -1, 0); arc(X0 + r, Y0 + r, Math.PI, Math.PI * 1.5);
+  /* ⚠️ LES ÉCHANTILLONS D'ABORD, LE DESSIN ENSUITE, PAR COUCHES (faces, rambarde, neige, poteaux). Premier jet :
+     tout dessiné échantillon par échantillon — sur le flanc est, parcouru vers le bas, la neige posée sur la rambarde
+     par un échantillon recouvrait la rambarde des précédents : le flanc disparaissait (vu au banc). L'ordre de dessin
+     ne doit pas dépendre du sens du parcours. */
+  const samples = [], gateEnds = [], pieces = [];
+  let sAcc = 0, wasGap = false;
+  for (const sg of segs) {
+    const n = Math.max(2, Math.ceil(sg.len / 0.3));
+    for (let k = 0; k <= n; k++) {
+      const u = k / n, sArc = sAcc + u * sg.len;
+      let x, y, nx, ny;
+      if (sg.kind === "l") { x = sg.ax + (sg.bx - sg.ax) * u; y = sg.ay + (sg.by - sg.ay) * u; nx = sg.nx; ny = sg.ny; }
+      else { const a2 = sg.a0 + (sg.a1 - sg.a0) * u; nx = Math.cos(a2); ny = Math.sin(a2); x = sg.cx + nx * r; y = sg.cy + ny * r; }
+      const gap = gateGap(x, y, nx, ny);
+      if (gap !== wasGap) { gateEnds.push({ x, y, nx, ny }); wasGap = gap; if (!gap) pieces.push([]); }
+      if (gap) continue;
+      if (!pieces.length) pieces.push([]);
+      const pcL = pieces[pieces.length - 1];
+      if (!pcL.length || Math.hypot(pcL[pcL.length - 1].x - x, pcL[pcL.length - 1].y - y) >= 2) pcL.push({ x: x + nx * TH / 2, y: y + ny * TH / 2 });
+      const gy = y + ny * TH / 2;
+      samples.push({ x, y, nx, ny, sArc, line: sg.kind === "l", row: Math.floor(gy / T), lit: 0.93 + 0.07 * (-nx * 0.7 - ny * 0.7) });
+    }
+    sAcc += sg.len;
+  }
+  const raiseOf = (ny) => (ny < -0.15 ? Math.round(H * Math.min(1, -ny * 1.4)) : ny > 0.15 ? Math.round(H * Math.min(1, ny * 1.4)) : H);
+  // 1 — les faces : l'intérieure au nord, l'extérieure au sud ; sur les flancs, une bande crème côté glace (l'épaisseur)
+  for (const q of samples) {
+    const { x, y, nx, ny, sArc, row, lit } = q;
+    if (ny < -0.15) {
+      const fh = raiseOf(ny);
+      for (let h = 1; h <= fh; h++) {
+        let c = h <= 2 ? (h === 2 ? A.kickHi : A.kick) : h === fh ? A.faceHi : A.face;
+        if (h > 2 && h < fh && Math.floor(sArc) % 10 === 0) c = A.seam;
+        // un panneau peint tous les 72 px sur la droite du nord (les commerçants parrainent la patinoire)
+        if (q.line && ny < -0.9 && h >= 3 && h <= 8) {
+          const pp = ((sArc % 72) + 72) % 72;
+          if (pp >= 8 && pp < 24) {
+            const ti = Math.floor(sArc / 72) % RINK_PICTO.length, tr = C.TOWN_STALL_TRADES[ti];
+            const bg = [parseInt(tr.aw.slice(1, 3), 16), parseInt(tr.aw.slice(3, 5), 16), parseInt(tr.aw.slice(5, 7), 16)];
+            c = pp < 9 || pp >= 23 || h === 3 || h === 8 ? shade(bg, 0.72) : [246, 240, 228];
+            const px2 = Math.floor(pp - 13.5), py2 = 7 - h;
+            if (px2 >= 0 && px2 < 5 && py2 >= 0 && py2 < 4 && RINK_PICTO[ti][py2][px2] === "1") c = RINK_PICTO_RGB[ti];
+            else if (pp >= 9 && pp < 13) c = bg;
+          }
+        }
+        put(row, x, y - h, shade(c, lit));
+      }
+    } else if (ny > 0.15) {
+      const fh = raiseOf(ny), ox2 = x + nx * TH, oy2 = y + ny * TH;
+      for (let h = 0; h < fh; h++) {
+        let c = h <= 1 ? (h === 1 ? A.kickHi : A.kick) : h === fh - 1 ? A.faceHi : A.faceOut;
+        if (h > 1 && h < fh - 1 && Math.floor(sArc) % 10 === 0) c = A.seam;
+        // la guirlande de sapin, en festons de 48 px, et un nœud rouge à chaque attache
+        const ph = ((sArc % 48) + 48) % 48, swag = Math.round(fh - 3 - 3.2 * Math.sin(Math.PI * ph / 48));
+        if (h === swag || h === swag + 1) c = (Math.floor(sArc) + h) % 3 === 0 ? A.firHi : A.fir;
+        if (ph < 3 && h >= fh - 4 && h <= fh - 2) c = A.bow;
+        put(row, ox2, oy2 - h, shade(c, lit));
+      }
+    } else {
+      // un flanc : la face côté glace, vue de biais (2 px), plus claire à l'est (elle regarde la lumière)
+      for (let t = 1; t <= 2; t++) put(row, x - nx * t, y - H - 1 + (t - 1), shade(t === 1 ? A.faceHi : A.face, nx > 0 ? 1 : 0.9));
+    }
+  }
+  // 2 — la rambarde, en haut, sur toute l'épaisseur
+  for (const q of samples) {
+    const { x, y, nx, ny, row, lit } = q, raise = raiseOf(ny);
+    for (let t = 0; t <= TH; t += 0.5) {
+      const c = t < 0.75 ? A.railHi : t > TH - 0.75 ? A.railLo : A.rail;
+      put(row, x + nx * t, y + ny * t - raise - 1, shade(c, lit));
+      put(row, x + nx * t, y + ny * t - raise - 2, shade(c, lit * 0.94));
+    }
+  }
+  /* 3 — la neige SUR la rambarde : elle en devient le dessus (sa rangée haute), l'arête extérieure reste rouge. Posée
+     AU-DESSUS (premier jet), elle recouvrait la rambarde des échantillons voisins sur les flancs et dans les
+     arrondis : un semis de points rouges dans du blanc (vu au banc). Interrompue par endroits (le vent, une main). */
+  if (snowy) for (const q of samples) {
+    const { x, y, nx, ny, sArc, row } = q, raise = raiseOf(ny);
+    if (waterHash(Math.floor(sArc / 4), 977) % 13 === 0) continue;
+    for (let t = 0; t < TH - 0.75; t += 0.5) put(row, x + nx * t, y + ny * t - raise - 2, t < 0.75 ? A.snow : [232, 238, 246]);
+  }
+  // 4 — les poteaux des portillons, avec leur boule rouge
+  for (const e of gateEnds) {
+    const gy = e.y + e.ny * TH / 2, row = Math.floor(gy / T);
+    const ph = A.H + 6;
+    for (let h = 0; h < ph; h++) for (let w = -1; w <= 2; w++) put(row, e.x + w, e.y - h, w <= 0 ? A.postHi : A.post);
+    for (let w = -1; w <= 2; w++) put(row, e.x + w, e.y - ph, A.rail);
+    for (let w = 0; w <= 1; w++) put(row, e.x + w, e.y - ph - 1, A.railHi);
+    if (snowy) for (let w = -1; w <= 2; w++) put(row, e.x + w, e.y - ph - 1, A.snow);
+  }
+  const out = [];
+  for (const b of rows.values()) {
+    const cv2 = document.createElement("canvas"); cv2.width = bw; cv2.height = rowH;
+    cv2.getContext("2d").putImageData(typeof ImageData !== "undefined" ? new ImageData(b.px, bw, rowH) : { width: bw, height: rowH, data: b.px }, 0, 0);
+    out.push({ row: b.row, cv: cv2, ox: bx0, oy: b.oy });
+  }
+  out.sort((a, b) => a.row - b.row);
+  RINK_CACHE[key] = out;
+  RINK_CACHE.outline = pieces;
+  return out;
+}
+/* Le tracé de la bande au sol, en morceaux d'un seul tenant (entre deux portillons), pour son OMBRE PORTÉE
+   (`drawRinkBoardShadow`) : la bande découpée par rangée ne peut pas porter son ombre morceau par morceau — chaque
+   morceau croirait toucher le sol au bas de sa rangée, et l'ombre des flancs sortait en peigne (vu en jeu). */
+export function rinkBoardOutline() {
+  if (!RINK_CACHE.outline) rinkBoardRows(false);
+  return RINK_CACHE.outline;
+}
+/* UNE GUIRLANDE AU-DESSUS DE LA GLACE (`tw.rinkGarlands`) : un fil sombre qui pend (`sag`, une parabole) et une ampoule
+   tous les 7 px, accrochée sous lui — blanc chaud, une sur trois ambrée, une sur sept rouge ou verte (c'est l'hiver) ;
+   allumées (`lit` 0..1), elles scintillent à peine, chacune à sa phase. `out` reçoit les ampoules allumées (les verres
+   qui brillent dans la passe de lumière). En px du monde. */
+export function drawRinkGarland(ctx, g, ms, lit, out) {
+  /* ⚠️ DU VERRE COLORÉ, ET PAS DES AMPOULES CLAIRES : premier jet au banc, de jour, des ampoules crème éteintes sur une
+     glace pâle ne se voyaient pas — il restait trois fils noirs tendus au-dessus de la patinoire, des lignes électriques.
+     Des ampoules de couleur (rouge, vert, or, bleu, blanc) se lisent éteintes ; le fil est vert sombre, pas noir. */
+  const dx = g.x1 - g.x0, dy = g.y1 - g.y0, L = Math.hypot(dx, dy) || 1, n = Math.ceil(L * 1.4);
+  const at = (u) => [g.x0 + dx * u, g.y0 + dy * u + g.sag * 4 * u * (1 - u)];
+  ctx.fillStyle = "rgba(30,52,40,0.92)";
+  let lx = null, ly = null;
+  for (let i = 0; i <= n; i++) { const [x, y] = at(i / n), rx = Math.round(x), ry = Math.round(y); if (rx !== lx || ry !== ly) { ctx.fillRect(rx, ry, 1, 1); lx = rx; ly = ry; } }
+  const GLASS = [[198, 58, 52], [52, 142, 84], [226, 170, 58], [70, 120, 200], [236, 230, 214]];
+  const GLOW = [[255, 120, 100], [130, 240, 150], [255, 214, 120], [150, 190, 255], [255, 246, 214]];
+  let acc = 3, prev = at(0), bi = 0;
+  for (let i = 1; i < n; i++) {
+    const cur = at(i / n);
+    acc += Math.hypot(cur[0] - prev[0], cur[1] - prev[1]); prev = cur;
+    if (acc < 6) continue;
+    acc = 0; bi++;
+    const bx = Math.round(cur[0]), by = Math.round(cur[1]) + 1, ci = (g.k + bi) % GLASS.length;
+    ctx.fillStyle = "#2a3a30"; ctx.fillRect(bx, by - 1, 1, 1);                    // le culot
+    if (lit > 0.05) {
+      const a = Math.min(1, lit) * (0.82 + 0.18 * Math.sin(ms / 470 + g.k * 2.3 + bi * 1.9)), c = GLOW[ci];
+      ctx.fillStyle = `rgb(${GLASS[ci].join(",")})`; ctx.fillRect(bx, by, 1, 2);
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`; ctx.fillRect(bx, by, 1, 2);
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${(0.3 * a).toFixed(3)})`;
+      ctx.fillRect(bx - 1, by, 1, 2); ctx.fillRect(bx + 1, by, 1, 2); ctx.fillRect(bx, by + 2, 1, 1);
+      if (out) out.push({ x: bx, y: by });
+    } else {
+      const c = GLASS[ci];
+      ctx.fillStyle = `rgb(${c.join(",")})`; ctx.fillRect(bx, by, 1, 2);
+      ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillRect(bx, by, 1, 1);         // le reflet du jour sur le verre
+    }
+  }
+}
+/* L'ombre de la bande, dans le tampon des ombres du soleil (`sunShadowPass`) : pour chaque morceau, le polygone entre
+   son pied et son sommet projeté (`sh` : le cisaillement de `ombres.js`, `ox`/`oy` : le coin du tampon). */
+export function drawRinkBoardShadow(g, sh, ox, oy) {
+  const hgt = RINK_ART.H + 2;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = "#000";
+  for (const pc of rinkBoardOutline()) {
+    if (pc.length < 2) continue;
+    g.beginPath();
+    g.moveTo(pc[0].x - ox, pc[0].y - oy);
+    for (const q of pc) g.lineTo(q.x - ox, q.y - oy);
+    for (let i = pc.length - 1; i >= 0; i--) g.lineTo(pc[i].x + sh.sx * hgt - ox, pc[i].y + sh.sy * hgt - oy);
+    g.closePath(); g.fill();
+  }
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 431 — LES GUIRLANDES DE FANIONS, TENDUES D'UN ÉTAL À L'AUTRE (sorties de la boucle de rendu le 2026-10-05).
+   ╚══════════════════════════════════════════════════════════════════════════
+   Le POURQUOI de leur forme est dans la boucle de rendu (FermeGame.js, « LES GUIRLANDES DE FANIONS ») : deux mâts,
+   une corde montée FRANCHEMENT au-dessus des bâches (à hauteur de toile, elle hachait leurs rayures), un sinus qui pend.
+   ⚠️ SORTIES ICI pour qu'un banc les REGARDE (`render-marche-hiver`) : dans la closure, personne ne les voyait.
+   ⚠️⚠️ 2026-10-05 (nuit) — L'HIVER, LA MÊME CORDE PORTE DES AMPOULES (`o.bulbs`), une entre deux fanions, accrochées
+   SOUS la corde : le jour, du verre laiteux à culot sombre ; allumées (`o.lit` 0..1, avec les lanternes), un blanc
+   chaud, une sur quatre ambrée, qui scintillent à peine — chacune à sa phase, tirée de sa place : rien ne circule. Un
+   premier jet tendait un fil de plus sur le FAÎTAGE de chaque étal : c'était la hauteur que le zip 431 avait déjà
+   écartée. `o.out` reçoit { x, y } de chaque ampoule allumée (les verres qui brillent, `heads`). */
+export function drawStallBunting(ctx, ax, bx, topY, mastBot, k, o) {
+  const seg = 14, sag = 8;
+  const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
+  ctx.fillStyle = "#6a4726";
+  for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY, 2, mastBot - topY);
+  ctx.fillStyle = "#d8b45a";
+  for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY - 2, 2, 2);
+  const at = (t2) => [ax + (bx - ax) * t2, topY + Math.sin(Math.PI * t2) * sag];
+  ctx.strokeStyle = "rgba(80,66,44,0.85)"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let sg = 0; sg <= seg; sg++) { const [cx2, cy2] = at(sg / seg); if (sg === 0) ctx.moveTo(cx2, cy2); else ctx.lineTo(cx2, cy2); }
+  ctx.stroke();
+  for (let sg = 1; sg < seg; sg++) {
+    const [cx2, cy2] = at(sg / seg);
+    ctx.fillStyle = FLAGS[(k * 3 + sg) % FLAGS.length];
+    ctx.beginPath(); ctx.moveTo(cx2 - 2.5, cy2); ctx.lineTo(cx2 + 2.5, cy2); ctx.lineTo(cx2, cy2 + 6); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fillRect(cx2 - 2.5, cy2, 5, 1);
+  }
+  if (!o || !o.bulbs) return;
+  const lit = o.lit || 0, ms = o.ms || 0;
+  for (let sg = 0; sg < seg; sg++) {
+    const [px, py] = at((sg + 0.5) / seg), bx2 = Math.round(px), by2 = Math.round(py) + 1;
+    const amber = ((k + sg) & 3) === 0;
+    if (lit > 0.05) {
+      const a = Math.min(1, lit) * (0.84 + 0.16 * Math.sin(ms / 430 + k * 3.1 + sg * 1.7));
+      ctx.fillStyle = amber ? `rgba(255,190,96,${a.toFixed(3)})` : `rgba(255,244,206,${a.toFixed(3)})`;
+      ctx.fillRect(bx2, by2, 1, 2);
+      ctx.fillStyle = `rgba(255,226,160,${(0.3 * a).toFixed(3)})`;   // un pixel de halo autour
+      ctx.fillRect(bx2 - 1, by2, 1, 2); ctx.fillRect(bx2 + 1, by2, 1, 2); ctx.fillRect(bx2, by2 + 2, 1, 1);
+      if (lit < 1) { ctx.fillStyle = `rgba(214,208,192,${(1 - lit).toFixed(3)})`; ctx.fillRect(bx2, by2, 1, 2); }
+      if (o.out) o.out.push({ x: bx2, y: by2 });
+    } else {
+      ctx.fillStyle = "#e2ddd0"; ctx.fillRect(bx2, by2, 1, 2);
+      ctx.fillStyle = "#5f574e"; ctx.fillRect(bx2, by2 - 1, 1, 1);
+    }
+  }
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LA COURSE SUR LA PATINOIRE : CE QUI SE POSE SUR LA GLACE (`course.js`).
+   ╚══════════════════════════════════════════════════════════════════════════
+   Les couleurs des quatre couloirs (la grille, la mini-carte, l'écran de course) : rouge, bleu, vert, or. */
+export const RACE_COLORS = ["#e0483d", "#3f7fd0", "#46a35a", "#e2b23a"];
+/* Un plot (px monde, `x` l'axe, `y` le pied) : orange vif, une bande blanche réfléchissante, une semelle carrée sombre,
+   l'arête gauche éclairée. 7 × 9 px. */
+export function drawRaceCone(ctx, x, y) {
+  const cx = Math.round(x), by = Math.round(y);
+  ctx.fillStyle = "rgba(20,30,50,0.28)"; ctx.fillRect(cx - 3, by - 1, 7, 2);           // l'ombre de contact
+  ctx.fillStyle = "#3a2c26"; ctx.fillRect(cx - 3, by - 2, 7, 2);                         // la semelle
+  const rows = [[3, "#e8642a"], [3, "#f0782e"], [2, "#f4f0ea"], [2, "#f0782e"], [1, "#f58a3c"], [1, "#ffb070"]];
+  let yy = by - 3;
+  for (let k = 0; k < rows.length; k++) {
+    const w = 5 - Math.floor(k / 1.6), c = rows[k][1];
+    ctx.fillStyle = c; ctx.fillRect(cx - Math.floor(w / 2), yy, w, 1);
+    if (w > 1) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(cx - Math.floor(w / 2), yy, 1, 1); }
+    yy--;
+  }
+}
+/* La ligne de départ et d'arrivée (un damier de 2 px, deux colonnes, de l'îlot à la bande) et les quatre marques de la
+   grille (un trait de couleur et un petit chevron). `G` : { lineX, y0, y1, slots: [{ x, y }] } en px monde. */
+export function drawRaceMarks(ctx, G) {
+  const x = Math.round(G.lineX);
+  for (let y = Math.round(G.y0); y < G.y1; y += 2) {
+    const k = ((y - Math.round(G.y0)) >> 1) & 1;
+    ctx.fillStyle = k ? "#1c1e24" : "#f6f8fa"; ctx.fillRect(x, y, 2, 2);
+    ctx.fillStyle = k ? "#f6f8fa" : "#1c1e24"; ctx.fillRect(x + 2, y, 2, 2);
+  }
+  ctx.fillStyle = "rgba(200,40,40,0.55)"; ctx.fillRect(x - 3, Math.round(G.y0), 1, Math.round(G.y1 - G.y0));   // un filet rouge peint, juste avant
+  G.slots.forEach((sl, i) => {
+    const sx = Math.round(sl.x), sy = Math.round(sl.y);
+    ctx.fillStyle = RACE_COLORS[i % 4];
+    ctx.fillRect(sx - 6, sy, 12, 1); ctx.fillRect(sx + 6, sy - 2, 1, 5);
+    ctx.fillRect(sx + 2, sy - 2, 1, 1); ctx.fillRect(sx + 3, sy - 1, 1, 1); ctx.fillRect(sx + 2, sy + 1, 1, 1); ctx.fillRect(sx + 3, sy + 1, 1, 1);
+  });
+}
+/* Le podium des résultats, au milieu de l'îlot (`cx`, `by` : l'axe et le sol) : trois marches crème aux dessus or, argent et
+   bronze, la plus haute au centre, une coupe d'or dessus, et un fanion de la couleur de chaque podium. */
+export function drawRacePodium(ctx, cx, by, colors) {
+  const blocks = [[-15, 9, "#c0c6d0", 1], [-4, 15, "#e8c24a", 0], [7, 6, "#c98a52", 2]];
+  ctx.fillStyle = "rgba(20,30,50,0.3)"; ctx.fillRect(cx - 17, by - 1, 36, 3);
+  for (const [dx, h, top, rank] of blocks) {
+    const x0 = Math.round(cx + dx), y0 = by - h;
+    ctx.fillStyle = "#e9e1d0"; ctx.fillRect(x0, y0, 11, h);
+    ctx.fillStyle = "#cfc5b1"; ctx.fillRect(x0 + 9, y0, 2, h);
+    ctx.fillStyle = top; ctx.fillRect(x0, y0, 11, 2);
+    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(x0, y0, 11, 1);
+    // le numéro, en pixels (1, 2, 3)
+    ctx.fillStyle = "#6a5a44";
+    const nx = x0 + 4, ny = y0 + Math.max(3, Math.round(h / 2) - 2);
+    if (rank === 0) { ctx.fillRect(nx + 1, ny, 1, 5); ctx.fillRect(nx, ny + 1, 1, 1); }
+    else if (rank === 1) { ctx.fillRect(nx, ny, 3, 1); ctx.fillRect(nx + 2, ny + 1, 1, 1); ctx.fillRect(nx, ny + 2, 3, 1); ctx.fillRect(nx, ny + 3, 1, 1); ctx.fillRect(nx, ny + 4, 3, 1); }
+    else { ctx.fillRect(nx, ny, 3, 1); ctx.fillRect(nx + 2, ny + 1, 1, 3); ctx.fillRect(nx + 1, ny + 2, 1, 1); ctx.fillRect(nx, ny + 4, 3, 1); }
+    if (colors && colors[rank]) { ctx.fillStyle = "#5a4a3a"; ctx.fillRect(x0 + 1, y0 - 7, 1, 7); ctx.fillStyle = colors[rank]; ctx.fillRect(x0 + 2, y0 - 7, 4, 3); }
+  }
+  // la coupe, sur la plus haute marche
+  const tx = Math.round(cx + 1), ty = by - 15 - 1;
+  ctx.fillStyle = "#b8862c"; ctx.fillRect(tx - 1, ty - 1, 3, 1); ctx.fillRect(tx - 2, ty, 5, 1);
+  ctx.fillStyle = "#f2c94c"; ctx.fillRect(tx, ty - 3, 1, 2); ctx.fillRect(tx - 2, ty - 7, 5, 4); ctx.fillRect(tx - 3, ty - 7, 1, 2); ctx.fillRect(tx + 3, ty - 7, 1, 2);
+  ctx.fillStyle = "#fff0b0"; ctx.fillRect(tx - 1, ty - 6, 1, 2);
+}
+/* Les escarbilles d'un brasero (px du monde, `cx` : l'axe, `top` : le haut des braises) :
+   trois points qui montent en dérivant et s'éteignent, chacun sur sa période — une pure
+   fonction du temps et de la place. */
+export function drawBrazierSparks(ctx, cx, top, ms, seed) {
+  for (let i = 0; i < 4; i++) {
+    const per = 1100 + ((seed * 7 + i * 131) % 500);
+    const ph = (((ms + (seed * 977 + i * 311)) % per) + per) % per / per;
+    const y = top - 2 - ph * 20, x = cx + Math.sin(ph * 5.3 + i * 2.1 + seed) * (1.5 + ph * 3) + ph * 2;
+    const a = (1 - ph) * (ph < 0.08 ? ph / 0.08 : 1);
+    if (a < 0.05) continue;
+    ctx.fillStyle = ph < 0.4 ? `rgba(255,214,120,${a.toFixed(3)})` : `rgba(255,140,60,${(a * 0.85).toFixed(3)})`;
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+}
 export function drawTownRoadSpill(ctx, S, tw, x, y, px, py) {
   if (!S || !S.townRoad || !S.townRoad.kerbTone) return;
   const F = townRoadField(tw);
@@ -2800,7 +3363,7 @@ export function townSnowEnv(tw, S, waterAt) {
   const inSocle = (i) => { const x = i % tw.w, y = (i / tw.w) | 0; return x >= C.TOWN_MONUMENT.x && x < C.TOWN_MONUMENT.x + 2 && y >= C.TOWN_MONUMENT.y && y < C.TOWN_MONUMENT.y + 2; };
   const tallSnow = (i) => tall(i) && (!inFoot(i) || inSocle(i));
   const propTiles = new Set((tw.props || []).map((p) => p.y * tw.w + p.x));
-  const casterMemo = new Map(), shadowMemo = new Map();
+  const casterMemo = new Map(), shadowMemo = new Map(), roadMemo = new Map();
   const trees = [];
   for (let i = 0; i < tw.w * tw.h; i++) {
     const o = tw.objects[i];
@@ -2810,6 +3373,12 @@ export function townSnowEnv(tw, S, waterAt) {
   }
   return {
     waterAt,
+    /* 2026-10-05 (nuit) — la rue pavée à bord libre, AU PIXEL (`townRoadPixel`, la lecture du dessin). */
+    roadAt: (x, y, lx, ly) => townRoadPixel(tw, x, y, lx, ly, roadMemo),
+    /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver, au pixel (`townDuckPixel`, la lecture du dessin). */
+    duckAt: tw.duck ? (x, y, lx, ly) => townDuckPixel(tw, x, y, lx, ly) : null,
+    /* 2026-10-05 (nuit) — la glace de la patinoire, au pixel (`rinkSD`, la figure de la collision) : pas de neige dessus. */
+    rinkAt: tw.rink ? (wx, wy) => rinkSD(wx + 0.5, wy + 0.5) <= 0 : null,
     /* Le giron d'une marche : plus clair que la moyenne de son atlas. */
     stairTread: (x, y, lx, ly) => {
       const vert = townStairVertical(tw, x, y), At = vert ? stairV : stairH;
@@ -7281,8 +7850,98 @@ export function buildSprites() {
      ⚠️ Le retournement se fait PIXEL À PIXEL (`getImageData`), pas par
      `scale(-1, 1)` : le faux canevas des bancs ignore les transformations, et
      les bancs verraient un étal que le jeu ne dessine pas. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-10-05 (nuit) — LE BRASERO DU MARCHÉ D'HIVER : une corbeille de fer forgé sur
+     trois pieds, les braises qui rougeoient ENTRE les barreaux, et la flamme en quatre
+     images (le jeu les enchaîne à cadence FIXE : `floor(t × cadence)` avec une cadence
+     qui varie tire une image au hasard, §4). Les escarbilles et la lumière viennent du
+     rendu (`drawBrazierSparks`, la lampe « torch »). 18 × 26 px, posé par le bas.
+     ══════════════════════════════════════════════════════════════════════════ */
+  /* 2026-10-05 (nuit) — LE MÂT DE LA PATINOIRE (`TOWN_RINK_POLES`) : un fût de fonte vert sombre sur un socle, une crosse
+     qui porte une lanterne, et l'anneau où s'attache la guirlande (3 px sous le sommet, `RINK_POLE_H`). 14 × 46 px, posé
+     par le bas ; allumé, le verre est chaud (la lumière elle-même vient de la passe de lumière). */
+  function townRinkPoleSprite(lit) {
+    const W = 14, H = C.RINK_POLE_H + 2, cx = 7;
+    const [c, g] = cv(W, H);
+    const IRON = "#2a3a32", IRON_L = "#4a6356", IRON_D = "#1a2520";
+    P(g, cx - 2, H - 4, 5, 4, IRON_D); P(g, cx - 2, H - 4, 2, 3, IRON_L); P(g, cx - 3, H - 1, 7, 1, IRON_D);   // le socle
+    P(g, cx - 1, 6, 2, H - 9, IRON); P(g, cx - 1, 6, 1, H - 9, IRON_L);                                      // le fût
+    for (const y of [14, 26]) P(g, cx - 2, y, 4, 1, IRON_D);                                                  // les bagues
+    P(g, cx - 1, 1, 2, 5, IRON); P(g, cx - 2, 0, 4, 1, IRON_D);                                               // la tête
+    P(g, cx + 1, 5, 4, 1, IRON); P(g, cx + 4, 5, 1, 2, IRON);                                                 // la crosse
+    P(g, cx + 2, 7, 5, 6, IRON_D);                                                                            // la lanterne
+    P(g, cx + 3, 8, 3, 4, lit ? "#ffe3a0" : "#8aa0a8"); if (lit) P(g, cx + 3, 8, 1, 4, "#fff6d8");
+    P(g, cx + 2, 6, 5, 1, IRON);
+    P(g, cx - 2, 3, 1, 2, "#7a6a4a"); P(g, cx + 1, 3, 1, 2, "#7a6a4a");                                     // l'anneau de la guirlande
+    return c;
+  }
+  function townBrazierSprites() {
+    const W = 18, H = 26, cx = 9;
+    const IRON = "#2e2724", IRON_M = "#4a3f38", IRON_L = "#7c6a5b";
+    const frames = [];
+    // Les langues de flamme de chaque image : [axe x, hauteur, largeur] — fixées, pas tirées.
+    const TONGUES = [
+      [[6, 9, 3], [9, 12, 4], [12, 8, 3]],
+      [[6, 7, 3], [9, 13, 3], [11, 10, 3]],
+      [[7, 10, 3], [9, 11, 4], [12, 7, 2]],
+      [[6, 8, 2], [8, 12, 3], [11, 11, 4]],
+    ];
+    for (let f = 0; f < 4; f++) {
+      const [c, g] = cv(W, H);
+      const base = 12;   // le haut des braises (y)
+      /* LA DALLE : le brasero est posé sur le caillebotis, sur une pierre plate qui le protège (comme sur les vrais
+         marchés) — dessus clair et moucheté, tranche plus sombre devant. Ses bords sont arrondis d'un pixel. */
+      const SL = 20;
+      P(g, 2, SL, 14, 4, "#a29d93"); P(g, 1, SL + 1, 16, 2, "#a29d93");
+      P(g, 2, SL, 14, 1, "#bdb8ad"); P(g, 1, SL + 1, 1, 1, "#b3aea4");
+      for (const [sx2, sy2] of [[4, SL + 1], [9, SL + 2], [13, SL + 1], [6, SL + 3], [11, SL + 3]]) P(g, sx2, sy2, 1, 1, "#8c877e");
+      P(g, 2, SL + 4, 14, 1, "#6e6962"); P(g, 3, SL + 5, 12, 1, "#56524c");
+      P(g, 4, SL + 3, 10, 1, "rgba(40,30,24,0.35)");   // l'ombre du bol sur la dalle
+      // les pieds : deux devant, écartés, un derrière (plus sombre) — ils se posent sur la dalle
+      for (let y = 16; y <= SL + 2; y++) {
+        const t = (y - 16) / (SL + 2 - 16);
+        P(g, Math.round(5 - t * 2), y, 1, 1, IRON); P(g, Math.round(12 + t * 2), y, 1, 1, IRON);
+        if (y < SL + 1) P(g, cx, y, 1, 1, "#1f1a18");
+      }
+      P(g, 2, SL + 2, 2, 1, IRON_M); P(g, 14, SL + 2, 2, 1, IRON_M);
+      // la corbeille : un bol qui se resserre vers le bas, barreaux tous les deux pixels
+      const rows = [[3, 14], [3, 14], [4, 13], [4, 13], [5, 12], [6, 11]];
+      for (let r = 0; r < rows.length; r++) {
+        const y = base + r, [x0, x1] = rows[r];
+        for (let x = x0; x <= x1; x++) {
+          const slat = (x & 1) === 0 || x === x0 || x === x1;
+          if (slat) P(g, x, y, 1, 1, x === x0 ? IRON_L : IRON_M);
+          else {
+            // les braises vues entre les barreaux : plus chaudes en haut, et elles respirent d'une image à l'autre
+            const hot = (r < 2 ? 2 : r < 4 ? 1 : 0) + ((x + f) % 3 === 0 ? 1 : 0);
+            P(g, x, y, 1, 1, ["#7a1e0e", "#c2401a", "#ff7a26", "#ffb347"][Math.min(3, hot)]);
+          }
+        }
+      }
+      P(g, 2, base - 1, 14, 1, IRON_M); P(g, 2, base - 1, 6, 1, IRON_L);   // le rebord, éclairé à gauche
+      P(g, 3, base + rows.length, 10, 1, "#1d1816");                     // le fond, dans l'ombre
+      // le lit de braises, en dôme au-dessus du rebord
+      for (let x = 4; x <= 13; x++) {
+        const hgt = x === 4 || x === 13 ? 1 : x === 5 || x === 12 ? 2 : 3;
+        for (let k = 0; k < hgt; k++) P(g, x, base - 1 - k, 1, 1, k === hgt - 1 ? ((x + f) & 1 ? "#ffd76a" : "#ff9a3c") : "#e5561c");
+      }
+      // les flammes : rouge-orangé dehors, jaune au cœur, la pointe presque blanche
+      for (const [tx, th, tw] of TONGUES[f]) {
+        for (let k = 0; k < th; k++) {
+          const y = base - 3 - k, w = Math.max(1, Math.round(tw * (1 - k / th) + 0.4));
+          const x0 = Math.round(tx - w / 2 + Math.sin((k + f * 2) * 0.9) * 0.6);
+          const col = k > th - 3 ? "#fff3c4" : k > th * 0.5 ? "#ffd25a" : "#ff8a2a";
+          P(g, x0, y, w, 1, "#e5541e");
+          if (w > 1) P(g, x0 + (w > 2 ? 1 : 0), y, Math.max(1, w - 2), 1, col);
+          else P(g, x0, y, 1, 1, col);
+        }
+      }
+      frames.push(c);
+    }
+    return frames;
+  }
   function townStallSprite(variant, alt) {
-    const W = 52, H = 50;
+    const W = C.TOWN_STALL_SPRITE.w, H = C.TOWN_STALL_SPRITE.h;   // 2026-10-05 (nuit) : lues aussi par les guirlandes du marché d'hiver
     const [c, g] = cv(W, H);
     const tr = STALL_TRADES[((variant | 0) % STALL_TRADES.length + STALL_TRADES.length) % STALL_TRADES.length];
     const AW = tr.aw, AW_L = tr.awL;
@@ -21065,6 +21724,8 @@ house: house(),
     townStalls: STALL_TRADES.map((_, i) => townStallSprite(i)),
     townStallsAlt: STALL_TRADES.map((_, i) => townStallSprite(i, true)),   // 2026-09-25 : la seconde rangée — voir townStallSprite
     townMarketArch: townMarketArchSprite(),   // zip 431
+    townBrazier: townBrazierSprites(),        // 2026-10-05 (nuit) : le coin du feu du marché d'hiver (4 images de flamme)
+    townRinkPole: townRinkPoleSprite(false), townRinkPoleLit: townRinkPoleSprite(true),   // 2026-10-05 (nuit) : les mâts de la patinoire
     townFlowerCart: townFlowerCartSprite(),   // zip 431
     townBarrel: townBarrelSprite(),           // zip 431
     townSacks: townSackPileSprite(),          // zip 431

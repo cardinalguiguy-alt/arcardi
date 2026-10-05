@@ -1872,6 +1872,44 @@ banc cité par le routeur (84 références lues), égalité entre les titres de 
 (60 récits, 62 titres lus avec les deux phrases du préambule), `AGENTS.md` toujours un simple renvoi. **Falsifié le jour même** :
 un chemin cassé, un titre altéré, un récit sans titre, un noyau de 375 lignes — les quatre le font rougir.
 
+## `verify-ombres.mjs` — LE SOLEIL DES OMBRES PORTÉES (2026-10-05, 27 contrôles)
+
+Joue `components/ferme/ombres.js` sur une journée de chaque saison : pas d'ombre la nuit ; vers l'ouest le matin,
+vers l'est le soir ; à midi vers le bas, penchée au sud-est (la lumière PEINTE vient du nord-ouest) ; elle raccourcit
+jusqu'à midi puis s'allonge ; l'hiver plus longue que l'été ; bornée (`K_MAX`) ; le ciel couvert la pâlit, la pluie
+et la neige qui tombe l'éteignent ; aucune minute ne la fait sauter (glissement < 1 px pour 40 px de haut) ; la
+matrice de cisaillement pose bien un point à h px de haut. Il vérifie aussi que sa copie de `C.SUN_HOURS` est celle
+du ciel. **Falsifié** : `FALSIFY=lean` (midi sans pente) rougit quatre contrôles. ⚠️ Ce qu'il ne voit pas : le dessin
+des ombres (la passe `sunShadowPass` vit dans la closure de `FermeGame.js`) — il se juge en jeu.
+
+## `render-marche-hiver.mjs` — LE MARCHÉ D'HIVER DE LA PRAIRIE (2026-10-05, 3 contrôles)
+
+Peint le VRAI monde d'hiver (`E.townWinterWorld`) : sol, caillebotis, neige du jeu, étals, arche, brasero (flamme et
+escarbilles), lanternes, fanions et leurs ampoules (`A.drawStallBunting`, le dessin du jeu). Planches :
+`marche-hiver-<cm>cm.png` (de jour) et `marche-hiver-guirlandes.png` (gros plan de l'allée, ampoules allumées). Les
+décors sont posés à la main (bas-centre, triés) : ⚠️ le faux canevas n'honore pas `translate` — un mandataire décale
+les coordonnées — et ne remplit pas les triangles des fanions (en jeu, ils sont là). La structure (placements,
+accessibilité, vente, caillebotis d'un seul tenant) est tenue par `verify-vallee` (« le marché d'hiver »).
+
+## `verify-course.mjs` — LA COURSE DE LA PATINOIRE SE JOUE-T-ELLE ? (2026-10-05, 30 contrôles)
+
+Joue `components/ferme/course.js` avec la glissade de `patin.js` : la piste (l'îlot laisse 5,5 cases de couloir de chaque
+côté, la grille est sur la glace derrière la ligne, la boucle d'un couloir ne touche ni l'îlot ni la bande, 26 plots) ; le
+compte des tours (faire le tour compte, vingt allers-retours sur la ligne, la marche arrière et le demi-tour non) ; les
+résidents (même graine → même course au millième, tous arrivent, dans l'ordre, sur la glace, le plus lent tombe environ une
+course sur deux) ; un PATINEUR SIMULÉ à la ligne idéale situe les résidents (le plus fort battable mais à moins de 15 %, le
+plus lent à moins de 40 %, une course entre 20 et 50 s, la corde paie, viser trop court coûte) ; l'aspiration (dans le
+sillage seulement) ; le classement aux temps ; le fantôme (aller-retour au huitième de case). **Falsifié** : `FALSIFY=laps`
+(un passage de ligne compte toujours) rougit 8 contrôles. ⚠️ Ce qu'il ne voit pas : le réseau, l'écran (`CourseHud.js`), le
+dessin — la course à deux se joue avec `app/audit-duo` (docs/VERIFICATION.md §10).
+
+## `render-patinoire.mjs` — LA PATINOIRE DU CHAMP DE FOIRE (2026-10-05, 4 contrôles)
+
+Peint la glace, la bande et ses ombres depuis le VRAI monde d'hiver (`E.townWinterWorld`) : la glace suit le rectangle
+arrondi de la collision au pixel, chaque case de glace en porte en son centre, la bande est découpée une fois par rangée de
+sol, la neige lit la glace (`rinkAt`). Planches : `patinoire-<cm>cm.png`, `patinoire-bande.png`. ⚠️ Sans patineurs, ni
+lumière de nuit, ni course : ceux-là se jugent en jeu.
+
 ## `hook-bancs.sh` — LE FILET, ET IL N'EST PAS UN BANC
 
 ⚠️⚠️ **CE N'EST PAS UN BANC DE PLUS : C'EST CE QUI LANCE LES VINGT AUTRES.** Appelé par le HARNAIS

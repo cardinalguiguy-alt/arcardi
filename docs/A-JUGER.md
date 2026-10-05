@@ -23,9 +23,30 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Le 2026-10-05 (nuit)** : **l'essai « petits personnages » en ville** (menu dev, interrupteur LOCAL, éteint par défaut) — tout le monde à ×0,68, sa marche à
-  ×0,5 : ce qu'il a vu par accident au nord du tribunal. À juger : garder ? pour les résidents aussi ? au cran 2 (dézoom des monuments) le perso tombe à
-  ~16 px d'écran. Si oui, le vrai chantier : cadence des pas, portées d'interaction, bancs, et un dessin natif plutôt qu'un `ctx.scale`.
+- **Le 2026-10-05 (nuit, fin ter)** : **la course de la patinoire et le contre-la-montre** — privatiser au chalet (40 or), grille de 30 s,
+  toujours quatre au départ (des résidents complètent), 5 tours autour de l'îlot de plots, aspiration, chute contre la bande au-dessus de
+  6,4 cases/s ; l'écran de course (compte à rebours, tours, chrono, place, mini-carte, classement en direct, résultats, podium) ; le
+  contre-la-montre seul contre le fantôme du record. Vu en jeu seul ET à deux (mêmes résultats au centième). À juger : la difficulté des
+  résidents — ⚠️ le plus fort (24,55 s) n'est qu'à 0,2 % de la ligne idéale du banc (24,50 s) : il faut une course presque parfaite
+  pour le battre (le pilote automatique du test, maladroit, met ~41 s) ; à desserrer ? —, 5 tours (≈ 25-40 s : court ?), le prix,
+  le seuil de chute, la lisibilité de l'écran sur un portable étroit.
+- **Le 2026-10-05 (nuit)** : **l'essai « petits personnages » en ville** (menu dev, interrupteur LOCAL, éteint par défaut) — jugé une première fois : marche
+  ×0,5 « parfaite », taille ×0,68 « un peu trop petite » → **×0,8** (même nuit). À rejuger à ×0,8 ; puis : garder ? pour les résidents aussi ? Si oui, le vrai
+  chantier : cadence des pas, portées d'interaction, bancs, et un dessin natif plutôt qu'un `ctx.scale`.
+- **Le 2026-10-05 (nuit, fin)** : **la patinoire** (le lieu) — la glace (voiles, flocon peint, reflet de la bande), la bande (crème,
+  rambarde rouge, panneaux des commerçants, guirlande de sapin), six mâts et trois guirlandes colorées, le chalet à l'est. À juger : de
+  jour et de nuit ; le portillon sans patins (1,1 s d'insistance) et la CHUTE qui suit — c'est la blessure du lac (15 min, retour à la
+  maison) : trop dur pour une patinoire de place ? Planche : `tools/out/patinoire-*.png`.
+- **Le 2026-10-05 (nuit, fin)** : **le marché d'hiver dans la prairie** — la place (arche entre deux tilleuls, caillebotis jusqu'à
+  l'escalier ouest, deux rangées, coin du feu), les ampoules sur la corde des fanions, le brasero, les lanternes. Vu en jeu de jour et de
+  nuit. À juger : la place elle-même, le potier qui hiverne (9 étals), la bascule instantanée au changement de saison. Planches :
+  `tools/out/marche-hiver-*.png`.
+- **Le 2026-10-05 (nuit, fin)** : **les ombres portées du soleil** (ville et ferme) — direction et longueur selon l'heure et la saison,
+  force selon le ciel. À juger : la force (0,30), la longueur d'hiver (×1,6 à midi : un soleil stylisé à 32°), la pente de midi (sud-est), la
+  teinte (bleu de ciel assombri). Pas d'ombre aux haies, clôtures, fanions.
+- **Le 2026-10-05 (nuit)** : **la neige au bord des rues pavées** — la rue lue au pixel (fini l'escalier de cases et les carrés verts), les ornières
+  parallèles qui suivent la courbe, la lisière qui recule par anses contre la bordure (1 à 10 px). Vu en jeu sous 12 cm (rue de l'ouest) et au banc à la
+  fonte (`render-neige biais|nord`, `FONTE=1`). À juger en vraie fonte : la largeur des anses ; la lisière se voit aussi sous neige épaisse (sel, éclaboussures).
 - **Le 2026-10-05 (soir)** : **les lapins de Valley Town** — l'échelle est TRANCHÉE (la nuit même : « à la taille des pigeons », redessinés, assis 7 px) ; la tête de face (ovale, yeux sur
   les côtés), le « fluffy » (contour teinté + touches claires), les 4 robes, les trajets (ondulation, rafales de bonds, pauses), le nombre (10), les jardins
   (14 % des créneaux de l'aube et du crépuscule), la fuite en zigzag, le lapin hardi. Planche : `tools/out/lapins-planche.png`. Pas vus : la nuit, sous la neige

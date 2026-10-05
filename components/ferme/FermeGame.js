@@ -73,6 +73,9 @@ import { loadBitmap, peekBitmap } from "./bitmapAssets";
 const tallGrassBitmap = (variant) => loadBitmap(`/town/${variant}.png`);
 import * as PF from "./pixelFont";
 import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
+import * as OMB from "./ombres";    // 2026-10-05 (nuit) — les ombres portées du soleil, qui tournent et s'allongent avec l'heure
+import * as CO from "./course";     // 2026-10-05 (nuit) — la course de vitesse sur la patinoire (piste, tours, résidents-coureurs, fantôme)
+import CourseHud from "./CourseHud"; // 2026-10-05 (nuit) — l'écran de course (compte à rebours, tours, chrono, mini-carte, résultats)
 import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
 import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
 import * as FART from "./fauneArt"; // 2026-09-26 (phase 5) — ses dessins au pixel (carpes, goélands en vol, ronds, sillages)
@@ -208,6 +211,23 @@ function composeMonumentGlow(key, glowImg, mip, tmin, day) {
    des vitres allumées, en fractions de l'image : découpe dans l'image NATIVE du
    calque (le repère qu'exige un `drawImage` à neuf arguments, §4), pose en px
    écran. La fonction rend ces morceaux (`glowParts`) pour la lumière. */
+/* 2026-10-05 (nuit) — LE RELEVÉ DES BITMAPS POSÉS (ombres portées) : la passe des ombres du soleil (`drawTownFrame`)
+   projette au sol chaque bâtiment peint, et c'est CE dessin qui sait où il l'a posé — à l'écran, au pixel près, avec
+   l'altitude de sa case. Il le note ici (`BITMAP_LOG.fn`, posé par la ville le temps de son image) ; la passe suivante
+   s'en sert. ⚠️ Pas de recopie de la géométrie des monuments (le tribunal décale façade et parvis, l'église son
+   ancrage) : une seconde écriture divergerait au premier réglage (§4). `glowOpts.foot` : le pied du MUR (y monde),
+   quand l'image porte sous lui un trottoir ou un jardin peints — qui ne se dressent pas, donc ne portent pas d'ombre. */
+const BITMAP_LOG = { fn: null };
+/* Le tampon des ombres portées (à la résolution de l'ART : une ombre crénelée comme le reste du décor) et les
+   bâtiments relevés à l'image précédente (`BITMAP_LOG`), en coordonnées du MONDE. Un objet de MODULE, pas un ref :
+   aucun hook de plus (l'ordre des hooks est ce par quoi le harnais retrouve les siens). */
+const SUN_SHADOW = { buf: null, bitmaps: new Map() };
+/* 2026-10-05 (nuit) — l'insistance au portillon de la patinoire (`rinkGateHold`) : le temps poussé, le dernier message.
+   LOCAL, et de module (aucun hook de plus). */
+const RINK_INSIST = { t: 0, toast: 0 };
+/* 2026-10-05 (nuit) — L'ÎLOT DE PLOTS DE LA COURSE EST SOLIDE tant qu'une course est ouverte (attente ou course) : on ne
+   coupe pas par le milieu. Un drapeau de MODULE, posé à chaque image par la boucle (`blockedTown` le lit). */
+const RINK_RACE = { island: false };
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
@@ -219,6 +239,10 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const dw = exact ? mip.w : SB.disp * SB.grow * zoom, dh = exact ? mip.h : SB.dispH * SB.grow * zoom;
   const left = exact ? Math.round(sx - mip.w / 2) : sx - dw / 2;
   const top = exact ? Math.round(sy) - mip.h : sy - dh;
+  if (BITMAP_LOG.fn && img) {
+    const foot = glowOpts && glowOpts.foot != null ? M.d * glowOpts.foot + M.f : sy;   // à l'écran
+    BITMAP_LOG.fn(SB, cxW, byW, img, left, top, dw, dh, foot);
+  }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = !exact;   // transitoire seulement — voir la note
@@ -614,9 +638,21 @@ function getEvilWorldCached(E2, day) {
 // Valley Town (zip 234): same module-level cache pattern as the evil world —
 // fixed seed, generated once per page load, shared by every remount.
 let townWorldModuleCache = null;
+/* ⚠️⚠️ 2026-10-05 (nuit) — LA CARTE DE LA VILLE DÉPEND DE LA SAISON : l'hiver, le monde dérivé
+   `E.townWinterWorld` (le marché hiverne dans la prairie — voir `TOWN_WINTER_MARKET`). UNE seule porte
+   pour les deux : tout ce qui demandait la carte la demande ici, et chaque cache indexé par son
+   identité (la navigation, les arrêts, la neige, les oiseaux…) se reconstruit seul au changement.
+   La saison est relue au plus toutes les 500 ms (`seasonOf` n'est pas gratuit, et cette porte est
+   appelée à chaque image) ; elle se DÉDUIT de l'heure et de la saison forcée partagée — rien ne circule. */
+const TOWN_SEASON_MEMO = { at: -1e12, winter: false };
+function townWinterNow(E2) {
+  const t = Date.now();
+  if (t - TOWN_SEASON_MEMO.at > 500 || t < TOWN_SEASON_MEMO.at) { TOWN_SEASON_MEMO.at = t; TOWN_SEASON_MEMO.winter = E2.seasonOf().key === "winter"; }
+  return TOWN_SEASON_MEMO.winter;
+}
 function getTownWorldCached(E2) {
   if (!townWorldModuleCache) townWorldModuleCache = E2.generateTownWorld();
-  return townWorldModuleCache;
+  return townWinterNow(E2) ? E2.townWinterWorld(townWorldModuleCache) : townWorldModuleCache;
 }
 // Zip 426 : l'intérieur du tribunal, MÊME motif de cache. Il est purement
 // déterministe (aucune graine, voir generateCourtWorld) : deux joueurs y voient
@@ -1572,7 +1608,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const evilWorldRef = useRef(null);
   // Valley Town (zip 234) : carte locale de CE joueur, comme evilWorldRef —
   // mais le zone "town" est MULTIJOUEUR (positions publiees normalement).
-  const townWorldRef = useRef(null);
+  /* 2026-10-05 (nuit) — PLUS UN REF : une LECTURE de la porte `getTownWorldCached`, toujours celle de la
+     saison. Les trente-quatre `townWorldRef.current || (townWorldRef.current = …)` gardent leur forme ; une
+     écriture est ignorée (la carte ne se pose pas, elle se déduit). Un `useState` à la place du `useRef` :
+     même nombre de hooks, donc même ordre (le harnais retrouve ses refs par leur forme, voir audit-tmp). */
+  const [townWorldRef] = useState(() => ({ get current() { return getTownWorldCached(E); }, set current(v) { /* déduite, jamais posée */ } }));
   /* Zip 426 — L'INTÉRIEUR DU TRIBUNAL. Même statut que townWorldRef : une carte
      locale, multijoueur, jamais persistée. ⚠️ ET LE NIVEAU N'EST PAS ICI : il
      se déduit de `y` (courtFloorOf), donc il n'y a rien à stocker ni à
@@ -2071,6 +2111,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
   const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, star: Q.newStar() });
+  /* 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE, CE QUI EST LOCAL (`course.js`). La session vit dans l'état partagé
+     (`sharedRef.current.rink`, arbitrée par l'hôte) ; ici, ce que CE client mesure : ses horloges (datées à la RÉCEPTION
+     des durées que l'hôte envoie, §3), son compteur de tours, son chrono, son fantôme, les courses des résidents (tirées de
+     la graine), et — chez l'hôte seulement — les échéances de la session. Déclaré APRÈS `sharedRef` : les refs d'avant
+     gardent leur rang (le harnais les retrouve par lui). */
+  const rinkLocalRef = useRef({ sid: null, goAt: 0, lobbyEnd: 0, placed: false, tracker: null, laps: 0, prog: 0, finished: false, finishMs: null,
+    lapAt: [], ghost: [], bots: null, botsSid: null, others: new Map(), lapFlashAt: 0, resultsOpen: false, host: { lobbyUntil: 0, raceUntil: 0, doneUntil: 0 } });
+  /* L'écran de course lit sa vue par une fonction STABLE (son `useEffect` ne repart pas à chaque rendu du jeu). */
+  const raceVMRef = useRef(null);
+  const [raceVMGet] = useState(() => () => (raceVMRef.current ? raceVMRef.current() : null));
   const invRef = useRef(null);
   // AUDIT 2026-10 (FIX-004) — l'état affiché de l'interrupteur du dallage civique haute résolution (menu dev, local).
   const [civicHdUi, setCivicHdUi] = useState(() => HD.civicHD.on);
@@ -2965,6 +3015,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // 2026-09-16 : repousse des buissons taillés — même chemin que townChop
         // (426)/wardrobe (427) : un champ de plus dans le JSON, aucune migration.
         bushTrim: (saved && saved.bushTrim) || {},
+        rinkRec: (saved && saved.rinkRec) || null, rink: null,   // 2026-10-05 (nuit) : les records de la patinoire (la session, elle, ne survit pas)
         /* 2026-10-05 — LES BONSHOMMES DE NEIGE (`bonhomme.js`) : un champ de plus dans le JSON
            de `ferme_saves`, comme `townChop`. AUCUNE MIGRATION. `snowRoll` (ce que chacun
            pousse) repart vide : une boule qu'on roulait au moment de la sauvegarde est perdue. */
@@ -3273,6 +3324,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
+      rinkRec: payload.rinkRec || null, rink: payload.rink || null,   // 2026-10-05 (nuit) : la patinoire
       snowmen: BN.normalizeSnowmen(payload.snowmen), snowRoll: payload.snowRoll || {},   // 2026-10-05
       wardrobe: payload.wardrobe || {},  // zip 427
       star: Q.migrateStar(payload.star), // zip 444
@@ -3521,7 +3573,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     ch.on("broadcast", { event: "pos" }, ({ payload }) => {
       if (isHost && farmersRef.current[payload.id]) { farmersRef.current[payload.id].x = payload.x; farmersRef.current[payload.id].y = payload.y; }
       if (payload.id === me.id) return;
+      /* 2026-10-05 (nuit) — un `pos` d'un joueur que je ne connaissais pas (arrivée, ou retrouvailles
+         après un balayage mutuel, voir le gestionnaire `ping`) reçoit le mien en retour : sans ça, un
+         joueur immobile resterait invisible pour lui — et un hôte immobile, muet. Borné : chacun ne répond
+         qu'à un INCONNU, et l'est au plus une fois — trois `pos` pour des retrouvailles (mesuré au relais), un
+         de plus par pair à l'arrivée d'un joueur. */
+      const knewIt = playersRef.current.has(payload.id);
       ensureRemote(payload);
+      if (!knewIt) announceMe();
       const r = playersRef.current.get(payload.id);
       // ----------------------------------------------------------------
       // Zip 365 — VITESSE REÇUE, PLUS DEVINÉE.
@@ -3634,6 +3693,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Volontairement PAS de ensureRemote ici : un ping seul ne porte ni nom
       // ni apparence. Un joueur inconnu sera inscrit proprement par son
       // prochain `pos` ou `join`, avec toutes ses données.
+      /* ⚠️⚠️ 2026-10-05 (nuit) — « SON PROCHAIN `pos` » N'ARRIVAIT JAMAIS QUAND LES DEUX S'ÉTAIENT
+         BALAYÉS L'UN L'AUTRE. Un hôte dont le portable dort plus d'une minute : l'invité le retire
+         au bout du TTL, et l'hôte, au réveil, retire l'invité (son `Date.now` a sauté). Chacun a
+         alors une liste vide, donc AUCUNE audience : `sendPos` et `hostSend` se taisent (c'est
+         leur garde de quota), les pings continuent de passer… et ne réinscrivent personne. Le
+         salon restait coupé en deux, l'invité jouant seul sans jamais voir un `apply`, jusqu'au
+         rechargement — vu en essayant la course à deux (le harnais avance l'horloge). On répond
+         donc à un ping INCONNU en annonçant sa position, hors garde d'audience : un message par
+         ping (donc au plus un toutes les 20 s), et rien du tout en régime normal. Le `pos` qui
+         répond fait l'autre moitié (voir `announceMe` dans le gestionnaire `pos`). */
+      else announceMe();
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -3901,6 +3971,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
       bushTrim: s.bushTrim || {},
+      rinkRec: s.rinkRec || null, rink: s.rink || null,   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
       // 2026-10-05 : les bonshommes de neige, par le même chemin (et ce que chacun pousse, pour un invité qui arrive).
       snowmen: s.snowmen || [], snowRoll: s.snowRoll || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
@@ -4090,7 +4161,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        défaut que le 426 s'est juré de ne plus commettre, et il est d'autant plus
        vicieux ici que le joueur vient de cliquer sur « vendre ».
        ══════════════════════════════════════════════════════════════════════ */
-    if (E.isProduceSale(req) && !E.atMarket({ px, py, pz: req.pz })) {
+    if (E.isProduceSale(req) && !E.atMarket({ px, py, pz: req.pz }, getTownWorldCached(E))) {   // 2026-10-05 : l'hiver, dans la prairie
       hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "farMarket" } } });
       return;
     }
@@ -5738,6 +5809,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now());
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: C.SKATES_RENT_PRICE };
+    } else if (req.kind === "rinkBook" || req.kind === "rinkJoin" || req.kind === "rinkLeave" || req.kind === "rinkGo" || req.kind === "rinkFinish") {
+      /* 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE (`hostRinkReq`) : l'hôte tient la session, rien d'autre. */
+      hostRinkReq(req, f, s, out);
     } else if (req.kind === "iceFall") {
       /* 2026-10-04 — LA CHUTE SUR LA GLACE SANS PATINS. Calque exact de « starBurn » :
          la glissade se joue chez le joueur (sa position, sa glace — une pure fonction
@@ -5829,7 +5903,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          l'or arrive, le stock diminue chez l'hôte, et l'invité continue de voir
          ses vieilles gemmes jusqu'à la prochaine sauvegarde. C'est exactement le
          genre de défaut que seule une session à deux révèle (§13). */
-      const r = E.resolveTownSell(f, req, s.day || 1, s);
+      const r = E.resolveTownSell(f, req, s.day || 1, s, getTownWorldCached(E));   // 2026-10-05 : le marché de la saison
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.gemsChanged) out.gems = s.gems;
@@ -9154,6 +9228,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.fx) for (const f of p.fx) spawnFx(f);
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
+    if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
+    if (p.rink !== undefined) rinkApply(p.rink || null, p.rinkT || null);   // 2026-10-05 (nuit) — la session de course
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     // Zip 366 : plus personne n'émet `rabbits` (simulation locale, voir
@@ -9380,6 +9456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "snowTooBig") return L.snowTooBigToast;
     if (key && key.startsWith("snow_")) return L.snowRefuse(key.slice(5));
     if (key === "skatesBought") return L.skatesBoughtToast(n | 0, C.SKATES_RENT_MS / 60000);
+    if (key && key.startsWith("rink") && typeof L.rinkToast === "function") return L.rinkToast(key, CO.COURSE.PRICE);   // 2026-10-05 (nuit) : la course de la patinoire
     if (key === "skates_have") return L.skatesHaveToast;
     if (key === "skates_closed") return L.skatesClosedToast;
     if (key === "skates_far") return L.skatesFarToast;
@@ -10281,7 +10358,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const active = starPlayerEngaged() ? "a" : "i";
     return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + active;
   }
-  function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  /* ⚠️ 2026-10-05 (nuit) — `pubMe` lit `meRef.current` sans garde : appelé avant que le joueur existe
+     (un `join` reçu pendant le chargement), il levait une TypeError dans le gestionnaire réseau. Sans
+     personnage, il n'y a rien à publier. */
+  function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (!_m) return; lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  /* Ma position, HORS garde d'audience (ni liste de joueurs ni onglet visible) : seulement pour se faire
+     connaître d'un joueur qui m'ignore (voir les gestionnaires `ping` et `pos`). */
+  function announceMe() { const _m = meRef.current; if (!channelReadyRef.current || !joinedRef.current || !_m) return; lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
   // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
   /* ⚠️⚠️ ZIP 428 — L'AOI SUIT LE DÉZOOM, ET L'OUBLIER AURAIT ANNULÉ LE DÉZOOM.
      Ce rayon dit « au-delà de quelle distance je cesse de diffuser / d'attendre
@@ -11805,6 +11888,238 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!boatReady()) { pushToast(L.boatNotReady); return true; }
     sendReq({ kind: "board" });
     return true;
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE : CE QUE TIENT L'HÔTE (`course.js`).
+     ╚══════════════════════════════════════════════════════════════════════
+     Une SESSION dans l'état partagé (`s.rink`) : qui l'a réservée, qui court (quatre au plus), l'état (`lobby` →
+     `race` → `done`), la graine des résidents-coureurs, les arrivées, les résultats. Ce qui circule (§3) : une requête
+     par geste (réserver, rejoindre, quitter, partir, arriver), et à chaque changement UN `apply` qui porte la session
+     et, quand il y en a une, une DURÉE (`rinkT` : ce qui reste d'attente, le départ dans…) — datée à la réception par
+     chacun, jamais une horloge comparée à une autre. Le chrono de chacun se mesure chez lui, depuis SON départ, et
+     n'arrive qu'en durée : le classement est juste à 300 ms de latence. Les échéances (fin de l'attente, course trop
+     longue, résultats affichés) sont des durées LOCALES à l'hôte (`rinkLocalRef.host`), jamais diffusées.
+     ⚠️ La privatisation coûte `PRICE` à la caisse commune, rendue si le propriétaire annule pendant l'attente. */
+  function hostRinkReq(req, f, s, out) {
+    const K = CO.COURSE, loc = rinkLocalRef.current, tw = getTownWorldCached(E), rk = s.rink, nowW = Date.now();
+    const fx = C.footX(f.x || 0), fy = C.footY(f.y || 0), R = C.TOWN_RINK;
+    const near = (m) => fx >= R.x0 - m && fx <= R.x1 + 1 + m && fy >= R.y0 - m && fy <= R.y1 + 1 + m;
+    const hasSk = E.skatesActive(f.inv, nowW);
+    const no = (key) => { out.toast = { id: f.id, key }; };
+    const lobbyLeft = () => Math.max(0, loc.host.lobbyUntil - performance.now());
+    if (req.kind === "rinkBook") {
+      const mode = req.mode === "tt" ? "tt" : "race";
+      if (!tw.rink) return no("rinkClosed");
+      if (rk && rk.state !== "done") return no("rinkBusy");
+      if (!hasSk) return no("rinkNeedSkates");
+      if (E.townSkateChaletDist(tw, fx, fy) > C.TOWN_SKATE_CHALET_REACH + 1.5 && !near(2)) return no("rinkFar");
+      if ((s.money | 0) < K.PRICE) return no("rinkNoGold");
+      s.money -= K.PRICE; out.state = shareState();
+      s.rinkSeq = (s.rinkSeq | 0) + 1;
+      s.rink = { sid: s.rinkSeq, mode, owner: f.id, ownerName: f.name || "?", ent: [{ id: f.id, name: f.name || "?" }], state: "lobby", seed: 0, bots: [], lanes: {}, fin: {}, res: null };
+      loc.host.ghosts = new Map();
+      dirtyRef.current = true;
+      if (mode === "tt") hostRinkStart(s, out);
+      else { loc.host.lobbyUntil = performance.now() + K.LOBBY_MS; out.rink = s.rink; out.rinkT = { lobbyLeft: K.LOBBY_MS }; }
+      out.toast = { id: f.id, key: mode === "tt" ? "rinkTtBooked" : "rinkBooked" };
+      return;
+    }
+    if (!rk) return;
+    if (req.kind === "rinkJoin") {
+      if (rk.state !== "lobby" || rk.mode !== "race") return no("rinkNotOpen");
+      if (rk.ent.some((e) => e.id === f.id)) return;
+      if (rk.ent.length >= 4) return no("rinkFull");
+      if (!hasSk) return no("rinkNeedSkates");
+      if (!near(6)) return no("rinkFar");
+      rk.ent.push({ id: f.id, name: f.name || "?" });
+      out.rink = rk; out.rinkT = { lobbyLeft: lobbyLeft() };
+      return;
+    }
+    if (req.kind === "rinkLeave") {
+      if (rk.state !== "lobby" || !rk.ent.some((e) => e.id === f.id)) return;
+      if (f.id === rk.owner) { s.money += K.PRICE; out.state = shareState(); s.rink = null; out.rink = false; out.toast = { id: f.id, key: "rinkCancelled" }; dirtyRef.current = true; return; }
+      rk.ent = rk.ent.filter((e) => e.id !== f.id);
+      out.rink = rk; out.rinkT = { lobbyLeft: lobbyLeft() };
+      return;
+    }
+    if (req.kind === "rinkGo") {
+      if (rk.state === "lobby" && f.id === rk.owner) hostRinkStart(s, out);
+      return;
+    }
+    if (req.kind === "rinkFinish") {
+      if (rk.state !== "race" || !rk.ent.some((e) => e.id === f.id) || rk.fin[f.id] != null) return;
+      const ms = Math.round(+req.ms);
+      if (!(ms >= 6000 && ms <= K.MAX_MS + K.COUNTDOWN_MS)) return;
+      rk.fin[f.id] = ms;
+      if (rk.mode === "tt" && typeof req.ghost === "string" && req.ghost.length < 4000) (loc.host.ghosts || (loc.host.ghosts = new Map())).set(f.id, req.ghost);
+      if (rk.ent.every((e) => rk.fin[e.id] != null)) hostRinkDone(s, out);
+      else out.rink = rk;
+    }
+  }
+  /* Le départ : les couloirs (les joueurs d'abord, dans l'ordre d'inscription), les résidents qui complètent à quatre
+     (une course de vitesse ; le contre-la-montre se court seul, contre le fantôme du record), la graine, le compte à
+     rebours. Les résidents se tirent de la graine parmi les habitants (jamais deux fois le même). */
+  function hostRinkStart(s, out) {
+    const K = CO.COURSE, rk = s.rink, loc = rinkLocalRef.current;
+    rk.seed = (Math.random() * 1e9) | 0;
+    rk.lanes = {}; rk.ent.forEach((e, i) => { rk.lanes[e.id] = i; });
+    rk.bots = [];
+    if (rk.mode === "race") {
+      const order = [1, 2, 0];   // le moyen, le fort, puis le plus lent
+      const pool = C.VISITOR_ROSTER.filter((r) => r && r.rid != null && r.name);
+      const used = new Set();
+      for (let k = rk.ent.length, j = 0; k < 4; k++, j++) {
+        let pi = (rk.seed + j * 7919) % pool.length, guard = 0;
+        while (used.has(pi) && guard++ < pool.length) pi = (pi + 1) % pool.length;
+        used.add(pi);
+        const r = pool[pi];
+        rk.bots.push({ bi: order[j % 3], lane: k, rid: r.rid, name: r.name, gender: r.gender, outfit: r.outfit, overalls: !!r.overalls, cap: !!r.cap, look: r.look || null });
+      }
+    }
+    rk.state = "race"; rk.fin = {}; rk.res = null; rk.newRec = [];
+    loc.host.raceUntil = performance.now() + K.COUNTDOWN_MS + K.MAX_MS;
+    out.rink = rk; out.rinkT = { startIn: K.COUNTDOWN_MS };
+    dirtyRef.current = true;
+  }
+  /* L'arrivée de tous (ou la course trop longue) : les temps des résidents se TIRENT de leur graine (la même course que
+     chacun a vue), le classement aux chronos, les records (cinq meilleurs par épreuve ; le fantôme du meilleur
+     contre-la-montre). */
+  function hostRinkDone(s, out) {
+    const K = CO.COURSE, rk = s.rink, loc = rinkLocalRef.current;
+    const entries = rk.ent.map((e) => ({ id: e.id, name: e.name, ms: rk.fin[e.id] != null ? rk.fin[e.id] : null, bot: false, lane: rk.lanes[e.id] }));
+    for (const b of rk.bots) entries.push({ id: "bot" + b.rid, name: b.name, ms: CO.botRun(K.BOTS[b.bi], b.lane, rk.seed + b.lane * 101).finishMs, bot: true, lane: b.lane });
+    rk.res = CO.ranking(entries);
+    rk.state = "done";
+    const rec = s.rinkRec || (s.rinkRec = { race: [], tt: [], ttGhost: null });
+    const list = rk.mode === "tt" ? (rec.tt || (rec.tt = [])) : (rec.race || (rec.race = []));
+    rk.newRec = [];
+    for (const e of rk.res) {
+      if (e.bot || e.ms == null) continue;
+      if (!list.length || e.ms < list[0].ms) rk.newRec.push(e.id);
+      list.push({ name: e.name, ms: e.ms });
+    }
+    list.sort((a, b) => a.ms - b.ms); list.splice(5);
+    if (rk.mode === "tt" && rk.newRec.length) {
+      const id = rk.newRec[0], e = rk.res.find((q) => q.id === id), g = loc.host.ghosts && loc.host.ghosts.get(id);
+      if (e && g) rec.ttGhost = { name: e.name, ms: e.ms, g };
+    }
+    loc.host.doneUntil = performance.now() + K.DONE_MS;
+    out.rink = rk; out.rinkRec = rec;
+    dirtyRef.current = true;
+  }
+  /* Les échéances de la session, chez l'hôte, à chaque image : la fin de l'attente part toute seule, une course trop
+     longue se clôt (les non-arrivés en dernier), les résultats s'effacent. */
+  function hostRinkTick() {
+    const s = sharedRef.current, rk = s.rink, loc = rinkLocalRef.current;
+    if (!rk) return;
+    const nowP = performance.now();
+    let out = null;
+    if (rk.state === "lobby" && loc.host.lobbyUntil && nowP > loc.host.lobbyUntil) { out = {}; hostRinkStart(s, out); }
+    else if (rk.state === "race" && loc.host.raceUntil && nowP > loc.host.raceUntil) { out = {}; hostRinkDone(s, out); }
+    else if (rk.state === "done" && loc.host.doneUntil && nowP > loc.host.doneUntil) { s.rink = null; out = { rink: false }; }
+    else if (!loc.host.lobbyUntil && !loc.host.raceUntil && !loc.host.doneUntil) { s.rink = null; out = { rink: false }; }   // une session héritée (rechargement) : on la ferme
+    if (out) hostSend({ type: "broadcast", event: "apply", payload: out });
+  }
+  /* CHEZ CHACUN (l'hôte compris, par son propre `apply`) : la session reçue, et les horloges DATÉES À LA RÉCEPTION. */
+  function rinkApply(rk, T) {
+    const s = sharedRef.current, loc = rinkLocalRef.current, prev = s.rink, nowP = performance.now();
+    s.rink = rk;
+    if (!rk) { loc.sid = null; return; }
+    const reset = () => { loc.placed = false; loc.tracker = null; loc.finished = false; loc.finishMs = null; loc.laps = 0; loc.prog = 0; loc.lapAt = []; loc.ghost = []; loc.others = new Map(); loc.lapFlashAt = 0; };
+    if (loc.sid !== rk.sid) { loc.sid = rk.sid; reset(); loc.bots = null; loc.botsSid = null; loc.resultsOpen = false; }
+    if (T && T.lobbyLeft != null) loc.lobbyEnd = nowP + T.lobbyLeft;
+    if (T && T.startIn != null) { loc.goAt = nowP + T.startIn; reset(); }
+    /* ⚠️ PAS « l'état d'avant n'était pas fini » : chez l'hôte, la session est modifiée EN PLACE avant son propre `apply`
+       (`hostRinkDone`), donc l'état d'avant est déjà « done » — le tableau ne s'ouvrait jamais chez lui (vu en jeu). On
+       retient la dernière session dont on a ouvert les résultats. */
+    void prev;
+    if (rk.state === "done" && loc.doneSid !== rk.sid) { loc.doneSid = rk.sid; loc.resultsOpen = true; }
+  }
+  /* Les résidents-coureurs de la session, calculés UNE fois (la graine) : [{ b, run }]. */
+  function rinkBotsNow() {
+    const rk = sharedRef.current.rink, loc = rinkLocalRef.current;
+    if (!rk || !rk.bots || !rk.bots.length || rk.state === "lobby") return [];
+    if (loc.botsSid !== rk.sid + ":" + rk.seed) {
+      loc.botsSid = rk.sid + ":" + rk.seed;
+      loc.bots = rk.bots.map((b) => ({ b, run: CO.botRun(CO.COURSE.BOTS[b.bi], b.lane, rk.seed + b.lane * 101) }));
+    }
+    return loc.bots || [];
+  }
+  /* Suis-je inscrit à la session en cours ? Et le temps de course (ms depuis MON départ, négatif pendant le compte). */
+  function rinkMine() {
+    const rk = sharedRef.current.rink, me = meRef.current;
+    return !!(rk && me && rk.ent && rk.ent.some((e) => e.id === me.id));
+  }
+  function rinkRaceMs() { return performance.now() - rinkLocalRef.current.goAt; }
+  /* Les résidents-coureurs, là où ils sont maintenant (semelle, cases). */
+  function rinkBotPos() {
+    const out = [], tR = rinkRaceMs();
+    for (const q of rinkBotsNow()) { const p = CO.botAt(q.run, tR); if (p) out.push({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, tumble: p.tumble, done: p.done, fin: q.run.finishMs, b: q.b }); }
+    return out;
+  }
+  /* LA VUE DE L'ÉCRAN DE COURSE (`CourseHud`, qui la lit à ~20 images/s) : rien n'y est calculé deux fois — le
+     classement en direct vient de la passe de dessin (`rinkLocalRef.live`), les tours et le chrono du pas du coureur. */
+  function raceVM() {
+    const rk = sharedRef.current.rink, me = meRef.current, loc = rinkLocalRef.current, tw = townWorldRef.current;
+    if (!rk || !me || (me.zone || "farm") !== "town" || !tw || !tw.rink || loc.sid !== rk.sid) return null;
+    const K = CO.COURSE, nowP = performance.now(), mine = rinkMine(), R = C.TOWN_RINK;
+    const fx = C.footX(me.x), fy = C.footY(me.y);
+    const near = fx >= R.x0 - 6 && fx <= R.x1 + 7 && fy >= R.y0 - 6 && fy <= R.y1 + 7;
+    const hasSkates = E.skatesActive(invRef.current, Date.now());
+    const vm = {
+      mode: rk.mode, state: rk.state, owner: rk.ownerName, isOwner: rk.owner === me.id, mine, laps: K.LAPS,
+      ent: rk.ent.map((e) => ({ name: e.name, me: e.id === me.id })), lobbyLeft: Math.max(0, loc.lobbyEnd - nowP),
+      hasSkates, near, full: rk.ent.length >= 4, canJoin: hasSkates && near && rk.ent.length < 4,
+    };
+    const rec = sharedRef.current.rinkRec;
+    vm.recList = rk.mode === "tt" ? (rec && rec.tt) || [] : (rec && rec.race) || [];
+    vm.record = vm.recList[0] || null;
+    if (rk.state === "race") {
+      const tR = nowP - loc.goAt;
+      vm.count = tR < 0 ? Math.ceil(-tR / 1000) : (tR < 900 ? 0 : null);
+      vm.chrono = loc.finished ? loc.finishMs : Math.max(0, tR);
+      vm.lap = Math.min(K.LAPS, loc.laps + 1); vm.finished = loc.finished;
+      vm.lastLap = loc.laps === K.LAPS - 1 && !loc.finished;
+      vm.lapFlash = loc.lapAt.length > 0 && nowP - loc.lapFlashAt < 1700;
+      vm.lapTimes = loc.lapAt.map((t, i) => t - (i ? loc.lapAt[i - 1] : 0));
+      vm.draft = loc.draft || 0;
+      const live = loc.live || [];
+      const mi = live.findIndex((e) => e.me);
+      vm.rank = mi >= 0 ? mi + 1 : null; vm.of = live.length || rk.ent.length + rk.bots.length;
+      vm.live = live.map((e) => ({ name: e.name, lane: e.lane, me: e.me, bot: e.bot }));
+      // la mini-carte : le rectangle de la glace ramené à [0, 1], l'îlot, la ligne, chacun
+      const X0 = R.x0, Y0 = R.y0, Wd = R.x1 + 1 - R.x0, Hd = R.y1 + 1 - R.y0, I = K.ISLAND;
+      const u = (x) => (x - X0) / Wd, v = (y) => (y - Y0) / Hd;
+      const dots = [];
+      for (const bp of rinkBotPos()) dots.push({ u: u(bp.x), v: v(bp.y), lane: bp.b.lane });
+      for (const e of rk.ent) {
+        if (e.id === me.id) continue;
+        const p = playersRef.current.get(e.id);
+        if (p && (p.zone || "farm") === "town") dots.push({ u: u(C.footX(p.x)), v: v(C.footY(p.y)), lane: rk.lanes[e.id] | 0 });
+      }
+      if (loc.ghostRec && rk.mode === "tt" && tR >= 0) { const gp = CO.ghostAt(loc.ghostRec, tR); if (gp) dots.push({ u: u(gp.x), v: v(gp.y), lane: 0, ghost: true }); }
+      dots.push({ u: u(fx), v: v(fy), lane: rk.lanes[me.id] | 0, me: true });
+      vm.map = { r: R.r / Wd, island: { x0: u(K.CX - I.hx), x1: u(K.CX + I.hx), y0: v(K.CY - I.hy), y1: v(K.CY + I.hy), r: I.r / Wd },
+        line: { x: u(CO.startX()), y0: v(K.CY + I.hy), y1: v(R.y1 + 1) }, dots };
+    }
+    if (rk.state === "done" && rk.res) {
+      vm.results = rk.res.map((e) => ({ ...e, me: e.id === me.id }));
+      vm.newRec = (rk.newRec || []).includes(me.id);
+      vm.showResults = loc.resultsOpen && (mine || near);
+    }
+    return vm;
+  }
+  raceVMRef.current = raceVM;
+  /* Les AUTRES coureurs (joueurs inscrits, en ville, et résidents), pour l'aspiration et le classement. */
+  function rinkOthersPos() {
+    const rk = sharedRef.current.rink, me = meRef.current, out = rinkBotPos();
+    if (!rk) return out;
+    for (const e of rk.ent) {
+      if (me && e.id === me.id) continue;
+      const p = playersRef.current.get(e.id);
+      if (p && (p.zone || "farm") === "town") out.push({ x: C.footX(p.x), y: C.footY(p.y), id: e.id });
+    }
+    return out;
   }
   /* Le poste d'amarrage et la disponibilité : DEUX prédicats déjà existants, et
      pas un champ de plus. Le bateau est là quand il est fini et qu'Eduardo ne
@@ -16526,7 +16841,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              emprise est bloquante, et arriver à l'intérieur d'un bâtiment
              coincerait le joueur — la même précaution que DEV_BRIDGE_OFFSET. */
           if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
-          else if (dk === "townMarket") { m.x = C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2; m.y = C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2; } // zip 426
+          else if (dk === "townMarket") {   // zip 426 ; 2026-10-05 : l'hiver, l'allée du marché de la prairie (le centre du rectangle y tombe sur un étal)
+            if (getTownWorldCached(E).winter) { m.x = C.TOWN_WINTER_MARKET_AX; m.y = C.TOWN_WINTER_MARKET_AXIS; }
+            else { m.x = C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2; m.y = C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2; }
+          }
           else if (dk === "townLake") { m.x = C.TOWN_PIER.x + C.TOWN_PIER.w / 2; m.y = C.TOWN_LAKE.y - C.TOWN_QUAY_H - 1; }
           /* ⚠️ 2026-08-31 — LA PASSE. On se pose sur la BERGE, jamais dans
              l'eau, et la rangée se LIT sur la carte (première case non-eau en
@@ -16825,6 +17143,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        un nom retourné au fond de l'eau serait un nom de plus. */
     let ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
     let reflecting = false;
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ 2026-10-05 (nuit) — LA PASSE DES OMBRES PORTÉES DU SOLEIL (`ombres.js`), COMMUNE AUX DEUX CARTES.
+       ╚═══════════════════════════════════════════════════════════════════════
+       Le soleil de l'instant (l'heure, les bornes du jour de la saison, le ciel) donne un CISAILLEMENT ; chaque
+       chose debout (`baseOf(d)` rend sa ligne de sol en y monde, ou null : elle ne porte pas d'ombre) est rejouée
+       par lui dans un tampon à la résolution de l'art, avec `reflecting` levé — le contrat de la passe des reflets :
+       pas de nom, de bulle, d'escarbille, de dessin au pixel d'écran —, et le tampon devient UNE silhouette posée
+       une fois sur le sol. `bitmaps` : des images posées à l'image d'avant (les bâtiments peints de la ville).
+       Rend l'ombre du moment (ou null) pour qui voudrait la lire. */
+    function sunShadowPass(drawsL, baseOf, season, bitmaps, extra) {   // `extra(g, sh, ox, oy)` : des ombres dessinées à part (la bande de la patinoire)
+      const hrS = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+      const [riseS, setS] = WX.sunHoursOfTag(season);
+      const shS = OMB.sunShadow(hrS, riseS, setS, season, wxFrame());
+      if (!shS || shS.a <= 0.01) return null;
+      const M0 = ctx.getTransform(), zS = M0.a;
+      const vx0 = Math.floor(-M0.e / zS) - 2, vy0 = Math.floor(-M0.f / M0.d) - 2;
+      const bw = Math.ceil(canvas.width / zS) + 4, bh = Math.ceil(canvas.height / M0.d) + 4;
+      let sb = SUN_SHADOW.buf;
+      if (!sb || sb.width < bw || sb.height < bh) { sb = document.createElement("canvas"); sb.width = bw; sb.height = bh; SUN_SHADOW.buf = sb; }
+      const g = sb.getContext("2d");
+      g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
+      g.clearRect(0, 0, bw, bh); g.imageSmoothingEnabled = false;
+      const savedCtx = ctx;
+      reflecting = true;
+      try {
+        for (const d of drawsL) {
+          const base = baseOf(d);
+          if (base == null) continue;
+          g.setTransform(...OMB.shearMatrix(shS, base, vx0, vy0));
+          ctx = g;
+          try { d.fn(); } catch (e) { /* une ombre en moins, jamais une image en moins */ }
+        }
+      } finally { ctx = savedCtx; reflecting = false; }
+      if (bitmaps) {
+        const reach = 260;   // px monde : un bâtiment hors de l'écran peut y jeter son ombre
+        for (const b of bitmaps.values()) {
+          if (b.x + b.w < vx0 - reach || b.x > vx0 + bw + reach || b.foot < vy0 - reach || b.y > vy0 + bh + reach) continue;
+          const hFoot = Math.min(b.h, b.foot - b.y);
+          if (hFoot <= 1) continue;
+          g.setTransform(...OMB.shearMatrix(shS, b.foot, vx0, vy0));
+          const iw = b.img.naturalWidth || b.img.width, ih = b.img.naturalHeight || b.img.height;
+          try { g.drawImage(b.img, 0, 0, iw, ih * hFoot / b.h, b.x, b.y, b.w, hFoot); } catch (e) { /* image pas prête */ }
+        }
+      }
+      if (extra) { try { extra(g, shS, vx0, vy0); } catch (e) { /* une ombre en moins */ } }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = "source-in";
+      g.fillStyle = `rgb(${OMB.OMBRE.RGB.join(",")})`; g.fillRect(0, 0, bw, bh);
+      g.globalCompositeOperation = "source-over";
+      ctx.save(); ctx.globalAlpha = shS.a; ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sb, 0, 0, bw, bh, vx0, vy0, bw, bh);
+      ctx.restore();
+      return shS;
+    }
     const T = C.TILE;
 
     function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; ctx.imageSmoothingEnabled = false; }
@@ -17151,6 +17523,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
+      if (isHost) hostRinkTick();   // 2026-10-05 (nuit) : les échéances de la course de la patinoire
       if (isHost) updateWolves(dt);
       updateRabbits(dt); // zip 366 : plus réservé à l'hôte — chaque client simule SES lapins, décoratifs et non diffusés (motif canard)
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
@@ -17399,7 +17772,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const Wsn = WsnF;
         const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
         const sunSn = Math.min(1, NG.sunAt(hr, fSnowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost: frF.sun, frostShade: frF.shade, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05 });
+        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost: frF.sun, frostShade: frF.shade, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 });   // castLight : voir `sunShadowPass`
         fSnowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
         /* Les cratères de la quête sont chauds (leur chaleur ne descend jamais sous
            0,12 sur la ferme, voir leur dessin plus bas) : ils font fondre la neige
@@ -17838,7 +18211,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.restore();
       }
 
-      draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => {
+      draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, cb: (C.HOUSE.y + C.HOUSE.h) * T - 8, fn: () => {   // `cb` (2026-10-05) : le pied du mur, pour l'ombre du soleil
         // Maison à niveaux (2026-07) : sprite selon le niveau ; pendant les
         // travaux, marteau + barre de progression au-dessus du toit.
         const hh = sharedRef.current.house || { level: 1, upgradeUntil: 0 };
@@ -17857,7 +18230,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         drawPaintedGrounding(ctx, C.HOUSE.x * T + hSpan[0], C.HOUSE.x * T + hSpan[1], houseShadowGy, C.HOUSE.h * T * 0.6);
         ctx.drawImage(img, C.HOUSE.x * T, houseGroundY - 96);
         if (fSnowF) farmRoofSnow(fSnowPk, img, C.HOUSE.x * T, houseGroundY - 96);   // 2026-09-29 : la neige du toit
-        if (hh.upgradeUntil > Date.now()) {
+        if (hh.upgradeUntil > Date.now() && !reflecting) {   // (pas de barre de travaux dans l'ombre portée)
           const pal = C.HOUSE_LEVELS[hh.level - 1];
           const total = pal ? pal.durationMs : 1;
           const frac = Math.max(0, Math.min(1, 1 - (hh.upgradeUntil - Date.now()) / total));
@@ -17868,14 +18241,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillText("🔨", bx + barW / 2, by - 4);
         }
       } });
-      draws.push({ y: (C.SHOP.y + 1) * T, fn: () => {
+      draws.push({ y: (C.SHOP.y + 1) * T, cb: (C.SHOP.y + 1) * T, fn: () => {
         const gy = (C.SHOP.y + 1) * T, cx = C.SHOP.x * T - 4 + sprites.shop.width / 2;
         drawBuildingShadowConnected(ctx, cx, gy, sprites.shop.width / 2);
         ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, gy - 28);
         if (fSnowF) farmRoofSnow(fSnowPk, sprites.shop, C.SHOP.x * T - 4, gy - 28);   // 2026-09-29
         drawBuildingFooting(ctx, cx, gy, sprites.shop.width / 2);
       } });
-      draws.push({ y: (C.BIN.y + 1) * T, fn: () => {
+      draws.push({ y: (C.BIN.y + 1) * T, cb: (C.BIN.y + 1) * T, fn: () => {
         const gy = (C.BIN.y + 1) * T, cx = C.BIN.x * T - 2 + sprites.bin.width / 2;
         drawBuildingShadow(ctx, cx, gy, sprites.bin.width / 2);
         ctx.drawImage(sprites.bin, C.BIN.x * T - 2, gy - 18);
@@ -17974,9 +18347,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* 2026-09-29 — la neige dans ses branches : la charge du manteau (`tl` pour le
              chêne, `tc` pour le pin, qui la garde plus longtemps), décalée par arbre. */
           const load = fSnowF ? (o === C.O_TREE2 ? fSnowPk.tc : fSnowPk.tl) : 0, jit = (NG.h32(x, y, 7) % 100) / 100;
-          draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(img, x * T - 8, (y + 1) * T - 48); if (load > 0.02) farmTreeSnow(img, load, jit, x * T - 8, (y + 1) * T - 48); } });
+          draws.push({ y: (y + 1) * T, cb: (y + 1) * T - 1, fn: () => { ctx.drawImage(img, x * T - 8, (y + 1) * T - 48); if (load > 0.02) farmTreeSnow(img, load, jit, x * T - 8, (y + 1) * T - 48); } });
         }
-        else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30); if (fSnowF) farmPropSnow(fSnowF, sprites.well, x, y, x * T - 4, (y + 1) * T - 30); } });
+        else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, cb: (y + 1) * T - 1, fn: () => { ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30); if (fSnowF) farmPropSnow(fSnowF, sprites.well, x, y, x * T - 4, (y + 1) * T - 30); } });
         else if (o === C.O_LAMP) {
           const readyAt = w.objHp.get(idxOf(x, y));
           const ready = E.buildReady(readyAt, epochNow);
@@ -18030,7 +18403,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (ready) {
             // Aucun effet de jeu actif pour l'instant (contre les oiseaux,
             // pas encore implémentés) : sprite simplement affiché plein.
-            draws.push({ y: (y + 1) * T, fn: () => { ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.scarecrow, x, y, x * T, (y + 1) * T - 32); } });
+            draws.push({ y: (y + 1) * T, cb: (y + 1) * T - 1, fn: () => { ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32); if (fSnowF) farmPropSnow(fSnowF, sprites.scarecrow, x, y, x * T, (y + 1) * T - 32); } });
           } else {
             // Chantier en cours (10s réelles) : même traitement visuel que le
             // lampadaire (sprite assombri + jauge + compte à rebours mm:ss).
@@ -18417,7 +18790,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Station building (anchored by its BOTTOM edge: the zip 232 sprite
         // is taller than the footprint because of the gabled roof) + the
         // interactive ad board.
-        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => {
+        draws.push({ y: (C.STATION.y + C.STATION.h) * T, cb: (C.STATION.y + C.STATION.h) * T, fn: () => {
           const gy = (C.STATION.y + C.STATION.h) * T, cx = C.STATION.x * T + sprites.station.width / 2;
           drawBuildingShadow(ctx, cx, gy, sprites.station.width / 2);
           ctx.drawImage(sprites.station, C.STATION.x * T, gy - sprites.station.height);
@@ -18636,7 +19009,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, cb: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -18712,10 +19085,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           let hx, hy;
           if (isHost) { hx = ha.x; hy = ha.y; }
           else { const hp = smoothNpc("harald", ha.x, ha.y, dt, true, !!ha.moving, (cx, cy) => canStand(w, cx, cy)); hx = hp.x; hy = hp.y; }
-          draws.push({ y: (hy + 1) * T, fn: () => drawCharacter({ id: "harald", name: "Harald", x: hx, y: hy, dir: ha.dir || 0, moving: !!ha.moving, animT: ha.animT || 0, gender: "m", outfit: 6, overalls: true, cap: true }, false) });
+          draws.push({ y: (hy + 1) * T, cb: (hy + 1) * T, fn: () => drawCharacter({ id: "harald", name: "Harald", x: hx, y: hy, dir: ha.dir || 0, moving: !!ha.moving, animT: ha.animT || 0, gender: "m", outfit: 6, overalls: true, cap: true }, false) });
         }
       }
-      if (!m.sleeping) { draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) }); draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) }); }
+      if (!m.sleeping) { draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) }); draws.push({ y: (m.y + 1) * T, cb: (m.y + 1) * T, fn: () => drawSelf(m) }); }
       /* ZIP 444 — l'étoile qui suit, à la ferme. ⚠️ Elle est mise en FILE, un
          demi-pixel derrière moi : elle me suit, donc elle passe derrière moi
          quand je descends et devant quand je monte, comme n'importe quel
@@ -18833,7 +19206,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       // 2026-09-13 : les autres joueurs couchent eux aussi les buissons de la ferme (leur vitesse circule déjà, §3).
       snowDrawEntries("farm", (wy, x, fn) => draws.push({ y: wy, fn }));   // 2026-10-05 — les bonshommes de neige et les boules
-      for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { farmBushPress(w, p.x, p.y, p.vx || 0, p.vy || 0); draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
+      for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { farmBushPress(w, p.x, p.y, p.vx || 0, p.vy || 0); draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, cb: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 479 — LE PLAT SE VOIT DANS LES MAINS DE L'AUTRE, ET IL LE FAUT.
          ╚══════════════════════════════════════════════════════════════════════
@@ -19097,7 +19470,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (ro.look === "carla") {
             const lp2 = leoFollow(rx, ry, resMoving);
             const lAnimT2 = resMoving ? (performance.now() / 110) : 0;
-            draws.push({ y: (lp2.y + 1) * T - 1, fn: () => drawCharacter({ id: "leo", name: L.leoName, x: lp2.x, y: lp2.y, dir: lp2.dir, moving: lp2.moving, animT: lAnimT2, gender: "m", outfit: 0, overalls: false, cap: false, look: "leo" }, false) });
+            draws.push({ y: (lp2.y + 1) * T - 1, cb: (lp2.y + 1) * T, fn: () => drawCharacter({ id: "leo", name: L.leoName, x: lp2.x, y: lp2.y, dir: lp2.dir, moving: lp2.moving, animT: lAnimT2, gender: "m", outfit: 0, overalls: false, cap: false, look: "leo" }, false) });
           }
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
@@ -19290,6 +19663,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
+      /* 2026-10-05 (nuit) — LES OMBRES PORTÉES DU SOLEIL (`sunShadowPass`), à la ferme aussi : les dessins debout
+         portent `cb`, leur ligne de sol (arbres, maison, boutique, bac, puits, épouvantail, gare, personnages). La
+         neige de la ferme ne pose plus son ombre figée (`castLight: 0`). */
+      sunShadowPass(draws, (d) => (d.cb != null ? d.cb : null), fSnowSeason, null);
       draws.sort((a, b) => a.y - b.y);
       // Zip 253 (audit) : on isole chaque draw en try/catch, exactement comme
       // la boucle de rendu de la ville (fix zip 250 "les maisons disparaissent
@@ -20656,6 +21033,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true; // rails: only reachable along the platform
       // 2026-10-05 : un bonhomme de neige (ou une boule posée) se contourne. Le joueur seul : `townNav` ne le voit pas.
       if (BN.snowmanBlocks(sharedRef.current.snowmen, "town", x, y, Date.now())) return true;
+      if (RINK_RACE.island && tw.rink && CO.islandSD(x, y) < 0.15) return true;   // 2026-10-05 (nuit) : l'îlot de plots d'une course
       const i = fy * tw.w + fx;
       /* ⚠️ 425 : LES BÂTIMENTS ET LE MOBILIER SONT DANS `solid`, calculé une
          fois par le générateur (voir generateTownWorld). La boucle sur
@@ -21162,6 +21540,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ne circule : les autres reçoivent la position, la pose se déduit.
          ⚠️ CHAUSSÉ OU NON SE LIT DANS LE SAC (`invRef`, l'inventaire arbitré par
          l'hôte), jamais dans un état local qu'on aurait pu oublier de remettre. */
+      /* ╔══════════════════════════════════════════════════════════════
+         ║ 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE, CHEZ LE COUREUR (`course.js`).
+         ╚══════════════════════════════════════════════════════════════
+         Au départ (le `startIn` reçu, daté à la réception), on se pose sur SA place de la grille et on ne bouge plus
+         jusqu'au « PARTEZ » ; le compteur de tours démarre là. L'îlot de plots est solide tant que la session est ouverte
+         (`RINK_RACE`, lu par `blockedTown`). */
+      const rkS = sharedRef.current.rink, rLoc = rinkLocalRef.current;
+      RINK_RACE.island = !!(rkS && tw.rink && (rkS.state === "lobby" || rkS.state === "race"));
+      const racingMe = !!(rkS && rkS.state === "race" && tw.rink && rLoc.sid === rkS.sid && rinkMine());
+      let raceHold = false;
+      if (racingMe) {
+        if (!rLoc.placed) {
+          const g = CO.gridSlot(rkS.lanes[me.id] | 0);
+          m.x = g.x - C.footX(0); m.y = g.y - C.footY(0); m.vx = 0; m.vy = 0; m.dir = 3;
+          skateRef.current = PT.skateNew(0, 0); rLoc.placed = true;
+        }
+        if (rinkRaceMs() < 0) raceHold = true;
+        else if (!rLoc.tracker && !rLoc.finished) { rLoc.tracker = CO.tracker(C.footX(m.x), C.footY(m.y)); rLoc.ghost = []; }
+      }
       const skCur = skateRef.current;
       const onIceNow = townIceAt(tw, C.footX(m.x), C.footY(m.y));
       const skating = onIceNow || !!(skCur && skCur.mode !== "glide");
@@ -21171,14 +21568,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const st = skCur || (skateRef.current = PT.skateNew(m.vx || 0, m.vy || 0));
         const hasSk = E.skatesActive(invRef.current, Date.now());
         let ix = 0, iy = 0;
-        if (moving) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
-        PT.skateStep(st, ix, iy, dt, { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked) });
+        if (moving && !raceHold) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
+        /* L'ASPIRATION (en course) : dans le sillage d'un autre coureur — joueur ou résident —, on pousse plus fort et
+           la croisière monte un peu (`CO.draftK`). */
+        const skOpt = { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked) };
+        rLoc.draft = 0;
+        if (racingMe && !raceHold) {
+          const dk = CO.draftK({ x: C.footX(m.x), y: C.footY(m.y), vx: st.vx, vy: st.vy }, rinkOthersPos());
+          rLoc.draft = dk; skOpt.vmaxK = 1 + CO.COURSE.DRAFT.vK * dk; skOpt.accK = 1 + CO.COURSE.DRAFT.aK * dk;
+        }
+        PT.skateStep(st, ix, iy, dt, skOpt);
+        if (raceHold) { st.vx = 0; st.vy = 0; }
         if (st.mode === "down") { iceFallNow(); return; }
+        /* Les résidents-coureurs se BOUSCULENT : à moins de 0,62 case, on est repoussé (eux suivent leur ligne — ils sont
+           tirés d'une graine, rien ne peut les dévier sans le dire à tout le monde). */
+        if (racingMe && !raceHold) for (const bp of rinkBotPos()) {
+          const ex = C.footX(m.x) - bp.x, ey = C.footY(m.y) - bp.y, ed = Math.hypot(ex, ey);
+          if (ed > 0 && ed < 0.62) { st.vx = st.vx * 0.8 + (ex / ed) * 2.2; st.vy = st.vy * 0.8 + (ey / ed) * 2.2; }
+        }
         const nx = m.x + st.vx * dt, ny = m.y + st.vy * dt;
+        /* LA CHUTE CONTRE LA BANDE (et les plots) : trop vite, on culbute — sans blessure (`PT.skateTumble`). */
+        const onRinkNow = !!tw.rink && C.rinkInside(C.footX(m.x), C.footY(m.y));
         if (st.vx && townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx;
-        else if (st.vx) skateSpray(m, PT.skateBump(st, "x"), st.vx < 0 ? 1 : -1, 0);
+        else if (st.vx) { const bv = PT.skateBump(st, "x"); skateSpray(m, bv, st.vx < 0 ? 1 : -1, 0); if (onRinkNow && bv > CO.COURSE.CRASH_V) PT.skateTumble(st); }
         if (st.vy && townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny;
-        else if (st.vy) skateSpray(m, PT.skateBump(st, "y"), 0, st.vy < 0 ? 1 : -1);
+        else if (st.vy) { const bv = PT.skateBump(st, "y"); skateSpray(m, bv, 0, st.vy < 0 ? 1 : -1); if (onRinkNow && bv > CO.COURSE.CRASH_V) PT.skateTumble(st); }
         m.vx = st.vx; m.vy = st.vy;
         const spd = Math.hypot(st.vx, st.vy);
         // Le cap suit la COURSE (on regarde où l'on file), à défaut l'ordre donné.
@@ -21187,6 +21601,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (st.brake && spd > 1.2) skateSpray(m, spd, -st.vx / spd, -st.vy / spd);
         if (hasSk && spd > 0.8) skateMarkStep(m, spd, !!st.brake);
         m.animT = st.stride;
+      }
+      /* Les tours, le chrono, le fantôme (dix positions par seconde) ; l'arrivée part en DURÉE vers l'hôte. */
+      if (racingMe && rLoc.tracker && !rLoc.finished) {
+        const tR = rinkRaceMs(), r = rLoc.tracker.update(C.footX(m.x), C.footY(m.y));
+        if (r.laps > rLoc.laps) { rLoc.lapAt.push(tR); rLoc.lapFlashAt = performance.now(); }
+        rLoc.laps = r.laps; rLoc.prog = r.prog;
+        const gi = Math.floor(tR / (1000 / CO.COURSE.GHOST_HZ));
+        while (rLoc.ghost.length <= gi && rLoc.ghost.length < 4000) rLoc.ghost.push({ x: C.footX(m.x), y: C.footY(m.y) });
+        if (r.laps >= CO.COURSE.LAPS) {
+          rLoc.finished = true; rLoc.finishMs = Math.round(tR);
+          sendReq({ kind: "rinkFinish", ms: rLoc.finishMs, ghost: rkS.mode === "tt" ? CO.ghostEncode(rLoc.ghost) : undefined });
+        }
       }
       /* ⚠️ ZIP 458 — LA PENTE SE LIT UNE FOIS PAR IMAGE, AVANT LE PAS, et elle
          sert DEUX fois : à ralentir la montée, puis à emporter la glissade. Deux
@@ -21258,7 +21684,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (snowRollRef.current) spSec *= snowRollRef.current.carry ? BN.carrySpeedMul(snowRollRef.current.r) : BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — pousser une grosse boule ralentit (la porter, beaucoup moins)
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
-        const nx = m.x + dx * sp, ny = m.y + dy * sp;
+        let nx = m.x + dx * sp, ny = m.y + dy * sp;
+        /* 2026-10-05 (nuit) — LE PORTILLON DE LA PATINOIRE, SANS PATINS (`rinkGateHold`) : la bande retient, le jeu le
+           dit ; qui pousse encore `TOWN_RINK_INSIST_S` secondes passe — et la glace fait le reste (la glissade, la chute). */
+        if (rinkGateHold(tw, m, nx, ny, dt)) { nx = m.x; ny = m.y; }
         const snowPx = m.x, snowPy = m.y;
         /* ⚠️ 425 : L'ALTITUDE DE DÉPART EST RELUE AVANT CHAQUE AXE, et non une
            fois pour les deux. Un déplacement en diagonale sur une volée
@@ -21624,7 +22053,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* Le soleil sur la neige (0..1) : ombres bleues franches et éclats par
          beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
       const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-      return { winter: snowSeason === "winter", frost: fr.sun, frostShade: fr.shade, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 };
+      // `castLight: 0` (2026-10-05, nuit) : la ville pose ses ombres portées du soleil elle-même (`OMB`, voir drawTownFrame)
+      return { winter: snowSeason === "winter", frost: fr.sun, frostShade: fr.shade, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 };
     }
     /* ╔══════════════════════════════════════════════════════════════════════
        ║ 2026-10-05 — LA NEIGE DE LA VILLE EST PRÊTE QUAND L'ÉCRAN S'ÉCLAIRCIT.
@@ -21848,7 +22278,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         {
           const cpM = starCraterPos(), stM = sharedRef.current.star;
           const hot = !!(cpM && stM && starImpactLandedNow() && !Q.starDone(stM) && starCraterHeatNow() > 0.1);
-          snowF.setMelts(hot ? [{ x: (cpM.x + 0.5) * T, y: (cpM.y + 0.5) * T, r: C.STAR_CRATER_DRAW_R * T * 1.05 }] : []);
+          const meltL = hot ? [{ x: (cpM.x + 0.5) * T, y: (cpM.y + 0.5) * T, r: C.STAR_CRATER_DRAW_R * T * 1.05 }] : [];
+          /* 2026-10-05 (nuit) — les braseros du marché d'hiver font fondre un rond de neige autour d'eux :
+             l'herbe y est détrempée (le sol « dégelé » du cratère, même règle), et c'est ce qui dit
+             « ce feu brûle depuis le matin ». */
+          for (const pr of tw.props) if (pr.kind === "brazier") meltL.push({ x: (pr.x + 0.5) * T, y: (pr.y + 0.6) * T, r: T * 0.9 });
+          snowF.setMelts(meltL);
         }
         snowF.view(xL, Math.max(0, y0 - 1), xR, yBot);
         snowF.update(6, () => performance.now());
@@ -22279,6 +22714,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
           A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
         }
+        /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver (`tw.duck`, monde d'hiver seulement), SOUS la
+           neige de la case : elle n'y laisse qu'une poussière et garde ses flocons dans les jours. */
+        if (tw.duck && tw.duck[y * tw.w + x]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
+        /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
+           (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
+        if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) A.drawRinkIceTile(ctx, x, y, px, py);
         /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
         if (wetF && y >= y0 - 1) {
           const wc = wetF.cell(x, y);
@@ -24092,7 +24533,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              : (lit ? sprites.plazaLamp : sprites.plazaLampOff);
       };
       for (const pr of (tw.props || [])) {
-        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
+        // 2026-10-05 (nuit) : la bande de la patinoire a son ancre au coin sud-ouest, mais s'étend sur toute la glace —
+        // elle se découpe elle-même par rangée (plus bas) ; l'écarter sur son ancre l'effaçait dès qu'on regardait le nord.
+        if (pr.kind !== "rinkBoards" && (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2)) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
         /* 2026-09-27 (nuit) — le grand escalier : piliers, balustrades, rampes,
            pots. Une rampe au-dessus de la chaussée porte l'altitude de SA marche
@@ -24191,6 +24634,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           continue;
         }
+        /* 2026-10-05 (nuit) — LA BANDE DE LA PATINOIRE (`A.rinkBoardRows`) : un morceau par rangée de sol, trié avec
+           les patineurs à la rangée où il touche terre — on passe devant la bande nord, derrière la bande sud. Un
+           liseré de neige sur la rambarde dès qu'il en tombe ou qu'il en reste. Debout : elle porte son ombre. */
+        if (pr.kind === "rinkBoards") {
+          const snowyB = !!(snowF && snowPk.g > 1);
+          for (const rw of A.rinkBoardRows(snowyB)) {
+            if (rw.row < y0 - 2 || rw.row > yBot + 2) continue;
+            pushE((rw.row + 1) * T - 0.5, 0, () => ctx.drawImage(rw.cv, rw.ox, rw.oy));   // (son ombre : `A.drawRinkBoardShadow`, d'un seul tenant)
+          }
+          continue;
+        }
+        /* 2026-10-05 (nuit) — LE BRASERO DU MARCHÉ D'HIVER : quatre images de flamme à cadence FIXE (110 ms, §4 :
+           une cadence qui varie tirerait une image au hasard), et ses escarbilles (`A.drawBrazierSparks`). */
+        if (pr.kind === "brazier") {
+          const fr = sprites.townBrazier;
+          if (fr && fr.length) {
+            const bimg = fr[Math.floor(now / 110) & 3];
+            const bx = pr.x * T + T / 2 - bimg.width / 2, bty = (pr.y + 1) * T - bimg.height + 1, seedB = pr.x * 31 + pr.y;
+            pushE((pr.y + 1) * T, elAt(pr.x, pr.y), () => {
+              ctx.fillStyle = "rgba(20,12,8,0.28)"; fillPixEllipse(ctx, pr.x * T + T / 2, (pr.y + 1) * T - 1, 7, 2);
+              ctx.drawImage(bimg, bx, bty);
+              if (!reflecting) A.drawBrazierSparks(ctx, pr.x * T + T / 2, bty + 10, now, seedB);
+            }, 0, pr.x);   // debout : il se reflète et porte son ombre au soleil
+          }
+          continue;
+        }
         /* Zip 426 : le mobilier nouveau. ⚠️ LES ÉTALS SE CHOISISSENT PAR
            HACHAGE DE LEUR POSITION, jamais par tirage : un `Math.random()` ici
            changerait de bâche à chaque image et la foire clignoterait. C'est la
@@ -24213,6 +24682,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      tout en laissant leur case solide : un mur invisible, le
                      défaut du 425, créé par une constante recopiée. */
                   : pr.kind === "stall" ? ((pr.alt ? sprites.townStallsAlt : sprites.townStalls) || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
+                  : pr.kind === "rinkPole" ? (townLampLit(pr) ? sprites.townRinkPoleLit : sprites.townRinkPole)   // 2026-10-05 (nuit) : les mâts de la patinoire
                   : pr.kind === "kiosk" ? sprites.townKiosk
                   // 2026-10-04 — le chalet des patins : ouvert l'hiver, volets clos le reste de l'année.
                   : pr.kind === "skateChalet" ? (snowSeason === "winter" ? sprites.townSkateChalet : sprites.townSkateChaletClosed)
@@ -24430,11 +24900,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          stabilité du tri aurait marché aussi, mais un ordre qui dépend de
          l'ordre d'insertion dans un tableau est un ordre qu'on casse sans le
          voir en réorganisant une boucle. */
+      const buntingBulbs = [], buntingLights = [];   // 2026-10-05 (nuit) : les ampoules d'hiver des fanions (verres, flaques)
       {
         const stalls = (tw.props || []).filter(p => p.kind === "stall");
         const rows = new Map();
         for (const s of stalls) { if (!rows.has(s.y)) rows.set(s.y, []); rows.get(s.y).push(s); }
-        const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
         for (const [ry, list] of rows) {
           if (ry < y0 - 4 || ry > yBot + 3) continue;
           list.sort((a, b) => a.x - b.x);
@@ -24463,37 +24933,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                toiles — ce qui est de toute façon la façon dont on tend une
                guirlande dans une fête de village — et de lui donner ses mâts. */
             const topY = (ry + 1) * T - 62;
-            pushE((ry + 1) * T + 0.01, elAt(a.x, ry), () => {
-              const seg = 14, sag = 8;
-              /* Les deux mâts. ⚠️ SANS EUX LA CORDE FLOTTE : une guirlande dont
-                 on ne voit pas ce qui la tient se lit comme un défaut d'affichage,
-                 pas comme un décor. Deux traits de bois suffisent. */
-              ctx.fillStyle = "#6a4726";
-              for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY, 2, (ry + 1) * T - 48 - topY);
-              ctx.fillStyle = "#d8b45a";
-              for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY - 2, 2, 2);
-              ctx.strokeStyle = "rgba(80,66,44,0.85)"; ctx.lineWidth = 1;
-              ctx.beginPath();
-              /* ⚠️ L'INDICE S'APPELLE `sg`, PAS `s`, ET C'EST UN OUTIL QUI L'A
-                 EXIGÉ : `verify-cycle` refuse toute comparaison `s === <chiffre>`
-                 dans ce fichier, parce que `s` y est le paramètre de `selectSlot`
-                 et qu'un indice de case écrit en dur a déjà lâché au sol l'animal
-                 qu'on portait (zip 404). Le banc ne peut pas savoir que ce `s`-ci
-                 est un segment de corde — et c'est très bien : un contrôle qui
-                 accepterait les exceptions n'en serait plus un. */
-              for (let sg = 0; sg <= seg; sg++) {
-                const t2 = sg / seg, cx2 = ax + (bx - ax) * t2, cy2 = topY + Math.sin(Math.PI * t2) * sag;
-                if (sg === 0) ctx.moveTo(cx2, cy2); else ctx.lineTo(cx2, cy2);
-              }
-              ctx.stroke();
-              for (let sg = 1; sg < seg; sg++) {
-                const t2 = sg / seg, cx2 = ax + (bx - ax) * t2, cy2 = topY + Math.sin(Math.PI * t2) * sag;
-                ctx.fillStyle = FLAGS[(k * 3 + sg) % FLAGS.length];
-                ctx.beginPath(); ctx.moveTo(cx2 - 2.5, cy2); ctx.lineTo(cx2 + 2.5, cy2); ctx.lineTo(cx2, cy2 + 6); ctx.fill();
-                ctx.fillStyle = "rgba(255,255,255,0.25)";
-                ctx.fillRect(cx2 - 2.5, cy2, 5, 1);
-              }
-            });
+            /* 2026-10-05 (nuit) — le dessin vit dans `A.drawStallBunting` (un banc le regarde) ; l'hiver, la corde porte
+               des ampoules allumées avec les lanternes (le MÊME prédicat, lu au milieu de la corde), déclarées en verres
+               qui brillent pour la passe de lumière (`buntingBulbs`). */
+            const winterB = !!tw.winter, litB = winterB && LUM.lampLit((a.x + b.x) >> 1, ry, lampNa) ? Math.min(1, lampNa * 3) : 0;
+            if (litB > 0.05) buntingLights.push({ x: (ax + bx) / 2 / T, y: ry + 0.9, lift: elAt(a.x, ry) });
+            pushE((ry + 1) * T + 0.01, elAt(a.x, ry), () =>
+              A.drawStallBunting(ctx, ax, bx, topY, (ry + 1) * T - 48, k, winterB ? { bulbs: true, lit: litB, ms: now, out: reflecting ? null : buntingBulbs } : null));
           }
         }
       }
@@ -24671,7 +25117,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!o.ruin) queueHouseTufts(hsn, baseL, baseR, byW, doorWX, houseE);
         pushE(footWY, houseE, () => {
           drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY });
           if (r) {
             // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
             lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
@@ -24841,7 +25287,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0, { snow: shopSnow });
           const a0 = ctx.globalAlpha;
           if (SBfrom && fadeA < 1) ctx.globalAlpha = a0 * fadeA;
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, { ...(glowOpts || {}), snow: shopSnow });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, { ...(glowOpts || {}), snow: shopSnow, foot: footWY });
           ctx.globalAlpha = a0;
           if (!r) return;
           // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
@@ -25824,7 +26270,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (iceL && iceL.state) ctx.drawImage(iceL.cv, (x - iceL.R.bx0) * T, (y - iceL.R.by0) * T, T, T, px, py, T, T);
           }
           if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
-          if (iceOn) drawSkateMarks(tw, x0 * T - T, y0 * T - T, (x1 + 2) * T, (yBot + 2) * T);   // 2026-10-04 — les lames, sur la glace
+          if (iceOn || tw.rink) drawSkateMarks(tw, x0 * T - T, y0 * T - T, (x1 + 2) * T, (yBot + 2) * T);   // 2026-10-04 — les lames, sur la glace (2026-10-05 : celle de la patinoire aussi)
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -25879,6 +26325,118 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (a < 1) ctx.globalAlpha = 1;
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-10-05 (nuit) — LA COURSE SUR LA GLACE (`course.js`, `A.drawRace*`).
+         ╚══════════════════════════════════════════════════════════════════════
+         Pendant une session : la ligne et la grille peintes AU SOL (avant le monde trié et avant les ombres), les plots
+         de l'îlot, les résidents-coureurs (des habitants, chaussés, tirés de la graine — chacun les voit au même temps de
+         SA course), le fantôme du record au contre-la-montre, et le podium à l'arrivée. Le classement en direct se
+         calcule ici (`rLocD.live`), l'écran de course le lit. */
+      {
+        const rkD = sharedRef.current.rink, rLocD = rinkLocalRef.current;
+        if (tw.rink && rkD && rLocD.sid === rkD.sid) {
+          const KD = CO.COURSE;
+          if (rkD.state === "lobby" || rkD.state === "race") {
+            A.drawRaceMarks(ctx, { lineX: CO.startX() * T, y0: (KD.CY + KD.ISLAND.hy) * T + 3, y1: (C.TOWN_RINK.y1 + 1) * T - 2,
+              slots: [0, 1, 2, 3].map((k) => { const g = CO.gridSlot(k); return { x: g.x * T, y: g.y * T }; }) });
+            for (const cn of (rLocD.cones || (rLocD.cones = CO.conePositions()))) pushE(cn.y * T, elAt(Math.floor(cn.x), Math.floor(cn.y)), () => A.drawRaceCone(ctx, cn.x * T, cn.y * T));
+          }
+          if (rkD.state === "race" || rkD.state === "done") {
+            const tR = rinkRaceMs();
+            for (const bp of rinkBotPos()) {
+              const b = bp.b, spB = Math.hypot(bp.vx, bp.vy), ex = bp.x, ey = bp.y;
+              const dirB = Math.abs(bp.vx) > Math.abs(bp.vy) ? (bp.vx < 0 ? 2 : 3) : (bp.vy < 0 ? 1 : 0);
+              const pB = { id: "racebot" + b.rid, name: b.name, x: ex - C.footX(0), y: ey - C.footY(0), dir: tR < 0 ? 3 : (spB > 0.3 ? dirB : 3), moving: spB > 0.3, animT: 0,
+                gender: b.gender, outfit: b.outfit, overalls: b.overalls, cap: b.cap, look: b.look, zone: "town",
+                skate: bp.tumble ? "fall" : spB > 0.6 ? "glide" : "stand", skPh: bp.tumble ? (tR / 1000) % 1 : (tR / 1000) * (KD.BOTS[b.bi].vmax * 0.22 + 1.6) };
+              pushE((ey + 0.5) * T, elAt(Math.floor(ex), Math.floor(ey)), () => drawCharacter(pB, false), 0, Math.floor(ex));
+            }
+            // le fantôme du record (contre-la-montre) : moi, en transparence, sur la course du meilleur
+            const recG = sharedRef.current.rinkRec && sharedRef.current.rinkRec.ttGhost;
+            if (rkD.mode === "tt" && rkD.state === "race" && recG && recG.g && rinkMine()) {
+              if (rLocD.ghostRecKey !== recG.g) { rLocD.ghostRecKey = recG.g; rLocD.ghostRec = CO.ghostDecode(recG.g); }
+              const gp = CO.ghostAt(rLocD.ghostRec, tR);
+              if (gp && tR >= 0) {
+                const mG = meRef.current, spG = Math.hypot(gp.vx || 0, gp.vy || 0);
+                const pG = { ...mG, id: "ghost", name: recG.name + " · " + CO.fmtMs(recG.ms), x: gp.x - C.footX(0), y: gp.y - C.footY(0), moving: spG > 0.3,
+                  dir: Math.abs(gp.vx || 0) > Math.abs(gp.vy || 0) ? ((gp.vx || 0) < 0 ? 2 : 3) : ((gp.vy || 0) < 0 ? 1 : 0), skate: "glide", skPh: (tR / 1000) * 3.2, zone: "town" };
+                pushE((gp.y + 0.5) * T, elAt(Math.floor(gp.x), Math.floor(gp.y)), () => { ctx.save(); ctx.globalAlpha *= 0.42; drawCharacter(pG, false); ctx.restore(); });
+              }
+            }
+            // le classement en direct : la progression de chacun (tours + fraction), arrivés d'abord par ordre d'arrivée
+            const meD = meRef.current, live = [];
+            if (rkD.state === "race") {
+              for (const e of rkD.ent) {
+                // ⚠️ un ARRIVÉ se classe à son temps d'arrivée (1000 − secondes : plus tôt, plus haut), pas à sa progression
+                let prog = 0;
+                const finMs = meD && e.id === meD.id && rLocD.finished ? rLocD.finishMs : (rkD.fin && rkD.fin[e.id] != null ? rkD.fin[e.id] : null);
+                if (finMs != null) prog = 1000 - finMs / 1000;
+                else if (meD && e.id === meD.id) prog = rLocD.prog;
+                else {
+                  const p2 = playersRef.current.get(e.id);
+                  if (p2 && tR >= 0) {
+                    /* ⚠️ LA POSITION LA PLUS FRAÎCHE, PAS CELLE QU'ON DESSINE. Le camarade affiché traîne derrière ses
+                       paquets (le tampon anti-gigue, jusqu'à `POS_JITTER_MAX_MS`, en plus de la latence) : deux coureurs
+                       au coude-à-coude se voyaient CHACUN devant l'autre — vu à deux, « 3e/4 » des deux côtés. On prend
+                       son dernier paquet, poussé jusqu'à maintenant par sa vitesse (exacte, elle voyage avec). Reste la
+                       latence, qu'aucun client ne peut retirer : dans un mouchoir, chacun se voit d'un souffle devant —
+                       le résultat, lui, se tient aux TEMPS d'arrivée, identiques partout. */
+                    const ageS = p2.tRecv != null ? Math.min(0.5, (performance.now() - p2.tRecv) / 1000) : 0;
+                    const qx = C.footX(p2.px0 != null ? p2.px0 + (p2.moving ? (p2.vx || 0) * ageS : 0) : p2.x);
+                    const qy = C.footY(p2.py0 != null ? p2.py0 + (p2.moving ? (p2.vy || 0) * ageS : 0) : p2.y);
+                    let tr2 = rLocD.others.get(e.id);
+                    if (!tr2) { tr2 = CO.tracker(qx, qy); rLocD.others.set(e.id, tr2); }
+                    prog = tr2.update(qx, qy).prog;
+                  }
+                }
+                live.push({ id: e.id, name: e.name, lane: rkD.lanes[e.id] | 0, prog, me: !!(meD && e.id === meD.id) });
+              }
+              for (const bp of rinkBotPos()) {
+                let tr3 = rLocD.others.get("bot" + bp.b.rid);
+                if (!tr3) { tr3 = CO.tracker(bp.x, bp.y); rLocD.others.set("bot" + bp.b.rid, tr3); }
+                const pr3 = tr3.update(bp.x, bp.y).prog;
+                live.push({ id: "bot" + bp.b.rid, name: bp.b.name, lane: bp.b.lane, prog: bp.done && bp.fin != null ? 1000 - bp.fin / 1000 : pr3, bot: true, x: bp.x, y: bp.y });
+              }
+              live.sort((a, b) => b.prog - a.prog);
+            }
+            rLocD.live = live;
+          }
+          if (rkD.state === "done" && rkD.res) {
+            const top = rkD.res.slice(0, 3).map((e) => A.RACE_COLORS[(e.lane | 0) % 4]);
+            pushE((KD.CY + 1.2) * T, elAt(Math.floor(KD.CX), Math.floor(KD.CY)), () => A.drawRacePodium(ctx, KD.CX * T, (KD.CY + 1.2) * T, top), 0, Math.floor(KD.CX));
+          }
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-10-05 (nuit) — LES OMBRES PORTÉES DU SOLEIL (`ombres.js`).
+         ╚══════════════════════════════════════════════════════════════════════
+         Guillaume : « calculées en fonction de l'heure, qui s'allongent au lever et au coucher, pas figées ».
+         Le soleil de l'instant (`OMB.sunShadow` : l'heure, les bornes du jour de la saison, le ciel) donne un
+         CISAILLEMENT ; chaque chose debout est projetée par lui autour de sa ligne de sol, dans un tampon à la
+         résolution de l'art, et le tampon devient UNE silhouette posée une fois sur le sol — avant le monde trié
+         (les choses passent devant leur ombre et devant celle des autres), après le sol, la neige et l'eau.
+         · LES CHOSES DEBOUT sont celles de la file des REFLETS (`d.rb`, « tout ce qui se tient debout se
+           reflète ») : arbres, mobilier, étals, lampadaires, personnages. Leur dessin est déjà rejouable sans
+           effet de bord (`reflecting` coupe les noms, les bulles, les escarbilles, le rendu au pixel d'écran) :
+           c'est le contrat que la passe des reflets a établi, et cette passe le réutilise tel quel.
+         · LES BÂTIMENTS PEINTS sont projetés depuis ce qu'ils ont posé à l'image d'avant (`BITMAP_LOG`) : ils ne
+           bougent pas, et leur géométrie n'est écrite qu'une fois, dans leur propre dessin.
+         · UNE silhouette, pas une somme : deux ombres qui se recouvrent ne font pas une ombre plus noire.
+         ⚠️ Les ombres de CONTACT restent (l'ellipse sous chaque chose) : sous un ciel couvert, c'est tout ce qui
+         reste, et c'est juste — l'ombre portée vient du soleil, l'autre de la lumière du ciel. */
+      {
+        sunShadowPass(draws, (d) => (d.rb != null ? d.rb - (d.re || 0) * EP : null), snowSeason, SUN_SHADOW.bitmaps,
+          tw.rink ? (g, sh, ox, oy) => A.drawRinkBoardShadow(g, sh, ox, oy) : null);
+        /* Le relevé des bâtiments pour l'image suivante : leur rectangle, rendu au MONDE par la caméra de cette
+           image (ce que `drawScreenExactBitmap` voit est l'écran, altitude de la case comprise). */
+        const Mc = ctx.getTransform();
+        BITMAP_LOG.fn = (SB, cxW, byW, img, left, top, dw, dh, footS) => {
+          const wx = (left - Mc.e) / Mc.a, wy = (top - Mc.f) / Mc.d;
+          // une clé PAR POSE (deux maisons du même modèle partagent leur table de bitmaps)
+          SUN_SHADOW.bitmaps.set(`${Math.round(cxW)},${Math.round(byW)}`, { img, x: wx, y: wy, w: dw / Mc.a, h: dh / Mc.d, foot: (footS - Mc.f) / Mc.d });
+          if (SUN_SHADOW.bitmaps.size > 400) SUN_SHADOW.bitmaps.delete(SUN_SHADOW.bitmaps.keys().next().value);
+        };
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -25888,6 +26446,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openLightFrame();   // 2026-09-25 (phase 3) : les dessins déclarent leurs bâtiments, calques de nuit et lampes peintes
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      BITMAP_LOG.fn = null;   // 2026-10-05 : le relevé des bâtiments ne vaut que pour le monde de la ville, cette image
+      /* 2026-10-05 (nuit) — LES GUIRLANDES AU-DESSUS DE LA PATINOIRE (`tw.rinkGarlands`) : après le monde trié (elles
+         pendent à la hauteur des mâts, au-dessus des patineurs), avant la lumière ; allumées avec les lanternes (le même
+         prédicat, lu au milieu du fil), leurs ampoules déclarées en verres qui brillent (`rinkBulbs`). */
+      const rinkBulbs = [];
+      if (tw.rinkGarlands) for (const g of tw.rinkGarlands) {
+        const gx = (g.x0 + g.x1) / 2 / T, gy = (g.y0 + g.y1) / 2 / T;
+        if (gy < y0 - 6 || gy > yBot + 6) continue;
+        const litG = LUM.lampLit(Math.floor(gx), Math.floor(gy), lampNa) ? Math.min(1, lampNa * 3) : 0;
+        try { A.drawRinkGarland(ctx, g, now, litG, litG > 0.05 ? rinkBulbs : null); } catch (e) { console.error("[FERME] guirlande ignorée", e); }
+      }
       /* 2026-09-30 — LES FEUILLES QUI TOMBENT ET QUI VOLENT (`FL.makeLeafFlurry`),
          LOCALES : après le monde (une feuille passe devant tout), avant la lumière
          (la nuit les assombrit comme le reste). Le vent des épisodes (`W.wind`) les
@@ -26001,6 +26570,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         };
         if (torchOnRef.current) torchRefl(m.x, m.y, myE);
         for (const p of playersRef.current.values()) if (p.torch && (p.zone || "farm") === "town") torchRefl(p.x, p.y, playerElevTown(tw, p));
+        /* 2026-10-05 (nuit) — LE MARCHÉ D'HIVER. Les braseros brûlent jour et nuit : une flamme (« torch », son
+           vacillement), pas un réverbère. Les ampoules des fanions : un halo doux par corde, posé au SOL sous son milieu
+           (elle pend à ~4 cases de haut), et chaque ampoule allumée déclarée comme un verre qui brille. */
+        for (const pr of (tw.props || [])) {
+          if (pr.kind !== "brazier") continue;
+          if (pr.x < x0 - 6 || pr.x > x1 + 6 || pr.y < y0 - 6 || pr.y > yBot + 6) continue;
+          lights.push({ x: pr.x + 0.5, y: pr.y + 0.4 - elAt(pr.x, pr.y) * EP / T, r: C.TORCH_LIGHT_RADIUS * 1.15, c: "torch", k: torchFlicker(pr.x * 1.3 + pr.y) });
+        }
+        for (const bl of buntingLights) lights.push({ x: bl.x, y: bl.y - bl.lift * EP / T, r: 1.8, c: "lamp", k: 0.45 });
+        /* 2026-10-05 (nuit) — LA PATINOIRE ÉCLAIRÉE : la lanterne de chaque mât (une flaque, un verre), et sous chaque
+           guirlande allumée, cinq flaques douces posées sur la glace, sous le fil (il pend à ~3 cases de haut). */
+        for (const pr of (tw.props || [])) {
+          if (pr.kind !== "rinkPole" || !LUM.lampLit(pr.x, pr.y, lampNa)) continue;
+          if (pr.x < x0 - 6 || pr.x > x1 + 6 || pr.y < y0 - 6 || pr.y > yBot + 6) continue;
+          lights.push({ x: pr.x + 0.75, y: pr.y + 0.5, r: 3.0 });
+          heads.push({ x: pr.x * T + T / 2 + 2, y: (pr.y + 1) * T - (C.RINK_POLE_H + 2) + 10, r: 2 });
+        }
+        if (tw.rinkGarlands) for (const g of tw.rinkGarlands) {
+          const gyM = (g.y0 + g.y1) / 2 / T;
+          if (gyM < y0 - 6 || gyM > yBot + 6 || !LUM.lampLit(Math.floor((g.x0 + g.x1) / 2 / T), Math.floor(gyM), lampNa)) continue;
+          // ⚠️ serrées et douces : cinq flaques d'un rayon de 2,4 faisaient des POIS sur la glace (vu en jeu) ; onze, plus
+          // petites et plus faibles, se fondent en une bande de lumière sous le fil
+          for (let k = 1; k <= 11; k++) { const u = k / 12; lights.push({ x: (g.x0 + (g.x1 - g.x0) * u) / T, y: (g.y0 + (g.y1 - g.y0) * u + g.sag * 4 * u * (1 - u)) / T + 2.6, r: 2.0, c: "lamp", k: 0.3 }); }
+        }
+        for (const b of rinkBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 });
+        for (const b of buntingBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 });
         for (const wl of townWinLights) lights.push(wl);
         /* 2026-09-26 (phase 5) — les lucioles : une lumière minuscule au sol (au
            plus faible), et leur éclat (`sparks`) posé après le ciel. */
@@ -29894,14 +30489,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          l'écran : un plan de 1792 × 1344 px ne se rééchantillonne pas soixante
          fois par seconde. */
       const c = buildTownPlan(tw);
-      townMinimapImgRef.current = c;
+      townMinimapImgRef.current = c; c.__tw = tw;   // 2026-10-05 : le plan suit la carte de la saison (marché d'hiver)
       townMinimapScaledRef.current = null;
       return c;
     }
     function drawTownMap() {
       const mc = mapCanvasRef.current; if (!mc) return;
       const tw = townWorldRef.current; if (!tw) return;
-      const base = townMinimapImgRef.current || buildTownMinimapBase(tw);
+      const base = (townMinimapImgRef.current && townMinimapImgRef.current.__tw === tw ? townMinimapImgRef.current : null) || buildTownMinimapBase(tw);
       const g = mc.getContext("2d");
       /* La taille d'affichage tient dans la fenêtre EN LARGEUR ET EN HAUTEUR :
          le CSS borne la hauteur (`max-height`), et un canevas que le CSS
@@ -29938,7 +30533,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         [C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h, "⛪", L.mapTownChurch],
         [C.TOWN_PARK.x + C.TOWN_PARK.w / 2, C.TOWN_PARK.y + C.TOWN_PARK.h / 2, "🌳", L.mapTownPark],
         [C.TOWN_ORCHARD.x + C.TOWN_ORCHARD.w / 2, C.TOWN_ORCHARD.y + C.TOWN_ORCHARD.h / 2, "🍎", L.mapTownOrchard],
-        [C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2, C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2, "🎪", L.mapTownMarket],
+        [E.townMarketRect(getTownWorldCached(E)).x + E.townMarketRect(getTownWorldCached(E)).w / 2, E.townMarketRect(getTownWorldCached(E)).y + E.townMarketRect(getTownWorldCached(E)).h / 2, "🎪", L.mapTownMarket],   // 2026-10-05 : celui de la saison
         [C.TOWN_CEMETERY.x + C.TOWN_CEMETERY.w / 2, C.TOWN_CEMETERY.y + C.TOWN_CEMETERY.h / 2, "🪦", L.mapTownCemetery],
         [C.TOWN_LAKE.x + C.TOWN_LAKE.w / 2, C.TOWN_LAKE.y + C.TOWN_LAKE.h / 2, "🏞️", L.mapTownLake],
         [C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h / 2, "🔭", L.mapTownBelvedere],
@@ -30358,7 +30953,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function nearMarket() {
     const m = meRef.current;
     if (!m || m.zone !== "town") return false;
-    return E.atMarket({ px: m.x, py: m.y, pz: m.zone });
+    return E.atMarket({ px: m.x, py: m.y, pz: m.zone }, getTownWorldCached(E));   // 2026-10-05 : le monde de la saison (marché d'hiver)
   }
   /* ---- CE QUE FONT ESPACE ET E, EN UN SEUL ENDROIT (430) --------------------
      ⚠️ LE BOUTON TACTILE APPELLE EXACTEMENT CES FONCTIONS, il n'en réimplémente
@@ -30934,6 +31529,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townIceAt(tw, x, y) {
     if (!tw) return false;
     const fx = Math.floor(x), fy = Math.floor(y);
+    /* 2026-10-05 (nuit) — LA PATINOIRE (monde d'hiver, `tw.rink`) : une glace entretenue, prise tout l'hiver — au
+       point près (le rectangle arrondi, `rinkInside`), pas à la case : ses coins sont des courbes. */
+    if (tw.rink && fx >= 0 && fy >= 0 && fx < tw.w && fy < tw.h && tw.rink[fy * tw.w + fx]) return C.rinkInside(x, y);
     if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h || tw.ground[fy * tw.w + fx] !== C.G_WATER) return false;
     const pk = snowPackNow("town");
     if (!(pk.ice > 0.05) && !(pk.lkEq > 0.05)) return false;
@@ -30950,6 +31548,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townIceWalkable(tw, x, y) {
     for (let k = 0; k <= 6; k++) if (townIceAt(tw, x, y + k / C.TILE)) return true;
     return false;
+  }
+  /* 2026-10-05 (nuit) — LE PORTILLON DE LA PATINOIRE. Sans patins, un pas qui poserait la semelle sur la glace depuis
+     la terre ferme est RETENU, et le jeu le dit (une fois toutes les quelques secondes, pas à chaque image) ; si l'on
+     pousse encore `TOWN_RINK_INSIST_S` secondes dans le même sens, on passe — c'est la demande : « si on insiste, on
+     entre et on tombe » (la glissade sans patins de `patin.js` s'en charge). Rend true si le pas doit être annulé. */
+  function rinkGateHold(tw, m, nx, ny, dt) {
+    const st = RINK_INSIST;
+    /* 2026-10-05 (nuit) — PRIVATISÉE : pendant une course (attente comprise), la glace n'est qu'aux inscrits — patins ou
+       pas, insistance ou pas. On regarde par-dessus la bande. */
+    const rkG = sharedRef.current.rink;
+    if (tw && tw.rink && rkG && (rkG.state === "lobby" || rkG.state === "race") && !rinkMine()
+        && !townIceAt(tw, C.footX(m.x), C.footY(m.y)) && townIceAt(tw, C.footX(nx), C.footY(ny))) {
+      const nowT = performance.now();
+      if (nowT - st.toast > 4000) { st.toast = nowT; pushToast(L.rinkPrivate); }
+      return true;
+    }
+    if (!tw || !tw.rink || E.skatesActive(invRef.current, Date.now())) { st.t = 0; return false; }
+    const onIce = townIceAt(tw, C.footX(m.x), C.footY(m.y));
+    const intoIce = townIceAt(tw, C.footX(nx), C.footY(ny));
+    if (onIce || !intoIce) { if (!intoIce) st.t = Math.max(0, st.t - dt * 2); return false; }
+    st.t += dt;
+    if (st.t >= C.TOWN_RINK_INSIST_S) return false;
+    const now = performance.now();
+    if (now - st.toast > 4000) { st.toast = now; pushToast(L.rinkNoSkates); }
+    return true;
   }
   /* L'avertissement de la berge : la première fois qu'on s'apprête à poser le pied sur
      la glace SANS patins, on le dit — une fois par session. La chute reste inévitable
@@ -38898,6 +39521,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
         );
       })()}
+      {/* 2026-10-05 (nuit) — L'ÉCRAN DE LA COURSE DE LA PATINOIRE (`CourseHud.js`) : il se redessine seul. */}
+      <CourseHud getVM={raceVMGet} L={L} onJoin={() => sendReq({ kind: "rinkJoin" })} onLeave={() => sendReq({ kind: "rinkLeave" })}
+        onGo={() => sendReq({ kind: "rinkGo" })} onCloseResults={() => { rinkLocalRef.current.resultsOpen = false; }} />
       {skateShopOpen && (() => {
         /* 2026-10-05 — LA LOCATION : le panneau dit combien de temps il reste (re-lu chaque seconde,
            `skateClock`), et propose de louer SEULEMENT quand la précédente est finie. */
@@ -38919,6 +39545,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesRentedLeft(mm, ss)}</span>
                 : <button disabled={!winter || (hud.money | 0) < C.SKATES_RENT_PRICE} onClick={() => sendReq({ kind: "rentSkates" })}>{L.skatesRent(C.SKATES_RENT_PRICE, C.SKATES_RENT_MS / 60000)}</button>}
             </div>
+            {/* 2026-10-05 (nuit) — PRIVATISER LA PATINOIRE : une course à quatre (des résidents complètent) ou un
+                contre-la-montre contre le fantôme du record. Chaussé, l'hiver, quand la glace est libre. */}
+            {winter && (townWorldRef.current && townWorldRef.current.rink) && (() => {
+              const rkP = sharedRef.current.rink, busy = !!(rkP && rkP.state !== "done"), recP = sharedRef.current.rinkRec || {};
+              const dis = busy || !owned || (hud.money | 0) < CO.COURSE.PRICE;
+              return (
+                <div className="ferme-race-shop">
+                  <h3>🏁 {L.raceShopTitle}</h3>
+                  <div className="ferme-hint" style={{ margin: "2px 0 8px" }}>{busy ? L.raceShopBusy : !owned ? L.raceShopNeedSkates : L.raceShopHint(CO.COURSE.LAPS, CO.COURSE.PRICE)}</div>
+                  <div className="ferme-shop-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                    <button disabled={dis} onClick={() => { sendReq({ kind: "rinkBook", mode: "race" }); setSkateShopOpen(false); }}>🏁 {L.raceBookRace}</button>
+                    <button disabled={dis} onClick={() => { sendReq({ kind: "rinkBook", mode: "tt" }); setSkateShopOpen(false); }}>⏱️ {L.raceBookTt}</button>
+                  </div>
+                  <div className="ferme-race-shop-recs">
+                    {[["race", L.raceRecRace], ["tt", L.raceRecTt]].map(([k, lbl]) => (
+                      <div key={k}><b>{lbl}</b>{(recP[k] || []).length ? (recP[k] || []).slice(0, 5).map((r, i) => <span key={i}>{i + 1}. {r.name} — {CO.fmtMs(r.ms)}</span>) : <span>{L.raceNoRecord}</span>}</div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         );

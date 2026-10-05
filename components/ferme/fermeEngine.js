@@ -1519,11 +1519,17 @@ export function townSkateChalet(tw) {
   const p = tw.props.find((q) => q.kind === "skateChalet");
   return p ? { x: p.x - (C.TOWN_SKATE_CHALET_W >> 1), y: p.y - C.TOWN_SKATE_CHALET_H + 1, w: C.TOWN_SKATE_CHALET_W, h: C.TOWN_SKATE_CHALET_H } : null;
 }
+/* ⚠️ 2026-10-05 (nuit) — l'hiver, DEUX chalets (celui du lac, celui de la patinoire) : la distance au PLUS PROCHE. */
 export function townSkateChaletDist(tw, fx, fy) {
-  const r = townSkateChalet(tw);
-  if (!r) return Infinity;
-  const dx = Math.max(r.x - fx, 0, fx - (r.x + r.w)), dy = Math.max(r.y - fy, 0, fy - (r.y + r.h));
-  return Math.hypot(dx, dy);
+  if (!tw || !tw.props) return Infinity;
+  let best = Infinity;
+  for (const p of tw.props) {
+    if (p.kind !== "skateChalet") continue;
+    const r = { x: p.x - (C.TOWN_SKATE_CHALET_W >> 1), y: p.y - C.TOWN_SKATE_CHALET_H + 1, w: C.TOWN_SKATE_CHALET_W, h: C.TOWN_SKATE_CHALET_H };
+    const dx = Math.max(r.x - fx, 0, fx - (r.x + r.w)), dy = Math.max(r.y - fy, 0, fy - (r.y + r.h));
+    best = Math.min(best, Math.hypot(dx, dy));
+  }
+  return best;
 }
 export function resolveNetCatch(f, kind, sp, now, rnd) {
   normalizeFarmer(f);
@@ -3027,14 +3033,14 @@ export function resolveSell(f, m) {
    `moneyDelta` que l'appelant applique. Pour les premiers, on ne renvoie donc
    que le BONUS ; pour les seconds, le total. `paid` porte cette distinction, et
    se tromper ici paierait la vente deux fois sans lever la moindre erreur. */
-export function resolveTownSell(f, m, day, s) {
+export function resolveTownSell(f, m, day, s, tw) {   // `tw` (2026-10-05) : le monde de la saison, pour `atMarket`
   normalizeFarmer(f);
   const res = {
     moneyDelta: 0, earnedDelta: 0, invChanged: false, toast: null, gain: 0, base: 0,
     gemsChanged: false, flourChanged: false, sugarChanged: false, stockChanged: false,
     craftChanged: false, jewelryChanged: false, sharedChanged: false, n: 0,
   };
-  if (!atMarket(m)) { res.toast = "farMarket"; return res; }
+  if (!atMarket(m, tw)) { res.toast = "farMarket"; return res; }
   /* ══════════════════════════════════════════════════════════════════════════
      ZIP 431 — LE PANIER : UNE REQUÊTE, N LIGNES.
      ⚠️⚠️ C'EST UNE CONTRAINTE RÉSEAU, PAS UN CONFORT D'INTERFACE. Le panneau du
@@ -3050,7 +3056,7 @@ export function resolveTownSell(f, m, day, s) {
   if (Array.isArray(m.lines)) {
     for (const line of m.lines.slice(0, 64)) {
       if (!line || Array.isArray(line.lines)) continue;   // pas de panier dans un panier
-      const r = resolveTownSell(f, { ...line, px: m.px, py: m.py, pz: m.pz }, day, s);
+      const r = resolveTownSell(f, { ...line, px: m.px, py: m.py, pz: m.pz }, day, s, tw);
       res.moneyDelta += r.moneyDelta; res.earnedDelta += r.earnedDelta;
       res.gain += r.gain; res.base += r.base; res.n += r.n;
       for (const k of ["invChanged", "gemsChanged", "flourChanged", "sugarChanged",
@@ -3574,7 +3580,7 @@ export function marketFamilyOf(item) {
    juré de ne plus commettre).
    ⚠️ ELLE LIT `px/py` DE LA REQUÊTE, JAMAIS `f.x/f.y` : voir l'en-tête de
    resolveTownSell — c'est le piège des deux cartes, et il coûte cher ici. */
-export function atMarket(m) {
+export function atMarket(m, tw) {
   /* ⚠️⚠️ LA ZONE D'ABORD, LES DISTANCES ENSUITE. C'est la règle
      d'`anyRemoteNearZoned` (§4 de CLAUDE.md) appliquée à la vente, et elle est
      ici VITALE : le champ de foire vit en x∈[34;68], y∈[70;104] de la carte de
@@ -3588,7 +3594,10 @@ export function atMarket(m) {
      pour tout le monde — il suffirait d'omettre le champ. */
   if (m.pz !== "town") return false;
   const px = +m.px, py = +m.py;
-  const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
+  /* 2026-10-05 (nuit) — `tw` : le monde de la saison (l'hiver, le marché est dans la prairie, `townMarketRect`).
+     Sans lui, le champ de foire : la règle reste PURE (aucune horloge lue ici — un banc qui la jouerait
+     changerait de réponse selon la semaine réelle). */
+  const mk = townMarketRect(tw), R = C.MARKET_RANGE_TILES;
   return Number.isFinite(px) && Number.isFinite(py)
     && px >= mk.x - R && px <= mk.x + mk.w + R && py >= mk.y - R && py <= mk.y + mk.h + R;
 }
@@ -8699,6 +8708,147 @@ export function generateTownWorld() {
   return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY, gates, plots };
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit) — LE MONDE D'HIVER DE VALLEY TOWN : LE MARCHÉ DANS LA PRAIRIE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Voir `TOWN_WINTER_MARKET` (fermeConstants.js) pour le POURQUOI du lieu. Ici, le
+   COMMENT : un second monde, DÉRIVÉ du premier, que le jeu prend l'hiver
+   (`getTownWorldCached`, FermeGame.js).
+   ⚠️⚠️ UN AUTRE OBJET, PAS UNE MUTATION. La carte en cache est lue par trente
+   endroits et une douzaine de caches indexés par son IDENTITÉ (`townNav`,
+   `townSpots`, la neige, les oiseaux, le taxi…) : muter `solid` et `props` en
+   place au changement de saison aurait laissé chacun de ces caches décrire
+   l'ancienne carte — des résidents qui traversent les étals neufs, une neige qui
+   ombre des étals partis, sans une erreur. Un second objet, et chaque cache se
+   reconstruit seul la première fois qu'il le voit.
+   ⚠️ CE QUI EST PARTAGÉ ET CE QUI NE L'EST PAS : `solid` et `props` sont COPIÉS
+   (le calque les change) ; tout le reste (sol, relief, objets, haies…) est le
+   MÊME tableau — la carte n'a qu'un sol, et ce que les joueurs y changent (les
+   arbres coupés, un calque de l'état partagé) vaut pour les deux saisons.
+   ⚠️ AUCUN TIRAGE : tout se déduit de `AX` / `AXIS`, comme au champ de foire. Une
+   case prévue qui ne serait pas de l'herbe libre est SAUTÉE, jamais déplacée —
+   `verify-vallee` (« le marché d'hiver ») exige qu'aucune ne le soit. */
+const WINTER_WORLDS = new WeakMap();
+/* Ce que le marché remballe en quittant l'esplanade : les étals et ce qui traîne autour.
+   Les quatre lampadaires d'angle restent (ils éclaireront la patinoire). */
+const FAIR_PACKED = new Set(["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"]);
+export function townWinterWorld(tw) {
+  if (!tw) return null;
+  if (tw.winter) return tw;
+  const hit = WINTER_WORLDS.get(tw);
+  if (hit) return hit;
+  const W = tw.w, H = tw.h, mk = C.TOWN_MARKET;
+  const solid = Uint8Array.from(tw.solid);
+  const inFair = (p) => p.x >= mk.x && p.y >= mk.y && p.x < mk.x + mk.w && p.y < mk.y + mk.h;
+  const props = [];
+  for (const p of tw.props) {
+    if (inFair(p) && FAIR_PACKED.has(p.kind)) { solid[p.y * W + p.x] = 0; continue; }
+    props.push(p);
+  }
+  const AX = C.TOWN_WINTER_MARKET_AX, AXIS = C.TOWN_WINTER_MARKET_AXIS, NT = C.TOWN_STALL_TRADES.length;
+  const free = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !solid[y * W + x]
+    && tw.ground[y * W + x] === C.G_GRASS && tw.objects[y * W + x] === C.O_NONE;
+  const skipped = [];
+  const put = (x, y, kind, extra) => {
+    if (!free(x, y)) { skipped.push(`${kind}@${x},${y}`); return null; }
+    const p = { x, y, kind, ...(extra || {}) };
+    props.push(p); solid[y * W + x] = 1;
+    return p;
+  };
+  /* LES ÉTALS : la formule du champ de foire (cinq par rangée, un tous les quatre
+     pas, métiers décalés de trois entre les rangées) — sauf l'étal du MILIEU de la
+     rangée sud, qui laisse la place à l'entrée face à l'arche. Le métier qu'il
+     portait (le potier) hiverne : on ne tourne pas la terre par −10 °C. */
+  const stalls = [];
+  for (let row = 0; row < 2; row++) {
+    const ry = row ? AXIS + C.TOWN_WINTER_MARKET_SOUTH : AXIS - 3, shift = row ? 3 : 0;
+    for (let k = 0; k < 5; k++) {
+      if (row === 1 && k === 2) continue;
+      const p = put(AX - 8 + k * 4, ry, "stall", { v: (k + shift) % NT, alt: row });
+      if (p) stalls.push(p);
+    }
+  }
+  // L'ARCHE, sur l'axe, entre les deux tilleuls du boulevard (ses deux poteaux seuls sont solides, voir le champ de foire).
+  for (const side of [-1, 1]) put(AX + side * 2, C.TOWN_WINTER_MARKET_ARCH_Y, "marketArch", { side, cx: AX });
+  /* CE QUI TRAÎNE AUTOUR (les écarts du champ de foire, au bout des rangées) et LE
+     COIN DU FEU, au bout ouest de l'allée : un brasero, du bois à côté, de quoi
+     s'asseoir. (Les guirlandes ne sont pas des décors : ce sont les fanions tendus d'étal en étal par le rendu,
+     `drawStallBunting`, qui portent des ampoules l'hiver.) */
+  /* ⚠️ PAS DE CHARRETTE DE FLEURS L'HIVER : ce qui traîne autour d'un marché de janvier, ce sont des tonneaux, des
+     sacs, des caisses. Trois LANTERNES sur potence au bord des planches éclairent l'allée la nuit — aux deux bouts
+     et le long du tronçon qui file vers l'escalier, jamais entre deux étals (la corde des fanions y passe). */
+  const SO = C.TOWN_WINTER_MARKET_SOUTH;
+  for (const [dx, oy, kind] of [
+    [-11, AXIS - 3, "sacks"], [9, AXIS - 5, "barrel"], [-11, AXIS + SO, "barrel"],
+    [11, AXIS + SO, "crate"], [12, AXIS - 3, "crate"], [12, AXIS + SO, "sacks"],
+    [-12, AXIS + 2, "hangLamp"], [10, AXIS + 2, "hangLamp"], [20, AXIS - 2, "hangLamp"],
+    [-14, AXIS, "brazier"], [-16, AXIS - 1, "woodpileAxe"], [-14, AXIS - 2, "bench"],
+  ]) put(AX + dx, oy, kind);
+  /* LE CAILLEBOTIS (`duck` : 1 = l'allée est-ouest, planches en travers ; 2 = un
+     passage nord-sud). L'allée sur trois rangées (l'axe au milieu), du coin du feu
+     au pied de l'escalier ; l'entrée, de l'arche à l'allée ; et une marche de
+     planches qui monte vers l'escalier. Jamais sous un décor ni un arbre. */
+  const duck = new Uint8Array(W * H);
+  const lay = (x, y, k) => { if (free(x, y) && !duck[y * W + x]) duck[y * W + x] = k; };
+  /* Le caillebotis part du COIN DU FEU : le brasero est posé SUR les planches, sur sa dalle de pierre (dans son dessin),
+     comme sur les vrais marchés — un premier jet le posait sur l'herbe, où la fonte faisait une tache verte au bout
+     d'un plancher blanc. La case du brasero porte des planches elle aussi (sinon un trou de neige autour de la dalle). */
+  for (let x = AX - 15; x <= C.TOWN_WINTER_MARKET_STAIR_X; x++) for (let y = AXIS - 1; y <= AXIS + 1; y++) lay(x, y, 1);
+  for (const p of props) if (p.kind === "brazier" && p.x >= AX - 15 && p.y >= AXIS - 1 && p.y <= AXIS + 1) duck[p.y * W + p.x] = 1;
+  for (let y = AXIS + 2; y <= C.TOWN_WINTER_MARKET_ARCH_Y + 2; y++) for (let x = AX - 1; x <= AX + 1; x++) lay(x, y, 2);
+  // (les lanternes, posées plus haut au bord des planches, ne sont pas sur ce passage)
+  for (let y = AXIS - 3; y <= AXIS - 2; y++) lay(C.TOWN_WINTER_MARKET_STAIR_X, y, 2);
+  /* LA PATINOIRE (voir `TOWN_RINK`, fermeConstants.js) : la glace (`rink`, 1 par case), la BANDE (l'anneau extérieur
+     du dallage et les coins hors de l'arrondi, solides), les PORTILLONS (`rinkGate` : des trous dans la bande, qu'on
+     franchit chaussé — la règle de qui n'a pas de patins est dans le jeu, `rinkGateHold`). Un décor resté sur le dallage
+     (aucun : tout ce qui y était a été remballé plus haut) aurait été une case sautée, comptée par le banc. */
+  const RK = C.TOWN_RINK, rink = new Uint8Array(W * H), rinkGate = new Uint8Array(W * H);
+  const gateAt = (x, y) => C.TOWN_RINK_GATES.some((g) =>
+    (g.side === "n" && y === RK.y0 - 1 && x >= g.a && x <= g.b) || (g.side === "s" && y === RK.y1 + 1 && x >= g.a && x <= g.b) ||
+    (g.side === "e" && x === RK.x1 + 1 && y >= g.a && y <= g.b) || (g.side === "w" && x === RK.x0 - 1 && y >= g.a && y <= g.b));
+  for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) {
+    const i = y * W + x;
+    if (tw.ground[i] !== C.G_PATH_STONE) { skipped.push(`patinoire@${x},${y}`); continue; }
+    if (C.rinkInside(x + 0.5, y + 0.5)) { if (solid[i]) skipped.push(`glace@${x},${y}`); rink[i] = 1; continue; }
+    if (gateAt(x, y)) { rinkGate[i] = 1; solid[i] = 0; continue; }
+    solid[i] = 1;
+  }
+  props.push({ x: RK.x0, y: RK.y1 + 1, kind: "rinkBoards" });   // l'ancre du dessin de la bande (une passe à part le découpe par rangée)
+  /* Les mâts (sur l'allée de terre battue qui longe les flancs) et les guirlandes tendues de l'un à l'autre, d'ouest en
+     est (`TOWN_RINK_POLES`) : px du monde, le haut du mât, là où le fil s'attache. */
+  const rinkGarlands = [];
+  for (const pair of C.TOWN_RINK_POLES) {
+    const ends = [];
+    for (const [px2, py2] of pair) {
+      const i = py2 * W + px2;
+      if (solid[i] || tw.objects[i] !== C.O_NONE || tw.ground[i] === C.G_WATER) { skipped.push(`mât@${px2},${py2}`); continue; }
+      props.push({ x: px2, y: py2, kind: "rinkPole" }); solid[i] = 1;
+      ends.push({ x: px2 * C.TILE + C.TILE / 2, y: (py2 + 1) * C.TILE - C.RINK_POLE_H + 3 });
+    }
+    if (ends.length === 2) rinkGarlands.push({ x0: ends[0].x, y0: ends[0].y, x1: ends[1].x, y1: ends[1].y, sag: 22, k: rinkGarlands.length * 7 + 3 });
+  }
+  {
+    const CW = C.TOWN_SKATE_CHALET_W, CHh = C.TOWN_SKATE_CHALET_H, s0 = C.TOWN_RINK_CHALET;
+    let fits = true;
+    for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) if (!free(s0.x + dx, s0.y + dy)) fits = false;
+    if (fits) {
+      for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) solid[(s0.y + dy) * W + s0.x + dx] = 1;
+      props.push({ x: s0.x + (CW >> 1), y: s0.y + CHh - 1, kind: "skateChalet", ox: -C.TILE / 2, rink: 1 });
+    } else skipped.push(`chalet@${s0.x},${s0.y}`);
+  }
+  const out = Object.assign({}, tw, { solid, props, duck, rink, rinkGate, rinkGarlands, winter: true, summer: tw, marketRect: C.TOWN_WINTER_MARKET, winterSkipped: skipped });
+  delete out._arch;   // un cache de l'été (ses arches de pont ne changent pas, mais un cache se reconstruit, il ne se partage pas)
+  WINTER_WORLDS.set(tw, out);
+  return out;
+}
+/* Le rectangle du marché du monde donné : le champ de foire, ou la prairie l'hiver.
+   ⚠️ LU PAR LA VENTE (`atMarket`), LES RÉSIDENTS, LE CHAT DU MARCHÉ, LE TAXI ET LA
+   CARTE — jamais `C.TOWN_MARKET` en direct : sinon on vendrait l'hiver au milieu de
+   la patinoire. */
+export function townMarketRect(tw) {
+  return (tw && tw.marketRect) || C.TOWN_MARKET;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 427 — LES ENDROITS OÙ L'ON VIT, DÉRIVÉS DE LA CARTE.
    ───────────────────────────────────────────────────────────────────────────
@@ -8916,7 +9066,7 @@ export function townSpots(tw) {
   // les rangées, ce qui est précisément ce qui fait une foire plutôt qu'un
   // alignement de commerces.
   {
-    const mk = C.TOWN_MARKET;
+    const mk = townMarketRect(tw);   // 2026-10-05 : l'hiver, on traîne dans le marché de la prairie
     for (let y = mk.y + 3; y < mk.y + mk.h - 2; y += 9)
       for (let x = mk.x + 3; x < mk.x + mk.w - 3; x += 10) add(x, y, "fair");
   }
@@ -9759,7 +9909,7 @@ export function townTaxiStops(tw) {
   const src = [
     ["station",  C.TOWN_STATION.x + C.TOWN_STATION.w / 2, C.TOWN_STATION.y + C.TOWN_STATION.h + 2],
     ["plaza",    C.TOWN_PLAZA.x + C.TOWN_PLAZA.w / 2,     C.TOWN_PLAZA.y + C.TOWN_PLAZA.h - 2],
-    ["market",   C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2,   C.TOWN_MARKET.y + C.TOWN_MARKET.h - 2],
+    ["market",   townMarketRect(tw).x + townMarketRect(tw).w / 2, townMarketRect(tw).y + townMarketRect(tw).h - 2],   // 2026-10-05 : celui de la saison
     ["hall",     C.TOWN_HALL.x + C.TOWN_HALL.w / 2,       C.TOWN_HALL.y + C.TOWN_HALL.h + 2],
     ["church",   C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2,   C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2],
     ["court",    C.TOWN_COURT.x + C.TOWN_COURT.w / 2,     C.TOWN_COURT.y + C.TOWN_COURT.h + 2],

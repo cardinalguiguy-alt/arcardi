@@ -1,5 +1,169 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 (nuit, fin ter) — LA COURSE DE LA PATINOIRE : PRIVATISER, COURIR À QUATRE, LE CONTRE-LA-MONTRE
+
+« Privatiser la patinoire pour organiser des courses de vitesse comme dans Mario Party 5 ; bien travailler la physique, le graphisme
+et l'UI de la course multijoueur ; du contre-la-montre aussi » (Guillaume). Tranché avec lui : grande glace OUVERTE (la piste n'existe
+que pendant une session), toujours QUATRE au départ (des résidents complètent), physique « simple comme MP5 » + aspiration + chute
+contre la bande. **Supabase : rien** — les records vont dans la sauvegarde JSON existante (`rinkRec`), la session dans l'état partagé (`rink`).
+- *La piste et ses règles* (`course.js`, pur) : un îlot de plots (rectangle arrondi au centre, 26 plots) qu'on ne traverse pas (bloqué
+  pendant la session), la ligne sur la droite sud, la grille à quatre couloirs derrière, 5 tours dans le sens inverse des aiguilles
+  d'une montre. Le compte des tours (`tracker`) lit l'ANGLE CUMULÉ autour de l'îlot : ni l'aller-retour sur la ligne, ni la marche
+  arrière, ni le demi-tour ne paient. L'aspiration (`draftK`) : dans le sillage d'un autre (0,55 à 2,9 cases devant, dans l'axe),
+  +10 % de croisière, +25 % de poussée. Heurter la bande ou l'îlot au-dessus de 6,4 cases/s fait TOMBER (`skateTumble`, 0,95 s, sans
+  blessure : ce n'est pas le lac ; vrai sur la patinoire même hors course). Les résidents BOUSCULENT (à moins de 0,62 case, on est
+  repoussé) ; eux suivent leur ligne — tirés d'une graine, rien ne peut les dévier sans le dire à tout le monde.
+- *Les résidents-coureurs* (`botRun`) : une trajectoire DÉTERMINISTE tirée de la graine — chaque client la calcule seul (zéro
+  message), l'hôte en tire leurs temps. Trois profils réglés au banc sur un patineur simulé avec la vraie physique de `patin.js` : le
+  plus fort à 0,2 % de la ligne idéale, le plus lent à +30 % et qui tombe parfois. Habits et noms tirés des habitants.
+- *Le réseau* (§3) : une session coûte ses gestes et rien d'autre — réserver, rejoindre, partir, arriver (une `req` et un `apply`
+  chacun), la clôture. Chacun chronomètre SA course depuis un `startIn` DATÉ À LA RÉCEPTION et n'envoie qu'une DURÉE à l'arrivée :
+  le classement se fait aux chronos, juste avec 300 ms d'Europe à l'Australie. Le fantôme du contre-la-montre (10 positions/s au
+  huitième de case, ~740 caractères) part dans le message d'arrivée.
+- *L'écran* (`CourseHud.js`, sa propre boucle à ~20 images/s) : la grille d'attente (couleurs des couloirs, Rejoindre / Départ /
+  Annuler / Quitter), le compte à rebours, TOUR · CHRONO · PLACE, les temps au tour, la mini-carte, le classement en direct,
+  « DERNIER TOUR », l'aspiration, l'arrivée ; les résultats (médailles, records, « nouveau record »). Au sol : la ligne et la grille
+  peintes, les plots, le podium à l'arrivée. Au chalet : la section course (réserver course ou contre-la-montre, records).
+- *Le contre-la-montre* : seul, contre le FANTÔME du record (transparent), qui devient le sien s'il le bat.
+- Vu en jeu : seul (contre-la-montre complet, record et fantôme enregistrés ; course contre trois résidents, écran, podium) ET À DEUX
+  (`audit-duo`) : l'invitée voit la grille, rejoint, court ; résultats et records identiques au centième des deux côtés.
+- ⚠️ **Deux défauts trouvés à deux, corrigés.** (1) Le classement en direct lisait la position DESSINÉE de l'autre joueur, qui traîne
+  derrière ses paquets (tampon anti-gigue + latence) : chacun se voyait 3e devant l'autre. Il lit maintenant le dernier paquet poussé
+  jusqu'à maintenant par sa vitesse ; 17 relevés sur 17 concordants. (2) **Hors course, plus grave** : deux clients qui se sont
+  balayés L'UN L'AUTRE (TTL de 60 s ; un portable hôte qui dort une minute suffit) ne se retrouvaient JAMAIS — plus d'audience, donc
+  plus de `pos` ni d'`apply`, et un ping ne réinscrit personne. Un ping d'inconnu déclenche maintenant l'annonce de sa position, un
+  `pos` d'inconnu reçoit une réponse : trois messages pour des retrouvailles, mesuré au relais. `sendPos` ne publie plus rien avant que
+  le joueur existe (une TypeError dans le gestionnaire réseau, vue à la console).
+- Bancs : `verify-course` 30/30 (piste, compte des tours falsifié par allers-retours et marche arrière, résidents déterministes et
+  battables, aspiration, classement, fantôme), `verify-patin` 23/23, `verify-vallee` 319/319, `render-patinoire` 4/4.
+- ⚠️ Pas faits : les résidents qui patinent hors course ; les reflets des patineurs sur la glace ; un spectateur ne voit pas la
+  mini-carte (seulement une ligne d'état) ; pas de son (départ, tour, arrivée).
+
+## 2026-10-05 (nuit, fin bis) — LA PATINOIRE DU CHAMP DE FOIRE (le lieu ; la course suit)
+
+« HYPER soignée et belle » (Guillaume). **Supabase : rien** (un calque du monde d'hiver, `townWinterWorld`). Tranché avec lui :
+une GRANDE glace OUVERTE ; la bande bloque sans patins (un message), qui insiste entre et tombe ; chalet des patins à côté.
+- *La géométrie* (`TOWN_RINK`, `rinkInside`, fermeConstants.js) se DÉDUIT du dallage du champ de foire : l'anneau extérieur porte
+  la bande (solide), l'intérieur est la glace (19 × 20 cases), aux coins ARRONDIS (rayon 3,5) — une case est de glace si son
+  centre est dans l'arrondi ; la collision, le dessin, la neige et le banc lisent la même figure. Trois portillons (nord et sud
+  sur l'axe du dallage, est vers le chalet), six mâts sur l'allée des flancs, trois guirlandes tendues d'OUEST EN EST (le seul
+  sens qui se lit comme une guirlande dans cette vue), un second chalet des patins à l'est (celui du lac reste ; la distance
+  au comptoir prend le plus proche).
+- *La glace* (`rinkIcePixel` / `drawRinkIceTile`, fermeArt.js) : voiles laiteux, glace vive plus sombre, lueurs obliques, neige
+  de lames contre la bande, le REFLET pâle de la bande nord, un grand flocon bleu peint SOUS la glace ; tramée au bruit bleu. Pas
+  de neige dessus (`rinkAt`). Les traces de lames du lac s'y posent (et s'y purgent hors glace).
+- *La bande* (`rinkBoardRows`) : suivie au pixel le long du rectangle arrondi, planches crème à joints, plinthe verte, RAMBARDE
+  ROUGE ; côté glace, panneaux peints aux couleurs et pictos des commerçants du marché ; côté rue, guirlande de sapin à nœuds
+  rouges ; poteaux de portillon. Rastérisée PAR COUCHES (faces, rambarde, neige, poteaux — un premier jet échantillon par
+  échantillon effaçait le flanc est sous sa propre neige), découpée par RANGÉE DE SOL pour se trier avec les patineurs, et la
+  neige devient le DESSUS de la rambarde. Son OMBRE portée est calculée d'un seul tenant (`drawRinkBoardShadow` : le polygone
+  entre le pied et le sommet projeté) — découpée par rangée, elle sortait en peigne sur les flancs.
+- *Les guirlandes* (`drawRinkGarland`) : ampoules de VERRE COLORÉ (rouge, vert, or, bleu, blanc) sur fil vert — de jour, des
+  ampoules claires éteintes ne se voyaient pas et il restait trois lignes électriques ; la nuit, allumées avec les lanternes,
+  onze flaques douces sous chaque fil font une bande de lumière sur la glace (cinq faisaient des pois). Mâts : lanterne et
+  flaque de lumière.
+- *Le portillon sans patins* (`rinkGateHold`, FermeGame.js) : le pas qui poserait la semelle sur la glace est retenu, un message
+  (au plus toutes les 4 s) ; qui pousse encore 1,1 s passe — puis la glissade et la chute de `patin.js` (la blessure du lac).
+- Bancs : `verify-vallee` 319/319 (la glace est la figure de la collision, la bande est FERMÉE hors portillons, chaque portillon
+  s'atteint, 6 mâts et 3 fils, le chalet s'atteint, deux chalets l'hiver) ; `render-patinoire` 4/4 (la glace suit l'arrondi au
+  pixel, une case de glace porte de la glace, la bande découpée une fois par rangée). Vu en jeu : de jour, de nuit, chaussé (la
+  glisse, les traces), portillon retenu puis franchi en insistant (chute). Plan de ville : la glace en bleu pâle.
+- ⚠️ Pas faits : les résidents qui patinent ; la course, le contre-la-montre et la privatisation (la suite) ; les reflets des
+  patineurs sur la glace. Un joueur posé sur la glace sans patins (téléport dev) tombe : c'est la règle, pas un défaut.
+
+## 2026-10-05 (nuit, fin) — LE MARCHÉ HIVERNE DANS LA PRAIRIE ; LES OMBRES PORTÉES SUIVENT LE SOLEIL
+
+Deux livraisons, séparées (deux changements visuels, mais ils ne se touchent pas : l'un est un lieu, l'autre une lumière).
+**Supabase : rien** (aucun état neuf : le marché d'hiver est un calque de la carte, les ombres une pure fonction de l'heure).
+Décisions de Guillaume, la même nuit : la patinoire sera une GRANDE GLACE OUVERTE (la piste en plots seulement pendant une
+course privatisée), 4 au départ (des résidents complètent), le marché HIVERNE dans la prairie et revient au printemps,
+physique de course « simple comme Mario Party 5 » + aspiration + chute contre la bande ; Claude seul (pas de Codex).
+
+**1. Le marché d'hiver** (`TOWN_WINTER_MARKET*`, fermeConstants.js ; `townWinterWorld`, `townMarketRect`, fermeEngine.js).
+- *Un second monde, pas une mutation* : la carte est tirée d'une graine (aucun tirage de plus) et lue par une douzaine de caches
+  indexés par son IDENTITÉ (navigation, arrêts, neige, oiseaux, taxi…). L'hiver, `getTownWorldCached` rend un monde DÉRIVÉ
+  (`solid` et `props` copiés, tout le reste partagé) ; chaque cache se reconstruit seul. `townWorldRef` n'est plus un ref :
+  une lecture de cette porte (même nombre de hooks). Le plan de ville suit (`townMinimapImgRef` indexé par monde).
+- *Le lieu* : l'esplanade se vide (les quatre lampadaires d'angle restent, pour la patinoire). Dans la prairie au nord du
+  boulevard, l'ARCHE entre deux tilleuls de l'alignement (x 83 et 89), un CAILLEBOTIS de l'arche à l'allée et de l'allée au
+  pied de l'escalier ouest de la Haute-Ville (x 115), deux rangées d'étals (5 au nord, 4 au sud : l'étal du milieu laisse
+  l'entrée ; le potier hiverne), le COIN DU FEU au bout ouest (brasero sur sa dalle, banc, bûches), trois lanternes sur
+  potence, tonneaux, sacs, caisses — pas de charrette de fleurs en janvier. Rangée sud à AXIS+4 (un étal fait 50 px de
+  haut : à +2 il couvrait l'allée). Axe en 86 et pas 92 : la maison rouge du boulevard cachait l'étal sud-est (vu en jeu).
+- *Ce qui suit le marché* : la vente (`atMarket(m, tw)` — PURE, le monde est passé ; sans lui, le champ de foire), la
+  flânerie des résidents (`fair`), le chat roux, l'arrêt de taxi, l'étiquette de la carte, le téléport dev.
+- *Le caillebotis* (`tw.duck`, `townDuckPixel` / `drawTownDuckboardTile`, fermeArt.js) : pin délavé, planches de 4 px en travers
+  (période sur le MONDE), bouts irréguliers, tranche de 2 px au sud, clous sur les traverses ; cuit une fois par case. La neige le
+  lit au pixel (`duckAt`) : balayé au milieu, congère contre les bords ; le voile « sol détrempé » ne s'y applique pas.
+- *Le brasero* : quatre images de flamme à cadence fixe, escarbilles (`drawBrazierSparks`), lumière « torche », fonte d'un rond
+  de neige (`setMelts`). *Les guirlandes* : PAS de fil de plus — les ampoules sont posées SUR la corde des fanions du zip 431
+  (sortie dans `A.drawStallBunting` pour qu'un banc la regarde ; `render-foire` la recopiait, il l'appelle), allumées avec les
+  lanternes, déclarées en verres qui brillent. Un premier jet tendait un fil sur les faîtages : la hauteur que le 431 avait
+  écartée (elle hachait les bâches), puis des fils en travers de l'allée : ils barraient la marchandise d'une croix.
+- Bancs : `verify-vallee` 313/313 (section « le marché d'hiver » : monde distinct, 0 saut, 9 étals, esplanade vide, aucun mur
+  invisible, étals atteints, vente l'hiver et pas sur la patinoire, été inchangé, caillebotis d'un seul tenant jusqu'à
+  l'escalier, rangée sud hors de l'allée, brasero sur les planches) ; `render-marche-hiver` 3/3 ; `render-foire` identique.
+  Vu en jeu de jour et de nuit (ampoules, brasero, lanternes), vente proposée dans la prairie et pas sur l'esplanade, bascule
+  vers l'automne (la prairie se vide). ⚠️ La bascule de saison est INSTANTANÉE (un étal peut apparaître sous un joueur : rien
+  ne le dégage encore) ; les résidents qui marchaient vers l'ancien marché changent de chemin d'un coup.
+
+**2. Les ombres portées du soleil** (`ombres.js` ; `sunShadowPass`, FermeGame.js). « Calculées en fonction de l'heure, qui
+s'allongent au lever et au coucher, pas figées. »
+- *Le soleil* : levé à l'EST, couché à l'OUEST aux heures du ciel (`sunHoursOfTag`) ; à midi l'ombre tombe vers le bas, penchée
+  au sud-est (la lumière PEINTE des sprites vient du nord-ouest) ; hauteur par saison (60° l'été, 26° l'hiver), longueur
+  1/tan(hauteur) bornée à ×2,2 ; force selon le ciel (couvert : pâle ; pluie, neige qui tombe, nuit : rien) ; naissance et mort
+  en fondu avec un soleil rasant.
+- *Le dessin* : chaque chose DEBOUT est rejouée par un cisaillement autour de sa ligne de sol, dans un tampon à la résolution de
+  l'art, et le tampon devient UNE silhouette (pas de double noir) posée une fois sur le sol, avant le monde trié. Ville : la
+  file des reflets (`d.rb`, déjà sans effets de bord) + les bâtiments peints relevés par `drawScreenExactBitmap` à l'image
+  d'avant (`BITMAP_LOG`, coupés au pied du mur). Ferme : les dessins marqués `cb` (arbres, maison, boutique, bac, puits,
+  épouvantail, gare, personnages). Les ombres de CONTACT restent. La neige ne pose plus son ombre figée au nord-ouest
+  (`castLight: 0`), elle la garde comme MÉMOIRE (la neige tient plus longtemps à l'ombre).
+- Bancs : `verify-ombres` 27/27 (falsifié : `FALSIFY=lean`). Vu en jeu : prairie l'été à 7 h 30, 13 h 30, 19 h 30 ; marché
+  l'hiver à 10 h et 15 h (dentelle du bouleau nu sur la neige) ; ferme à 8 h et 17 h 30. ~4 ms par image avec ou sans ombres.
+  ⚠️ Pas d'ombre : les haies et clôtures de la ville, les clôtures de la ferme, les fanions. Le bord de l'écran peut faire
+  apparaître l'ombre d'un objet au matin (bornée à ×2,2 pour ça).
+- `verify-neige` 17/17, `verify-pluie` 34/34, `render-neige` 2/2, `verify-faune` 105/105, `verify-strings` OK, bundle esbuild et
+  `no-undef` propres.
+
+## 2026-10-05 (nuit, suite) — L'ESSAI À ×0,8, LE PERRON BORNÉ AU NORD, LA NEIGE QUI SUIT LE BORD DES RUES
+
+Trois retours de Guillaume en jeu. **Supabase : rien.** Trois changements, dont un seul visuel par défaut (la neige) : l'essai reste éteint par défaut,
+la borne du perron n'est visible que sur la route au nord du tribunal.
+
+**1. L'essai « petits personnages » passe de ×0,68 à ×0,8** (`TOWN_SMALL_FOLK_SCALE`, fermeConstants.js). « La vitesse de marche est parfaite », mais le
+perso était « un peu trop petit par rapport aux pots, aux animaux » : « un peu moins petit, toujours moins grand que la taille par défaut ». La taille
+est désormais un CHOIX (≈ 18 px de haut au lieu de 16, sur 23) ; la vitesse reste DÉRIVÉE du palier (×0,5). Le `Math.min` du jeu laisse le haut du
+perron rapetisser jusqu'à 0,68 : la profondeur des marches reste lisible. Vu en jeu, à côté du chat roux du marché.
+
+**2. `courtDepthFrac` s'arrête au mur nord du palais** (fermeConstants.js). Au-delà de `b.y` (la première rangée solide du corps), on est DERRIÈRE le
+bâtiment : facteur 1, avec un fondu d'une rangée (la bande latérale de fondu se longe du parvis jusque derrière ; sans lui, on y regrandissait d'un coup).
+`verify-vallee` § « le perron » : 3 contrôles neufs (le seuil de la porte à 0,677 ; derrière le palais, taille ET vitesse à 1 partout — falsifié : sans
+la borne, 0,500 en (60, 0) ; en longeant le flanc, saut max 0,04 par quart de case). En jeu : 5,15 cases/s sur la route y = 36 (2,59 avant), et le
+perron ralentit toujours jusqu'au palier (y = 52,4).
+
+**3. La neige lit la rue pavée AU PIXEL, comme elle est peinte** (neige.js `buildChunkStatic`, fermeArt.js `roadPixelInfo` / `townRoadPixel`).
+« Quand la neige fond, un bug autour des routes, c'est trop carré, pas réaliste » (deux captures). Cause : depuis la phase 7, les rues pavées ont un
+bord LIBRE (champ de distance aux coins, `townRoadField`), mais la neige classait encore CASE PAR CASE — la case de rue entière en chaussée (fondue
+la première), la case d'herbe entière en pré : la neige recouvrait le pavé qui déborde sur l'herbe et découvrait l'herbe des coins de chaque case de
+rue. Une rue en biais redevenait un escalier de 16 px, avec un carré vert à chaque marche. Au banc, pire : les ornières (orientées par les voisines
+de CASE) tournaient d'un quart de tour à chaque marche.
+- *Une lecture, deux usages* : `roadPixelInfo` dit ce qu'est un pixel de rue (dedans, profondeur jusqu'au bord, bordure, pavé contre une allée) ; le
+  DESSIN (`roadEdgeCell`) et la NEIGE (`env.roadAt` → `townRoadPixel`) la lisent tous deux. Refactor du dessin vérifié à l'octet : les six planches
+  `render-rues` réécrites sont identiques.
+- *Les ornières suivent la courbe* : posées à 0,28 de la largeur depuis le bord le plus proche, mesuré par un écart SIGNÉ à l'axe (`F.lat`, linéaire en
+  travers) — la distance au bord (`w/2 − |d|`) fait un V sur l'axe, et son interpolation bilinéaire y dessinait un zigzag d'une case.
+- *La lisière contre la bordure* : au contour exact, le pré s'arrêtait sur une ligne parfaite. Contre la pierre, la réception tombe sur une portée
+  irrégulière de 1 à 10 px (deux bruits ; surtout étroite, des anses par endroits) : à la fonte, l'herbe mouillée apparaît par morsures le long du
+  trottoir. Le caniveau de la pluie (`gut`) suit le même bord.
+- `render-neige` : deux lieux neufs (`biais`, la rue de l'ouest en pente raide ; `nord`, la rue du nord en pente douce) et `FONTE=1` (le pré blanc, la
+  chaussée nue : l'état des captures). Vu en jeu sur la rue de l'ouest (42, 127) sous 12 cm.
+- ⚠️ Restent lus à la CASE, et c'est juste : l'avenue goudronnée et les rues pavées sans bord libre (droites, bordure posée case par case), les dallages,
+  les sentiers meubles (gravier, terre battue : classe `SOFT`, presque la même neige que le pré — pas de marche visible). Les chemins de la FERME ne sont
+  pas touchés (pas de rue à bord libre là-bas).
+- Bancs : `verify-neige` 17/17, `verify-pluie` 34/34, `render-rues` OK (identique), `render-neige` 2/2, `verify-vallee` 295/295, `verify-strings` OK,
+  bundle esbuild et `no-undef` propres.
+
 ## 2026-10-05 (nuit) — LES LAPINS À LA TAILLE DU PIGEON, L'ESSAI « PETITS PERSONNAGES », LE PERRON QUI DÉBORDE AU NORD
 
 Deux demandes de Guillaume, plus un défaut trouvé en regardant. **Supabase : rien.** Deux changements visuels dans la même livraison, mais l'essai est
@@ -17,7 +181,7 @@ aimé, au nord du tribunal, un perso plus petit qui « semble marcher moins vite
 `Math.min` et non un produit : sur le perron, on ne rapetisse pas deux fois. Mesuré en jeu : 5,19 → 2,59 cases/s. ⚠️ La collision, les portées, la
 cadence des pas (9 images/s) et les patins ne bougent pas : c'est un essai de RESSENTI, pas une échelle.
 
-**3. Le défaut, pas corrigé** : `courtDepthFrac` (`fermeConstants.js`) n'a pas de borne au NORD — « au-delà du palier, on reste au plus profond » vaut pour
+**3. Le défaut, pas corrigé** (corrigé dans l'entrée suivante) : `courtDepthFrac` (`fermeConstants.js`) n'a pas de borne au NORD — « au-delà du palier, on reste au plus profond » vaut pour
 toute la bande x ≈ 59-76, du palier jusqu'au haut de la carte. Sur la route y = 35, le perso passe à ×0,68 et à mi-vitesse sur ces 17 cases (mesuré dans
 les deux sens, zoom constant). À borner au palier, avec un fondu sur les côtés des ailes.
 

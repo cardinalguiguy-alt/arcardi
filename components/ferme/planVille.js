@@ -57,12 +57,14 @@ const rgba = (c, k = 1, a = 1) => `rgba(${clamp8(c[0] * k)},${clamp8(c[1] * k)},
 const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 /* ─── classes de sol ────────────────────────────────────────────────────── */
-const K = { GRASS: 0, LAWN: 1, WATER: 2, ASPHALT: 3, COBBLE: 4, BRICK: 5, DIRT: 6, SLAB: 7, STAIR: 8, WOOD: 9, SAND: 10, GRAVEL: 11, STONEBR: 12 };
+const K = { GRASS: 0, LAWN: 1, WATER: 2, ASPHALT: 3, COBBLE: 4, BRICK: 5, DIRT: 6, SLAB: 7, STAIR: 8, WOOD: 9, SAND: 10, GRAVEL: 11, STONEBR: 12, ICE: 13 };
 const ROAD_CLS = new Set([K.ASPHALT, K.COBBLE, K.BRICK]);
-const HARD_CLS = new Set([K.ASPHALT, K.COBBLE, K.BRICK, K.DIRT, K.SLAB, K.STAIR, K.GRAVEL, K.WOOD, K.STONEBR]);
+const HARD_CLS = new Set([K.ASPHALT, K.COBBLE, K.BRICK, K.DIRT, K.SLAB, K.STAIR, K.GRAVEL, K.WOOD, K.STONEBR, K.ICE]);
 
 function classOf(tw, i) {
   const gr = tw.ground[i];
+  if (tw.duck && tw.duck[i]) return K.WOOD;   // 2026-10-05 : le caillebotis du marché d'hiver (monde d'hiver)
+  if (tw.rink && tw.rink[i]) return K.ICE;    // 2026-10-05 : la glace de la patinoire (monde d'hiver)
   if (gr === C.G_WATER) return K.WATER;
   if (gr === C.G_TOWN_LAWN) return K.LAWN;
   if (gr === C.G_PATH) {
@@ -82,6 +84,7 @@ const BASE = {
   [K.GRASS]: [112, 166, 84], [K.LAWN]: [98, 156, 78], [K.ASPHALT]: [72, 74, 82], [K.COBBLE]: [150, 148, 152],
   [K.BRICK]: [172, 94, 72], [K.DIRT]: [178, 146, 104], [K.SLAB]: [200, 194, 180], [K.STAIR]: [210, 204, 192],
   [K.WOOD]: [152, 110, 68], [K.SAND]: [224, 208, 152], [K.GRAVEL]: [178, 172, 160], [K.STONEBR]: [172, 168, 160],
+  [K.ICE]: [206, 226, 240],
 };
 const WATER_SHALLOW = [112, 190, 214], WATER_DEEP = [44, 102, 178];
 
@@ -336,6 +339,7 @@ export function buildTownPlan(tw, makeCanvasEl) {
         break; }
       case "marketArch": g.fillStyle = "rgba(90,70,50,0.9)"; g.fillRect(cx - 4, cy - 1, 8, 2); g.fillStyle = "rgba(255,230,160,0.9)"; g.fillRect(cx - 4, cy - 0.4, 8, 0.8); break;
       case "starKiln": dot(cx, cy, 3.4, [150, 110, 90]); dot(cx, cy, 1.8, [240, 140, 60]); break;
+      case "brazier": dot(cx, cy, 2.2, [52, 44, 40]); dot(cx, cy - 0.4, 1.3, [255, 150, 60]); break;   // 2026-10-05 : le coin du feu du marché d'hiver
       case "archBridge": {
         const b = C.townPropBox("archBridge", p.x, p.y), x0 = b.x0 * S, x1 = b.x1 * S, y0 = b.y0 * S, y1 = b.y1 * S;
         g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(x0 + 1.4, y0 + 1.8, x1 - x0, y1 - y0);
@@ -459,7 +463,7 @@ function collectBuildings(tw, C) {
   // Tout ce qui bloque sans être connu (la scierie, l'atelier de verre, les remises…) : un bâtiment générique par
   // composante connexe de cases pleines, hors eau, arbres, haies et décor de sol.
   const W = tw.w, H = tw.h, lump = new Uint8Array(W * H);
-  const knownProp = new Set(["skateChalet", "lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass"]);
+  const knownProp = new Set(["skateChalet", "lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass", "brazier", "rinkBoards", "rinkPole"]);
   const propAt = new Set(); for (const p of tw.props) if (knownProp.has(p.kind)) propAt.add(p.y * W + p.x);
   for (let i = 0; i < W * H; i++) {
     if (!tw.solid[i] || seen.has(i) || tw.ground[i] === C.G_WATER) continue;
@@ -467,6 +471,8 @@ function collectBuildings(tw, C) {
     if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD) continue;
     if (tw.hedge && tw.hedge[i]) continue;
     if (propAt.has(i)) continue;
+    // 2026-10-05 : la bande de la patinoire n'est pas un bâtiment (le plan montre la glace et son pourtour)
+    if (tw.rink) { const x = i % W, y = (i / W) | 0, R = C.TOWN_RINK; if (x >= R.x0 - 1 && x <= R.x1 + 1 && y >= R.y0 - 1 && y <= R.y1 + 1) continue; }
     lump[i] = 1;
   }
   const done = new Uint8Array(W * H);

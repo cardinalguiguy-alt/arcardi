@@ -51,6 +51,16 @@ export const SKATE = {
   STRIDE_BASE: 1.6, STRIDE_PER_V: 0.22,
 };
 
+/* ⚠️ 2026-10-05 (nuit) — LA CULBUTE (`skateTumble`) : trop vite contre la bande de la patinoire (ou les plots d'une course),
+   on tombe — SANS blessure (c'est une chute de patineur chaussé, pas la glissade de qui n'a pas de patins) : on perd sa
+   vitesse en glissant sur le derrière `TUMBLE_T` secondes, sans pouvoir rien commander, puis on se relève. La course y
+   perd une seconde : le virage devient un pari (décidé avec Guillaume : « chute contre la bande »). */
+export const SKATE_TUMBLE = { T: 0.95, K: 4.5 };
+export function skateTumble(st) {
+  if (st.mode === "tumble") return st;
+  st.mode = "tumble"; st.t = 0; st.vx *= 0.35; st.vy *= 0.35;
+  return st;
+}
 export function skateNew(vx = 0, vy = 0) {
   return { vx, vy, mode: "glide", t: 0, stride: 0, brake: 0, push: 0, bump: 0 };
 }
@@ -77,9 +87,15 @@ export function skateStep(st, ix, iy, dt, o) {
     return st;
   }
   /* ── CHAUSSÉ. ── */
+  if (st.mode === "tumble") {
+    st.t += dt;
+    const k = Math.exp(-SKATE_TUMBLE.K * dt); st.vx *= k; st.vy *= k;
+    if (st.t >= SKATE_TUMBLE.T) { st.mode = "glide"; st.t = 0; }
+    return st;
+  }
   st.mode = "glide";
   const sp = Math.hypot(st.vx, st.vy);
-  const vmax = o && o.run ? K.VMAX_RUN : K.VMAX;
+  const vmax = (o && o.run ? K.VMAX_RUN : K.VMAX) * (o && o.vmaxK ? o.vmaxK : 1);   // `vmaxK` (2026-10-05) : l'aspiration en course
   if (ix || iy) {
     const dot = sp > 1e-6 ? (ix * st.vx + iy * st.vy) / sp : 1;
     if (sp > K.BRAKE_MIN_V && dot < K.BRAKE_DOT) {
@@ -89,7 +105,8 @@ export function skateStep(st, ix, iy, dt, o) {
       st.brake = 1;
     } else {
       // La poussée le long de l'ordre, puis les carres mangent ce qui part de travers.
-      st.vx += ix * K.ACC * dt; st.vy += iy * K.ACC * dt;
+      const acc = K.ACC * (o && o.accK ? o.accK : 1);
+      st.vx += ix * acc * dt; st.vy += iy * acc * dt;
       const par = st.vx * ix + st.vy * iy;
       const kp = Math.exp(-K.TURN_K * dt);
       st.vx = ix * par + (st.vx - ix * par) * kp;
@@ -121,7 +138,7 @@ export function skateBump(st, axis) {
 export function skatePose(st) {
   if (!st) return null;
   if (st.mode === "slip") return "slip";
-  if (st.mode === "fall" || st.mode === "down") return "fall";
+  if (st.mode === "fall" || st.mode === "down" || st.mode === "tumble") return "fall";
   if (st.brake) return "brake";
   return Math.hypot(st.vx, st.vy) > 0.35 ? "glide" : "stand";
 }

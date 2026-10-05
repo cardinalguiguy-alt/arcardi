@@ -582,7 +582,7 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     if (only) { gut[o] = 0; aux[o] = 0; }
     if (x < 0 || y < 0 || x >= W || y >= H) { cls[o] = CL.NONE; continue; }
     const i = y * W + x, g = tw.ground[i], lx = wx - x * T, ly = wy - y * T;
-    let c = CL.GRASS, r = 1, ax = 0;
+    let c = CL.GRASS, r = 1, ax = 0, rp = null;
     if (env.classify) {
       const k = env.classify(x, y, i, g, lx, ly, wx, wy);
       if (!k) { cls[o] = CL.NONE; continue; }
@@ -590,7 +590,35 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     } else {
     const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2 && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
     if (!inFtn && env.waterAt(wx, wy)) { cls[o] = CL.NONE; continue; }
-    if (g === C.G_TOWN_LAWN) c = CL.LAWN;
+    if (env.rinkAt && env.rinkAt(wx, wy)) { cls[o] = CL.NONE; continue; }   // 2026-10-05 (nuit) : la glace entretenue de la patinoire
+    /* ⚠️⚠️ 2026-10-05 (nuit) — LA RUE PAVÉE À BORD LIBRE SE LIT AU PIXEL, COMME ELLE EST PEINTE (`env.roadAt` →
+       `townRoadPixel`, fermeArt.js : la même lecture que le dessin). Guillaume, en jeu, à la fonte : « un bug autour
+       des routes, c'est trop carré, pas réaliste ». Lue à la case, la chaussée prenait la case de rue ENTIÈRE et le
+       pré la case d'herbe entière : la neige recouvrait le pavé qui déborde sur l'herbe et découvrait l'herbe des
+       coins — une rue en biais redevenait un escalier de 16 px, un carré vert à chaque marche, et ses ornières
+       (orientées par les voisines de CASE) tournaient d'un quart de tour à chaque marche (`render-neige biais`).
+       Ici, le bord vient de la distance au bord (`depth`), et les ornières aussi : elles suivent la courbe. */
+    rp = env.roadAt ? env.roadAt(x, y, lx, ly) : null;
+    /* 2026-10-05 (nuit) — LE CAILLEBOTIS DU MARCHÉ D'HIVER (`env.duckAt`, la lecture du dessin) : des planches
+       qu'on balaie et qu'on piétine — une poussière dessus, un peu de neige gardée dans les jours (`ax` 0). */
+    const dkP = env.duckAt ? env.duckAt(x, y, lx, ly) : null;
+    /* balayé : rien au milieu, la neige poussée contre les deux bords (`edge`, px jusqu'au bord libre) — c'est ce
+       qui le dessine propre au lieu de le semer de taches (premier jet, au banc : une poussière partout faisait du bruit). */
+    if (dkP) { c = CL.DECK; ax = dkP.board ? 2 : 3; r = dkP.edge < 2 ? 0.6 : dkP.edge < 4 ? 0.25 : dkP.edge < 6 ? 0.06 : 0; }   // `ax` ≥ 2 : un plancher BALAYÉ (le rendu ne le détrempe pas)
+    else if (rp && rp.inside) {
+      c = CL.STREET;
+      /* Les ornières à 0,28 et 0,72 de la voie, comme `drawTownRoadTile` — comptées depuis le bord le PLUS PROCHE
+         (la distance au bord est symétrique : une voie unique a ses deux ornières à 0,28 de chaque bord). */
+      const wPx = rp.w, nl = wPx >= 3 * T ? 2 : 1, lw = wPx / nl, dep = Math.max(0, Math.min(rp.fromEdge, wPx / 2));
+      const wob = (vnoise(wx, wy, 13, 7) - 0.5) * 2.6;
+      const dt = Math.min(Math.abs(dep - (0.28 * lw + wob)), nl === 2 ? Math.abs(dep - (0.72 * lw + wob)) : 1e9);
+      ax = dt < 1.6 ? 1 : dt < 2.9 ? 0.5 : 0;
+      if (rp.depth < 5.9) ax = 2 + rp.depth;
+      const dk = rp.open ? rp.depth - C.TOWN_KERB_PX : 1e9;
+      gut[py * SZ + px] = dk < 0 ? 255 : dk < 8 ? 1 + dk : 0;
+    }
+    else if (rp && g === C.G_PATH) c = CL.GRASS;           // la case de rue, hors du trait : l'herbe peinte (`drawTownGrassTile`)
+    else if (g === C.G_TOWN_LAWN) c = CL.LAWN;
     else if (g === C.G_PATH_STONE || inFtn) { c = CL.STONE; r = 0.92; ax = env.jointAt(x, y, lx, ly); }
     else if (g === C.G_TOWN_STAIR) { c = CL.STAIR; ax = env.stairTread(x, y, lx, ly); r = 0.1 + 0.95 * ax; }
     else if (g === C.G_BRIDGE) { c = CL.DECK; ax = (ly % 4 === 3) ? 0 : 1; r = ax ? 0.95 : 0.35; }
@@ -645,6 +673,17 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
        brûlant ne garde pas la neige, et sa lisière s'effrange (l'ordre de couverture,
        §6, fait le reste : la terre mouillée apparaît pixel par pixel). */
     if (env.meltAt) { const mk = env.meltAt(wx + 0.5, wy + 0.5); if (mk < 1) r *= mk; }
+    /* 2026-10-05 (nuit) — LA LISIÈRE CONTRE LA BORDURE. Une fois la rue lue au contour, la neige du pré s'arrêtait
+       sur une ligne parfaite parallèle à la bordure (`render-neige biais`, FONTE=1) — juste, mais tirée à la règle.
+       Contre la pierre, la neige recule en MORSURES : le sel projeté par les roues, la chaussée qui rend sa chaleur.
+       Une portée irrégulière (1 à 10 px, deux bruits), où la réception tombe presque à rien contre la pierre (en
+       carré de la distance : un quart à mi-portée — moins creusé, 10 cm la couvraient encore entière) : à la fonte, l'herbe
+       mouillée apparaît par anses le long du trottoir, et l'ordre de couverture (§6) en effrange le bord. */
+    if (rp && !rp.inside && rp.depth > -8) {
+      const out = -rp.depth, n = vnoise(wx, wy, 6, 93) * 0.65 + vnoise(wx, wy, 17, 94) * 0.35;
+      const k = Math.max(0, Math.min(1, (n - 0.38) / 0.4)), reach = 1 + 9 * k * Math.sqrt(k);   // surtout étroite, des anses par endroits
+      if (out < reach) { const q = out / reach; r *= 0.03 + 0.97 * q * q; }
+    }
     cls[o] = c; recv[o] = Math.round(Math.min(2.55, r) * Q_RECV); aux[o] = Math.round(Math.min(7.9, ax) * Q_AUX);
     shade[o] = Math.round(Math.min(1, bil(F.shade, F.W, F.H, fx, fy)) * 255);
     /* Le bruit fin : l'herbe perce une neige mince en BRINS (plus haut que
@@ -943,6 +982,14 @@ export function renderChunk(st, pack, P, imp, out) {
     const need = c === CL.STREET ? 0.22 + 0.6 * st.cov[o] / 255 : (COV0 + COVR * Math.pow(st.cov[o] / 255, 1.3)) * CLS_COV[c];
     if (!c || c === CL.RAIL || dd < need) {
       dout[q + 3] = 0;
+      /* 2026-10-05 (nuit) — LE CAILLEBOTIS BALAYÉ (`aux` ≥ 2, classe DECK) n'est pas un sol dégelé : sans neige, ce
+         n'est pas de la terre trempée qu'on voit, c'est du bois — à peine plus sombre là où la neige vient de fondre.
+         Le voile « détrempé » du dessous (alpha 34 à 84) le noircissait tout entier (vu au banc). */
+      if (c === CL.DECK && st.aux[o] >= 2 * Q_AUX) {
+        if (falling) { if (b1 < 0.12) { dout[q] = 236; dout[q + 1] = 241; dout[q + 2] = 248; dout[q + 3] = 120; } }
+        else if (dd > 0.02) { dout[q] = 30; dout[q + 1] = 34; dout[q + 2] = 40; dout[q + 3] = Math.round(10 + 22 * Math.min(1, dd / need)); }
+        continue;
+      }
       /* LE SOL MOUILLÉ AUTOUR DES PLAQUES : là où la neige vient de partir (ou
          s'amincit sans couvrir), la terre et l'herbe sont trempées, plus
          sombres ; pendant la chute, elles sont au contraire saupoudrées. */
@@ -992,7 +1039,11 @@ export function renderChunk(st, pack, P, imp, out) {
        à deux pixels (le fond d'un pas, le pied d'une congère). */
     let cav = 0;
     if (x > 0 && y > 0 && x < CH - 1 && y < CH - 1) cav = Math.max(0, (Sf[o - 2] + Sf[o + 2] + Sf[o - 2 * SZ] + Sf[o + 2 * SZ]) / 4 - Sf[o]);
-    const castA = st.cast[o] / 255, aoA = st.ao[o] / 255;
+    /* 2026-10-05 (nuit) — `P.castLight` 0 : la carte dessine ses OMBRES PORTÉES DU SOLEIL elle-même (`ombres.js`,
+       qui tournent avec l'heure) ; l'ombre cuite ici, figée au nord-ouest, ne doit plus assombrir la lumière directe
+       — sinon deux ombres de chaque arbre, dans deux directions. Elle garde son rôle de MÉMOIRE : la neige tient plus
+       longtemps là où l'ombre tombe le plus souvent (`base`, plus haut), et la gelée aussi. */
+    const castA = (st.cast[o] / 255) * (P.castLight == null ? 1 : P.castLight), aoA = st.ao[o] / 255;
     const direct = sunK * Math.max(0, ndl) / LZ * (1 - castA * 0.94) * (1 - self);
     const amb = ambK * (1 - 0.42 * aoA) * (1 - Math.min(0.45, cav / 14)) * (0.9 + 0.1 * Math.min(1, ndl / LZ));
     const v = amb + direct;
@@ -1461,7 +1512,7 @@ export function makeSnowField(tw, env) {
          et la fonte doivent être PROGRESSIFS (Guillaume). */
       const fineQ = (v) => (v < 4 ? q(v, 0.04) : 100 + q(v, 0.2));
       // 2026-10-05 : + la gelée de l'ombre (`frostShade`, meteo.js § 10), au même pas que celle du soleil.
-      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), q(p.frostShade == null ? -1 : p.frostShade, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25)].join(",");
+      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), q(p.frostShade == null ? -1 : p.frostShade, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25), p.castLight == null ? 1 : p.castLight].join(",");
       if (k !== pkey) { pkey = k; ver++; }
       if (pk.g + pk.s + pk.berm < 0.05 && prints.size) { prints.clear(); printCum.clear(); }
     },

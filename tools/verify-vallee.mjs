@@ -603,6 +603,32 @@ section("Valley Town — le perron du tribunal");
   }
 }
 {
+  /* 2026-10-05 (nuit) — LA PROFONDEUR DU PERRON S'ARRÊTE AU MUR NORD DU PALAIS. `courtDepthFrac` tenait le palier
+     au plus petit… et toute la bande de `K` jusqu'au bord nord de la carte avec lui (la route y = 35 rendait le
+     joueur aux deux tiers, vu en jeu). Falsifié : sans la borne nord, le deuxième rougit (0,500 en (60,0) — la vitesse). */
+  const b = C.TOWN_COURT, K = C.TOWN_COURT_COLL, cx = (K.x0 + K.x1) / 2 + 0.5;
+  // le seuil réel, devant la porte : une demi-case au-delà de la dernière rangée de marches (t ≈ 1)
+  const top = C.courtDepthScale(cx, b.y + b.h - C.TOWN_COURT_STEP_ROWS - 0.5);
+  ok("le palier reste au plus petit", top < 0.7, `facteur ${top.toFixed(3)} au seuil de la porte`);
+  let worst = 1, at = "";
+  for (let y = 0; y < b.y - 1; y++) for (let x = K.x0 - 2; x <= K.x1 + 2; x++) {
+    const k = C.courtDepthScale(x + 0.5, y + 0.5), v = C.courtStairSlowMul(x + 0.5, y + 0.5);
+    if (Math.min(k, v) < worst) { worst = Math.min(k, v); at = `(${x},${y})`; }
+  }
+  ok("derrière le palais (au nord du corps), taille et vitesse pleines", worst === 1, worst === 1 ? "partout 1" : `${worst.toFixed(3)} en ${at}`);
+  // le long de la bande latérale de fondu, du parvis jusque derrière : aucun saut de plus d'un dixième par quart de case
+  let jump = 0, jat = "";
+  for (const x of [K.x0 - 0.5, K.x1 + 0.5]) {
+    let prev = C.courtDepthScale(x, b.y + b.h + 1);
+    for (let y = b.y + b.h + 1; y >= b.y - 3; y -= 0.25) {
+      const k = C.courtDepthScale(x, y);
+      if (Math.abs(k - prev) > jump) { jump = Math.abs(k - prev); jat = `x=${x}, y=${y}`; }
+      prev = k;
+    }
+  }
+  ok("en longeant le flanc jusque derrière, la taille se fond (aucun saut)", jump <= 0.1, `saut max ${jump.toFixed(3)} (${jat})`);
+}
+{
   // Des rebords sautables doivent exister, sinon la mécanique est morte.
   let ledges = 0;
   for (let y = 1; y < H - 3; y++) for (let x = 1; x < W - 1; x++) {
@@ -1481,6 +1507,119 @@ section("Valley Town — le marché du champ de foire (430)");
       }
       ok("sur 120 jours, jamais moins que le bac de la ferme", under === 0, `${under} jours sous le prix`);
     }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-05 (nuit) — LE MARCHÉ D'HIVER (`E.townWinterWorld`) : l'hiver, l'esplanade se
+   vide (elle deviendra la patinoire) et le marché s'installe dans la prairie du nord.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — le marché d'hiver, dans la prairie");
+{
+  const ww = E.townWinterWorld(tw), MK = C.TOWN_MARKET, WM = C.TOWN_WINTER_MARKET;
+  const inR = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
+  ok("le monde d'hiver est un AUTRE objet (les caches indexés par la carte se reconstruisent)", ww && ww !== tw && ww.winter === true && E.townWinterWorld(tw) === ww);
+  ok("rien de prévu n'a été sauté (chaque case du calque était de l'herbe libre)", ww.winterSkipped.length === 0, ww.winterSkipped.join(" ") || "0 saut");
+  const sumStalls = tw.props.filter((p) => p.kind === "stall"), winStalls = ww.props.filter((p) => p.kind === "stall");
+  ok("l'été ne bouge pas d'un étal (le monde d'été reste celui du générateur)", sumStalls.length === 10 && sumStalls.every((p) => inR(p, MK)), `${sumStalls.length} étals au champ de foire`);
+  ok("l'hiver, neuf étals, tous dans la prairie", winStalls.length === 9 && winStalls.every((p) => inR(p, WM)), `${winStalls.length} étals`);
+  const left = ww.props.filter((p) => inR(p, MK) && ["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"].includes(p.kind));
+  ok("l'esplanade est vide l'hiver (elle sera la patinoire)", left.length === 0, left.map((p) => p.kind + "@" + p.x + "," + p.y).join(" ") || "rien");
+  let freed = 0, ghost = [];
+  const RK = C.TOWN_RINK, onRing = (i) => { const x = i % W, y = (i / W) | 0; return x >= RK.x0 - 1 && x <= RK.x1 + 1 && y >= RK.y0 - 1 && y <= RK.y1 + 1 && !ww.rink[i]; };
+  const chal = ww.props.filter((p) => p.kind === "skateChalet" && p.rink).map((p) => ({ x: p.x - (C.TOWN_SKATE_CHALET_W >> 1), y: p.y - C.TOWN_SKATE_CHALET_H + 1 }));
+  const inChalet = (i) => { const x = i % W, y = (i / W) | 0; return chal.some((c) => x >= c.x && x < c.x + C.TOWN_SKATE_CHALET_W && y >= c.y && y < c.y + C.TOWN_SKATE_CHALET_H); };
+  for (let i = 0; i < W * H; i++) {
+    // (la bande de la patinoire et l'emprise du chalet sont solides sans décor par case : ils sont dessinés d'un tenant)
+    if (ww.solid[i] && !tw.solid[i] && !onRing(i) && !inChalet(i) && !ww.props.some((p) => p.y * W + p.x === i)) ghost.push(`(${i % W},${(i / W) | 0})`);
+    if (!ww.solid[i] && tw.solid[i]) freed++;
+  }
+  ok("aucune case solide neuve sans son décor (pas de mur invisible)", ghost.length === 0, ghost.slice(0, 6).join(" ") || "0");
+  // (un décor remballé posé sur l'anneau de la bande — les poteaux de l'arche d'été — y redevient solide : la bande)
+  const packedFree = tw.props.filter((p) => inR(p, MK) && ["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"].includes(p.kind) && !onRing(p.y * W + p.x)).length;
+  ok("les cases rendues au champ de foire sont celles des décors remballés (hors bande de la patinoire)", freed === packedFree, `${freed} cases, ${packedFree} décors`);
+  // le parcours, dans le monde d'hiver, depuis le quai (mêmes règles que la circulation plus haut)
+  const seenW = new Uint8Array(W * H);
+  const walkW = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H || railBlocked(x, y)) return false;
+    const i = idx(x, y);
+    if (ww.solid[i] && !(ww.soft && ww.soft[i])) return false;
+    if (ww.ground[i] === C.G_WATER) return false;
+    const o = ww.objects[i];
+    return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
+  };
+  {
+    const sx = Math.round(C.TOWN_SPAWN.x), sy = Math.round(C.TOWN_SPAWN.y), q = [[sx, sy]]; seenW[idx(sx, sy)] = 1;
+    while (q.length) {
+      const [x, y] = q.pop(), e0 = ww.elev[idx(x, y)];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!walkW(nx, ny) || seenW[idx(nx, ny)] || Math.abs(ww.elev[idx(nx, ny)] - e0) > C.TOWN_STEP_MAX) continue;
+        seenW[idx(nx, ny)] = 1; q.push([nx, ny]);
+      }
+    }
+  }
+  const reachW = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !!seenW[idx(x, y)];
+  const front = winStalls.filter((p) => !reachW(p.x, p.y + 1) && !reachW(p.x, p.y - 1));
+  ok("chaque étal d'hiver s'atteint à pied depuis le quai (devant ou derrière)", front.length === 0, front.map((p) => p.x + "," + p.y).join(" ") || `${winStalls.length}/${winStalls.length}`);
+  ok("l'esplanade vide s'atteint l'hiver (la glace, par les portillons)", reachW(MK.x + (MK.w >> 1), MK.y + (MK.h >> 1)));
+  const lostW = []; for (let i = 0; i < W * H; i++) if (seen[i] && !seenW[i] && !ww.solid[i]) lostW.push(`(${i % W},${(i / W) | 0})`);
+  ok("le calque ne ferme aucune case qu'on atteignait l'été (hors ses propres décors)", lostW.length === 0, lostW.slice(0, 6).join(" ") || "0");
+  // la vente : le marché de la saison, et seulement lui
+  const AX = C.TOWN_WINTER_MARKET_AX, AXIS = C.TOWN_WINTER_MARKET_AXIS;
+  const at = (x, y, w) => E.atMarket({ px: x, py: y, pz: "town" }, w);
+  ok("on vend l'hiver dans l'allée du marché d'hiver", at(AX, AXIS, ww) && winStalls.every((p) => at(p.x, p.y + 1, ww)));
+  ok("…et plus au milieu de la patinoire", !at(MK.x + MK.w / 2, MK.y + MK.h / 2, ww));
+  ok("l'été, la règle est celle du 431 (le champ de foire, pas la prairie)", at(MK.x + MK.w / 2, MK.y + MK.h / 2, tw) && !at(AX, AXIS, tw) && at(MK.x + MK.w / 2, MK.y + MK.h / 2));
+  // le caillebotis : posé sur l'herbe libre, d'un seul tenant de l'arche à l'escalier
+  let dn = 0, dbad = [];
+  const brazierAt = new Set(ww.props.filter((p) => p.kind === "brazier").map((p) => p.y * W + p.x));
+  for (let i = 0; i < W * H; i++) if (ww.duck[i]) { dn++; if ((ww.solid[i] && !brazierAt.has(i)) || ww.ground[i] !== C.G_GRASS || ww.objects[i] !== C.O_NONE) dbad.push(`(${i % W},${(i / W) | 0})`); }
+  ok("le caillebotis ne pose que sur l'herbe libre (et sous le brasero, sur sa dalle)", dn > 100 && dbad.length === 0, `${dn} cases${dbad.length ? " ; fautives : " + dbad.slice(0, 5).join(" ") : ""}`);
+  {
+    const s0 = idx(AX, C.TOWN_WINTER_MARKET_ARCH_Y + 2), seenD = new Uint8Array(W * H), st = [s0]; seenD[s0] = 1;
+    while (st.length) { const i = st.pop(), x = i % W, y = (i / W) | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const j = idx(x + dx, y + dy); if (ww.duck[j] && !seenD[j]) { seenD[j] = 1; st.push(j); } } }
+    const sx = C.TOWN_WINTER_MARKET_STAIR_X, stairOk = [AXIS - 3, AXIS - 2, AXIS - 1].some((y) => seenD[idx(sx, y)]);
+    ok("un seul caillebotis, de l'arche au pied de l'escalier ouest", ww.duck[s0] && stairOk && [...seenD].filter(Boolean).length === dn);
+    ok("le pied de l'escalier touche une marche (le caillebotis y mène vraiment)", [AXIS - 3, AXIS - 2, AXIS - 1].some((y) => ww.ground[idx(sx + 1, y)] === C.G_TOWN_STAIR));
+  }
+  {
+    // l'allée reste DÉGAGÉE : aucun étal de la rangée sud ne dessine sur le caillebotis (son faîte tombe sous les planches)
+    const T2 = C.TILE, topS = (AXIS + C.TOWN_WINTER_MARKET_SOUTH + 1) * T2 - C.TOWN_STALL_SPRITE.h;
+    ok("les étals sud ne couvrent pas l'allée (leur faîte est au sud du caillebotis)", topS >= (AXIS + 2) * T2 - 2, `faîte à ${(topS / T2).toFixed(2)} case, allée jusqu'à ${AXIS + 2}`);
+  }
+  ok("un brasero au coin du feu, posé sur le caillebotis", ww.props.some((p) => p.kind === "brazier" && ww.duck[idx(p.x, p.y)]));
+  /* 2026-10-05 (nuit) — LA PATINOIRE (`TOWN_RINK`) : la glace, la bande, les portillons, les mâts, le chalet. */
+  {
+    let ice = 0, figure = 0;
+    for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) {
+      const i = idx(x, y), inside = C.rinkInside(x + 0.5, y + 0.5);
+      if (ww.rink[i]) ice++;
+      if (!!ww.rink[i] !== inside || (inside && ww.solid[i])) figure++;
+    }
+    ok("la glace est la figure de la collision (rectangle arrondi), et rien de solide dessus", ice > 300 && figure === 0, `${ice} cases de glace, ${figure} écart(s)`);
+    // la bande est FERMÉE : depuis la glace, on ne sort que par un portillon
+    const seenI = new Uint8Array(W * H), st = [idx(RK.x0 + 5, RK.y0 + 5)], exits = new Set();
+    seenI[st[0]] = 1;
+    while (st.length) {
+      const i = st.pop(), x = i % W, y = (i / W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = idx(x + dx, y + dy);
+        if (seenI[j]) continue;
+        if (ww.rink[j]) { seenI[j] = 1; st.push(j); }
+        else if (!ww.solid[j]) exits.add(j);
+      }
+    }
+    const notGate = [...exits].filter((j) => !ww.rinkGate[j]);
+    ok("la bande est fermée : on ne quitte la glace que par un portillon", notGate.length === 0 && exits.size > 0, `${exits.size} sortie(s)${notGate.length ? " ; hors portillon : " + notGate.slice(0, 4).map((j) => `(${j % W},${(j / W) | 0})`).join(" ") : ""}`);
+    const gates = C.TOWN_RINK_GATES.map((g) => g.side);
+    const gateReach = gates.every((sd) => { for (let i = 0; i < W * H; i++) if (ww.rinkGate[i] && seenW[i]) { const x = i % W, y = (i / W) | 0; if ((sd === "n" && y === RK.y0 - 1) || (sd === "s" && y === RK.y1 + 1) || (sd === "e" && x === RK.x1 + 1) || (sd === "w" && x === RK.x0 - 1)) return true; } return false; });
+    ok("chaque portillon s'atteint à pied depuis le quai", gateReach, gates.join(", "));
+    const poles = ww.props.filter((p) => p.kind === "rinkPole").length;
+    ok("six mâts et trois guirlandes au-dessus de la glace", poles === 6 && ww.rinkGarlands.length === 3, `${poles} mâts, ${ww.rinkGarlands.length} fils`);
+    const ch = chal[0];
+    ok("le chalet de la patinoire est posé et s'atteint (son comptoir, au sud)", !!ch && [0, 1, 2, 3].some((dx) => reachW(ch.x + dx, ch.y + C.TOWN_SKATE_CHALET_H)), ch ? `(${ch.x},${ch.y})` : "absent");
+    ok("le chalet du lac reste (deux chalets l'hiver)", ww.props.filter((p) => p.kind === "skateChalet").length === 2);
   }
 }
 
