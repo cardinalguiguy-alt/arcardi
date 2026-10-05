@@ -1,5 +1,62 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 (nuit, fin quater) — LE CHALET COLLÉ À LA GLACE, LA BANDE AU POINT PRÈS, LE MATÉRIEL DE PATIN, LES FIGURES, LA GERBE
+
+« Déplace le chalet de location à côté de la patinoire ; vérifie les collisions externes qui posent problème ; rends-la plus belle ;
+de petites projections de glace derrière les patins, comme sur la luge ; plusieurs patins (normal / course, longues lames, meilleur
+contrôle dans les virages, un peu plus rapides) ; une combinaison plus rapide ; un choix de couleurs ; des figures en pratique libre :
+sauts, vrilles, marche arrière » (Guillaume — « caveman on » : exécuté sans questions, tout est à juger). **Supabase : rien** (le
+matériel et la figure voyagent dans le sac et dans le paquet de position déjà émis ; aucun message de plus, aucune migration).
+- *Le chalet* (`TOWN_RINK_CHALET`, fermeConstants.js) : de cinq cases dans l'herbe à l'allée de l'est, JUSTE AU NORD DU PORTILLON — on
+  loue, trois pas, on est sur la glace. Il laisse libres les rangées du portillon et la colonne des mâts. Celui du LAC n'a pas bougé.
+  Le générateur accepte désormais l'allée de terre (`freeOrPath`, `townWinterWorld`) pour le chalet et quatre BRASEROS gardant les
+  portillons nord et sud (`TOWN_RINK_BRAZIERS`) : un point chaud qui fond la neige et brille la nuit.
+- *Les collisions externes* — LE DÉFAUT : tout l'anneau de pierre du dallage était un mur plein (une case entière, 16 px, de mur
+  INVISIBLE en retrait de la planche qu'on voit), et aux quatre coins arrondis, dans les cases que l'arrondi traverse, le sol HORS de
+  la glace restait libre : on pouvait se tenir DANS la bande. Maintenant la bande ne bloque que sa propre épaisseur, AU POINT :
+  `C.rinkSignedDist` / `C.rinkBandSolid` (de 0,06 case en deçà du bord de la glace à 0,38 au-delà, ouverte aux portillons), lues par
+  `blockedTown` pour les cases marquées `tw.rinkBand`. `tw.solid` reste PLEIN sur l'anneau pour les résidents (`townNav`, plus
+  pessimiste — comme pour une souche). La pierre autour de la bande se marche enfin. `verify-vallee` tient la figure (tout le tour,
+  les coins, les portillons) et se falsifie des deux côtés (`OUT` à 1,2 ou à 0,03 rougit).
+- *La glace* (`rinkIcePixel`) : les RAYURES des anciens patineurs (15 arcs d'ellipse partiels, graine fixe), les passes de la
+  surfaceuse (une bande sur deux, à peine plus claire), un MÉDAILLON pointillé autour du flocon.
+- *Le matériel* (`patin.js`, pur) : DEUX PAIRES — le patin de patinage (comme avant) et les LONGUES LAMES (croisière +10 %, poussée
+  +7 %, lancée plus longue, virage plus mordant `turnK` 1,4 ET `carry` 0,5 : une part de la vitesse mangée de travers est rendue à la
+  nouvelle direction — on tourne serré sans perdre sa vitesse ; contrepartie : un arrêt en travers demande un peu plus de glace, +60 or)
+  — une COMBINAISON (+5 %, un peu moins de traînée, +45 or) — HUIT COULEURS (bottines en trois tons, combinaison dans le ton, rien
+  d'autre que de l'apparence). Choisi au chalet (panneau : aperçu de la paire, total en direct), arbitré et NORMALISÉ par l'hôte
+  (`resolveRentSkates(..., kit)` ; un choix invalide retombe sur le patin blanc), gardé dans `inv.skateKit`, diffusé avec le sac.
+  Dessin : `A.drawSkate(..., view)` (lame de course de onze pixels de profil), `A.suitSheet` (la feuille du personnage repeinte du
+  buste aux pieds, lumière gardée, mise en cache), `A.drawSkateKitPreview`.
+- *Les figures* (pratique libre, hors course) : ESPACE saute, V vrille, les deux ensemble font l'AXEL (un saut vrillé, il faut de
+  l'élan), B TENUE : à reculons (croisière ×0,7, on regarde à l'opposé de la course), et le CYGNE (en roue libre et vite, une jambe se
+  lève toute seule). Machine à durée dans `patin.js` (`skateTrickStart`, `skateTrickAt` : UNE courbe lue par ma machine ET par le
+  dessin des autres) ; le saut est un décalage de `py` (l'ombre reste au sol et rétrécit), la vrille tourne la LIGNE de la feuille
+  (face, profil, dos, profil) et pose un anneau d'éclats ; un enchaînement de figures rapprochées s'affiche (rien à gagner). VUES PAR
+  LES AUTRES : `tk = [code, âge ms]` dans le paquet de position (`pubMe`, daté à la réception, comme `dig`) ; `posKeyOf` porte le code
+  (sinon une vrille sur place n'émettrait rien) — vu à deux : l'invité reçoit `tk`, l'âge court, la figure s'arrête avec sa durée.
+  Sur écran tactile, le bouton d'action SAUTE ; V et B n'existent qu'au clavier.
+- *La gerbe* : `skateTrail` — des éclats qui partent en arrière de chaque lame, cadencés sur la vitesse (accumulateur : pas de
+  dépendance au taux d'images), avec un arc ; une gerbe tout autour du pied à l'atterrissage (`skateBurst`). Les AUTRES patineurs la
+  produisent chez nous, depuis la vitesse qu'ils publient. ⚠️ Blanc sur glace pâle ne se voit pas : chaque éclat porte son ombre bleue.
+- ⚠️ DÉFAUT ANCIEN TROUVÉ EN CHEMIN ET CORRIGÉ : `skatesUntil | 0` TRONQUAIT UN HORODATAGE EN ms À 32 BITS — `skatesActive` refusait des
+  patins loués pendant la moitié de chaque cycle de 49,7 jours, et le sac des autres, copié avec le même `| 0`, n'était jamais
+  comparable à `Date.now()` : à deux, un invité ne voyait pas les patins de l'hôte. `verify-vallee` joue maintenant la location à une
+  vraie heure d'horloge, dont les 32 bits bas sont négatifs (falsifié). ⚠️ Même motif vu et PAS corrigé : `f.injuredUntil | 0`
+  (FermeGame.js, `resolveStarCandy`).
+- ⚠️ À DEUX, LE HARNAIS : l'hôte ne sait pas qu'un invité existe tant que celui-ci n'a pas émis un `pos` (un invité immobile, posé par
+  `m.x = …`, n'en émet pas) — aucun `apply` ne part alors (`netHasAudience`). Faire bouger l'invité d'une touche avant de juger.
+- Bancs : `verify-patin` 59/59 (§9 le matériel, §10 les figures, falsifiés : `carry`/`turnK`, la courbe de l'arc), `verify-vallee` 337/337
+  (le chalet à moins de trois cases du portillon, la bande au point, le prix du matériel, l'heure à 32 bits négatifs), `render-patin` 4/4
+  (NOUVEAU : toutes les poses, deux paires, planche `tools/out/patin-poses.png`), `render-patinoire` 4/4, `verify-course` 30/30,
+  `verify-ombres` 27/27, `verify-neige` 17/17, `verify-pluie` 34/34, `verify-faune` 105/105, `verify-meteo` 76/76, `verify-collision`,
+  `verify-strings`, `verify-docs`, `verify-syntax`/`-portee`/`-scope`. Vu en jeu : la location au nouveau chalet, le panneau, la gerbe, le
+  saut (à une et à deux fenêtres), le cygne, la combinaison, la bande au pas à pas.
+- ⚠️ Pas faits : les résidents qui patinent ; les reflets des patineurs ; les figures en course (volontairement exclues) ; V/B au tactile ;
+  la marche arrière ne change pas la foulée dessinée (même pas, retournée) ; la combinaison n'a pas de casque ; l'équilibre de la
+  COURSE avec le matériel (les résidents sont tirés d'une graine à matériel neutre : en longues lames + combinaison on les bat plus
+  facilement — à juger).
+
 ## 2026-10-05 (nuit, fin ter) — LA COURSE DE LA PATINOIRE : PRIVATISER, COURIR À QUATRE, LE CONTRE-LA-MONTRE
 
 « Privatiser la patinoire pour organiser des courses de vitesse comme dans Mario Party 5 ; bien travailler la physique, le graphisme

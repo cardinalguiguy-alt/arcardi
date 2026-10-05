@@ -1620,6 +1620,46 @@ section("Valley Town — le marché d'hiver, dans la prairie");
     const ch = chal[0];
     ok("le chalet de la patinoire est posé et s'atteint (son comptoir, au sud)", !!ch && [0, 1, 2, 3].some((dx) => reachW(ch.x + dx, ch.y + C.TOWN_SKATE_CHALET_H)), ch ? `(${ch.x},${ch.y})` : "absent");
     ok("le chalet du lac reste (deux chalets l'hiver)", ww.props.filter((p) => p.kind === "skateChalet").length === 2);
+    /* 2026-10-05 (nuit, fin quater) — LE CHALET EST COLLÉ À LA PATINOIRE : à moins de trois cases du portillon est (premier jet :
+       cinq cases et une allée entre les deux, planté dans l'herbe), et il laisse libre le passage du portillon. */
+    const gE = C.TOWN_RINK_GATES.find((g) => g.side === "e"), gx = RK.x1 + 1.5;
+    const dToGate = ch ? Math.max(0, Math.max(ch.x - gx, gx - (ch.x + C.TOWN_SKATE_CHALET_W))) + Math.max(0, Math.max(ch.y - (gE.b + 1), gE.a - (ch.y + C.TOWN_SKATE_CHALET_H))) : 99;
+    ok("le chalet de la patinoire est à moins de trois cases de son portillon", dToGate < 3, `${dToGate.toFixed(1)} case(s)`);
+    ok("… et les deux rangées du portillon restent libres devant lui", ch && !(ch.y <= gE.b && ch.y + C.TOWN_SKATE_CHALET_H - 1 >= gE.a) && !ww.solid[idx(RK.x1 + 2, gE.a)] && !ww.solid[idx(RK.x1 + 2, gE.b)]);
+    const brz = ww.props.filter((p) => p.kind === "brazier" && p.x >= RK.x0 - 3 && p.x <= RK.x1 + 3 && p.y >= RK.y0 - 3 && p.y <= RK.y1 + 3);   // (celui du marché d'hiver est ailleurs)
+    ok("quatre braseros gardent les portillons nord et sud, hors du passage", brz.length === 4 && brz.every((b) => !C.TOWN_RINK_GATES.some((g) => (g.side === "n" || g.side === "s") && b.x >= g.a && b.x <= g.b)), `${brz.length} braseros`);
+    /* LA BANDE SE LIT AU POINT (`C.rinkBandSolid`) : elle est pleine sur sa propre épaisseur, libre dehors comme dedans, ouverte
+       aux portillons, et les quatre coins arrondis ne laissent ni trou ni mur invisible. */
+    {
+      const T4 = 0.25, bad = { hole: [], wall: [], gate: [] };
+      // 1. le long du bord de la glace, hors portillons : plein à mi-épaisseur
+      for (let a = 0; a < Math.PI * 2; a += 0.011) {
+        // un point sur le contour exact : on part du centre et on cherche le bord par dichotomie le long du rayon
+        const cx0 = (RK.x0 + RK.x1 + 1) / 2, cy0 = (RK.y0 + RK.y1 + 1) / 2, dxr = Math.cos(a), dyr = Math.sin(a);
+        let lo = 0, hi = 40; for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (C.rinkSignedDist(cx0 + dxr * m, cy0 + dyr * m) < 0) lo = m; else hi = m; }
+        const bx = cx0 + dxr * lo, by = cy0 + dyr * lo;
+        // (les 0,2 case de part et d'autre d'un portillon sont ses poteaux : on ne les juge pas)
+        const gm = (g, v, lo, hi) => v >= lo + 0.2 && v < hi - 0.2, gedge = (g, v, lo, hi) => (v >= lo - 0.2 && v < lo + 0.2) || (v >= hi - 0.2 && v < hi + 0.2);
+        const gk = C.TOWN_RINK_GATES.map((g) => g.side === "n" ? [Math.abs(by - RK.y0) < 0.5, bx, g.a, g.b + 1] : g.side === "s" ? [Math.abs(by - (RK.y1 + 1)) < 0.5, bx, g.a, g.b + 1] : g.side === "e" ? [Math.abs(bx - (RK.x1 + 1)) < 0.5, by, g.a, g.b + 1] : [Math.abs(bx - RK.x0) < 0.5, by, g.a, g.b + 1]);
+        const inGate = gk.some(([on, v, lo, hi]) => on && gm(0, v, lo, hi)), onPost = gk.some(([on, v, lo, hi]) => on && gedge(0, v, lo, hi));
+        const px = bx + dxr * 0.15, py = by + dyr * 0.15;
+        if (onPost) continue;
+        if (inGate) { if (C.rinkBandSolid(px, py)) bad.gate.push(`(${px.toFixed(1)},${py.toFixed(1)})`); }
+        else if (!C.rinkBandSolid(px, py)) bad.hole.push(`(${px.toFixed(1)},${py.toFixed(1)})`);
+        // à une tuile au-delà, ni mur invisible ni planche
+        const qx = bx + dxr * 0.75, qy = by + dyr * 0.75;
+        if (C.rinkBandSolid(qx, qy)) bad.wall.push(`(${qx.toFixed(1)},${qy.toFixed(1)})`);
+        // à une demi-tuile en deçà, la glace est libre
+        const ix = bx - dxr * 0.5, iy = by - dyr * 0.5;
+        if (C.rinkBandSolid(ix, iy)) bad.wall.push(`ice(${ix.toFixed(1)},${iy.toFixed(1)})`);
+      }
+      ok("la bande est pleine sur son épaisseur, tout le tour, hors portillons (aucun trou aux coins)", bad.hole.length === 0, bad.hole.slice(0, 3).join(" "));
+      ok("elle ne laisse aucun mur invisible : libre à trois quarts de case au-delà, et sur la glace", bad.wall.length === 0, bad.wall.slice(0, 3).join(" "));
+      ok("elle est ouverte aux portillons (le trou est la largeur du passage)", bad.gate.length === 0, bad.gate.slice(0, 3).join(" "));
+      ok("un coin arrondi : le sol HORS de la glace dans la case d'angle n'est plus dans la bande", !C.rinkBandSolid(RK.x0 + 0.05, RK.y0 + 0.05) && C.rinkSignedDist(RK.x0 + 0.05, RK.y0 + 0.05) > 0.5);
+      ok("toutes les cases du dallage de la patinoire se lisent au point (`rinkBand`)", (() => { for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) if (!ww.rinkBand[idx(x, y)]) return false; return true; })());
+      ok("les résidents gardent la case entière (`solid` plein sur l'anneau)", ww.solid[idx(RK.x0 - 1, RK.y0 + 8)] === 1 && ww.solid[idx(RK.x1 + 1, RK.y0 + 8)] === 1);
+    }
   }
 }
 
@@ -2154,6 +2194,30 @@ section("Valley Town — le chalet des patins");
   ok("la location finie, on peut en reprendre une (elle repart de zéro)", (() => { const r = E.resolveRentSkates(f, 1e9, "winter", true, NOW + 700000); return r.ok && f.inv.skatesUntil === NOW + 700000 + 600000; })());
   ok("une ancienne paire achetée (2026-10-04) est remise à zéro", (() => { const g = { inv: { skates: 1 }, tools: {} }; E.normalizeFarmer(g); return g.inv.skates === 0 && !E.skatesActive(g.inv, NOW); })());
   ok("les avertissements tombent dans la location (60 s puis 15 s avant la fin)", C.SKATES_WARN_MS < C.SKATES_RENT_MS && C.SKATES_WARN2_MS < C.SKATES_WARN_MS);
+  /* 2026-10-05 (nuit, fin quater) — LE MATÉRIEL : le prix suit la paire et la combinaison, l'hôte NORMALISE le choix, le dernier
+     choix reste dans le sac, et sans matériel demandé on loue comme avant. */
+  {
+    const g = mkS();
+    ok("un fermier neuf a le patin ordinaire blanc sans combinaison", g.inv.skateKit && g.inv.skateKit.type === "classic" && g.inv.skateKit.suit === 0 && g.inv.skateKit.color === 0);
+    const lowP = C.SKATES_RENT_PRICE + 59;
+    ok("des longues lames sans l'or suffisant : refus, rien de loué", E.resolveRentSkates(g, lowP, "winter", true, NOW, { type: "race" }).reason === "noGold" && g.inv.skatesUntil === 0);
+    const r1 = E.resolveRentSkates(g, 1e9, "winter", true, NOW, { type: "race", suit: 1, color: 3 });
+    ok("longues lames + combinaison : le prix de base + les deux suppléments", r1.ok && r1.moneyDelta === -(C.SKATES_RENT_PRICE + 60 + 45) && r1.price === C.SKATES_RENT_PRICE + 105, `${r1.price} or`);
+    ok("le choix reste dans le sac (couleur comprise), pour les autres et pour la prochaine location", g.inv.skateKit.type === "race" && g.inv.skateKit.suit === 1 && g.inv.skateKit.color === 3);
+    const h = mkS(); const r2 = E.resolveRentSkates(h, 1e9, "winter", true, NOW, { type: "mégapatin", suit: "x", color: 99 });
+    ok("un choix invalide est ramené au patin ordinaire blanc (l'hôte ne croit jamais le client)", r2.ok && h.inv.skateKit.type === "classic" && h.inv.skateKit.color === 0 && r2.price === C.SKATES_RENT_PRICE + 45);
+    const k = mkS(); k.inv.skateKit = { type: "race", suit: 0, color: 5 };
+    const r3 = E.resolveRentSkates(k, 1e9, "winter", true, NOW);
+    ok("sans matériel demandé, on reprend le dernier choix du sac", r3.ok && r3.price === C.SKATES_RENT_PRICE + 60 && k.inv.skateKit.color === 5);
+    /* ⚠️ L'HORODATAGE EN ms NE SE TRONQUE PAS (`| 0` le rendait négatif une moitié de chaque cycle de 49,7 jours) : on joue la
+       location à une VRAIE heure d'horloge, et à une heure dont les 32 bits bas sont négatifs. */
+    for (const real of [1791235991701, 1791235991701 + 2.2e9]) {
+      const w = mkS(); const rr = E.resolveRentSkates(w, 1e9, "winter", true, real);
+      ok(`une location à l'heure ${real} est active (32 bits ${(real | 0) < 0 ? "négatifs" : "positifs"})`, rr.ok && E.skatesActive(w.inv, real + 1000) && E.skatesLeftMs(w.inv, real + 1000) === C.SKATES_RENT_MS - 1000 && !E.skatesActive(w.inv, real + C.SKATES_RENT_MS));
+    }
+    const m2 = { inv: { skateKit: { type: "race", suit: 1, color: 7 } }, tools: {} }; E.normalizeFarmer(m2);
+    ok("un matériel déjà rangé survit à la normalisation du sac", m2.inv.skateKit.type === "race" && m2.inv.skateKit.suit === 1 && m2.inv.skateKit.color === 7);
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

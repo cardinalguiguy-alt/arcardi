@@ -20,6 +20,7 @@
    ========================================================================== */
 
 import * as C from "./fermeConstants.mjs";
+import * as PT from "./patin.mjs";   // 2026-10-05 (nuit, fin quater) : le matériel de patin (`skateKitNorm`, `skateKitPrice`) — pur, il n'importe rien
 import * as WX from "./meteo.mjs";   // 2026-10-05 : l'étiquette de la saison (`seasonTagAt`, fin de saison — meteo.js § 0 bis)
 /* ⚠️⚠️ ZIP 444 — LE MOTEUR N'IMPORTE PLUS AUCUNE QUÊTE, ET C'EST UNE RÉPARATION
    AUTANT QU'UN RETRAIT. Le 442 lui faisait emprunter `enqMarketMod` : une issue
@@ -1183,6 +1184,10 @@ export function normalizeFarmer(f) {
      2026-10-04) n'existe plus : toute ancienne paire est remise à zéro. */
   if (typeof f.inv.skatesUntil !== "number") f.inv.skatesUntil = 0;
   f.inv.skates = 0;
+  /* 2026-10-05 (nuit, fin quater) — le MATÉRIEL choisi au chalet (`patin.js` : la paire, la combinaison, la couleur) :
+     le dernier choix, gardé après la location (le panneau le propose de nouveau), diffusé avec le sac pour que les
+     autres le VOIENT. Toujours normalisé : un sac ancien ou un paquet tronqué retombe sur le patin ordinaire blanc. */
+  f.inv.skateKit = PT.skateKitNorm(f.inv.skateKit);
   if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
   for (const k of Object.keys(f.inv.catMilk)) {
     const e = f.inv.catMilk[k];
@@ -1500,16 +1505,24 @@ export function resolveBuyNet(f, money) {
    l'hôte sur la position qu'il connaît (`near`, calculé à l'appel). `now` : l'horloge de l'hôte,
    passée en argument pour qu'un banc rejoue une location (jamais `Date.now()` ici). On ne loue
    pas deux fois de suite : tant que la location court, le comptoir dit « vous les avez ». */
-export function skatesActive(inv, now) { return !!inv && (inv.skatesUntil | 0) > 0 && inv.skatesUntil > now; }
+/* ⚠️ 2026-10-05 (nuit, fin quater) — `| 0` TRONQUE UN HORODATAGE EN ms À 32 BITS (1,79 × 10¹² → un entier quelconque, parfois
+   négatif) : l'ancienne garde `(inv.skatesUntil | 0) > 0` refusait des patins loués pendant la moitié de chaque cycle de 49,7
+   jours, et le sac des autres, copié avec le même `| 0`, n'était jamais comparable à `Date.now()` — un invité ne voyait pas les
+   patins de l'hôte. On compare des nombres entiers de 64 bits, point. */
+export function skatesActive(inv, now) { return !!inv && +inv.skatesUntil > 0 && inv.skatesUntil > now; }
 export function skatesLeftMs(inv, now) { return skatesActive(inv, now) ? inv.skatesUntil - now : 0; }
-export function resolveRentSkates(f, money, season, near, now) {
+export function resolveRentSkates(f, money, season, near, now, kit) {
   normalizeFarmer(f);
   if (skatesActive(f.inv, now)) return { ok: false, reason: "have", moneyDelta: 0 };
   if (season !== "winter") return { ok: false, reason: "closed", moneyDelta: 0 };
   if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
-  if ((money | 0) < C.SKATES_RENT_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
+  /* Le matériel demandé (2026-10-05, fin quater) : normalisé ICI, par l'hôte — jamais cru tel quel. Le prix en dépend
+     (`PT.skateKitPrice`) ; sans `kit`, c'est le dernier choix du sac, donc un appelant ancien loue comme avant. */
+  const k = PT.skateKitNorm(kit || f.inv.skateKit), price = PT.skateKitPrice(k, C.SKATES_RENT_PRICE);
+  if ((money | 0) < price) return { ok: false, reason: "noGold", moneyDelta: 0, price };
   f.inv.skatesUntil = now + C.SKATES_RENT_MS;
-  return { ok: true, moneyDelta: -C.SKATES_RENT_PRICE, until: f.inv.skatesUntil };
+  f.inv.skateKit = k;
+  return { ok: true, moneyDelta: -price, until: f.inv.skatesUntil, price, kit: k };
 }
 /* Le chalet : son emprise (cases) une fois la ville générée — le décor `skateChalet`
    qu'a posé le générateur, ou `null`. Et la distance d'un point (semelle, cases) au
@@ -8748,6 +8761,10 @@ export function townWinterWorld(tw) {
   const AX = C.TOWN_WINTER_MARKET_AX, AXIS = C.TOWN_WINTER_MARKET_AXIS, NT = C.TOWN_STALL_TRADES.length;
   const free = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !solid[y * W + x]
     && tw.ground[y * W + x] === C.G_GRASS && tw.objects[y * W + x] === C.O_NONE;
+  /* La patinoire se pose AUSSI sur l'allée de terre battue qui la ceint (2026-10-05, fin quater) : le chalet et les braseros y
+     vivent, l'herbe seule ne suffisait plus. Jamais sur un décor, un arbre, ni une case déjà solide. */
+  const freeOrPath = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !solid[y * W + x]
+    && (tw.ground[y * W + x] === C.G_GRASS || tw.ground[y * W + x] === C.G_PATH) && tw.objects[y * W + x] === C.O_NONE;
   const skipped = [];
   const put = (x, y, kind, extra) => {
     if (!free(x, y)) { skipped.push(`${kind}@${x},${y}`); return null; }
@@ -8802,12 +8819,13 @@ export function townWinterWorld(tw) {
      du dallage et les coins hors de l'arrondi, solides), les PORTILLONS (`rinkGate` : des trous dans la bande, qu'on
      franchit chaussé — la règle de qui n'a pas de patins est dans le jeu, `rinkGateHold`). Un décor resté sur le dallage
      (aucun : tout ce qui y était a été remballé plus haut) aurait été une case sautée, comptée par le banc. */
-  const RK = C.TOWN_RINK, rink = new Uint8Array(W * H), rinkGate = new Uint8Array(W * H);
+  const RK = C.TOWN_RINK, rink = new Uint8Array(W * H), rinkGate = new Uint8Array(W * H), rinkBand = new Uint8Array(W * H);
   const gateAt = (x, y) => C.TOWN_RINK_GATES.some((g) =>
     (g.side === "n" && y === RK.y0 - 1 && x >= g.a && x <= g.b) || (g.side === "s" && y === RK.y1 + 1 && x >= g.a && x <= g.b) ||
     (g.side === "e" && x === RK.x1 + 1 && y >= g.a && y <= g.b) || (g.side === "w" && x === RK.x0 - 1 && y >= g.a && y <= g.b));
   for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) {
     const i = y * W + x;
+    rinkBand[i] = 1;   // 2026-10-05 (fin quater) : toute case du dallage de la patinoire se lit AU POINT (`C.rinkBandSolid`) pour le joueur
     if (tw.ground[i] !== C.G_PATH_STONE) { skipped.push(`patinoire@${x},${y}`); continue; }
     if (C.rinkInside(x + 0.5, y + 0.5)) { if (solid[i]) skipped.push(`glace@${x},${y}`); rink[i] = 1; continue; }
     if (gateAt(x, y)) { rinkGate[i] = 1; solid[i] = 0; continue; }
@@ -8827,16 +8845,22 @@ export function townWinterWorld(tw) {
     }
     if (ends.length === 2) rinkGarlands.push({ x0: ends[0].x, y0: ends[0].y, x1: ends[1].x, y1: ends[1].y, sag: 22, k: rinkGarlands.length * 7 + 3 });
   }
+  /* Les BRASEROS de l'entrée (`TOWN_RINK_BRAZIERS`) : un point chaud de part et d'autre des portillons nord et sud, sur l'allée
+     de terre. Une case libre ou rien (jamais sur un arbre ni dans le passage) ; solide, comme celui du marché. */
+  for (const [bx0, by0] of C.TOWN_RINK_BRAZIERS) {
+    if (!freeOrPath(bx0, by0)) { skipped.push(`brasero@${bx0},${by0}`); continue; }
+    props.push({ x: bx0, y: by0, kind: "brazier" }); solid[by0 * W + bx0] = 1;
+  }
   {
     const CW = C.TOWN_SKATE_CHALET_W, CHh = C.TOWN_SKATE_CHALET_H, s0 = C.TOWN_RINK_CHALET;
     let fits = true;
-    for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) if (!free(s0.x + dx, s0.y + dy)) fits = false;
+    for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) if (!freeOrPath(s0.x + dx, s0.y + dy)) fits = false;
     if (fits) {
       for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) solid[(s0.y + dy) * W + s0.x + dx] = 1;
       props.push({ x: s0.x + (CW >> 1), y: s0.y + CHh - 1, kind: "skateChalet", ox: -C.TILE / 2, rink: 1 });
     } else skipped.push(`chalet@${s0.x},${s0.y}`);
   }
-  const out = Object.assign({}, tw, { solid, props, duck, rink, rinkGate, rinkGarlands, winter: true, summer: tw, marketRect: C.TOWN_WINTER_MARKET, winterSkipped: skipped });
+  const out = Object.assign({}, tw, { solid, props, duck, rink, rinkGate, rinkBand, rinkGarlands, winter: true, summer: tw, marketRect: C.TOWN_WINTER_MARKET, winterSkipped: skipped });
   delete out._arch;   // un cache de l'été (ses arches de pont ne changent pas, mais un cache se reconstruit, il ne se partage pas)
   WINTER_WORLDS.set(tw, out);
   return out;

@@ -35,6 +35,7 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau.mjs";
 import { townNoise, seasonOf } from "./fermeEngine.mjs";
 import { buildFaunaSprites } from "./fauneArt.mjs";
+import * as PT from "./patin.mjs";   // 2026-10-05 (fin quater) : les couleurs et les lames du matériel de patin (pur)
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures.mjs";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis.mjs";
 import { drawCivicHDTile, drawCivicHDBorder } from "./solHD.mjs";   // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution
@@ -1450,6 +1451,40 @@ function rinkSD(cx, cy) {
   const qx = Math.abs(px) - hx, qy = Math.abs(py) - hy;
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit, fin quater) — UNE GLACE QUI A SERVI : les traces d'anciens patineurs, les passes de la surfaceuse, le
+   ║ médaillon. (Guillaume : « rends-la plus belle en général ».)
+   ╚════════════════════════════════════════════════════════════════════════════
+   Une glace entretenue n'est pas un aplat : elle porte (1) des RAYURES — des arcs d'ellipse partiels, fins, clairs ou sombres,
+   les boucles qu'ont laissées les patineurs d'avant (déterministes : le tirage vient d'une graine fixe, la glace est la même
+   pour tout le monde et à chaque chargement) ; (2) les PASSES DE LA SURFACEUSE : de longues bandes de la largeur d'une lame
+   de machine, à peine plus claires une sur deux ; (3) un MÉDAILLON : un anneau pointillé bleu autour du flocon, qui le pose.
+   ⚠️ Tout se COMPOSE dans la même valeur `v` que le reste (puis la rampe tramée au bruit bleu) : aucune couche de plus à dessiner. */
+const RINK_SCRATCH = (() => {
+  const R = C.TOWN_RINK, T = 16, cx = (R.x0 + R.x1 + 1) / 2 * T, cy = (R.y0 + R.y1 + 1) / 2 * T, out = [];
+  let a = 20261005;
+  const rnd = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+  const W = (R.x1 - R.x0 + 1) * T, H = (R.y1 - R.y0 + 1) * T;
+  for (let k = 0; k < 15; k++) {
+    const rx = 34 + rnd() * 86, ry = 22 + rnd() * 58, th = rnd() * Math.PI;
+    out.push({ cx: cx + (rnd() - 0.5) * W * 0.62, cy: cy + (rnd() - 0.5) * H * 0.62, a: rx, b: ry, c: Math.cos(th), s: Math.sin(th),
+      ph: rnd() * 6.28, f: 2 + Math.floor(rnd() * 3), dark: rnd() < 0.4, gain: 0.06 + rnd() * 0.07 });
+  }
+  return out;
+})();
+function rinkWear(wx, wy) {
+  let dv = 0;
+  for (const e of RINK_SCRATCH) {
+    const dx = wx - e.cx, dy = wy - e.cy;
+    if (dx > e.a + 3 || dx < -e.a - 3 || dy > e.a + 3 || dy < -e.a - 3) continue;   // un rayon d'arc maximal : la grande boîte suffit
+    const u = (dx * e.c + dy * e.s) / e.a, v2 = (-dx * e.s + dy * e.c) / e.b;
+    const d = Math.abs(Math.hypot(u, v2) - 1) * (e.a + e.b) * 0.5;
+    if (d > 0.62) continue;
+    if (Math.sin(Math.atan2(v2, u) * e.f + e.ph) < -0.15) continue;                   // un arc, pas une ellipse complète
+    dv += e.dark ? -e.gain : e.gain;
+  }
+  return dv;
+}
 const RINK_PICTO = [   // 5 × 4 : le pain, le poisson, la fleur, le fromage, la carotte, le pot (l'ordre de TOWN_STALL_TRADES)
   ["01110", "11111", "11111", "01110"], ["01100", "11111", "11111", "01100"], ["01010", "00100", "01110", "00100"],
   ["00011", "00111", "01111", "11111"], ["00110", "01100", "11000", "10000"], ["01110", "11011", "11111", "01110"],
@@ -1466,6 +1501,8 @@ export function rinkIcePixel(wx, wy) {
   if (n3 > 0.22) v -= 0.2 * Math.min(1, (n3 - 0.22) / 0.4);                       // la glace vive, où l'on voit le fond
   const sh = Math.sin((wx + wy * 0.55) / 21) * Math.sin((wx - wy * 0.3) / 57);
   if (sh > 0.74) v += 0.12 * (sh - 0.74) / 0.26;                                   // les lueurs obliques
+  v += rinkWear(wx, wy);                                                           // les rayures des anciens patineurs
+  if (Math.floor((wy - R.y0 * T) / 26) & 1) v += 0.028;                            // les passes de la surfaceuse : une bande sur deux, à peine plus claire
   const spray = 7 + 3 * townNoise(wx / T, wy / T, 0.7, 404);
   if (dEdge < spray) v += 0.36 * Math.pow(1 - dEdge / spray, 1.5);                  // la neige de lames contre la bande
   /* LE FLOCON PEINT SOUS LA GLACE : six bras de 2 px, deux paires de ramilles en V tournées vers le dehors sur chacun,
@@ -1486,6 +1523,8 @@ export function rinkIcePixel(wx, wy) {
     const hx = Math.max(Math.abs(ex), Math.abs(ex * 0.5 + ey * 0.866), Math.abs(-ex * 0.5 + ey * 0.866));
     if (Math.abs(hx - 0.72 * T) < 0.9) emb = 1;
   }
+  /* LE MÉDAILLON : un anneau pointillé (vingt tirets) à 4,6 cases du centre, qui pose le flocon sur la glace. */
+  if (Math.abs(er - 4.6 * T) < 0.75 && Math.sin(Math.atan2(ey, ex) * 20) > -0.25) emb = 1;
   // le reflet de la bande nord (sa face, puis sa rambarde), à l'envers, sur les 14 px sous elle
   const nyN = (rinkSD(cx, cy + 1) - rinkSD(cx, cy - 1)) / 2;
   let refl = null, reflA = 0;
@@ -5342,9 +5381,72 @@ export function drawSnowKick(ctx, fx, fy, ux, uy, u) {
    ⚠️ LA FOULÉE EST UNE PHASE RÉELLE (`phase`, sa partie entière choisit la
    jambe) : une poussée part de sous le corps, s'écarte en arrière en se
    soulevant, revient — c'est le sinus d'un demi-tour, jamais un saut d'image. */
-const SKATE_BOOT = ["#ffffff", "#f6f3ec", "#d6d0c4"];
 const SKATE_BLADE = ["#ffffff", "#c6ccd4", "#6e7680"];
-export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt) {
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-05 (nuit, fin quater) — LE MATÉRIEL SE VOIT : la couleur des bottines, les LONGUES LAMES, la combinaison, et
+   ║ les FIGURES (le saut, la vrille, l'axel, le cygne, la marche arrière).
+   ╚════════════════════════════════════════════════════════════════════════════
+   `view` (facultatif) : { kit } — le matériel de CE patineur (`PT.skateKitNorm`) ; sans lui, le patin ordinaire blanc
+   d'avant. Les bottines prennent les trois tons de la couleur (`PT.SKATE_COLORS`), la lame de course est LONGUE (onze
+   pixels de profil, la pointe relevée) avec une fixation à deux pieds ; de face ou de dos, la lame se voit par la tranche,
+   la même pour les deux paires (la longueur ne se voit que de profil — c'est comme ça qu'on les reconnaît).
+   ⚠️ LES FIGURES SONT DES POSES, LA COURBE EST AILLEURS : la hauteur du saut est un décalage de `py` que fait l'appelant
+   (`drawCharacter`, l'ombre reste au sol) ; les tours de la vrille sont un CHOIX DE LIGNE de la feuille (face, profil,
+   dos, profil) que fait aussi l'appelant. Ici : le corps ramassé en l'air ("hop", "axel"), les bras collés ("spin"), la
+   jambe levée du cygne ("swan"), et — pour la vrille — l'anneau d'éclats de glace autour des lames. */
+function skateBootCols(view) {
+  const c = PT.SKATE_COLORS[PT.skateKitNorm(view && view.kit).color];
+  return [c.hi, c.main, c.lo];
+}
+/* La combinaison : la feuille du personnage, de la poitrine aux pieds, REPEINTE dans le ton de la couleur choisie en gardant
+   la lumière de chaque pixel (le pli reste un pli) ; la tête n'est pas touchée. Mise en cache par feuille et par couleur —
+   ⚠️ UN CANEVAS PAR (FEUILLE, COULEUR), jamais refait à l'image. Hors navigateur (le faux canevas des bancs n'a pas de
+   `getImageData`), la feuille d'origine est rendue telle quelle : un banc ne la regarde pas, le jeu si. */
+const SUIT_SHEETS = new WeakMap();
+export function suitSheet(sheet, colorIdx) {
+  if (!sheet || !sheet.getContext || typeof document === "undefined") return sheet;
+  let per = SUIT_SHEETS.get(sheet);
+  if (!per) { per = new Map(); SUIT_SHEETS.set(sheet, per); }
+  const key = colorIdx | 0;
+  if (per.has(key)) return per.get(key);
+  let out = sheet;
+  try {
+    const cv = document.createElement("canvas"); cv.width = sheet.width; cv.height = sheet.height;
+    const g = cv.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(sheet, 0, 0);
+    const im = g.getImageData(0, 0, cv.width, cv.height), d = im.data;
+    const hex = PT.SKATE_COLORS[Math.max(0, Math.min(PT.SKATE_COLORS.length - 1, key))].suit;
+    const cr = parseInt(hex.slice(1, 3), 16), cg = parseInt(hex.slice(3, 5), 16), cb = parseInt(hex.slice(5, 7), 16);
+    for (let y = 0; y < cv.height; y++) {
+      if (y % 24 < POSE_TORSO_Y + 1) continue;                          // la tête (et le cou) restent comme ils sont
+      for (let x = 0; x < cv.width; x++) {
+        const i = (y * cv.width + x) * 4; if (d[i + 3] < 8) continue;
+        const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
+        const m = 0.42 + 0.95 * l;
+        d[i] = Math.min(255, cr * m); d[i + 1] = Math.min(255, cg * m); d[i + 2] = Math.min(255, cb * m);
+      }
+    }
+    g.putImageData(im, 0, 0); out = cv;
+  } catch (e) { out = sheet; }
+  per.set(key, out);
+  return out;
+}
+/* L'aperçu du matériel (le panneau du chalet) : une bottine de profil sur sa lame, à l'échelle 1 (le CSS agrandit sans
+   lisser) — la MÊME `boot` que le jeu, pas un second dessin (§8). Le fond est transparent. */
+export function drawSkateKitPreview(ctx, kit) {
+  const k = PT.skateKitNorm(kit), v = { kit: k }, BC = skateBootCols(v), bl = PT.SKATE_KITS[k.type].blade >= 10;
+  const P1 = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  const one = (bx, by) => {
+    // La jambe (le ton de la combinaison si on la porte), la bottine, puis la lame — celle de la `boot` du jeu.
+    if (k.suit) { P1(bx + 1, by - 5, 3, 5, PT.SKATE_COLORS[k.color].suit); P1(bx + 1, by - 5, 1, 5, "rgba(255,255,255,0.25)"); }
+    P1(bx, by, 5, 3, BC[1]); P1(bx, by, 1, 3, BC[0]); P1(bx, by + 2, 5, 1, BC[2]); P1(bx + 1, by - 1, 3, 1, BC[1]);
+    P1(bx + 4, by + 1, 1, 1, BC[0]);                                     // le bout, éclairé
+    if (bl) { P1(bx - 3, by + 3, 11, 1, SKATE_BLADE[1]); P1(bx - 3, by + 3, 3, 1, SKATE_BLADE[0]); P1(bx + 7, by + 2, 1, 1, SKATE_BLADE[1]); P1(bx, by + 3, 1, 1, SKATE_BLADE[2]); P1(bx + 4, by + 3, 1, 1, SKATE_BLADE[2]); P1(bx - 2, by + 4, 9, 1, SKATE_BLADE[2]); }
+    else { P1(bx - 1, by + 3, 6, 1, SKATE_BLADE[1]); P1(bx - 1, by + 3, 2, 1, SKATE_BLADE[0]); P1(bx + 4, by + 2, 1, 1, SKATE_BLADE[1]); P1(bx, by + 4, 5, 1, SKATE_BLADE[2]); }
+  };
+  one(6, 8); one(22, 8);                                                  // la paire, de profil, un pied derrière l'autre
+}
+export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt, view) {
+  const SKATE_BOOT = skateBootCols(view), longBlade = PT.SKATE_KITS[PT.skateKitNorm(view && view.kit).type].blade >= 10;
   const sy = row * 24, side = row === 2;
   const ph = +phase || 0, leg = Math.floor(ph) & 1, u = ph - Math.floor(ph);
   const P1 = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
@@ -5359,7 +5461,10 @@ export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt) {
   const boot = (lx, ly, right) => {
     const bx = lx + (right ? 0 : 5), by = ly + LH - 3;
     P1(bx, by, 3, 3, SKATE_BOOT[1]); P1(bx, by, 1, 3, SKATE_BOOT[0]); P1(bx, by + 2, 3, 1, SKATE_BOOT[2]);
-    if (side) {                                                          // de profil : la lame entière, pointe relevée devant
+    if (side && longBlade) {                                             // de profil, longues lames : onze pixels, la pointe relevée, deux fixations
+      P1(bx - 3, by + 3, 11, 1, SKATE_BLADE[1]); P1(bx - 3, by + 3, 3, 1, SKATE_BLADE[0]); P1(bx + 7, by + 2, 1, 1, SKATE_BLADE[1]);
+      P1(bx, by + 3, 1, 1, SKATE_BLADE[2]); P1(bx + 4, by + 3, 1, 1, SKATE_BLADE[2]);
+    } else if (side) {                                                   // de profil : la lame entière, pointe relevée devant
       P1(bx - 1, by + 3, 6, 1, SKATE_BLADE[1]); P1(bx - 1, by + 3, 2, 1, SKATE_BLADE[0]); P1(bx + 4, by + 2, 1, 1, SKATE_BLADE[1]);
     } else {                                                             // de face ou de dos : la lame vue par la tranche
       P1(bx + 1, by + 3, 1, 1, SKATE_BLADE[1]); P1(bx, by + 3, 1, 1, SKATE_BLADE[2]);
@@ -5410,8 +5515,51 @@ export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt) {
     }
     return;
   }
-  /* CHAUSSÉ : "stand", "brake", "glide". */
+  /* CHAUSSÉ : "stand", "brake", "glide" — et les figures : "hop", "axel", "spin", "swan". */
   const top = py - 9;                                                   // un pixel plus haut : la lame
+  if (pose === "hop" || pose === "axel") {
+    /* EN L'AIR : le corps ramassé (genoux montés d'un pixel, jambes jointes), les bras collés — l'appelant a déjà levé
+       `py` de la hauteur de l'arc, l'ombre est restée au sol. À l'axel, les jambes se croisent (un pied devant l'autre). */
+    const t2 = top + 1;
+    upper(t2, 0, 0);
+    const ly2 = t2 + LY;
+    if (pose === "axel") {
+      legs(2, -1, -2, -1, ly2);
+      boot(px + 2, ly2 - 1, false); boot(px + 6, ly2 - 1, true);
+    } else {
+      legs(0, -1, 0, -1, ly2);
+      boot(px, ly2 - 1, false); boot(px + 8, ly2 - 1, true);
+    }
+    return;
+  }
+  if (pose === "spin") {
+    /* LA VRILLE AU SOL : un seul appui, les bras rentrés, le buste droit — et l'anneau d'éclats qui tourne autour de la lame
+       (c'est lui qui dit la vitesse de rotation, le corps ne bouge presque pas). `ph` : les tours faits. */
+    upper(top, 0, 0);
+    legs(1, 0, -1, 0, top + LY);
+    boot(px + 1, top + LY, false); boot(px + 7, top + LY, true);
+    for (let k = 0; k < 6; k++) {
+      const a = ph * Math.PI * 2 * 2 + k * (Math.PI * 2 / 6), rx = Math.round(Math.cos(a) * 8), ry = Math.round(Math.sin(a) * 2.6);
+      P1(px + 8 + rx, py + 15 + ry, 1, 1, k & 1 ? "rgba(250,253,255,0.95)" : "rgba(200,225,250,0.8)");
+    }
+    return;
+  }
+  if (pose === "swan") {
+    /* LE CYGNE : le buste penché en avant, une jambe seule qui porte, l'autre TENDUE en arrière (de profil) ou sur le côté (de
+       face, de dos) et à demi levée, les bras ouverts. La jambe libre est la tranche de la feuille CISAILLÉE tranche par
+       tranche (chaque rangée décalée de 1,3 px vers l'extérieur et de 0,5 px vers le haut : aucun `rotate`, le faux canevas
+       des bancs n'en veut pas) — une diagonale, pas un bâton vertical plaqué contre le corps (premier jet, invisible). */
+    const t2 = top + 2;
+    upper(t2, side ? 2 : 0, side ? 1 : 0);
+    const ly2 = t2 + LY;
+    halfLeg(false, px, ly2); boot(px, ly2, false);                      // la jambe d'appui
+    const hx = side ? px + 7 : px + 9, hy = ly2 + 1, ox = side ? -1 : 1;
+    for (let k = 0; k < LH; k++) ctx.drawImage(sheet, 8, sy + LY + k, 8, 1, hx + ox * Math.round(k * 1.4), hy - Math.round(k * 0.6), 8, 1);
+    boot(hx + ox * Math.round((LH - 1) * 1.4), hy - Math.round((LH - 1) * 0.6) - LH + 3 + 1, true);
+    arm(0, px + POSE_BODY_L - POSE_ARM_W - 2, t2 + POSE_ARM_Y - 1);
+    arm(1, px + POSE_BODY_R + 2, t2 + POSE_ARM_Y - 1);
+    return;
+  }
   if (pose === "brake") {
     /* L'ARRÊT EN TRAVERS : genoux fléchis (un pixel plus bas), jambes écartées, le
        buste rejeté en arrière de la course (vers −x dans le repère du profil). */

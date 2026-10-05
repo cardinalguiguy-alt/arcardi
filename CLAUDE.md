@@ -11,35 +11,32 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 (nuit, fin ter) — PATINOIRE + COURSE + CONTRE-LA-MONTRE, MARCHÉ D'HIVER, OMBRES DU SOLEIL — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-05 (nuit, fin quater) — CHALET COLLÉ À LA PATINOIRE, BANDE AU POINT PRÈS, MATÉRIEL DE PATIN, FIGURES, GERBE — DANS L'ARBRE, NON COMMITÉ
 
-Récits : README de la ferme, journaux « (nuit, suite) », « (nuit, fin) », « (nuit, fin bis) », « (nuit, fin ter) ». **Supabase : rien**
-(records de course dans la sauvegarde JSON, `rinkRec`). (1) Essai « petits personnages » ×0,8 ; `courtDepthFrac` borné au nord ; la
-neige lit la rue pavée au pixel. (2) **Le marché hiverne dans la prairie** : un SECOND MONDE dérivé (`townWinterWorld`), pris l'hiver
-par `getTownWorldCached`. (3) **Ombres portées du soleil** (`ombres.js`, `sunShadowPass`), ville et ferme. (4) **La patinoire** sur
-l'esplanade (glace arrondie, bande, mâts, guirlandes, chalet ; portillon : message, puis chute si l'on insiste). (5) **La course**
-(`course.js` pur, `CourseHud.js`, `hostRinkReq` & co.) : privatiser au chalet (40 or), grille de 30 s, 4 au départ (résidents
-DÉTERMINISTES, zéro message), 5 tours, aspiration, chute contre la bande ; le contre-la-montre contre le fantôme du record. Vue en jeu
-seul ET À DEUX (`audit-duo`) : résultats identiques au centième. (6) **Réseau, hors course** : deux clients qui se balayaient l'un
-l'autre ne se retrouvaient jamais (piège neuf du §4) — corrigé ; le classement en direct lit le dernier paquet, pas l'avatar dessiné.
-Bancs relancés : `verify-vallee` 319/319, `verify-course` 30/30 (falsifié), `verify-ombres` 27/27, `verify-patin` 23/23,
-`verify-neige` 17/17, `verify-pluie` 34/34, `verify-faune` 105/105, `verify-meteo` 76/76, `verify-collision`, `verify-strings` 1252
-clés, `render-patinoire` 4/4, `render-marche-hiver` 3/3, bundle et `no-undef` propres.
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; `?room=` unique ;
-`audit-cap` écrit dans `tools/out/audit-2026-10/`. Le harnais avance `Date.now` pour régler l'heure : à deux, ça balaie l'autre client
-(il revient au ping suivant, ≤ 20 s). `.claude/launch.json` a gagné `fake-supabase-verbose` (le relais qui journalise chaque message).
-⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git). ⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas
-(`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore ni `translate` ni le remplissage des chemins ; `TOWN_SPEED_MULT` est mort depuis
-le zip 250. ⚠️ La bascule de saison du monde de la ville est instantanée : un étal peut apparaître sous un joueur.
+Récit : README de la ferme, journal « (nuit, fin quater) » (le précédent, « fin ter », décrit la course et la patinoire). **Supabase : rien.**
+Fait en « caveman on » (sans questions) : (1) le chalet de la patinoire est AU NORD DU PORTILLON EST (celui du lac n'a pas bougé), quatre
+braseros aux portillons nord/sud ; (2) la COLLISION DE LA BANDE se lit AU POINT (`C.rinkBandSolid`, `tw.rinkBand`) : plus de mur invisible, plus
+de trou aux coins ; `tw.solid` reste plein pour les résidents ; (3) glace rayée + médaillon ; (4) `patin.js` : DEUX PAIRES (patinage / longues
+lames : +10 %, virages en carres `carry`), COMBINAISON (+5 %), HUIT COULEURS, choisis au chalet, normalisés par l'hôte (`inv.skateKit`) ;
+(5) les FIGURES en pratique libre : Espace saute, V vrille, les deux = axel, B tenue = à reculons, cygne automatique — vues par les autres via
+`tk` dans le paquet de position ; (6) la gerbe de glace continue derrière les lames (`skateTrail`). ⚠️ Défaut ancien corrigé : `skatesUntil | 0`
+tronquait un horodatage à 32 bits (un invité ne voyait pas les patins de l'hôte) ; même motif NON corrigé : `f.injuredUntil | 0`.
+Bancs relancés : `verify-patin` 59/59, `verify-vallee` 337/337, `render-patin` 4/4 (nouveau), `render-patinoire` 4/4, `verify-course` 30/30,
+`verify-ombres` 27/27, `verify-neige` 17/17, `verify-pluie` 34/34, `verify-faune` 105/105, `verify-meteo` 76/76, `verify-collision`,
+`verify-strings`, `verify-docs`, `verify-syntax`/`-portee`/`-scope`. Vu en jeu, seul et à deux fenêtres.
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent
+`tools/.cache/*.mjs` (suivi par git). ⚠️ Un invité immobile n'émet aucun `pos` : l'hôte ne le connaît pas, aucun `apply` ne part (faire bouger
+l'invité d'une touche avant de juger à deux). ⚠️ Piège du dev : la boucle de rendu est montée une fois — recharger la page après toute édition de
+`FermeGame.js` avant de juger (le rechargement à chaud laisse l'ANCIEN code dans la boucle). Vu en passant, pas corrigé : `C.G_SOIL` n'existe
+pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison du monde de la ville est instantanée.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER LA PATINOIRE ET SA COURSE, PUIS LES RÉSIDENTS QUI PATINENT
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER CE LOT, PUIS LES RÉSIDENTS QUI PATINENT
 
-(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : la course — ⚠️ le résident le plus fort est à 0,2 % de la ligne idéale du banc, très
-dur à battre —, 5 tours, le prix, la chute ; la patinoire de jour et de nuit, la chute du portillon (blessure du lac : trop dur ?) ; le
-marché d'hiver ; les ombres ; l'essai ×0,8 ; la neige des rues. (2) Puis le dernier morceau DÉCIDÉ de la patinoire : **les résidents
-qui patinent à l'occasion** (hors session ; aucun `rnd()` de plus dans la graine de la ville), et les reflets des patineurs sur la
-glace. (3) Ensuite : marché de Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place ; sols de VT (FIX-004),
-boutique d'hiver peinte, lots B/C0, intérieurs. Idée en attente : l'horloge qui ne roule qu'avec un hôte (`docs/AUDIT-2026-10.md`, 3).
+(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : le chalet et la bande (marcher le long, de jour et de nuit), les prix et l'écart des deux paires,
+la combinaison, les figures (hauteur du saut, durée, vrille), la gerbe (visible sur glace pâle ?), la glace rayée ; puis la course avec le
+matériel (les résidents ont du matériel neutre : trop facile ?). (2) Ensuite : les **résidents qui patinent à l'occasion** (hors session ;
+aucun `rnd()` de plus dans la graine de la ville) et les reflets des patineurs. (3) Puis : marché de Noël + grand sapin ; sols de VT (FIX-004),
+boutique d'hiver peinte, lots B/C0, intérieurs ; casque de la combinaison ; V/B au tactile.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -64,7 +61,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Tâche | Lire, dans l'ordre | Bancs à relancer |
 |---|---|---|
 | Neige, hiver, glace, feuilles mortes | `components/ferme/neige.js`, `glace.js`, `feuilles.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles` |
-| Patin, glace du lac, chalet des patins | `components/ferme/patin.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journal 2026-10-05) | `verify-patin`, `render-glace`, `verify-vallee` |
+| Patin, matériel (paires, combinaison, couleurs), figures, gerbe, glace du lac, chalets, collision de la bande | `components/ferme/patin.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journal 2026-10-05, « fin quater ») ; `C.rinkBandSolid` (fermeConstants.js) | `verify-patin`, `render-patin`, `render-glace`, `verify-vallee` |
 | Bonhomme de neige (coups de pied, boule portée, chapeaux) | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme`, `render-bonhomme` |
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
@@ -292,6 +289,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN BANC QUI CHERCHE UN NOM D'APPEL MESURE UNE ÉCRITURE, PAS UN AFFICHAGE
 - `chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.
 - UNE CLÉ EN DOUBLE DANS UN LITTÉRAL NE LÈVE RIEN : LA SECONDE GAGNE
+- `x | 0` SUR UN HORODATAGE EN MILLISECONDES LE TRONQUE À 32 BITS : UN ENTIER QUELCONQUE, PARFOIS NÉGATIF, QUI NE SE COMPARE PLUS À `Date.now()`
 - UNE BORNE DE BOUCLE RECALCULÉE À CHAQUE TOUR SUR CE QUE LA BOUCLE MODIFIE S'ARRÊTE TROP TÔT, SANS ERREUR
 - UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT
 - UN EFFET QUI SE DESSINE AILLEURS QUE SON OBJET (un reflet, une ombre longue) N'EXISTE QUE SI LA FILE DE DESSIN CONNAÎT L'OBJET HORS CADRE

@@ -23,6 +23,14 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-05 (nuit, fin quater)** (« caveman on » : tout exécuté sans questions, donc TOUT À JUGER) : **le chalet de la patinoire collé à la
+  glace** (au nord du portillon est ; celui du lac n'a pas bougé), **quatre braseros** aux portillons nord et sud, **la bande qui ne bloque plus que sa
+  planche** (plus de mur invisible autour, plus de trou aux coins — à marcher le long de la bande, de jour et de nuit), **la glace rayée** (rayures,
+  passes de surfaceuse, médaillon — très discret : assez ?), **le matériel** (patins de course : +10 % et virages en carres ; combinaison : +5 % ; huit
+  couleurs ; prix 60 / 120 / 165 or : trop ? pas assez de différence ?), **les figures** (Espace saut, V vrille, les deux axel, B tenue à reculons, le
+  cygne tout seul — la hauteur du saut, la durée, la lisibilité de la vrille, l'enchaînement affiché), **la gerbe derrière les lames** (assez visible
+  sur une glace aussi pâle ? trop ?). Questions ouvertes : le matériel doit-il compter dans la COURSE (il y compte ; les résidents ont du matériel
+  neutre, on les bat plus facilement) ? un casque avec la combinaison ? V/B au tactile ? les figures aussi sur le lac ? (elles y marchent déjà).
 - **Le 2026-10-05 (nuit, fin ter)** : **la course de la patinoire et le contre-la-montre** — privatiser au chalet (40 or), grille de 30 s,
   toujours quatre au départ (des résidents complètent), 5 tours autour de l'îlot de plots, aspiration, chute contre la bande au-dessus de
   6,4 cases/s ; l'écran de course (compte à rebours, tours, chrono, place, mini-carte, classement en direct, résultats, podium) ; le

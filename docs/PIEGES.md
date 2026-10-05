@@ -406,3 +406,10 @@ dépôt.
 - **`crystal` n'affiche AUCUNE image** : tampon 480×270 toujours opaque.
 - **La caméra de `walk` est 2,6 unités DERRIÈRE le personnage.**
 - **Rendre un objet invisible ne le retire pas du monde.**
+- ⚠️⚠️ **`x | 0` SUR UN HORODATAGE EN MILLISECONDES LE TRONQUE À 32 BITS : UN ENTIER QUELCONQUE, PARFOIS NÉGATIF, QUI NE SE COMPARE PLUS À `Date.now()`** (2026-10-05, nuit fin quater). `Date.now()` vaut ~1,79 × 10¹² : `| 0` n'en garde
+  que les 32 bits bas (ici ~2,3 × 10⁸, et NÉGATIF une moitié de chaque cycle de 49,7 jours). `skatesActive` refusait des patins
+  loués pendant cette moitié-là, et le sac des autres, copié avec le même `| 0`, n'était jamais comparable à `Date.now()` — à deux, un
+  invité ne voyait pas les patins de l'hôte ; ni erreur, ni avertissement, et le bug dépend de la DATE du jour (un banc vert un mois,
+  rouge le suivant). Parade : comparer des nombres tels quels (`+x > 0`, `|| 0` pour un défaut), jamais `| 0` sur du temps ; et un
+  banc qui joue la fonction à une vraie heure d'horloge dont les 32 bits bas sont négatifs (`verify-vallee`). ⚠️ Même motif repéré, pas
+  corrigé : `f.injuredUntil | 0` (FermeGame.js, `resolveStarCandy`).

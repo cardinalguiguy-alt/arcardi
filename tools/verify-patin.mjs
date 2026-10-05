@@ -145,6 +145,109 @@ section("§8 — la cadence d'image ne change pas la trajectoire");
   ok("60 et 144 images par seconde finissent au même endroit", gap / len < 0.03, `écart ${gap.toFixed(2)} cases sur ${len.toFixed(1)}`);
 }
 
+section("§9 — le matériel : les longues lames, la combinaison, les couleurs (2026-10-05, fin quater)");
+{
+  const cruise = (kit, run) => { const st = PT.skateNew(); const o = play(st, 5, 60, () => [1, 0], { skates: true, run: !!run, stats: PT.skateKitStats(kit) }); return o.vmax; };
+  const vC = cruise({ type: "classic" }), vR = cruise({ type: "race" }), vS = cruise({ type: "classic", suit: 1 }), vRS = cruise({ type: "race", suit: 1 });
+  // Falsifié : `vmaxK` de la lame de course remis à 1 dans une copie → « les longues lames vont plus vite » rougit.
+  ok("les longues lames vont un peu plus vite (+10 %)", vR > vC * 1.07 && vR < vC * 1.13, `${vC.toFixed(2)} → ${vR.toFixed(2)}`);
+  ok("la combinaison seule gagne un peu (+5 %)", vS > vC * 1.03 && vS < vC * 1.07, `${vS.toFixed(2)}`);
+  ok("les deux ensemble s'additionnent en se MULTIPLIANT", Math.abs(vRS / vC - 1.10 * 1.05) < 0.01, `×${(vRS / vC).toFixed(3)}`);
+  ok("sans `stats`, rien ne change (le patin ordinaire d'avant)", Math.abs(cruise(undefined) - vC) < 1e-9);
+  /* Le VIRAGE : à la croisière, un ordre à angle droit ; on mesure ce qu'il reste de vitesse une fois le cap pris (la
+     composante dans le nouveau cap) après 0,8 s, et le cap atteint après 0,3 s (la tenue de trajectoire). */
+  const turn = (kit) => {
+    const st = PT.skateNew(PT.SKATE.VMAX, 0), o = { skates: true, stats: PT.skateKitStats(kit) };
+    for (let t = 0; t < 0.3; t += 1 / 60) PT.skateStep(st, 0, 1, 1 / 60, o);
+    const a3 = Math.atan2(st.vy, st.vx) * 180 / Math.PI;
+    for (let t = 0; t < 0.5; t += 1 / 60) PT.skateStep(st, 0, 1, 1 / 60, o);
+    return { ang: a3, keep: st.vy / (PT.SKATE.VMAX * PT.skateKitStats(kit).vmaxK) };
+  };
+  const tC = turn({ type: "classic" }), tR = turn({ type: "race" });
+  // Falsifié : `carry` à 0 et `turnK` à 1 dans une copie → les deux grandeurs rejoignent celles du patin ordinaire.
+  ok("les longues lames MORDENT mieux : le cap tourne plus vite", tR.ang > tC.ang + 5, `${tC.ang.toFixed(1)}° → ${tR.ang.toFixed(1)}° après 0,3 s`);
+  ok("… et la vitesse tient mieux dans le virage", tR.keep > tC.keep + 0.05, `${(tC.keep * 100).toFixed(0)} % → ${(tR.keep * 100).toFixed(0)} % de la croisière après 0,8 s`);
+  ok("jamais au-delà de la croisière du matériel (pas de vitesse fabriquée dans un virage)", (() => {
+    const st = PT.skateNew(PT.SKATE.VMAX, 0), o = { skates: true, stats: PT.skateKitStats({ type: "race", suit: 1 }) }, cap = PT.SKATE.VMAX * 1.10 * 1.05;
+    let m = 0; for (let t = 0; t < 6; t += 1 / 60) { const ang = t * 3; PT.skateStep(st, Math.cos(ang), Math.sin(ang), 1 / 60, o); m = Math.max(m, Math.hypot(st.vx, st.vy)); }
+    return m <= cap + 1e-9;
+  })());
+  const g = (kit) => { const st = PT.skateNew(PT.SKATE.VMAX, 0); return play(st, 20, 60, () => [0, 0], { skates: true, stats: PT.skateKitStats(kit) }).x; };
+  ok("la lancée est plus longue en longues lames", g({ type: "race" }) > g({ type: "classic" }) * 1.1, `${g({ type: "classic" }).toFixed(1)} → ${g({ type: "race" }).toFixed(1)} cases`);
+  ok("un arrêt en travers demande un peu plus de glace en longues lames", (() => {
+    // La distance jusqu'à `BRAKE_MIN_V` (au-dessous, le même ordre fait repartir de l'autre côté : on s'arrête là).
+    const d = (kit) => { const st = PT.skateNew(PT.SKATE.VMAX, 0), o = { skates: true, stats: PT.skateKitStats(kit) }; let x = 0; for (let k = 0; k < 600 && Math.hypot(st.vx, st.vy) > PT.SKATE.BRAKE_MIN_V; k++) { PT.skateStep(st, -1, 0, 1 / 60, o); x += st.vx / 60; } return x; };
+    return d({ type: "race" }) > d({ type: "classic" });
+  })());
+  ok("le prix : base + supplément de la paire + de la combinaison", PT.skateKitPrice({ type: "classic" }, 60) === 60 && PT.skateKitPrice({ type: "race", suit: 1 }, 60) === 60 + PT.SKATE_KITS.race.extra + PT.SKATE_SUIT.extra);
+  ok("un matériel invalide est ramené au patin ordinaire blanc", (() => { const n = PT.skateKitNorm({ type: "x", suit: "oui", color: 99 }); return n.type === "classic" && n.suit === 1 && n.color === 0; })()
+    && (() => { const n = PT.skateKitNorm(null); return n.type === "classic" && n.suit === 0 && n.color === 0; })());
+  ok("huit couleurs, chacune avec bottine (clair, moyen, ombre) et combinaison", PT.SKATE_COLORS.length === 8 && PT.SKATE_COLORS.every((c) => c.main && c.hi && c.lo && c.suit));
+}
+
+section("§10 — les figures de la pratique libre : saut, vrille, axel, marche arrière, cygne");
+{
+  const o = { skates: true };
+  // Un saut : un arc (la hauteur monte puis redescend), de la durée annoncée, qui ne s'écoute pas pendant le vol.
+  const st = PT.skateNew(5, 0);
+  ok("un saut part chaussé, en glisse", PT.skateTrickStart(st, "hop", o));
+  ok("… et pas deux à la fois", !PT.skateTrickStart(st, "hop", o) && !PT.skateTrickStart(st, "spin", o));
+  let peak = 0, peakAt = 0, steps = 0, landedAt = -1, tt = 0;
+  const vx0 = st.vx;
+  while (steps < 200 && landedAt < 0) { PT.skateStep(st, 0, 1, 1 / 60, o); tt += 1 / 60; if (st.air > peak) { peak = st.air; peakAt = tt; } if (st.landed) landedAt = tt; steps++; }
+  // Falsifié : la hauteur passée à `tk.h * u` dans une copie → le sommet n'est plus au milieu, plus de retour à 0.
+  ok("l'arc monte au sommet annoncé", Math.abs(peak - PT.TRICK.HOP.H) < 0.6, `${peak.toFixed(1)} px (attendu ${PT.TRICK.HOP.H})`);
+  ok("le sommet est au MILIEU du vol (un arc, pas une rampe)", Math.abs(peakAt - PT.TRICK.HOP.T / 2) < 0.05, `${peakAt.toFixed(3)} s sur ${PT.TRICK.HOP.T}`);
+  ok("il atterrit à la durée annoncée, en rendant `landed` UN pas", Math.abs(landedAt - PT.TRICK.HOP.T) < 0.03 && st.landed === "hop" && (() => { PT.skateStep(st, 0, 0, 1 / 60, o); return st.landed === null; })(), `${landedAt.toFixed(3)} s`);
+  ok("en l'air, l'ordre n'est pas écouté (la trajectoire reste droite : pas de virage)", Math.abs(st.vy) < 1e-9 && st.vx > 0 && st.vx < vx0, `vx ${vx0} → ${st.vx.toFixed(2)}`);
+  ok("au sol, retour à zéro (air, tours)", st.air === 0 && st.spin === 0 && st.trick === null);
+  // La vrille : tours rendus, jamais en l'air, freine un peu.
+  const sp = PT.skateNew(4, 0); PT.skateTrickStart(sp, "spin", o);
+  let maxAir = 0, spin = 0; for (let k = 0; k < 40; k++) { PT.skateStep(sp, 0, 0, 1 / 60, o); maxAir = Math.max(maxAir, sp.air); spin = Math.max(spin, sp.spin); }
+  ok("la vrille tourne d'un tour sans quitter la glace", maxAir === 0 && spin > 0.5 && spin <= PT.TRICK.SPIN.TURNS + 1e-9, `${spin.toFixed(2)} tour(s) à mi-parcours`);
+  const sp2 = PT.skateNew(4, 0); PT.skateTrickStart(sp2, "spin", o);
+  let sLast = 0, sLand = null; for (let k = 0; k < 60; k++) { if (sp2.trick) sLast = sp2.spin; PT.skateStep(sp2, 0, 0, 1 / 60, o); if (sp2.landed) sLand = sp2.landed; }
+  ok("elle finit à un tour entier, puis rend `landed` : \"spin\"", sLast > PT.TRICK.SPIN.TURNS * 0.95 && sLand === "spin" && sp2.trick === null, `${sLast.toFixed(3)} tour`);
+  // L'axel : il faut de l'élan.
+  ok("un axel exige de l'élan", !PT.skateTrickStart(PT.skateNew(0.5, 0), "axel", o) && PT.skateTrickStart(PT.skateNew(PT.TRICK.AXEL_MIN_V + 0.5, 0), "axel", o));
+  const ax = PT.skateNew(5, 0); PT.skateTrickStart(ax, "axel", o);
+  let axPeak = 0, axSpin = 0; for (let k = 0; k < 40; k++) { PT.skateStep(ax, 0, 0, 1 / 60, o); axPeak = Math.max(axPeak, ax.air); axSpin = Math.max(axSpin, ax.spin); }
+  ok("l'axel est un saut ET une vrille", axPeak > PT.TRICK.AXEL.H * 0.6 && axSpin > 0.5, `${axPeak.toFixed(1)} px, ${axSpin.toFixed(2)} tour`);
+  // La spin finale : exactement `turns`.
+  ok("les tours montent sans jamais redescendre (la courbe est monotone)", (() => {
+    const s9 = PT.skateNew(5, 0); PT.skateTrickStart(s9, "axel", o); let prev = -1, okk = true;
+    for (let k = 0; k < 120 && s9.trick; k++) { PT.skateStep(s9, 0, 0, 1 / 60, o); if (s9.trick && s9.spin < prev - 1e-9) okk = false; prev = s9.spin; }
+    return okk;
+  })());
+  // Pas sans patins, pas tombé, pas en course (`free: false`).
+  ok("pas de figure sans patins", !PT.skateTrickStart(PT.skateNew(5, 0), "hop", { skates: false }));
+  ok("pas de figure en course (`free: false`)", !PT.skateTrickStart(PT.skateNew(5, 0), "hop", { skates: true, free: false }));
+  ok("pas de figure à terre (une culbute)", (() => { const s3 = PT.skateNew(5, 0); PT.skateTumble(s3); return !PT.skateTrickStart(s3, "hop", o); })());
+  ok("une culbute en plein saut le coupe net", (() => { const s3 = PT.skateNew(5, 0); PT.skateTrickStart(s3, "hop", o); PT.skateStep(s3, 0, 0, 0.2, o); PT.skateTumble(s3); return s3.trick === null && s3.air === 0; })());
+  // L'enchaînement : deux figures rapprochées comptent, une pause le remet à zéro.
+  const ch = PT.skateNew(5, 0); PT.skateTrickStart(ch, "hop", o);
+  for (let k = 0; k < 50; k++) PT.skateStep(ch, 0, 0, 1 / 60, o);
+  PT.skateTrickStart(ch, "spin", o);
+  ok("deux figures rapprochées font un enchaînement de deux", ch.chain === 2, `chain=${ch.chain}`);
+  for (let k = 0; k < 60 * 6; k++) PT.skateStep(ch, 0, 0, 1 / 60, o);
+  ok("six secondes de pause remettent l'enchaînement à zéro", ch.chain === 0);
+  // La marche arrière : croisière plafonnée.
+  const bk = PT.skateNew(); const ob = play(bk, 4, 60, () => [1, 0], { skates: true, back: true });
+  ok("à reculons, la croisière est plafonnée", ob.vmax <= PT.SKATE.VMAX * PT.TRICK.BACK_K + 1e-9 && ob.vmax > PT.SKATE.VMAX * PT.TRICK.BACK_K * 0.95, `${ob.vmax.toFixed(2)} ≤ ${(PT.SKATE.VMAX * PT.TRICK.BACK_K).toFixed(2)}`);
+  ok("… et la machine le dit (`back`)", bk.back === true && PT.skateTrickView(bk).kind === "back");
+  // Le cygne : en roue libre, vite.
+  const sw = PT.skateNew(6, 0); for (let k = 0; k < 40; k++) PT.skateStep(sw, 0, 0, 1 / 60, o);
+  ok("en roue libre et vite, une jambe se lève (cygne)", PT.skatePose(sw) === "swan" && PT.skateTrickCode(sw) === PT.TRICK_CODE.swan);
+  const sw2 = PT.skateNew(6, 0); for (let k = 0; k < 40; k++) PT.skateStep(sw2, 1, 0, 1 / 60, o);
+  ok("en poussant, jamais de cygne", PT.skatePose(sw2) !== "swan");
+  // Les autres voient les figures par leur code.
+  ok("les autres voient la figure par son code (rien d'autre ne circule)", PT.skateSeen(true, 3, 0, PT.TRICK_CODE.axel) === "axel" && PT.skateSeen(true, 3, 0, 0) === "glide" && PT.skateSeen(false, 3, 0, PT.TRICK_CODE.axel) === "slip");
+  ok("la cadence d'image ne change pas un saut (60 contre 144)", (() => {
+    const run = (hz) => { const s5 = PT.skateNew(5, 0); PT.skateTrickStart(s5, "axel", o); let x = 0; for (let t = 0; t < 1.2; t += 1 / hz) { PT.skateStep(s5, 0, 0, 1 / hz, o); x += s5.vx / hz; } return x; };
+    return Math.abs(run(60) - run(144)) < 0.1;
+  })());
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

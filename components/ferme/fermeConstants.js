@@ -3753,8 +3753,47 @@ export const TOWN_RINK_GATES = [
   { side: "s", a: TOWN_RINK_AX - 1, b: TOWN_RINK_AX + 1 },
   { side: "e", a: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1), b: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1) + 1 },
 ];
-/* Le chalet des patins de la patinoire (le second : celui du lac reste), à l'est, face au portillon est. */
-export const TOWN_RINK_CHALET = { x: TOWN_RINK.x1 + 5, y: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1) - 1 };
+/* ⚠️ 2026-10-05 (nuit, fin quater) — LE CHALET DES PATINS EST COLLÉ À LA PATINOIRE, AU PIED DU PORTILLON EST (Guillaume :
+   « déplace le chalet de location à côté de la patinoire, plus proche logiquement »). Premier jet : à cinq cases de la
+   glace, derrière une allée, planté dans l'herbe — on le prenait pour un décor du quartier. Il se pose maintenant SUR
+   l'allée de l'est, juste au nord du portillon : on loue au comptoir, on fait trois pas, on est sur la glace. Il laisse
+   libres les deux rangées du portillon (le passage) et la colonne x1 + 2 (celle des mâts, le long de la bande). */
+export const TOWN_RINK_CHALET = { x: TOWN_RINK.x1 + 3, y: ((TOWN_RINK.y0 + TOWN_RINK.y1) >> 1) - 2 };
+/* ⚠️ 2026-10-05 (nuit, fin quater) — LA BANDE EST UNE LIGNE, PAS UN ANNEAU DE CASES : la COLLISION de la patinoire se lit
+   AU POINT PRÈS, comme la glace et comme le dessin (`rinkSignedDist` : la même figure que `rinkInside`). Avant, tout
+   l'anneau de pierre du dallage était un mur plein : on butait à une case entière en retrait de la planche qu'on voyait
+   (un mur invisible tout autour), et aux quatre coins, dans les cases que l'arrondi traverse, le sol hors de la glace restait
+   libre — on pouvait se tenir DANS la bande. Maintenant la bande ne bloque que sa propre épaisseur : de `IN` tuile en
+   deçà du bord de la glace à `OUT` tuile au-delà (la planche fait 3 px, plus la semelle), sauf au droit d'un portillon.
+   `tw.rinkBand` (le monde d'hiver) dit quelles cases s'y fient ; `tw.solid` reste plein pour les résidents (`townNav`
+   est volontairement plus pessimiste, comme pour une souche). */
+export const TOWN_RINK_BAND = { IN: 0.06, OUT: 0.38 };
+/* La distance signée (en CASES) d'un point au bord de la glace — négative dedans — du rectangle arrondi de `rinkInside`. */
+export function rinkSignedDist(x, y) {
+  const R = TOWN_RINK, X0 = R.x0, X1 = R.x1 + 1, Y0 = R.y0, Y1 = R.y1 + 1, r = R.r;
+  const px = x - (X0 + X1) / 2, py = y - (Y0 + Y1) / 2, hx = (X1 - X0) / 2 - r, hy = (Y1 - Y0) / 2 - r;
+  const qx = Math.abs(px) - hx, qy = Math.abs(py) - hy;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+/* Ce point (cases, réel) est-il DANS la planche de la bande ? Faux au droit d'un portillon (le trou est la largeur du passage). */
+export function rinkBandSolid(x, y) {
+  const sd = rinkSignedDist(x, y);
+  if (sd < -TOWN_RINK_BAND.IN || sd > TOWN_RINK_BAND.OUT) return false;
+  const R = TOWN_RINK;
+  for (const g of TOWN_RINK_GATES) {
+    if (g.side === "n" && Math.abs(y - R.y0) < 1 && x >= g.a && x < g.b + 1) return false;
+    if (g.side === "s" && Math.abs(y - (R.y1 + 1)) < 1 && x >= g.a && x < g.b + 1) return false;
+    if (g.side === "e" && Math.abs(x - (R.x1 + 1)) < 1 && y >= g.a && y < g.b + 1) return false;
+    if (g.side === "w" && Math.abs(x - R.x0) < 1 && y >= g.a && y < g.b + 1) return false;
+  }
+  return true;
+}
+/* Les quatre braseros de l'entrée : de part et d'autre des portillons nord et sud, sur l'allée de terre battue (deux pas
+   au-delà de la bande) — un point chaud où se retrouver, qui fond la neige autour de lui et brille la nuit. */
+export const TOWN_RINK_BRAZIERS = [
+  [TOWN_RINK_AX - 2, TOWN_RINK.y0 - 2], [TOWN_RINK_AX + 2, TOWN_RINK.y0 - 2],
+  [TOWN_RINK_AX - 2, TOWN_RINK.y1 + 2], [TOWN_RINK_AX + 2, TOWN_RINK.y1 + 2],
+];
 /* Un point (en CASES, réel) est-il sur la glace ? Le rectangle arrondi [x0, x1+1] × [y0, y1+1], coins de rayon r. */
 export function rinkInside(x, y) {
   const R = TOWN_RINK, X0 = R.x0, X1 = R.x1 + 1, Y0 = R.y0, Y1 = R.y1 + 1;

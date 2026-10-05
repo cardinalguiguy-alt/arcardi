@@ -354,7 +354,8 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   elle ne mesure rien (un chapeau qui flotte n'est pas un nombre).
 - **`tools/render-lapins.mjs` (2026-10-05)** : quatre robes × vingt poses sur de l'herbe, à côté d'un chat et d'une fermière (l'échelle se juge contre ses voisins) —
   `tools/out/lapins-planche.png` ; mesure : le lapin assis ≤ 85 % du chat assis (cernes retirés). Les mêmes bornes sont tenues par `verify-faune` § 7.
-- **`tools/verify-patin.mjs` — 23 contrôles, 23/23 (2026-10-05 : le patin à glace).** Il JOUE `patin.js` à 60 i/s :
+- **`tools/verify-patin.mjs` — 59 contrôles, 59/59 (fin quater : §9 le matériel — longues lames, combinaison, prix, validation —, §10 les figures — saut, vrille, axel, marche arrière, cygne, enchaînement ; falsifié : `turnK`/`carry` remis à 1/0, la hauteur de l'arc en rampe).**
+- **`tools/verify-patin.mjs`, le socle — 23 contrôles (2026-10-05 : le patin à glace).** Il JOUE `patin.js` à 60 i/s :
   croisière atteinte et jamais dépassée (course comprise), lancée ≈ v/k cases, virage qui COURBE (pas de pivot), arrêt
   en travers sans repartir en arrière et dans la distance de `BRAKE`, sans patins chute à `SLIP_T` et sol à
   `SLIP_T + FALL_T`, choc renvoyé, poses déduites des autres, même trajectoire à 60 et 144 i/s. Falsifié règle par
@@ -1909,6 +1910,15 @@ Peint la glace, la bande et ses ombres depuis le VRAI monde d'hiver (`E.townWint
 arrondi de la collision au pixel, chaque case de glace en porte en son centre, la bande est découpée une fois par rangée de
 sol, la neige lit la glace (`rinkAt`). Planches : `patinoire-<cm>cm.png`, `patinoire-bande.png`. ⚠️ Sans patineurs, ni
 lumière de nuit, ni course : ceux-là se jugent en jeu.
+
+## `render-patin.mjs` — LES POSES DU PATIN, LES DEUX PAIRES, LES FIGURES (2026-10-05, fin quater, 4 contrôles)
+
+Le VRAI `A.drawSkate` sur la vraie feuille du personnage : arrêt, glisse (deux phases), saut, axel, vrille, cygne, de face, de dos et de
+profil, en patin ordinaire blanc puis en longues lames rouge et bleue. Mesure : la lame de course est plus LONGUE de profil que
+l'ordinaire (9 → 14 px), la bottine prend le ton de la palette, le saut monte de la hauteur de l'arc et reste dans son cadre, le cygne
+ne se confond pas avec la glisse. Planche : `tools/out/patin-poses.png`. ⚠️ Sans la combinaison (elle repeint la feuille par
+`getImageData`, que le faux canevas n'a pas) ni les lignes de profil et de dos (dans le faux canevas elles sortent SANS corps, seules les bottines et les lames se voient — cause non cherchée) : ceux-là se
+jugent en jeu.
 
 ## `hook-bancs.sh` — LE FILET, ET IL N'EST PAS UN BANC
 
