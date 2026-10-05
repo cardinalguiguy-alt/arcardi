@@ -11,26 +11,29 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 — BOIS DES COINS OUEST, PATINS ET LAC GELÉ, BONHOMME DE NEIGE — TROIS LIVRAISONS, NON COMMITÉES
+### 2026-10-05 — BOIS DES COINS OUEST, PATINS ET LAC GELÉ, BONHOMME DE NEIGE — TROIS LIVRAISONS, COMMITÉES (« bdn »)
 
-Sur l'arbre de travail, rien n'est commité depuis « nouveau dal » : le lot du 2026-10-04 (nuit) (étoile reine, obélisque) ET les trois
-livraisons du jour. Récits : README de la ferme, en tête (une entrée par livraison). **(1) Les bois** : `TOWN_WOODS_WEST`, champ par polygone,
+Le commit « bdn » porte le lot du 2026-10-04 (nuit) (étoile reine, obélisque) ET les trois livraisons du jour (arbre propre à la reprise ;
+seuls deux bancs ont été corrigés après : `verify-pont`, motif trop étroit depuis le patin ; `verify-planche3`, empreinte renouvelée pour les bois). Récits : README de la ferme, en tête (une entrée par livraison). **(1) Les bois** : `TOWN_WOODS_WEST`, champ par polygone,
 clairières rouvertes par un parcours 0-1 en fin de générateur. **(2) Le patin** : `patin.js` (pur), glace du lac par `lakeCold` (neige.js) et la
 règle de l'étang étirée (`glace.js`), chute sans patins = blessure de 15 min (`iceFall`), chalet des patins PROCÉDURAL ET PROVISOIRE (prompt
 Gemini dans `docs/IMAGES-ET-BLENDER.md`), 450 or. **(3) Le bonhomme** : `bonhomme.js` (pur), rouler / empiler / décor au choix, ferme et ville,
 dégel daté par l'hôte. Vus en jeu à un client (hiver, lac et neige forcés au menu dev). **Supabase : rien** (`inv.skates`, `snowmen` : du JSON).
-⚠️ **Pas vu** : à DEUX vrais clients — dans le harnais `audit-tmp` (iframes ou onglets), aucun client n'enregistre l'autre comme joueur distant,
-donc aucune position ne part (`netCanBroadcast` exige déjà un camarade connu) : plomberie du harnais, à démêler avant de juger l'invité. La
+**Le harnais à deux clients MARCHE** (`app/audit-duo`, `docs/VERIFICATION.md` : la panne était `document.hidden`) — reste à JOUER le patin et le bonhomme à deux avec lui.
+**Le menu dev à deux** (vérifié) : météo et saison forcées = pour TOUTE la session ; profondeur de neige, glace, lac, feuilles = locales à chacun (README ferme, journal 2026-10-05 « suite »).
+**La neige en descendant du train** est préchauffée pendant le fondu (`prewarmTownSnow`) ; non vue sur la machine de Guillaume. Pas vu : la
 nuit sur la glace et près d'un bonhomme ; le lac sous la vraie météo. Restent aussi ceux de la veille (obélisque en fondu et sous la pluie, reine
 en ville et la nuit, rosace sous la neige).
-⚠️ `app/audit-tmp/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
+**Idée en attente, rien de codé** : l'horloge ne roule QUE pendant qu'un hôte est en ligne (retour tardif = un seul jour de plus, 6h00) —
+`docs/AUDIT-2026-10.md`, partie 3 ; la changer touche la sauvegarde, donc validation préalable.
+⚠️ `app/audit-tmp/page.js`, `app/audit-duo/page.js` et `app/api/audit-cap/route.js` (échafaudage de capture) : **à supprimer avant déploiement**. ⚠️ Vu en passant, pas
 corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`, fermeEngine.js) ; `tools/lib-canvas.mjs` annonce honorer `translate` et ne le fait pas
 (les feuilles de personnage n'y ont qu'une direction — `render-etoile` ne juge que la rangée 0).
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER, PUIS LES SOLS DE VALLEY TOWN SUR LE MODÈLE FIX-004
 
 (1) Faire juger `docs/A-JUGER.md` (en tête : le patin et le lac, le bonhomme, les bois ; puis l'obélisque, la reine, la rosace) — idéalement EN
-JOUANT À DEUX, ce qui suppose de réparer d'abord le harnais. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements**
+JOUANT À DEUX, avec le harnais réparé. (2) Puis **étendre le procédural HD du dallage civique aux autres revêtements**
 (`components/ferme/solHD.js`, `docs/AUDIT-2026-10.md` FIX-004) — poser les questions de cadrage avant.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)

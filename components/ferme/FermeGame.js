@@ -17139,6 +17139,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       // Valley Town (zip 234): same early-return pattern as the evil map; the
       // host sims above keep running on the farm world regardless.
+      prewarmTownSnow();   // 2026-10-05 : la neige de la ville se prépare pendant le fondu de sortie (voir la fonction)
       if (m.zone === "town") {
         /* ⚠️ LE TAXI AVANCE AVANT LA SORTIE `overlayUp`, comme toute simulation :
            couper la PEINTURE ne doit jamais couper le MONDE (règle du 425). */
@@ -21462,6 +21463,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       wetLayerRef.current = { tw, sf, layer };
       return layer;
     }
+    /* Les réglages de la neige de la ville pour une image : UNE SEULE écriture, lue par `drawTownFrame`
+       ET par `prewarmTownSnow`. ⚠️ Elles doivent rendre la MÊME clé à `setParams` (`pkey`) : si le
+       préchauffage posait d'autres réglages que la première image réelle, tout ce qu'il a dessiné
+       serait refait à l'arrivée — le travail perdu, et le défaut intact. */
+    function townSnowParams(snowPk, snowSeason, Wsn) {
+      const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+      /* La gelée blanche : les matins d'hiver clairs, de l'aube à dix heures,
+         là où il n'y a pas de neige. */
+      const frost = snowSeason === "winter" && snowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
+      const wetRoad = Math.min(1, snowPk.r * 0.5 + (snowPk.g > 0.5 ? 0.4 : 0));
+      /* Le soleil sur la neige (0..1) : ombres bleues franches et éclats par
+         beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
+      const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
+      return { winter: snowSeason === "winter", frost, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 };
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-10-05 — LA NEIGE DE LA VILLE EST PRÊTE QUAND L'ÉCRAN S'ÉCLAIRCIT.
+       ╚══════════════════════════════════════════════════════════════════════
+       Vu par Guillaume : en descendant du train à Valley Town, « la neige arrive quelques
+       centièmes de seconde après le joueur ». Mesuré (iframe 1280×800, hiver, 12 cm) : le champ
+       de neige se construit à la première image de la ville, puis les parcelles de la vue se
+       dessinent à `update(6)` par image — 24, 48, 54, 118, 182… 342 cases sur 437, en ~570 ms,
+       pendant que l'écran se rouvre. La ville, elle, n'est dessinée qu'APRÈS la bascule.
+       ⚠️ LA PARADE EST DE TRAVAILLER PENDANT LE FONDU AU NOIR (900 ms, écran noir à la fin) :
+       on bâtit le champ et on dessine les parcelles du cadre d'ARRIVÉE, à ce même budget par
+       image, avant que la ville ne soit visible. Même champ (`townSnowField`), mêmes réglages
+       (`townSnowParams`, météo de la VILLE et non celle de la ferme que `wxFrame` lirait
+       encore), donc rien à refaire à l'arrivée.
+       ⚠️ Un fondu d'entrée vers la ville, et seulement lui : la position d'arrivée vient de la
+       destination (`townArrivalOf`). Sans neige (été), rien n'est construit. */
+    function townArrivalOf(zt, m) {
+      if (!zt || !zt.active || zt.swapped) return null;
+      if (zt.dest === "town" || zt.dest === "dev:town") return { x: C.TOWN_SPAWN.x, y: C.TOWN_SPAWN.y };
+      if (zt.dest === "townFromCourt" && typeof m.townX === "number") return { x: m.townX, y: m.townY };
+      return null;
+    }
+    function prewarmTownSnow() {
+      const m = meRef.current, zt = zoneTransRef.current;
+      if (!m || m.zone === "town") return;
+      const at = townArrivalOf(zt, m);
+      if (!at) return;
+      const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+      if (!tw) return;
+      const snowPk = snowPackNow("town"), snowSeason = E.seasonOf().key;
+      if (!(snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter")) return;
+      const f = townSnowField(tw);
+      f.setParams(snowPk, townSnowParams(snowPk, snowSeason, weatherNow(Date.now(), "town")));
+      // Le cadre d'arrivée, large : le zoom le plus serré de la ville est plafonné (`townZoomTarget`), donc le plus ÉLOIGNÉ des deux.
+      const zm = Math.min(C.TOWN_ZOOM_NEAR, manualZoomRef.current) || 1;
+      const hw = Math.ceil(canvas.width / (zm * T) / 2) + 3, hh = Math.ceil(canvas.height / (zm * T) / 2) + 3;
+      const cx = Math.floor(at.x), cy = Math.floor(at.y);
+      f.view(Math.max(0, cx - hw - 2), Math.max(0, cy - hh - 1), Math.min(tw.w - 1, cx + hw + 2), Math.min(tw.h - 1, cy + hh + 4));
+      f.update(6, () => performance.now());
+    }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!tw || !sprites) return;
@@ -21632,15 +21687,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter") {
         snowF = townSnowField(tw);
         const Wsn = wxFrame();
-        const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
-        /* La gelée blanche : les matins d'hiver clairs, de l'aube à dix heures,
-           là où il n'y a pas de neige. */
-        const frost = snowSeason === "winter" && snowPk.g < 1 ? Math.max(0, Math.min(1, (10.2 - hr) / 3)) * Math.max(0, 1 - Wsn.dark * 1.6) * (Wsn.rain > 0.05 ? 0 : 1) : 0;
-        const wetRoad = Math.min(1, snowPk.r * 0.5 + (snowPk.g > 0.5 ? 0.4 : 0));
-        /* Le soleil sur la neige (0..1) : ombres bleues franches et éclats par
-           beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
-        const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-        snowF.setParams(snowPk, { winter: snowSeason === "winter", frost, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05 });
+        snowF.setParams(snowPk, townSnowParams(snowPk, snowSeason, Wsn));
         // Ce qui tombe pendant cette image comble les traces (une heure de jeu = 48 s réelles).
         snowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
         /* 2026-09-29 — le cratère de la quête fait fondre la neige tant qu'il est chaud

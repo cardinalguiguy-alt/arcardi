@@ -214,7 +214,11 @@ title("4. garde-fou de source : la flèche n'est pas une altitude");
      colonne d'un objet qui se reflète dans l'eau (`rx`). Le décalage d'image
      reste le 4e — le motif accepte donc ce 5e argument derrière lui, sans quoi
      il cessait de compter les passants reflétables (4 au lieu de 7). */
-  const lifts = (src.match(/pushE\([^;]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*(,\s*Math\.floor\([^)]*\))?\s*\)/g) || []).length;
+  /* ⚠️ 2026-10-05 (patin) : `[^;]*` s'arrêtait au premier `;` — or la pose du patin
+     met un bloc `{ const sk = …; drawCharacter(…); }` DANS la fonction de dessin du
+     passant, et l'appel cessait d'être compté (5 au lieu de 6) alors que le décalage y
+     était toujours passé. Un `pushE` tient sur une ligne : on lit donc la LIGNE. */
+  const lifts = (src.match(/pushE\([^\n]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*(,\s*Math\.floor\([^)]*\))?\s*\)/g) || []).length;
   ok(lifts >= 6, "…et elle est bien passée en décalage d'image à tout ce qui marche dessus",
     lifts + " appel(s) avec un décalage");
 }

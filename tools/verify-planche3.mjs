@@ -46,7 +46,11 @@ const W = tw.w, H3 = C.TOWN_HOUSE_H;
 /* ─── 1. L'empreinte d'avant ───────────────────────────────────────────────── */
 console.log("\n=== 1. la carte d'avant le branchement sort au bit près ===\n");
 // FNV-1a sur le sol, les objets, l'altitude, les clôtures, les portails et les potagers.
-const HEAD_FP = "2935e656";
+/* ⚠️ 2026-10-05 : RENOUVELÉE (2935e656 → 6b9b07f7) — les bois des coins ouest (`TOWN_WOODS_WEST`)
+   plantent des arbres sur des cases qui étaient vides : la carte change VOLONTAIREMENT. Vérifié :
+   à `d23cc74` (avant les bois) ce banc sort 2935e656 au bit près ; à `9bf75c3` (avec), 6b9b07f7.
+   Seul `generateTownWorld` a bougé (trois blocs, tous les bois). */
+const HEAD_FP = "6b9b07f7";
 function fingerprint(w) {
   let h = 0x811c9dc5 >>> 0;
   const f = (v) => { h ^= v & 255; h = Math.imul(h, 16777619) >>> 0; };

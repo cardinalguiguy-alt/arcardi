@@ -1,5 +1,24 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 (suite) — LE HARNAIS À DEUX CLIENTS RÉPARÉ, LE MENU DEV À DEUX, LA NEIGE PRÊTE À L'ARRIVÉE EN VILLE
+
+**1. Le harnais** (voir `docs/VERIFICATION.md`, « LE HARNAIS DEUX CLIENTS ») : la cause était `document.hidden` (`netCanBroadcast`), pas le réseau.
+`app/audit-duo` monte hôte puis invité ; chacun voit l'autre dans `playersRef`.
+**2. Le menu dev vaut-il pour toute la session ?** Vérifié à deux clients, dans les deux sens. **Partagé** (requête → l'hôte pose, persiste, diffuse dans
+`p.state`, annonce au chat) : **la météo** (`devSky` : pluie, orage, neige…), **la saison forcée**, le monde du passage (`devWorld`), les résidents, l'or,
+« finir les constructions », le soin. L'invité ouvre le menu par le même raccourci (Cmd/Ctrl+Maj+X) — seul le raccourci est secret. **Local, propre à
+chaque client** (volontairement : ce sont des réglages de caméra de juge) : le dallage civique HD, la **profondeur de neige** (0,5 → 30 cm), les arbres chargés,
+l'épaisseur de glace de l'étang, le **froid du lac**, l'avancée de la saison des feuilles, les téléportations. Conséquence : « Hiver + Neige » change le ciel de
+tous, mais les « 12 cm » forcés ne se voient que chez celui qui les a posés — l'autre voit la neige que la météo commandée a accumulée depuis (elle MONTE à
+partir de l'heure du forçage). Pas un défaut ; à savoir pour comparer deux écrans.
+**3. La neige en descendant du train** (Guillaume : « la neige arrive quelques centièmes de seconde après le joueur »). Mesuré (1280×800, hiver, 12 cm, champ neuf) :
+à la première image de la ville le champ se bâtit, puis les parcelles de la vue se dessinent à `update(6)` par image (24 → 342 cases sur 437 en ~570 ms) pendant que
+l'écran se rouvre. **Corrigé** : `prewarmTownSnow` (FermeGame.js, avant `drawTownFrame`) travaille pendant les 900 ms du fondu de sortie — même champ, mêmes réglages
+(`townSnowParams`, extraits pour n'être écrits qu'une fois : sinon la clé de `setParams` diffère et tout est refait), météo de la VILLE (`weatherNow(…, "town")`), cadre
+d'arrivée dérivé de `TOWN_SPAWN`. Après correctif : 342 cases dessinées dès ~270 ms de fondu ; 251 ms de travail avant l'échange, **0,4 ms après**. Couvre `town`, `dev:town` et
+`townFromCourt` ; pas les autres téléportations de développeur. ⚠️ **Pas corrigé** : la première image de la ville dure encore ~170 ms (autres caches froids, hors neige), sous le noir.
+Pas vu : à un vrai écran de Guillaume (machine plus lente : le budget de 6 ms/image y donne moins de cases par image, le fondu de 900 ms en laisse plus que la mesure ici).
+
 ## 2026-10-05 — LE BONHOMME DE NEIGE (livraison 3 sur 3)
 
 Guillaume : « possibilité de construire un bonhomme de neige quand le sol est couvert de neige » ; tranché : **on roule les boules, puis

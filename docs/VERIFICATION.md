@@ -239,6 +239,17 @@ JIT=60` simule une vraie liaison ; il imprime le débit réel PAR TYPE toutes le
 texte voit tout se connecter et rien passer. Depuis le 2026-08-27, le relais mémorise aussi
 `broadcast.self` à la jonction : une partie solo à client unique doit recevoir son propre état.
 
+⚠️⚠️ **LE HARNAIS DEUX CLIENTS DE LA FERME (réparé le 2026-10-05) : `app/audit-duo` (page parente) + `app/audit-tmp?p=1|2` (un client).**
+La page parente monte l'HÔTE (`p=1`) puis, 4 s plus tard, l'INVITÉ (`p=2`) dans deux iframes same-origin, même salon (`?room=`, taille `?w=&h=`) ;
+on pilote chaque client par `iframe.contentWindow` (`__ensureJoined`, `__btn`, `__hook`, `__tp`, `__setHour`…). L'hôte monte AVANT l'invité : un `join`
+envoyé avant l'abonnement de l'autre est perdu. **La panne d'avant : `netCanBroadcast()` exige `!document.hidden`** — et dans le volet du navigateur intégré
+(ou un onglet/iframe d'un volet masqué) la page est « masquée » : aucun paquet `pos`, donc personne n'enregistrait l'autre. `audit-tmp` déclare désormais
+`document.hidden = false` / `visibilityState = "visible"` à l'installation. **Preuve** : `playersRef` de l'hôte contient « Amie », celui de l'invité « Hote » ;
+une requête `devSky` de l'invité arrive chez l'hôte et revient chez les deux, et inversement. ⚠️ Les index de hooks changent à chaque `useRef` ajouté :
+retrouver une ref par sa FORME (`__sharedIdx` le fait pour `sharedRef`), jamais par un numéro écrit en dur. ⚠️ Naviguer la page parente efface les
+iframes : changer `iframe.src` d'un seul client suffit pour le recharger (état neuf, champ de neige neuf — utile pour mesurer une première arrivée).
+Les DEUX dossiers `audit-*` et `app/api/audit-cap` se suppriment avant livraison.
+
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
 quelle au 454 puis au 456) :
 1. l'URL factice `http://127.0.0.1:54321` — ⚠️ **SANS RÉÉCRIRE `.env.local`, qui porte les vraies

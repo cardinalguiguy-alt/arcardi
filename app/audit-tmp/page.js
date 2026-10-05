@@ -6,6 +6,12 @@ import FermeGame from "@/components/ferme/FermeGame";
 function installHelpers() {
   if (window.__auditReady) return;
   window.__auditReady = true;
+  // 2026-10-05 — LA PAGE SE DÉCLARE VISIBLE. `netCanBroadcast` exige `!document.hidden` : dans le volet du navigateur intégré
+  // (ou un iframe d'un volet masqué) la page est « masquée », et aucun paquet `pos` ne part — d'où « aucun client n'enregistre l'autre ».
+  try {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  } catch (e) {}
   // Son coupé pendant l'audit (préférences + lecture forcée muette).
   try { localStorage.setItem("arcardi:soundEnabled", "0"); localStorage.setItem("arcardi:musicEnabled", "0"); } catch (e) {}
   const op = window.HTMLMediaElement.prototype.play;
