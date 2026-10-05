@@ -1369,6 +1369,10 @@ export function faunaCats(fw, env, tw) {
    chats). ⚠️ Aucune téléportation : comme tout ce fichier, la bête VOYAGE de
    la cible du créneau précédent à celle du créneau courant. */
 const RAB_SLOT = 60, RAB_HOP = 0.5, RAB_HOP_T = 0.3;
+/* 2026-10-05 (soir) — LE BOND SUIT LA TAILLE DU DESSIN. Les lapins ont été redessinés à la taille du pigeon
+   (fauneArt.js § 6, ~75 %) : un bond de l'ancienne hauteur sur un corps plus petit se lit comme un saut de puce.
+   Un seul facteur, appliqué aux quatre hauteurs (routine, fuite, approche, retour) — jamais quatre nombres retouchés. */
+const RAB_LIFT_K = 0.75;
 const RAB_COATS = ["fauve", "gris", "fauve", "creme", "fauve", "tache", "gris", "fauve", "creme"];
 const rabNight = (tm) => tm >= 22 * 60 + 30 || tm < 5 * 60 + 30;
 const rabMidday = (tm) => tm >= 11 * 60 + 30 && tm < 16 * 60 + 30;
@@ -1674,7 +1678,7 @@ export function faunaRabbits(fw, env, tw) {
       const q = along(R.pts, sd);
       x = q.x; y = q.y; hx = q.hx; hy = q.hy; rest = false;
       if (g.rest) { pose = g.rest === "graze" ? "graze" + (Math.floor(tt * 3) & 1) : (Math.floor(tt * 0.9) % 4 === 3 ? "sitTwitch" : "sit"); moving = false; }
-      else { moving = true; hopping = true; lift = Math.sin(Math.PI * ph) * 0.17 * Math.min(1, g.hop * 1.1); pose = rabHopPose(hx, hy, ph); }
+      else { moving = true; hopping = true; lift = Math.sin(Math.PI * ph) * 0.17 * RAB_LIFT_K * Math.min(1, g.hop * 1.1); pose = rabHopPose(hx, hy, ph); }
       face = hx < -0.05 ? -1 : hx > 0.05 ? 1 : face;
     } else {
       const p = rabRestPose(r, tt, tm, storm);
@@ -2090,7 +2094,7 @@ export function faunaReactRabbits(S, fw, rabs, threats, dt, rnd) {
       const l = step(o.tx, o.ty, 3.9, Math.sin(o.t * 6.2 + o.ph) * 0.75);
       const ph = hopPhase(0.28), v = Math.abs(o.vy || 0) > Math.abs(o.vx || 1) * 1.3;
       c.pose = v ? (o.vy > 0 ? "down" : "up") + (ph < 0.55 ? 1 : 0) : ph < 0.55 ? "run0" : "run1";
-      c.lift = Math.sin(Math.PI * Math.min(1, ph / 0.8)) * 0.24 * (ph < 0.8 ? 1 : 0);
+      c.lift = Math.sin(Math.PI * Math.min(1, ph / 0.8)) * 0.24 * RAB_LIFT_K * (ph < 0.8 ? 1 : 0);
       if (l < 0.3 || o.t > 3.2) { o.mode = "watch"; o.t = 0; }
     } else if (o.mode === "watch") {
       c.pose = Math.floor(o.t * 4) % 5 === 3 ? "sitTwitch" : "sit"; facing();
@@ -2099,11 +2103,11 @@ export function faunaReactRabbits(S, fw, rabs, threats, dt, rnd) {
     } else if (o.mode === "approach") {
       // Il s'enhardit : de petits bonds vers le joueur immobile, puis il le regarde de face.
       if (!who || who.moving || dWho < 1.6) { o.mode = who && dWho < 2.4 ? "freeze" : "back"; o.t = 0; }
-      else if (dWho > 2.1) { step(who.x, who.y, 1.3, Math.sin(o.t * 2.3 + o.ph) * 0.5); const ph = hopPhase(0.42); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.1; }
+      else if (dWho > 2.1) { step(who.x, who.y, 1.3, Math.sin(o.t * 2.3 + o.ph) * 0.5); const ph = hopPhase(0.42); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.1 * RAB_LIFT_K; }
       else { c.pose = o.t % 6 < 3.2 ? "front" : "frontTilt"; facing(); if (o.t > 24) { o.mode = "back"; o.t = 0; } }
     } else if (o.mode === "back") {
       const l = step(c.x, c.y, 1.9, 0);
-      const ph = hopPhase(0.34); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.15;
+      const ph = hopPhase(0.34); c.pose = rabHopPose(o.vx || 1, o.vy || 0, ph); c.lift = Math.sin(Math.PI * ph) * 0.15 * RAB_LIFT_K;
       if (l < 0.2 || o.t > 40) { M.delete(c.id); continue; }
     }
     c.x = o.x; c.y = o.y; c.face = o.face; c.react = o.mode; c.moving = o.mode === "flee" || o.mode === "back"; c.resting = false;

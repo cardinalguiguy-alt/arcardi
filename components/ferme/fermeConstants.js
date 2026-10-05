@@ -6421,6 +6421,13 @@ export function courtStairSlowMul(x, y) {
   const f = courtDepthFrac(x, y);
   return f <= 0 ? 1 : 1 - f * (1 - TOWN_COURT_STAIR_SLOW);
 }
+/* ⚠️ 2026-10-05 (soir) — ESSAI RÉVERSIBLE « PETITS PERSONNAGES » EN VILLE (interrupteur LOCAL du menu dev,
+   `SMALL_FOLK` dans FermeGame.js). Demande de Guillaume : retrouver PARTOUT en ville ce qu'il a vu par
+   accident sur la route au nord du tribunal — où `courtDepthFrac` ne s'arrête pas au palier (défaut connu,
+   pas encore corrigé) : tout le monde à la taille du haut du perron, et sa marche à la vitesse du palier.
+   Les deux nombres sont DÉRIVÉS de ceux du perron, jamais recopiés : l'essai montre exactement ce qu'il a aimé. */
+export const TOWN_SMALL_FOLK_SCALE = TOWN_COURT_DEPTH_MIN;   // ~0,68
+export const TOWN_SMALL_FOLK_SPEED = TOWN_COURT_STAIR_SLOW;  // 0,5
 
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
 

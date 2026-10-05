@@ -534,6 +534,15 @@ console.log("§7 — Les lapins (2026-10-05) : lieux, trajets, jardins, réactio
     ok("le lapin assis fait au plus 85 % du chat assis (cernes retirés)", rs <= 0.85 * cs, `${rs} px contre ${cs} px`);
     ok("le lapin en miche est plus court que le chat en miche", rl < cl, `${rl} px contre ${cl} px`);
     ok("aucune pose du lapin ne dépasse 14 px de large ni 12 de haut (cernes retirés)", FA.RABBIT_POSE_KEYS.every((q) => S.rabbit.fauve[q].w - 4 <= 14 && S.rabbit.fauve[q].h - 4 <= 12));
+    /* ⚠️ 2026-10-05 (soir) — À LA TAILLE DU PIGEON (Guillaume : « les lapins sont à réduire à la taille des pigeons »).
+       Comparaison avec le VOISIN, jamais un seuil en pixels : si le pigeon change de dessin, la règle le suit.
+       Les deux canevas portent le même cerne (2 px de chaque côté), d'où les −4. Falsifié sur le dessin d'avant
+       (assis 9 px contre 7, en course 10 contre 9 : rouge). */
+    const pg = S.birds.pigeon, ph = Math.max(pg.stand.height, pg.alert.height) - 4, pw = pg.walk.width - 4;
+    const tallest = Math.max(...["sit", "sitTwitch", "groom0", "groom1"].map((q) => S.rabbit.fauve[q].h - 4));
+    const longest = Math.max(...["loaf", "run0", "run1", "graze0", "hop1"].map((q) => S.rabbit.fauve[q].w - 4));
+    ok("à la taille du pigeon : assis, pas plus haut que le pigeon aux aguets", tallest <= ph, `${tallest} px contre ${ph} px`);
+    ok("à la taille du pigeon : allongé, pas plus long que le pigeon qui marche", longest <= pw, `${longest} px contre ${pw} px`);
   }
 }
 

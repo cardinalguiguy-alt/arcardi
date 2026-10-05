@@ -23,7 +23,10 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Le 2026-10-05 (soir)** : **les lapins de Valley Town** — l'échelle (assis 9 px contre 11 pour le chat : assez petits ?), la tête de face (ovale, yeux sur
+- **Le 2026-10-05 (nuit)** : **l'essai « petits personnages » en ville** (menu dev, interrupteur LOCAL, éteint par défaut) — tout le monde à ×0,68, sa marche à
+  ×0,5 : ce qu'il a vu par accident au nord du tribunal. À juger : garder ? pour les résidents aussi ? au cran 2 (dézoom des monuments) le perso tombe à
+  ~16 px d'écran. Si oui, le vrai chantier : cadence des pas, portées d'interaction, bancs, et un dessin natif plutôt qu'un `ctx.scale`.
+- **Le 2026-10-05 (soir)** : **les lapins de Valley Town** — l'échelle est TRANCHÉE (la nuit même : « à la taille des pigeons », redessinés, assis 7 px) ; la tête de face (ovale, yeux sur
   les côtés), le « fluffy » (contour teinté + touches claires), les 4 robes, les trajets (ondulation, rafales de bonds, pauses), le nombre (10), les jardins
   (14 % des créneaux de l'aube et du crépuscule), la fuite en zigzag, le lapin hardi. Planche : `tools/out/lapins-planche.png`. Pas vus : la nuit, sous la neige
   (ils laissent des empreintes de chat), un jardin, à deux clients.

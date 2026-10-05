@@ -11,40 +11,36 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 (nuit) — FIN DE SAISON, TEMPÉRATURE EN DIRECT, GELÉE, BOURGEONS — DANS L'ARBRE, NON COMMITÉ (livraison 1 sur 2)
+### 2026-10-05 (nuit, suite) — LAPINS À LA TAILLE DU PIGEON + ESSAI « PETITS PERSONNAGES » — DANS L'ARBRE, NON COMMITÉ
 
-Demande de Guillaume en deux volets. **(A) livré ici** : fin d'hiver douce (« moins de neige, surtout du soleil, un peu de pluie, dans la même journée ;
-des bourgeons discrets ») ; fin d'automne qui annonce l'hiver (« une petite gelée légère au petit matin qui fond vite en fin de matinée », « pas de chutes
-de neige ») ; température en direct. **(B) PAS COMMENCÉ** : patinoire, marché d'hiver (voir ACTION SUIVANTE).
-**Fait** : `meteo.js` § 0 bis — la saison d'un jour devient une ÉTIQUETTE (`"winter~7"`, 12 crans dès 55 % de la saison, `E.seasonTagAt`), qui traverse
-tirages, manteau, sol mouillé et lac sans changer une signature ; `LATE_ODDS` (ajusté par Guillaume : neige encore 28 % des jours le samedi soir, 23 % le
-dimanche matin, mais chutes moins fortes — `LATE_SNOW_CUT`), deux genres neufs (`giboulee` par séries de 2-3, `windy`) ; § 9 la température
-(pure fonction, continue d'une saison à l'autre) ; § 10 la gelée lue dans la température (part d'abord au soleil, tient à l'ombre). `neige.js` : fonte de
-fin d'hiver (`*_MELT_LATE`), gelée au pixel ombre/soleil. Bourgeons : `makeWinterTrees` (crans 1-3, `A.townTreeBud`) — **VT seulement** (les arbres de la
-ferme gardent leurs feuilles l'hiver). HUD « 🌡️ −3 °C » (1 Hz) + fourchette du jour dans le message du matin. ⚠️ **L'avancée de saison du menu dev est
-devenue PARTAGÉE** (`forcedSeasonP`, 3e rangée « Météo et saison » ; la rangée locale « feuilles » a disparu).
-**Bancs relancés** : `verify-meteo` 76/76 (§ 12-13 neufs, dont l'empreinte au bit près des tirages hors fin de saison — falsifiée), `verify-neige` 17/17,
-`verify-pluie` 34/34, `verify-feuilles` 29/29, `verify-faune` 103/103, `verify-lumiere` 86/86, `verify-jour` 40/40, `verify-strings` 1231 clés ; bundle
-esbuild et `no-undef` propres. **Vu en jeu** : le HUD (−2 °C à 6 h en hiver ; 5 °C à 10 h, hiver forcé à 97 % + giboulées), le forçage partagé.
-**PAS VU** (volet du navigateur masqué, capture impossible) : bourgeons, gelée d'automne, giboulées et coup de vent à l'écran, rien à deux clients.
-⚠️ **Changement à juger** : la gelée d'HIVER suit aussi la température (à l'ombre toute la journée par grand froid) au lieu de « aube → 10 h 12 ».
-**Supabase : rien** (`forcedSeasonP` = un champ JSON de plus, comme `forcedSeason`).
-Restent à juger d'avant : lapins de VT, patins loués, canne qui se range, bonhomme cassable (`docs/A-JUGER.md`) ; pas de touche tactile K/R ; tout le
-monde peut casser le bonhomme de tout le monde (dit, pas décidé). Idée en attente : l'horloge qui ne roule qu'avec un hôte (`docs/AUDIT-2026-10.md`, partie 3).
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; passer `?room=` unique (un autre agent peut
-partager le relais 54321). ⚠️ Vu en passant, pas corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore pas `translate`.
-⚠️ Serveur de dev figé sur « Compiling » : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
+Récit : README de la ferme, journal du même nom. **Supabase : rien.** (1) **Lapins de VT redessinés à la taille du pigeon** (« à réduire à la taille
+des pigeons ») : 20 poses au pixel natif (assis 7×7, en course 8×4 ; pigeon 8×6), bond ×0,75 (`RAB_LIFT_K`), ombre 6 px ; `verify-faune` 105/105 dont
+2 contrôles neufs PAR COMPARAISON au pigeon (falsifiés sur l'ancien dessin), `render-lapins` OK ; vus en jeu au terrier (17, 56). (2) **Essai réversible
+« petits personnages »** : menu dev, interrupteur LOCAL éteint par défaut (`SMALL_FOLK`, retenu dans `localStorage`) — tout le monde à ×0,68, sa marche à
+×0,5, nombres DÉRIVÉS du perron du tribunal ; mesuré en jeu 5,19 → 2,59 cases/s, capture de la place. (3) **Défaut trouvé, PAS corrigé** : `courtDepthFrac`
+(`fermeConstants.js`) n'a pas de borne au nord — toute la bande x ≈ 59-76 au nord du palier rapetisse et ralentit (c'est ce que Guillaume a vu sur la route
+y = 35). `verify-strings` 1234 clés, bundle esbuild et `no-undef` propres. Le travail (A) d'avant (fin de saison, température, gelée, bourgeons) est commité
+(`temps`) ; il reste à JUGER (voir ci-dessous).
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement** ; `?room=` unique (un autre agent peut
+partager le relais 54321). ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git) : un diff là n'est pas un changement de code. ⚠️ Vu en passant, pas
+corrigé : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `tools/lib-canvas.mjs` n'honore pas `translate` ; `TOWN_SPEED_MULT` est mort depuis le zip 250 et
+son commentaire ment. ⚠️ Serveur de dev figé sur « Compiling » : l'arrêter, `rm -rf .next/cache/webpack`, relancer.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER (A), PUIS LA PATINOIRE ET LE MARCHÉ D'HIVER (B)
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER (lapins, essai, saison), PUIS LA PATINOIRE ET LE MARCHÉ D'HIVER (B)
 
-(1) Faire juger (A) en jeu : menu dev « ❄️ Hiver » + « 📅 Saison à 97 % » + « 🌦️ Giboulées » en ville (bourgeons, giboulées) ; « 🍂 Automne » + 84/97 % à
-8 h (gelée qui recule au soleil vers 10 h). (2) **(B), décisions DÉJÀ PRISES avec Guillaume** : l'hiver, l'esplanade du champ de foire (`TOWN_MARKET`)
-devient une GRANDE patinoire, ouverte tout l'hiver ; le chalet des patins va à côté ; la bande BLOQUE sans patins avec un message (« chaussez des
-patins »), mais **si on insiste on entre et on tombe** ; les résidents patinent à l'occasion ; le marché déménage dans la **prairie à l'ouest de la
-Maison Garfield** (x≈80-115, y≈2-27, au pied de l'escalier ouest de la Haute-Ville) « ou ailleurs si plus approprié » — exigence : **pas posé là, cohérent
-avec l'environnement, une vraie installation vivante** ; les étals actuels pour l'instant. **Montrer un plan AVANT de construire.** Plus tard : marché de
-Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place. Contrainte : ville tirée d'une graine (aucun `rnd()` de plus) → calque
+(1) Juger en jeu : les lapins à la taille du pigeon ; l'essai « petits personnages » (garder ? résidents aussi ? au cran 2 le perso tombe à ~16 px —
+s'il est gardé, le vrai chantier est un dessin natif, la cadence des pas à 9 images/s, les portées, les bancs) ; la saison (A) : menu dev « ❄️ Hiver » +
+« 📅 Saison à 97 % » + « 🌦️ Giboulées » en ville, « 🍂 Automne » + 84/97 % à 8 h (gelée qui recule vers 10 h) ; ⚠️ la gelée d'HIVER suit désormais la
+température. Puis borner `courtDepthFrac` au nord. (2) **(B), décisions DÉJÀ PRISES avec Guillaume** : l'hiver, l'esplanade du champ de foire
+(`TOWN_MARKET`) devient une GRANDE patinoire, ouverte tout l'hiver ; le chalet des patins va à côté ; la bande BLOQUE sans patins avec un message
+(« chaussez des patins »), mais **si on insiste on entre et on tombe** ; les résidents patinent à l'occasion ; le marché déménage dans la **prairie à l'ouest
+de la Maison Garfield** (x≈80-115, y≈2-27, au pied de l'escalier ouest de la Haute-Ville) « ou ailleurs si plus approprié » — exigence : **pas posé là,
+cohérent avec l'environnement, une vraie installation vivante** ; les étals actuels pour l'instant. **Montrer un plan AVANT de construire.** Plus tard :
+marché de Noël quelques jours d'hiver + grand sapin orné au cœur de la grande place. Contrainte : ville tirée d'une graine (aucun `rnd()` de plus) → calque
 saisonnier (cases solides à basculer, chemins des résidents). (3) Ensuite : sols de VT (FIX-004), boutique d'hiver peinte, lots B/C0, intérieurs.
+Restent à juger d'avant : patins loués, canne qui se range, bonhomme cassable (`docs/A-JUGER.md`) ; pas de touche tactile K/R ; tout le monde peut casser
+le bonhomme de tout le monde (dit, pas décidé). L'avancée de saison du menu dev est PARTAGÉE (`forcedSeasonP`). Idée en attente : l'horloge qui ne roule
+qu'avec un hôte (`docs/AUDIT-2026-10.md`, partie 3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 

@@ -1,5 +1,26 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-05 (nuit) — LES LAPINS À LA TAILLE DU PIGEON, L'ESSAI « PETITS PERSONNAGES », LE PERRON QUI DÉBORDE AU NORD
+
+Deux demandes de Guillaume, plus un défaut trouvé en regardant. **Supabase : rien.** Deux changements visuels dans la même livraison, mais l'essai est
+ÉTEINT par défaut (interrupteur local) : les lapins se jugent seuls.
+
+**1. Les lapins redessinés à la taille du pigeon** (`fauneArt.js` § 6, `faune.js` `RAB_LIFT_K`, ombre dans `FermeGame.js`). « Les lapins sont à réduire à
+la taille des pigeons. » Les 20 poses refaites au pixel natif (jamais réduites au rendu) : assis 7×7 au lieu de 8×9, couché/en course 8×4 au lieu de 10×5,
+de face 5×8 — le pigeon debout fait 8×6. Gardés : tête ronde, œil, nez rose, museau blanc, pompon, deux oreilles. Perdus : la troisième rangée d'oreille,
+la joue débordante. Le bond (×0,75, un seul facteur sur les quatre hauteurs) et l'ombre (8 → 6 px) ont suivi. `verify-faune` tient la règle par
+COMPARAISON au pigeon (jamais un seuil en pixels) — falsifiée sur l'ancien dessin (assis 9 contre 7 : rouge). Vu en jeu, au terrier de (17, 56).
+
+**2. L'essai « petits personnages » en ville** (menu dev, `SMALL_FOLK` dans `FermeGame.js`, `TOWN_SMALL_FOLK_*` dans `fermeConstants.js`). Guillaume a
+aimé, au nord du tribunal, un perso plus petit qui « semble marcher moins vite » : l'essai reproduit cet état partout en ville — tous les personnages
+(et les pets) dessinés à ×0,68, sa marche à ×0,5 —, LOCAL, retenu par machine (`ferme_dev_smallfolk`). Les deux nombres DÉRIVENT de ceux du perron.
+`Math.min` et non un produit : sur le perron, on ne rapetisse pas deux fois. Mesuré en jeu : 5,19 → 2,59 cases/s. ⚠️ La collision, les portées, la
+cadence des pas (9 images/s) et les patins ne bougent pas : c'est un essai de RESSENTI, pas une échelle.
+
+**3. Le défaut, pas corrigé** : `courtDepthFrac` (`fermeConstants.js`) n'a pas de borne au NORD — « au-delà du palier, on reste au plus profond » vaut pour
+toute la bande x ≈ 59-76, du palier jusqu'au haut de la carte. Sur la route y = 35, le perso passe à ×0,68 et à mi-vitesse sur ces 17 cases (mesuré dans
+les deux sens, zoom constant). À borner au palier, avec un fondu sur les côtés des ailes.
+
 ## 2026-10-05 (soir) — LES LAPINS DE VALLEY TOWN, LES PATINS LOUÉS, LA CANNE QUI SE RANGE, LE BONHOMME QU'ON PEUT CASSER
 
 Cinq demandes de Guillaume dans la séance, cinq livraisons séparées (la règle « un seul changement visuel par livraison » ne tient plus pour la feuille

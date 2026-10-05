@@ -5185,6 +5185,9 @@ export const FERME_STR = {
     // AUDIT 2026-10 (FIX-004) — l'interrupteur du prototype de dallage civique haute résolution (solHD.js).
     devCivicHdSection: "Dallage civique (prototype, sur cet écran)",
     devCivicHdBtn: (on) => on ? "🪨 Haute résolution" : "🧱 Ancien dessin",
+    devSmallFolkSection: "Petits personnages en ville (essai, sur cet écran)",
+    devSmallFolkHint: "Comme au nord du tribunal : tout le monde à 68 %, ta marche à mi-vitesse. Rien ne part sur le réseau.",
+    devSmallFolkBtn: (on) => on ? "🐭 Petits (×0,68, marche ×0,5)" : "🧍 Taille normale",
     devSnowSection: "Neige (sur cet écran)",
     devSnowHint: "LOCAL, pour juger : impose l'épaisseur au sol et l'état des arbres sur cet écran seulement (les autres joueurs gardent la neige de la météo). « Météo » rend la main au manteau calculé.",
     devSnowDepth: (v) => (v == null ? "🔄 Météo" : v === 0 ? "∅ Pas de neige" : `❄️ ${String(v).replace(".", ",")} cm`),
@@ -7067,6 +7070,9 @@ export const FERME_STR = {
     // AUDIT 2026-10 (FIX-004) — the switch of the high-resolution civic paving prototype (solHD.js).
     devCivicHdSection: "Civic paving (prototype, on this screen)",
     devCivicHdBtn: (on) => on ? "🪨 High resolution" : "🧱 Old drawing",
+    devSmallFolkSection: "Small characters in town (trial, on this screen)",
+    devSmallFolkHint: "As north of the courthouse: everyone at 68 %, your walk at half speed. Nothing goes over the network.",
+    devSmallFolkBtn: (on) => on ? "🐭 Small (×0.68, walk ×0.5)" : "🧍 Normal size",
     devSnowSection: "Snow (on this screen)",
     devSnowHint: "LOCAL, for judging: forces the ground depth and the state of the trees on this screen only (other players keep the weather's snow). \"Weather\" hands back to the computed snowpack.",
     devSnowDepth: (v) => (v == null ? "🔄 Weather" : v === 0 ? "∅ No snow" : `❄️ ${v} cm`),

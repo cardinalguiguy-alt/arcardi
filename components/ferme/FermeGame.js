@@ -552,6 +552,19 @@ function readSavedZoomLevel() {
   } catch (e) { /* localStorage indispo */ }
   return ZOOM;
 }
+/* ⚠️ 2026-10-05 (soir) — ESSAI RÉVERSIBLE : PETITS PERSONNAGES EN VILLE (voir `TOWN_SMALL_FOLK_*`,
+   fermeConstants.js). LOCAL — cet écran seulement, rien ne part sur le réseau — et retenu par machine
+   comme le cran de zoom. Un objet de MODULE, pas un ref : la boucle de rendu (drawCharacter, les pets,
+   la marche) et le menu dev du composant le lisent tous deux ; une fonction déclarée dans la closure de
+   la boucle n'existe pas pour le composant, et l'inverse (§4), mais le module, tout le monde le voit.
+   ⚠️ `Math.min` et non un produit : sur le perron (et dans la bande fautive au nord du tribunal), l'essai
+   ne rapetisse pas une seconde fois — on reste à la taille qu'il a vue là-bas. */
+const SMALL_FOLK = { on: false };
+function readSmallFolk() {
+  try { return window.localStorage.getItem("ferme_dev_smallfolk") === "1"; } catch (e) { return false; }
+}
+function smallFolkK(k) { return SMALL_FOLK.on ? Math.min(k, C.TOWN_SMALL_FOLK_SCALE) : k; }
+function smallFolkSpeed(k) { return SMALL_FOLK.on ? Math.min(k, C.TOWN_SMALL_FOLK_SPEED) : k; }
 /* hors-zip (Codex, 2026-08-26) — DÉCISION EN ATTENTE DE GUILLAUME : sans
    pointeur à portée, le label de salle suit pour l'instant la case devant le
    joueur, comme les pips de graines. La constante isole ce repli pour qu'un
@@ -2061,6 +2074,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const invRef = useRef(null);
   // AUDIT 2026-10 (FIX-004) — l'état affiché de l'interrupteur du dallage civique haute résolution (menu dev, local).
   const [civicHdUi, setCivicHdUi] = useState(() => HD.civicHD.on);
+  const [smallFolkUi, setSmallFolkUi] = useState(() => (SMALL_FOLK.on = readSmallFolk()));   // 2026-10-05 (soir) : l'essai « petits personnages »
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
   const keysRef = useRef({});
@@ -21240,7 +21254,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            la volée dirait deux vitesses de profondeur différentes selon qu'on
            la regarde ou qu'on la marche. Rend 1 (aucun effet) partout ailleurs
            en ville, donc s'applique sans garde ici. */
-        spSec *= C.courtStairSlowMul(m.x, m.y);
+        spSec *= smallFolkSpeed(C.courtStairSlowMul(m.x, m.y));   // 2026-10-05 (soir) : l'essai « petits personnages » (SMALL_FOLK)
         if (snowRollRef.current) spSec *= snowRollRef.current.carry ? BN.carrySpeedMul(snowRollRef.current.r) : BN.rollSpeedMul(snowRollRef.current.r);   // 2026-10-05 — pousser une grosse boule ralentit (la porter, beaucoup moins)
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
@@ -25330,7 +25344,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const cell = FAS.rabbit && FAS.rabbit[r.coat] && FAS.rabbit[r.coat][r.pose];
             const gx = r.x * T, gy = r.y * T, re = townLvl(tw, "rabbit:" + r.idx, r.x, r.y), air = Math.max(0, r.lift || 0);
             if (!air) snowWalk("rabbit:" + r.idx, "paw", r.x, r.y, re);
-            pushE(gy, re, () => { groundShadow(gx, gy, 8 - air * 8, 0.18 - air * 0.12); blitF(cell, gx, gy - air * T, r.face); }, 0, Math.floor(r.x));
+            // 2026-10-05 (soir) — ombre de 6 px (8 avant) : le lapin a été redessiné à la taille du pigeon (fauneArt.js § 6).
+            pushE(gy, re, () => { groundShadow(gx, gy, 6 - air * 8, 0.18 - air * 0.12); blitF(cell, gx, gy - air * T, r.face); }, 0, Math.floor(r.x));
           }
           // ── Les petits effets : le cœur du chat qui dit bonjour.
           faunaFxRef.current = faunaFxRef.current.filter((fx) => nowP - fx.t0 < 1400);
@@ -27119,7 +27134,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ferme et l'intérieur du tribunal, où `m.x`/`m.y` n'ont rien à voir avec
          les coordonnées de la ville. */
       const depthK = ((meRef.current && (meRef.current.zone || "farm")) === "town")
-        ? C.courtDepthScale(m.x, m.y) : 1;
+        ? smallFolkK(C.courtDepthScale(m.x, m.y)) : 1;   // 2026-10-05 (soir) : les pets suivent l'essai (SMALL_FOLK)
       for (let i = 0; i < pets.length; i++) {
         // Zip 367 : l'id du pet peut arriver sous DEUX formes — objet
         // {id, at} pour MES pets (f.pets, persiste tel quel), simple chaîne
@@ -28788,7 +28803,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          dessinée pour ce personnage, et se referme à la toute fin de la
          fonction — qui ne sort jamais avant (aucun `return` entre les deux). */
       const depthK = ((meRef.current && (meRef.current.zone || "farm")) === "town")
-        ? C.courtDepthScale(p.x, p.y) : 1;
+        ? smallFolkK(C.courtDepthScale(p.x, p.y)) : 1;   // 2026-10-05 (soir) : l'essai « petits personnages » (SMALL_FOLK)
       if (depthK !== 1) {
         const dax = px + C.CHAR_SPRITE_W / 2, day = py + C.CHAR_SHADOW_PY;
         ctx.save();
@@ -41161,6 +41176,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid">
                   {[true, false].map(v => (
                     <button key={"devcivic-" + v} className={"ferme-dev-btn" + (civicHdUi === v ? " on" : "")} onClick={() => { HD.civicHD.on = v; setCivicHdUi(v); }}>{L.devCivicHdBtn(v)}</button>
+                  ))}
+                </div>
+                {/* 2026-10-05 (soir) — ESSAI RÉVERSIBLE : PETITS PERSONNAGES EN VILLE, LOCAL (`SMALL_FOLK`) —
+                    ce que Guillaume a vu au nord du tribunal, partout en ville. Retenu par machine. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSmallFolkSection}</div>
+                <div className="ferme-dev-hint">{L.devSmallFolkHint}</div>
+                <div className="ferme-dev-grid">
+                  {[true, false].map(v => (
+                    <button key={"devsmallfolk-" + v} className={"ferme-dev-btn" + (smallFolkUi === v ? " on" : "")} onClick={() => { SMALL_FOLK.on = v; setSmallFolkUi(v); try { window.localStorage.setItem("ferme_dev_smallfolk", v ? "1" : "0"); } catch (e) { /* localStorage indispo */ } }}>{L.devSmallFolkBtn(v)}</button>
                   ))}
                 </div>
                 {/* 2026-09-28 (phase 12a) — LA NEIGE, LOCALE (`snowDevRef`, lu par `snowPackNow`). */}
