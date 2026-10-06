@@ -31976,7 +31976,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const kind = st.landed;
     /* 2026-10-06 : LA PLUS GRANDE GERBE DE LA GLISSE — le saut (34), l'axel (56) ; une vrille retombe plus modestement (16), mais
        elle grossit avec ses tours (une vrille emballée projette la glace d'autant plus). */
-    if (kind === "hop" || kind === "axel") skateBurst(m, kind === "axel" ? 56 : 34, kind === "axel" ? 1.9 : 1.5);
+    if (kind === "hop" || kind === "axel") skateBurst(m, kind === "axel" ? 28 : 16, kind === "axel" ? 1.25 : 0.95);   // 2026-10-06 (modif express) : moins d'éclats, plus petits (étaient 56/34, force 1,9/1,5)
     else skateBurst(m, 16 + (st.landedLv | 0) * 10, 0.9 + (st.landedLv | 0) * 0.25);
     if (st.chain >= 2 || kind === "axel" || (kind === "spin" && st.landedTurns >= 2)) pushToast(L.skateTrickToast(kind, st.chain, st.landedTurns));   // 2026-10-06 : une vrille emballée se nomme (double, triple…)
   }
