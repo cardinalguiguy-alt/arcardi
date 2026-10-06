@@ -27,7 +27,7 @@ automne ; place vide ; saut. **Pas vu** : printemps, nuit, deux clients, iPad.
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi
 par git). ⚠️ La boucle de rendu est montée une fois : recharger la page après toute édition de `FermeGame.js`. ⚠️ Un invité immobile n'émet aucun `pos`.
 Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
-**Pas fait** : variantes saisonnières du marché (AUTRE chantier), usages de l'ancienne place, résidents qui patinent, reflets des patineurs, V/B/C au tactile.
+**Décidé ensuite (2026-10-06, rien de codé, `docs/PROJETS.md` §4-§5)** : place hors hiver = skatepark (rollers/vélo/skate, figures, nettoyage à heure fixe), miroir d'eau à geysers, jeux Halloween/citrouilles/maison hantée ; **piscine municipale** (centre aquatique années 30, nord-est, GROS chantier). **Pas fait** : variantes saisonnières du marché (AUTRE chantier), résidents qui patinent, reflets des patineurs, V/B/C au tactile.
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER CES DEUX LOTS, PUIS LE CATALOGUE DE LA MAISON GARFIELD
 
@@ -88,7 +88,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
 | « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
-| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad | `docs/PROJETS.md` (§1 à §3) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
+| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors hiver (skatepark, miroir d'eau, Halloween), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
 
@@ -327,7 +327,7 @@ Tout « §N » cité dans le code, les README et les bancs reste valable : on le
 | 8 · 9 · 11 | qualité d'image (méthode de mesure), Blender et bitmaps (pipeline C), modes 3D autonomes ; **notes d'intégration d'image** | `docs/IMAGES-ET-BLENDER.md` |
 | 10 | vérification : bancs, jouer en local, automatisation du navigateur, « ce qui n'existe pas » | `docs/VERIFICATION.md` |
 | 13 · REPRISE « Toujours ouvert » | ce qui attend un jugement humain | `docs/A-JUGER.md` |
-| — | projets décidés, pas commencés (catalogue Garfield, création du personnage, iPad, suites du marché) | `docs/PROJETS.md` |
+| — | projets décidés, pas commencés (catalogue Garfield, création du personnage, iPad, place hors hiver, piscine) | `docs/PROJETS.md` |
 | 14 | maintenir ce fichier (règles et leçons complètes) | `docs/ENTRETIEN.md` |
 | — | audit 2026-10 : graphismes (ferme, ville, intérieurs), fluidité à deux, corrections FIX-… | `docs/AUDIT-2026-10.md` |
 

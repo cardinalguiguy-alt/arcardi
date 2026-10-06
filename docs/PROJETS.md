@@ -99,5 +99,38 @@ lisibilité des textes, taille des cibles tactiles.
 - **Variantes saisonnières du marché** — « un AUTRE chantier » (Guillaume, 2026-10-06) : aujourd'hui le marché est « le même, sans le froid »
   (`townMarketWorld`) ; à dessiner : un caillebotis moins gris hors hiver (il est peint « pin délavé par l'hiver », `DUCK_RGB`), le potier et la
   charrette de fleurs de retour au printemps et l'été, le coin du feu et les ampoules gardés pour l'hiver, des étals de saison.
-- **Les autres usages de l'ancienne place** (le dallage du champ de foire, vide hors hiver, patinoire l'hiver) — rien n'est décidé ni dessiné ; à
-  chercher AVEC Guillaume, par questions, en proposant des idées par saison (printemps, été, automne).
+- **Les autres usages de l'ancienne place** — DÉCIDÉS le 2026-10-06 (Guillaume : « la place est le plus fun en hiver ; si on ne fait que du décor
+  les autres saisons, ça ne va pas — il faut des activités fun », avec des MÉCANIQUES NOUVELLES, sans sortir de l'univers de VT, comme la patinoire
+  ou les bonhommes de neige). Rien n'est dessiné ni codé. Trois lots, à découper et à lui faire valider chacun (questions de forme d'abord) :
+  1. **Le skatepark (printemps/été, « super idée, géniale »).** Le dallage devient un skatepark : **rollers, vélo ET skate** (trois montures).
+     Rampes, bancs, rails ; des **figures** neuves — slides, sauts, vrilles… — **sans obligation de réutiliser le moteur du patin** (`patin.js`) : il
+     peut avoir ses propres règles. **Une équipe de nettoyage passe automatiquement à heure fixe** (comme la surfaceuse de la glace, mais horaire
+     fixe, pas à la demande). Pistes non décidées : matériel prêté par le chalet ? chrono/slalom ? classement ?
+  2. **Le miroir d'eau (été).** Une nappe d'eau peu profonde sur la place, avec des **geysers illuminés la nuit**. Idée gardée ; à questionner :
+     on y marche ? jeux (se poursuivre, esquiver les jets) ? reflets (`eau.js` existe) ? cycle des jets ?
+  3. **Les jeux de l'automne : Halloween et le spooky.** Chasse aux citrouilles, **bonhommes de citrouilles** (le pendant du bonhomme de neige,
+     `bonhomme.js`), tas de feuilles, **lien avec la maison hantée** de la ville, décor et ambiance spooky la nuit. Mécaniques nouvelles, pas des
+     décors. Printemps : des jeux du même esprit restent à trouver (cerf-volant, chasse aux œufs… simples pistes, non décidées).
+  Principe : chaque saison a SON activité jouable, au niveau de finition de la patinoire (« AAA », §0 du noyau).
+
+---
+
+## 5. La piscine municipale — un centre aquatique permanent (décidé, GROS CHANTIER, rien de codé)
+
+> Demandé le 2026-10-06 (« gros chantier mais super résultat »), inspiré des **Antilles de Jonzac** (centre thermal et de loisirs). Un bâtiment
+> **TOTALEMENT NEUF**, ouvert toute l'année (aucune dépendance de saison), dans Valley Town.
+
+- **Où** : au **nord-est** de la ville. Emplacement exact et emprise à choisir contre la carte (`docs/CARTE.md`, `fermeEngine.js` : le générateur,
+  README ferme §15 bis) — un lieu dont le placement ne casse pas la génération (piège de la carte regénérée depuis sa graine).
+- **L'extérieur** : un grand bâtiment **style années 30** (Art déco/paquebot), « magnifique de l'extérieur ». Image Gemini à envisager
+  (`docs/IMAGES-ET-BLENDER.md`) : le prompt se PROPOSE à Guillaume, il ne l'appelle pas (noyau §2).
+- **L'intérieur** : plusieurs **grandes salles**, des **fondus enchaînés** entre elles (mécanisme des intérieurs comme le tribunal — troisième
+  carte, README ferme §22 — à relire avant de décider si la piscine est une quatrième carte ou une extension). **Des palmiers et une végétation
+  tropicale À L'INTÉRIEUR.**
+- **Ce qu'on y fait (beaucoup)** : hammam, sauna, jacuzzis, bains froids ; **un bassin olympique** (**courses** et **nage libre**) ; un **espace libre
+  « tropical »** ; **toboggans** ; **plongeoirs**. Chaque activité doit être une MÉCANIQUE à elle, pas un décor (cf. la patinoire).
+- **À lui demander AVANT de dessiner** : une ou plusieurs cartes ? maillots (garde-robe) et nage (animation du personnage, nouvelle) ? courses
+  contre la montre à deux/trois (réutiliser `course.js` ou pas) ? entrée payante ? effets (vapeur, reflets : `eau.js`, `lumiere.js`) ?
+  découpage en lots livrables (extérieur d'abord, puis salles).
+- **Pièges prévisibles** : nouveau lieu = nouveau repère de carte (noyau §4 : une position taguée par sa zone) ; l'altitude/étage se déduit et ne se
+  diffuse pas ; ≤ 10 messages/s par client.
