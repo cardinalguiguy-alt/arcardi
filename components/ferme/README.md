@@ -47,7 +47,7 @@ saisonnières dessinées : un AUTRE chantier), l'ancienne place « dallage enti�
   bougé** (graine, `TOWN_MARKET`, prestige des adresses, dallage « market ») : le champ de foire y est l'ancien marché, le calque le retire. La patinoire
   est ABSENTE de la carte hors hiver (`tw.rink` indéfini : c'est ce que le jeu lit). L'arrêt « Valley Town — marché » du menu dev vise l'allée de la
   prairie en toute saison. Le banc `verify-vallee` gagne 21 contrôles (« le marché de trois saisons ») ; `winterSkipped` devient `layerSkipped`.
-- *Une seule ombre au saut* : `drawCharacter` posait l'ellipse de contact au sol, et `sunShadowPass` REJOUAIT le patineur levé de `skAir` px — la
+- ⚠️ *PÉRIMÉ (2026-10-06 soir : voir `sunCasting` dans FermeGame.js — le corps est de nouveau levé dans le rejeu, l'ombre se décale de `skAir·(sx,sy)`, l'ellipse s'estompe)* — *Une seule ombre au saut* : `drawCharacter` posait l'ellipse de contact au sol, et `sunShadowPass` REJOUAIT le patineur levé de `skAir` px — la
   silhouette se cisaille autour de la ligne de sol, donc l'ombre portée du corps en l'air décollait, à côté de l'ellipse restée en bas. Un drapeau
   `sunCasting` (FermeGame.js, levé le temps du rejeu) dit à `drawCharacter` de ne pas lever le sprite : le corps monte, l'ombre reste au sol (la règle
   des lapins et des animaux de compagnie). Les reflets, eux, lèvent encore le corps. **Vu en jeu avant/après**, au même instant d'un saut (9 px) :

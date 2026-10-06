@@ -28,6 +28,8 @@ il n'agit à VT que sur l'arbre entamé), mémoire iPad, tactile réel (multi-to
 ligne d'une pile d'appels du navigateur (webpack « eval ») NE SONT PAS ceux du source : se fier aux NOMS de fonctions. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas
 (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
 
+**2026-10-06 (soir) — DANS L'ARBRE, NON COMMITÉ** : (1) reflet de la bande nord de la patinoire étendu (`rinkIcePixel`, fermeArt.js : profondeur `A.H + 6`, poids lissé dans les coins) — vu au banc `render-patinoire`, PAS en jeu ; (2) gerbe du freinage brut réduite (`skateStopSpray`, FermeGame.js : ~3× moins d'éclats, plus petits, bouffées plus rares) — `verify-patin` 78/78, PAS vue en jeu. (3) ombre du soleil au saut : le rejeu LÈVE de nouveau le corps (décalage `skAir·(sx,sy)`, le calcul de `ombres.js`) et l'ellipse de contact s'estompe avec la hauteur — `verify-ombres` 27/27, PAS vu en jeu ; le README de la ferme (« Une seule ombre au saut ») décrit l'ancien jet, périmé. Dettes de ménage inchangées (dossiers `audit-*` à supprimer avant déploiement).
+
 ### ⏭️ ACTION SUIVANTE — UNE SÉANCE SUR UN VRAI iPAD, ET TRANCHER LE ZOOM 1
 
 (1) Vingt minutes sur un vrai iPad (Safari, même réseau, `next dev` + `tools/fake-supabase.mjs`) : `docs/PROJETS.md` §3. (2) À décider avec Guillaume (rien de codé) : zoom 1 plafonné à 2 au tactile

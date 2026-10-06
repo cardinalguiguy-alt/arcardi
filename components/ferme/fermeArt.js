@@ -1528,10 +1528,16 @@ export function rinkIcePixel(wx, wy) {
   // le reflet de la bande nord (sa face, puis sa rambarde), à l'envers, sur les 14 px sous elle
   const nyN = (rinkSD(cx, cy + 1) - rinkSD(cx, cy - 1)) / 2;
   let refl = null, reflA = 0;
-  if (nyN < -0.45 && dEdge < A.H + 3) {
+  /* 2026-10-06 (soir) — LE REFLET ÉTENDU (Guillaume : « la zone du reflet sur la patinoire est coupée, il faut l'étendre ») : il
+     s'éteignait avant d'atteindre sa rambarde (à 11 px, 0,07 d'opacité : invisible) et s'arrêtait net dans les coins arrondis
+     (seuil sec sur la normale). Il descend maintenant jusqu'à `A.H + 6` — la rambarde s'y lit, puis s'efface — et le poids
+     suit la normale en douceur : plein sur la bande nord, décroissant le long des coins, plus rien là où la bande fait face à l'ouest/l'est. */
+  const REFL_D = A.H + 6, wN = Math.max(0, Math.min(1, (-nyN - 0.12) / 0.55));
+  if (wN > 0 && dEdge < REFL_D) {
     const hgt = dEdge;
     refl = hgt > A.H - 0.5 ? A.rail : hgt < 2 ? A.kick : A.face;
-    reflA = 0.34 * (1 - hgt / (A.H + 3)) * (-nyN);
+    const depthK = hgt <= A.H ? 1 - 0.4 * hgt / A.H : 0.6 * (1 - (hgt - A.H) / (REFL_D - A.H));
+    reflA = 0.42 * depthK * wN;
   }
   // la rampe, tramée au bruit bleu
   const BN = snowBlueNoise(), b = BN[(wy & 63) * 64 + (wx & 63)] / 256;

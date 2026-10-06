@@ -17289,11 +17289,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        un nom retourné au fond de l'eau serait un nom de plus. */
     let ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
     let reflecting = false;
-    /* 2026-10-06 — `sunCasting` : vrai le temps où `sunShadowPass` REJOUE les dessins pour en faire des ombres. ⚠️ Un SAUT n'y
-       compte pas : la silhouette se cisaille autour de la ligne de sol, donc un patineur rejoué en l'air jetait une ombre
-       décollée du sol, à côté de l'ellipse de contact restée en bas — deux ombres, flagrantes en plein saut (retour de
-       Guillaume). Le corps monte, l'ombre reste au sol (la règle des lapins et des animaux de compagnie) : `drawCharacter` ne
-       lève donc pas le sprite pendant ce rejeu. Les reflets, eux, le lèvent (le miroir d'un corps en l'air est en l'air). */
+    /* 2026-10-06 — `sunCasting` : vrai le temps où `sunShadowPass` REJOUE les dessins pour en faire des ombres.
+       ⚠️ 2026-10-06 (soir) — LE SAUT DANS L'OMBRE : le premier jet (corps non levé dans le rejeu) laissait l'ombre IMMOBILE pendant
+       tout le saut — faux : le cisaillement (`ombres.js`) envoie un point à `h` px de haut en `(h·sx, h·sy)` du pied, donc un corps
+       levé de `skAir` px jette son ombre décalée de `skAir·(sx, sy)` — loin du patineur, sur le côté que dicte le soleil, d'autant
+       plus que le soleil est bas. Le rejeu LÈVE donc le sprite (le calcul est celui du cisaillement, sans rien de plus) ; ce qui
+       restait « deux ombres » était l'ellipse de contact, pleine en l'air : elle s'estompe et rétrécit maintenant avec la hauteur
+       (`drawCharacter`). `sunCasting` ne sert plus qu'à écarter les effets de sol (la glace sous le patineur). */
     let sunCasting = false;
     /* ╔═══════════════════════════════════════════════════════════════════════
        ║ 2026-10-05 (nuit) — LA PASSE DES OMBRES PORTÉES DU SOLEIL (`ombres.js`), COMMUNE AUX DEUX CARTES.
@@ -29692,7 +29694,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          reflète), et les pieds s'enfoncent (un bourrelet, plus bas). */
       /* 2026-09-29 — la neige de la carte QU'ON REGARDE (la ville ou, depuis ce jour, la ferme). */
       const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === charSnowZone && !inBoat ? charSnowAt(p) : 0;
-      if (!swimmingHere) { ctx.fillStyle = snowFeet > 1 ? "rgba(36,54,104,0.32)" : "rgba(0,0,0,0.25)"; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6 - Math.min(2, Math.round((p.skAir || 0) / 8)), riding ? 3 : C.CHAR_SHADOW_RY); }   // FIX-003 ; 2026-10-05 : l'ombre rétrécit sous un patineur qui saute
+      if (!swimmingHere) { const airK = Math.min(1, (p.skAir || 0) / 14); ctx.fillStyle = snowFeet > 1 ? `rgba(36,54,104,${(0.32 * (1 - 0.8 * airK)).toFixed(3)})` : `rgba(0,0,0,${(0.25 * (1 - 0.8 * airK)).toFixed(3)})`; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6 - Math.min(2, Math.round((p.skAir || 0) / 8)), riding ? 3 : C.CHAR_SHADOW_RY); }   // FIX-003 ; 2026-10-05 : l'ombre rétrécit sous un patineur qui saute
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
          encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
@@ -29847,7 +29849,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         let dS = p.dir | 0;
         if (p.skBack) dS = dS === 0 ? 1 : dS === 1 ? 0 : dS === 2 ? 3 : 2;
         if (p.skSpin) { const seq = [0, 3, 1, 2], i0 = seq.indexOf(dS); dS = seq[(i0 + Math.floor(p.skSpin * 4 + 0.5)) % 4]; }
-        const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - (sunCasting ? 0 : Math.round(p.skAir || 0));   // 2026-10-06 : pas de saut dans l'ombre du soleil (voir `sunCasting`)
+        const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - Math.round(p.skAir || 0);   // 2026-10-06 (soir) : le saut est AUSSI dans l'ombre du soleil — voir `sunCasting`
         /* 2026-10-06 (soir) : la main tendue d'une figure à deux — dans le repère de la feuille (mirroité avec le profil gauche). */
         const handS = p.skHand ? { x: flipS ? px + 16 - p.skHand.x : p.skHand.x, y: p.skHand.y } : null;
         const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
@@ -31958,19 +31960,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const seen = skateSeenRef.current, key = "st:" + (o.key || "me"), t = performance.now();
     let e = seen.get(key); if (!e) { e = { acc: 0, t }; seen.set(key, e); }
     const dtS = Math.min(0.1, Math.max(0, (t - e.t) / 1000)); e.t = t;
-    e.acc += (90 + spd * 30) * dtS;
-    let n = Math.floor(e.acc); e.acc -= n; n = Math.min(n, 22);
+    /* 2026-10-06 (soir) : TROP GROSSE ET PAS ASSEZ RÉALISTE (Guillaume) — environ trois fois moins d'éclats (de ~14/s à 2 cases/s à ~45/s
+       à la croisière), plus petits, moins hauts, et des bouffées plus rares et deux fois moins larges : un jet de copeaux, pas un nuage. */
+    e.acc += (14 + spd * 10) * dtS;
+    let n = Math.floor(e.acc); e.acc -= n; n = Math.min(n, 8);
     if (!n) return;
     const L2 = skateSprayRef.current, ux = vx / spd, uy = vy / spd, fx = C.footX(p.x) * C.TILE, fy = C.footY(p.y) * C.TILE;
     for (let k = 0; k < n; k++) {
-      if (k % 5 === 0) {   // une bouffée de poudreuse, plus lente, qui s'étale et s'efface
-        const sd2 = Math.random() < 0.5 ? -1 : 1, a2 = Math.atan2(uy, ux) + sd2 * (0.4 + Math.random() * 1.0), sp2 = 0.8 + Math.random() * 1.6 + spd * 0.12;
-        L2.push({ x: fx - uy * sd2 * 3, y: fy - 3 + ux * sd2 * 1.5, vx: Math.cos(a2) * sp2 * 16, vy: Math.sin(a2) * sp2 * 9 - 8 - Math.random() * 16, t0: t, life: 0.55 + Math.random() * 0.4, sz: 5 + Math.floor(Math.random() * 5), puff: true });
+      if (k % 8 === 0) {   // une bouffée de poudreuse, plus lente, qui s'étale et s'efface
+        const sd2 = Math.random() < 0.5 ? -1 : 1, a2 = Math.atan2(uy, ux) + sd2 * (0.4 + Math.random() * 1.0), sp2 = 0.6 + Math.random() * 1.0 + spd * 0.08;
+        L2.push({ x: fx - uy * sd2 * 3, y: fy - 3 + ux * sd2 * 1.5, vx: Math.cos(a2) * sp2 * 16, vy: Math.sin(a2) * sp2 * 9 - 8 - Math.random() * 16, t0: t, life: 0.4 + Math.random() * 0.3, sz: 3 + Math.floor(Math.random() * 3), puff: true });
         continue;
       }
-      const side = Math.random() < 0.5 ? -1 : 1, a = Math.atan2(uy, ux) + side * (0.3 + Math.random() * 1.15), sp = 2.2 + Math.random() * 3.4 + spd * 0.3;   // un éventail vers l'avant et les côtés (pas seulement en travers : on le voit alors à côté du patineur, pas dessous)
-      L2.push({ x: fx - uy * side * 2.5, y: fy - 1 + ux * side * 1.2, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 10 - 30 - Math.random() * 56,
-        t0: t, life: 0.5 + Math.random() * 0.6, sz: (() => { const r = Math.random(); return r < 0.15 ? 1 : r < 0.6 ? 2 : r < 0.9 ? 3 : 4; })(), b: Math.random() < 0.3 });
+      const side = Math.random() < 0.5 ? -1 : 1, a = Math.atan2(uy, ux) + side * (0.3 + Math.random() * 1.15), sp = 1.4 + Math.random() * 2.0 + spd * 0.2;   // un éventail vers l'avant et les côtés (pas seulement en travers : on le voit alors à côté du patineur, pas dessous)
+      L2.push({ x: fx - uy * side * 2.5, y: fy - 1 + ux * side * 1.2, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 10 - 18 - Math.random() * 30,
+        t0: t, life: 0.35 + Math.random() * 0.4, sz: (() => { const r = Math.random(); return r < 0.55 ? 1 : r < 0.92 ? 2 : 3; })(), b: Math.random() < 0.3 });
     }
     if (L2.length > 560) L2.splice(0, L2.length - 560);
   }
