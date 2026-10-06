@@ -89,6 +89,7 @@ import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la c
 import * as PO from "./poussiere"; // 2026-10-04 — la poussière soulevée par les pieds (terre battue, sable, labour sec), locale
 import * as GL from "./glace";
 import * as PT from "./patin";
+import * as DU from "./duo"; // 2026-10-06 (soir) — les figures à deux sur la glace (pur)
 import * as BN from "./bonhomme";   // 2026-10-05 — le bonhomme de neige : croissance des boules, empilement, décor, dégel (pur)      // 2026-10-04 — le patin à glace : la machine d'état du patineur (pure)      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
@@ -1197,6 +1198,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const skateRef = useRef(null);
   const skateMarksRef = useRef([]);
   const skateSprayRef = useRef([]);
+  const duoRef = useRef({ act: null, ask: null, out: null, seq: 0, host: { pend: {}, busy: {} } });   // 2026-10-06 (soir) : les figures à deux (`duo.js`)
   const skateTrickReqRef = useRef({ hop: 0, spin: 0 });   // 2026-10-05 (fin quater) : la demande de figure (saut / vrille), consommée par la boucle
   const skateHintRef = useRef({ tricks: 0, hint: 0 });    // l'indice des touches, une fois par session
   const skateWarnRef = useRef(0);
@@ -5829,6 +5831,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now(), req.kit);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: r.price || C.SKATES_RENT_PRICE };
+    } else if (req.kind === "duoAsk" || req.kind === "duoYes") {
+      hostDuo(req, f, out);   // 2026-10-06 (soir) : les figures à deux — l'hôte arbitre l'offre et l'acceptation
     } else if (req.kind === "rinkSmooth") {
       hostRinkSmooth(req, f, s, out);   // 2026-10-06 : la surfaceuse, demandée au chalet
     } else if (req.kind === "rinkBook" || req.kind === "rinkJoin" || req.kind === "rinkLeave" || req.kind === "rinkGo" || req.kind === "rinkFinish") {
@@ -9255,6 +9259,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
     if (p.rink !== undefined) rinkApply(p.rink || null, p.rinkT || null);   // 2026-10-05 (nuit) — la session de course
+    if (p.duoAsk) duoAskApply(p.duoAsk);   // 2026-10-06 (soir) — une main tendue
+    if (p.duo) duoApply(p.duo);            // 2026-10-06 (soir) — la figure à deux part (des noms et une durée, aucune position)
     if (p.ice) iceApply(p.ice);   // 2026-10-06 — l'usure de la glace / la passe de la surfaceuse
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
@@ -9482,6 +9488,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "snowTooBig") return L.snowTooBigToast;
     if (key && key.startsWith("snow_")) return L.snowRefuse(key.slice(5));
     if (key === "skatesBought") return L.skatesBoughtToast(n | 0, C.SKATES_RENT_MS / 60000);
+    if (key && key.startsWith("duo") && typeof L.duoToast === "function") return L.duoToast(key);   // 2026-10-06 (soir)
     if (key && key.startsWith("rink") && typeof L.rinkToast === "function") return L.rinkToast(key, CO.COURSE.PRICE);   // 2026-10-05 (nuit) : la course de la patinoire
     if (key === "skates_have") return L.skatesHaveToast;
     if (key === "skates_closed") return L.skatesClosedToast;
@@ -17474,6 +17481,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code === "KeyK" && !e.repeat && !uiOpen) snowKickAct();
       // 2026-10-05 (fin quater) — V : la vrille du patineur (Espace saute, les deux ensemble font l'axel ; B tenue : à reculons).
       if (e.code === "KeyV" && !e.repeat && !uiOpen) skateTrickPress("spin");
+      // 2026-10-06 (soir) — H : tendre la main à un patineur proche (figures à deux), ou prendre celle qu'on nous tend.
+      if (e.code === "KeyH" && !e.repeat && !uiOpen) duoPress();
       // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
       // visitor card for the nearest one waiting within reach. NOTE: KeyQ is
       // ALSO move-left on AZERTY (ZQSD) - !e.repeat keeps a held Q from
@@ -21693,6 +21702,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if ((dx || dy) && starGreenWalking()) {
         starGreenGuideRef.current.walk = false;
       }
+      if (duoStepMe(m)) { maybeSendPos(); return; }   // 2026-10-06 (soir) : en figure à deux, la figure me pose
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) starInputAtRef.current = performance.now();
       /* ╔══════════════════════════════════════════════════════════════
@@ -26070,6 +26080,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // farm loop early-returns before its own lerp while we are here.
       // 2026-10-05 — les bonshommes de neige et les boules (reflétés dans l'eau et sur la glace comme tout décor posé).
       snowDrawEntries("town", (wy, x, fn) => { const tx = Math.floor(x), ty = Math.floor(wy / T); pushE(wy, (tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h) ? tw.elev[ty * tw.w + tx] : 0, fn, 0, tx); });
+      duoFrame();   // 2026-10-06 (soir) : l'instant des figures à deux, une fois par image
       for (const p of playersRef.current.values()) {
         if (p.zone !== "town" || p.sleeping) continue;
         advanceRemote(p); // FIX 243
@@ -26080,6 +26091,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 22);
         p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+        duoOverride(p);   // 2026-10-06 (soir) : en figure à deux, sa place vient du plan
         /* HORS-ZIP 2026-09-02 — UN CAMARADE COUCHE LES BUISSONS AUSSI, et rien
            n'a été ajouté au réseau pour ça : le frisson se DÉDUIT de la position
            qui circule déjà (§3 — ce qui peut se déduire ne se diffuse pas).
@@ -28243,6 +28255,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function skateDraw(p, isSelf) {
       if (!p || (p.zone || "farm") !== "town") return {};
+      { const dqf = duoFieldsOf(p, isSelf); if (dqf) return dqf; }   // 2026-10-06 (soir) : en figure à deux, la pose du plan
       if (isSelf) {
         const st = skateRef.current; if (!st) return {};
         const pose = PT.skatePose(st); if (!pose) return {};
@@ -29828,7 +29841,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (p.skBack) dS = dS === 0 ? 1 : dS === 1 ? 0 : dS === 2 ? 3 : 2;
         if (p.skSpin) { const seq = [0, 3, 1, 2], i0 = seq.indexOf(dS); dS = seq[(i0 + Math.floor(p.skSpin * 4 + 0.5)) % 4]; }
         const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - (sunCasting ? 0 : Math.round(p.skAir || 0));   // 2026-10-06 : pas de saut dans l'ombre du soleil (voir `sunCasting`)
-        const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD });
+        /* 2026-10-06 (soir) : la main tendue d'une figure à deux — dans le repère de la feuille (mirroité avec le profil gauche). */
+        const handS = p.skHand ? { x: flipS ? px + 16 - p.skHand.x : p.skHand.x, y: p.skHand.y } : null;
+        const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
+        /* 2026-10-06 (soir) — LE REFLET DU PATINEUR (Guillaume : « la réflexion du patineur joue sur l'aspect lisse de la glace »).
+           Le corps renversé sous la semelle, sur dix pixels, deux paliers qui s'éteignent ; son poids suit le poli de la glace
+           (`GLOSS_K` : plein sur la glace lisse, nul sur l'usée). Seulement sur la glace entretenue, jamais dans l'ombre du soleil. */
+        const twR = townWorldRef.current, lvR = rinkIceRef.current ? rinkIceRef.current.lv | 0 : 0;
+        if (!sunCasting && twR && twR.rink && C.rinkInside(C.footX(p.x), C.footY(p.y)) && lvR < 3) {
+          const aR = [0.34, 0.2, 0.08][lvR], fyR = py + 15;
+          for (const [d0, d1, k] of [[0, 5, 1], [5, 10, 0.5]]) {
+            ctx.save();
+            ctx.beginPath(); ctx.rect(px - 12, fyR + d0, 40, d1 - d0); ctx.clip();
+            ctx.globalAlpha = aR * k;
+            ctx.translate(0, 2 * fyR); ctx.scale(1, -1);
+            if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); } else drawSk(px);
+            ctx.restore();
+          }
+        }
         if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); }
         else drawSk(px);
       } else if (p.slip && (p.slip !== "climb" || p.dir === 1) && (p.slip !== "slide" || p.dir !== 3)) {
@@ -31971,6 +32001,122 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     /* Deux V (ou trois) pressés avant le départ de la vrille : elle part déjà emballée, d'autant de niveaux — jusqu'au dernier. */
     if (kind === "spin") for (let k = 1; k < nSpin; k++) PT.skateTrickBoost(st, true);
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-06 (soir) — LES FIGURES À DEUX (`duo.js` pour les règles et le pourquoi).
+     ╚══════════════════════════════════════════════════════════════════════════
+     H tend la main au patineur chaussé le plus proche (H de nouveau : la figure suivante) ; H chez lui accepte. L'hôte arbitre
+     (`hostDuo`) et ne diffuse que des noms et une durée : CHAQUE CLIENT calcule les deux patineurs (`duoFrame`) depuis sa vue
+     des deux départs, et les pose (moi : `duoStepMe` ; les autres : `duoOverride` ; la pose dessinée : `duoFieldsOf`). */
+  function duoNear(a, b) { return Math.hypot(C.footX(a.x) - C.footX(b.x), C.footY(a.y) - C.footY(b.y)); }
+  function duoPress() {
+    const m = meRef.current, st = skateRef.current, D = duoRef.current, now = performance.now(), tw = townWorldRef.current;
+    if (!m || (m.zone || "farm") !== "town" || !st || !tw || !tw.rink || !E.skatesActive(invRef.current, Date.now())) return;
+    const fx = C.footX(m.x), fy = C.footY(m.y), rk = sharedRef.current.rink;
+    if (D.act || !C.rinkInside(fx, fy) || (rk && rinkMine() && (rk.state === "race" || rk.state === "lobby"))) return;
+    if (st.mode !== "glide" || st.trick || Math.hypot(st.vx, st.vy) > DU.DUO.MAX_V) { pushToast(L.duoSlow); return; }
+    if (D.ask && now < D.ask.until) {   // une main tendue vers moi : je la prends (si l'autre est encore là et que la figure tient)
+      const o = playersRef.current.get(D.ask.a), k = D.ask;
+      if (o && o.zone === "town" && duoNear(m, o) <= DU.DUO.REACH + 1.2) {
+        const sp = DU.duoSpace(k.fig, { x: C.footX(o.x), y: C.footY(o.y) }, { x: fx, y: fy }, k.hx, k.hy);
+        if (!sp.ok) { pushToast(L.duoSpace); return; }
+        sendReq({ kind: "duoYes", from: k.a }); D.ask = null; return;
+      }
+      D.ask = null; pushToast(L.duoToast("duoGone")); return;
+    }
+    let best = null;
+    for (const p of playersRef.current.values()) {
+      if (p.zone !== "town" || p.sleeping || !remoteHasSkates(p.id)) continue;
+      const d = duoNear(m, p);
+      if (d <= DU.DUO.REACH && C.rinkInside(C.footX(p.x), C.footY(p.y)) && (!best || d < best.d)) best = { p, d };
+    }
+    if (!best) { pushToast(L.duoNone); return; }
+    const fig = D.out && D.out.to === best.p.id && now < D.out.until ? DU.duoFigNext(D.out.fig) : "ronde";
+    const sp0 = Math.hypot(st.vx, st.vy), dv = [[0, 1], [0, -1], [-1, 0], [1, 0]][m.dir | 0] || [1, 0];
+    const hx = sp0 > 0.5 ? st.vx / sp0 : dv[0], hy = sp0 > 0.5 ? st.vy / sp0 : dv[1];
+    const sp = DU.duoSpace(fig, { x: fx, y: fy }, { x: C.footX(best.p.x), y: C.footY(best.p.y) }, hx, hy);
+    if (!sp.ok) { pushToast(L.duoSpace); return; }
+    D.out = { to: best.p.id, fig, until: now + DU.DUO.ASK_MS };
+    sendReq({ kind: "duoAsk", to: best.p.id, fig, hx: +hx.toFixed(2), hy: +hy.toFixed(2), len: sp.len });
+  }
+  /* CHEZ L'HÔTE : l'offre (une seule par destinataire, qui tient `ASK_MS`) et l'acceptation. La figure demandée n'est jamais crue
+     (`duoFigOk`), la longueur est bornée ; deux patineurs déjà en figure ne s'en voient pas offrir une autre. */
+  function hostDuo(req, f, out) {
+    const H = duoRef.current.host, now = performance.now(), me0 = meRef.current;
+    const no = (key) => { out.toast = { id: f.id, key }; };
+    if (req.kind === "duoAsk") {
+      const to = String(req.to || "");
+      if (!DU.duoFigOk(req.fig)) return;
+      if (!to || to === f.id || !(playersRef.current.get(to) || (me0 && me0.id === to))) return no("duoGone");
+      if ((H.busy[f.id] || 0) > now || (H.busy[to] || 0) > now) return no("duoBusy");
+      const hx = Math.max(-1, Math.min(1, +req.hx || 0)), hy = Math.max(-1, Math.min(1, +req.hy || 0)), len = Math.max(0, Math.min(7, +req.len || 0));
+      H.pend[to] = { a: f.id, fig: req.fig, hx, hy, len, until: now + DU.DUO.ASK_MS };
+      out.duoAsk = { a: f.id, b: to, fig: req.fig, hx, hy, len };
+    } else {
+      const pd = H.pend[f.id];
+      if (!pd || pd.a !== String(req.from || "") || now > pd.until) return no("duoGone");
+      delete H.pend[f.id];
+      if ((H.busy[pd.a] || 0) > now || (H.busy[f.id] || 0) > now) return no("duoBusy");
+      H.busy[pd.a] = H.busy[f.id] = now + DU.DUO.DUR[pd.fig] * 1000 + 600;
+      out.duo = { id: ++duoRef.current.seq, a: pd.a, b: f.id, fig: pd.fig, hx: pd.hx, hy: pd.hy, len: pd.len };
+    }
+  }
+  function duoNameOf(id) { const me0 = meRef.current, p = playersRef.current.get(id); return (me0 && me0.id === id ? me0.name : p && p.name) || "?"; }
+  function duoAskApply(d) {
+    const me0 = meRef.current, D = duoRef.current; if (!me0 || !d) return;
+    if (d.b === me0.id) { D.ask = { ...d, until: performance.now() + DU.DUO.ASK_MS }; pushToast(L.duoAsked(duoNameOf(d.a), L.duoName(d.fig))); }
+    else if (d.a === me0.id) pushToast(L.duoAsking(duoNameOf(d.b), L.duoName(d.fig)));
+  }
+  /* L'ordre reçu, DATÉ À LA RÉCEPTION : le plan se bâtit sur MA vue des deux départs. Qui n'est pas en ville ne le voit pas. */
+  function duoApply(d) {
+    const me0 = meRef.current, D = duoRef.current; if (!me0 || !d || !DU.duoFigOk(d.fig) || (me0.zone || "farm") !== "town") return;
+    const A0 = d.a === me0.id ? me0 : playersRef.current.get(d.a), B0 = d.b === me0.id ? me0 : playersRef.current.get(d.b);
+    if (!A0 || !B0 || (A0.zone || "town") !== "town" || (B0.zone || "town") !== "town") return;
+    D.act = { d, t0: performance.now(), cur: null, landed: false,
+      plan: DU.duoPlan(d.fig, { x: C.footX(A0.x), y: C.footY(A0.y) }, { x: C.footX(B0.x), y: C.footY(B0.y) }, d.hx, d.hy, d.len) };
+    D.ask = null; D.out = null;
+  }
+  /* UNE FOIS PAR IMAGE (le dessin de la ville) : l'instant de la figure, la retombée en gerbe, les sillons et la poudre derrière
+     les lames des deux. Passé sa durée, la figure est lâchée (chacun garde sa dernière place, au repos). */
+  function duoFrame() {
+    const D = duoRef.current, now = performance.now();
+    if (D.ask && now > D.ask.until) D.ask = null;
+    if (D.out && now > D.out.until) D.out = null;
+    const a = D.act; if (!a) return;
+    const r = DU.duoAt(a.plan, (now - a.t0) / 1000);
+    if (r.done) { D.act = null; return; }
+    a.cur = r;
+    const pp = (q) => ({ x: q.x - C.footX(0), y: q.y - C.footY(0) });
+    if (r.landed && !a.landed) { a.landed = true; skateBurst(pp(r.a), 22, 1.0); skateBurst(pp(r.b), 22, 1.0); }
+    for (const [id, q] of [[a.d.a, r.a], [a.d.b, r.b]]) {
+      const spd = Math.hypot(q.vx, q.vy);
+      if (spd > 1.8 && !q.air) skateTrail(pp(q), q.vx, q.vy, { key: "duo" + id });
+      if (spd > 0.8 && !q.air) skateMarkStep(pp(q), spd, false, "duo" + id);
+    }
+  }
+  function duoQ(id) { const a = duoRef.current.act; return a && a.cur ? (a.d.a === id ? a.cur.a : a.d.b === id ? a.cur.b : null) : null; }
+  /* MOI : la figure me pose (aucune collision — `duoSpace` a vérifié la glace), et ma machine suit la vitesse du plan. */
+  function duoStepMe(m) {
+    const q = duoQ(m.id); if (!q) return false;
+    m.x = q.x - C.footX(0); m.y = q.y - C.footY(0); m.dir = q.dir; m.vx = q.vx; m.vy = q.vy; m.moving = true; m.animT = q.ph;
+    const st = skateRef.current; if (st) { st.vx = q.vx; st.vy = q.vy; st.mode = "glide"; st.trick = null; st.stride = q.ph; }
+    return true;
+  }
+  /* LES AUTRES : leur place vient du plan, pas du réseau, tant que la figure dure. */
+  function duoOverride(p) {
+    const q = duoQ(p.id); if (!q) return null;
+    p.x = q.x - C.footX(0); p.y = q.y - C.footY(0); p.dir = q.dir; p.vx = q.vx; p.vy = q.vy; p.moving = true; p.animT = q.ph;
+    return q;
+  }
+  /* La pose dessinée d'un participant (celle que `A.drawSkate` sait faire). */
+  function duoFieldsOf(p, isSelf) {
+    const q = duoQ(p.id); if (!q) return null;
+    const kit = skateKitHere(isSelf ? PT.skateKitNorm(invRef.current && invRef.current.skateKit) : remoteSkateKit(p.id), p);
+    /* Le point où les deux mains se joignent (px du monde) : au milieu des deux semelles, à hauteur de hanche (7 px sous le haut
+       de la feuille de marche, la hauteur de saut commune en moins) — `drawCharacter` le replace dans le repère de la feuille. */
+    const a = duoRef.current.act, T2 = C.TILE;
+    const hand = a && a.cur ? { x: (a.cur.a.x + a.cur.b.x) / 2 * T2, y: (a.cur.a.y + a.cur.b.y) / 2 * T2 - 8 - ((a.cur.a.air || 0) + (a.cur.b.air || 0)) / 2 } : null;
+    return { skate: q.pose, skPh: q.ph, skAir: q.air, skSpin: q.pose === "axel" ? q.spin : 0, skBack: false, skKit: kit, skHand: hand };
   }
   /* L'atterrissage : la gerbe (forte après un saut, légère après une vrille), et — pour un axel ou un enchaînement — le mot. */
   function skateLanded(m, st) {

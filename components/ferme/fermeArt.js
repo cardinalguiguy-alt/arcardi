@@ -5760,7 +5760,40 @@ export function drawSkateKitPreview(ctx, kit) {
   };
   one(6, 8); one(22, 8);                                                  // la paire, de profil, un pied derrière l'autre
 }
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-06 (soir) — LE BRAS TENDU DES FIGURES À DEUX (`view.hand` = { x, y } : le point où les deux mains se joignent,
+   ║ dans le repère de `px` — l'appelant a déjà mirroité pour un profil gauche).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Guillaume : « les bras DOIVENT ÊTRE RÉALISTES — même niveau de réalisme que l'axel ». Pas un trait collé : le bras est la
+   MANCHE DE LA FEUILLE (mêmes couleurs, même cerne, même ombre que le bras qui pend), étiré de l'épaule à la main — chaque pas du
+   segment reprend la rangée de manche qui lui correspond (la manche, puis le poignet, puis la main nue au bout) — avec un
+   léger fléchi du coude (le bras ne se tend jamais comme une règle). Le bras qui PEND de ce côté est retiré du buste (`upper`),
+   sinon le personnage en aurait trois. Le bras de l'autre côté ne bouge pas. ⚠️ Aucun `rotate` (le faux canevas des bancs n'en
+   veut pas) : des `drawImage` d'un pixel posés le long du segment. */
+function drawReachArm(ctx, sheet, sy, px, side, reachLR, R, hand) {
+  const sx0 = side ? 7 : reachLR ? POSE_ARM_RX : POSE_ARM_LX, aw = side ? 2 : POSE_ARM_W;
+  const shX = px + (side ? 8 : reachLR ? 11 : 4) + R.dx, shY = R.top + 1;
+  let ddx = hand.x - shX, ddy = hand.y - shY;
+  const L0 = Math.hypot(ddx, ddy), LMAX = 15;
+  if (L0 > LMAX) { ddx *= LMAX / L0; ddy *= LMAX / L0; }
+  const L = Math.max(3, Math.hypot(ddx, ddy)), n = Math.max(3, Math.ceil(Math.max(Math.abs(ddx), Math.abs(ddy)))), sag = Math.min(1.6, L * 0.1);
+  const horiz = Math.abs(ddx) >= Math.abs(ddy), H = POSE_ARM_H;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, X = shX + ddx * t, Y = shY + ddy * t + sag * Math.sin(Math.PI * t);
+    const r = t < 0.7 ? Math.min(H - 3, Math.floor(t / 0.7 * (H - 2))) : (H - 2) + (t > 0.86 ? 1 : 0);   // la manche, le poignet, la main
+    for (let c = 0; c < aw; c++) {
+      const o = c - (aw - 1) / 2;
+      ctx.drawImage(sheet, sx0 + c, sy + POSE_ARM_Y + r, 1, 1, Math.round(horiz ? X : X + o), Math.round(horiz ? Y + o : Y), 1, 1);
+    }
+  }
+}
 export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt, view) {
+  const R = { top: null, dx: 0 };
+  drawSkateBody(ctx, sheet, row, px, py, pose, phase, skirt, view, R);
+  const hand = view && view.hand;
+  if (hand && R.top != null) drawReachArm(ctx, sheet, row * 24, px, row === 2, hand.x >= px + 8 ? 1 : 0, R, hand);
+}
+function drawSkateBody(ctx, sheet, row, px, py, pose, phase, skirt, view, R) {
   const SKATE_BOOT = skateBootCols(view), longBlade = PT.SKATE_KITS[PT.skateKitNorm(view && view.kit).type].blade >= 10;
   const sy = row * 24, side = row === 2;
   const ph = +phase || 0, leg = Math.floor(ph) & 1, u = ph - Math.floor(ph);
@@ -5789,11 +5822,21 @@ export function drawSkate(ctx, sheet, row, px, py, pose, phase, skirt, view) {
   const legs = (dl, dlY, dr, drY, top) => { halfLeg(false, px + dl, top + dlY); halfLeg(true, px + 8 + dr, top + drY); };
   /* Le haut du corps : la tête (décalée de `hx`), puis le buste — avec sa jupe s'il
      en a une — décalé de `tx`, posés pour que la tranche des jambes commence à `top + LY`. */
+  const handV = view && view.hand, reachLR = handV ? (handV.x >= px + 8 ? 1 : 0) : -1;
   const upper = (top, hx, tx) => {
     ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + hx, top, 16, POSE_HEAD_H);
-    ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y, px + tx, top + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y);
+    R.top = top + POSE_TORSO_Y; R.dx = tx;
+    if (!handV) { ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y, px + tx, top + POSE_TORSO_Y, 16, LY - POSE_TORSO_Y); return; }
+    /* Le buste SANS le bras du côté qui tend la main : la rangée d'épaule entière, les rangées de manche en deux morceaux (le
+       cerne intérieur du bras reste : pas d'encoche au flanc), le reste (la jupe) entier. */
+    const y0 = POSE_ARM_Y - POSE_TORSO_Y, ac = side ? 7 : reachLR ? POSE_ARM_RX + 1 : POSE_ARM_LX, aw = side ? 2 : POSE_ARM_W - 1;
+    const yEnd = Math.min(LY - POSE_TORSO_Y, y0 + POSE_ARM_H);
+    ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, y0, px + tx, top + POSE_TORSO_Y, 16, y0);
+    ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y + y0, ac, yEnd - y0, px + tx, top + POSE_TORSO_Y + y0, ac, yEnd - y0);
+    ctx.drawImage(sheet, ac + aw, sy + POSE_TORSO_Y + y0, 16 - ac - aw, yEnd - y0, px + tx + ac + aw, top + POSE_TORSO_Y + y0, 16 - ac - aw, yEnd - y0);
+    if (LY - POSE_TORSO_Y > yEnd) ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y + yEnd, 16, LY - POSE_TORSO_Y - yEnd, px + tx, top + POSE_TORSO_Y + yEnd, 16, LY - POSE_TORSO_Y - yEnd);
   };
-  const arm = (lr, x, y) => ctx.drawImage(sheet, lr ? POSE_ARM_RX : POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, x, y, POSE_ARM_W, POSE_ARM_H);
+  const arm = (lr, x, y) => lr === reachLR ? 0 : ctx.drawImage(sheet, lr ? POSE_ARM_RX : POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, x, y, POSE_ARM_W, POSE_ARM_H);
   if (pose === "slip") {
     /* SANS PATINS. Le buste penche d'un côté puis de l'autre (cisaillement : la tête
        part plus loin que le buste), les jambes en ciseaux, et les deux bras LEVÉS qui
