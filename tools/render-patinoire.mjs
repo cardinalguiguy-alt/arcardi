@@ -54,7 +54,7 @@ function paint(cmN, garlandLit, frame) {
     else if (g === C.G_TOWN_STAIR) A.drawTownStairTile(ctx, S, tw, x, y, px, py);
     else A.drawTownGrassTile(ctx, S, tw, x, y, px, py);
     if (tw.duck[i]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
-    { const R = C.TOWN_RINK; if (x >= R.x0 && x <= R.x1 && y >= R.y0 && y <= R.y1) A.drawRinkIceTile(ctx, x, y, px, py); }
+    { const R = C.TOWN_RINK; if (x >= R.x0 && x <= R.x1 && y >= R.y0 && y <= R.y1) A.drawRinkIceTile(ctx, x, y, px, py); A.drawRinkGlossAt(ctx, x, y, px, py, { lv: 0, prev: 0, f: 1, rects: [] }); }   // 2026-10-06 (soir) : la glace lisse, polie
     const sc = field.cell(x, y);
     if (sc) ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, px, py, T, T);
   }

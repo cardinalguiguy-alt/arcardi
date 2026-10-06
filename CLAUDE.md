@@ -29,6 +29,8 @@ par git). ⚠️ La boucle de rendu est montée une fois : recharger la page apr
 Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
 **Décidé ensuite (2026-10-06, rien de codé, `docs/PROJETS.md` §4-§5)** : place hors hiver = skatepark (rollers/vélo/skate, figures, nettoyage à heure fixe), miroir d'eau à geysers, jeux Halloween/citrouilles/maison hantée ; **piscine municipale** (centre aquatique années 30, nord-est, GROS chantier). **Pas fait** : variantes saisonnières du marché (AUTRE chantier), résidents qui patinent, reflets des patineurs, V/B/C au tactile.
 
+**Ajouté le soir (2026-10-06, dans l'arbre, non commité, Supabase : rien)** : (a) le MIMOSA se dénude l'hiver (`BARE.mimosa`, plus de `townTreeSprite` « spring » dans `makeWinterTrees`) — son sprite reste à refaire (prompt Gemini à proposer) ; (b) plus de bourrelet de neige aux patins sur la glace : `charSnowAt` de la ville rend 0 dans `C.rinkInside` ; (c) le POLI de la glace (`drawRinkGlossAt`, `rinkGlossCanvas`, fermeArt.js ; appelé après `drawRinkWearAt`, poids `GLOSS_K` par niveau d'usure, plein derrière la surfaceuse). Vu : `render-patinoire` seulement ; **pas vu en jeu**. Bancs : `verify-surfaceuse` 59/59, `verify-vallee` 358/358, `verify-patin` 78/78.
+
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER CES DEUX LOTS, PUIS LE CATALOGUE DE LA MAISON GARFIELD
 
 (1) Juger en jeu (`docs/A-JUGER.md`, en tête) : le marché hors hiver et la place vide, l'ombre du saut, puis le lot du patin (gerbe, vrille, usure, surfaceuse,

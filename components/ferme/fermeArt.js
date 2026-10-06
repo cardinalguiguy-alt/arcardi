@@ -1586,6 +1586,53 @@ export function drawRinkIceTile(ctx, x, y, px, py) {
    près, pas à la case. */
 const RINK_WEAR_CV = [null, null, null, null];
 const RINK_WEAR_STROKES = [0, 170, 460, 940];
+/* 2026-10-06 (soir) — LE POLI DE LA GLACE REFAITE (Guillaume : « plus belle et réfléchissante après lissage, regarde les JO d'hiver »).
+   Une glace olympique est un miroir laiteux : un ciel clair qui s'y couche en larges lueurs obliques, de longs éclats nets le long des
+   passes de la machine, et la bande qui s'y reflète en bleu profond tout autour. Posé PAR-DESSUS la glace de la case, avant l'usure : le
+   poids vient du niveau (`GLOSS_K`) — plein à l'état lisse, nul à l'état usé — et la glace neuve derrière la surfaceuse le reprend en plein. */
+const GLOSS_K = [1, 0.6, 0.22, 0];
+let RINK_GLOSS_CV = null;
+function rinkGlossCanvas() {
+  if (RINK_GLOSS_CV) return RINK_GLOSS_CV;
+  const R = C.TOWN_RINK, T = SPR_T, W = (R.x1 - R.x0 + 1) * T, H = (R.y1 - R.y0 + 1) * T, X0 = R.x0 * T, Y0 = R.y0 * T;
+  const px = new Uint8ClampedArray(W * H * 4);
+  const put = (x, y, c, a) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const o = (y * W + x) * 4, al = Math.min(255, Math.round(a * 255));
+    if (al <= px[o + 3] || rinkSD(X0 + x + 0.5, Y0 + y + 0.5) > -1.5) return;
+    px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = al;
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const sd = rinkSD(X0 + x + 0.5, Y0 + y + 0.5);
+    if (sd > -1.5) continue;
+    // 1 — les lueurs du ciel : de larges bandes obliques, quantifiées en quatre tons (du pixel, pas du dégradé lisse)
+    const b = Math.sin((x * 0.8 + y * 1.0) / 46) * Math.sin((x * 0.3 - y * 0.9) / 71 + 1.3);
+    let a = b > 0.12 ? 0.12 + 0.36 * Math.min(1, (b - 0.12) / 0.45) : 0;
+    a = Math.round(a * 4) / 4 * 1.0;
+    // 2 — la bande se reflète tout autour : un bleu profond qui s'éteint en 12 px
+    const e = -sd, edge = e < 12 ? 0.3 * Math.pow(1 - e / 12, 1.5) : 0;
+    const o = (y * W + x) * 4;
+    if (a === 0 && b < -0.3) { px[o] = 112; px[o + 1] = 152; px[o + 2] = 204; px[o + 3] = Math.round(Math.min(0.2, 0.06 + (-0.3 - b) * 0.3) * 255); }   // la profondeur bleue entre les lueurs
+    if (a > 0) { px[o] = 250; px[o + 1] = 253; px[o + 2] = 255; px[o + 3] = Math.round(a * 255); }
+    if (edge > 0.02 && edge > a) { px[o] = 92; px[o + 1] = 128; px[o + 2] = 178; px[o + 3] = Math.round(edge * 255); }
+  }
+  // 3 — de longs éclats nets le long des passes de la machine (26 px) : le trait blanc d'une glace qui a vu la lame, deux pixels, un point brillant au bout
+  let sd = 0x2f6e2b1;
+  const rnd = () => { sd = (sd + 0x6d2b79f5) | 0; let t = Math.imul(sd ^ (sd >>> 15), 1 | sd); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  for (let k = 0; k < 120; k++) {
+    const x0 = rnd() * W, y0 = (Math.floor(rnd() * (H / 26)) * 26) + 2 + rnd() * 20, len = 22 + rnd() * 70, al = 0.18 + rnd() * 0.22;
+    for (let i = 0; i < len; i++) {
+      const f = Math.sin(Math.PI * i / len);
+      put(x0 + i, y0 + i * 0.05, [255, 255, 255], al * (0.4 + 0.6 * f));
+    }
+    put(x0 + len * 0.5, y0 - 1, [255, 255, 255], Math.min(0.7, al * 2.4));
+  }
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  cv.getContext("2d").putImageData(typeof ImageData !== "undefined" ? new ImageData(px, W, H) : { width: W, height: H, data: px }, 0, 0);
+  RINK_GLOSS_CV = cv;
+  return cv;
+}
 function rinkWearCanvas(lv) {
   if (RINK_WEAR_CV[lv]) return RINK_WEAR_CV[lv];
   const R = C.TOWN_RINK, T = SPR_T, W = (R.x1 - R.x0 + 1) * T, H = (R.y1 - R.y0 + 1) * T, X0 = R.x0 * T, Y0 = R.y0 * T;
@@ -1650,6 +1697,18 @@ function rinkWearCanvas(lv) {
   cv.getContext("2d").putImageData(typeof ImageData !== "undefined" ? new ImageData(px, W, H) : { width: W, height: H, data: px }, 0, 0);
   RINK_WEAR_CV[lv] = cv;
   return cv;
+}
+/* Le poli d'une case de glace, posé APRÈS `drawRinkWearAt` (mêmes arguments) : poids par niveau d'usure, plein derrière la surfaceuse. */
+export function drawRinkGlossAt(ctx, x, y, px, py, st) {
+  const T = SPR_T, R = C.TOWN_RINK, ox = (x - R.x0) * T, oy = (y - R.y0) * T;
+  const layers = st.f < 1 && st.prev !== st.lv ? [[st.prev, 1 - st.f], [st.lv, st.f]] : [[st.lv, 1]];
+  const gk = layers.reduce((s, [lv, al]) => s + al * GLOSS_K[lv], 0);
+  if (gk > 0.02) { ctx.globalAlpha = Math.min(1, gk); ctx.drawImage(rinkGlossCanvas(), ox, oy, T, T, px, py, T, T); ctx.globalAlpha = 1; }
+  for (const r of st.rects || []) {
+    const wx0 = Math.max(Math.round(r.x0), px), wx1 = Math.min(Math.round(r.x1), px + T), wy0 = Math.max(Math.round(r.y0), py), wy1 = Math.min(Math.round(r.y1), py + T);
+    if (wx1 <= wx0 || wy1 <= wy0) continue;
+    ctx.drawImage(rinkGlossCanvas(), ox + (wx0 - px), oy + (wy0 - py), wx1 - wx0, wy1 - wy0, wx0, wy0, wx1 - wx0, wy1 - wy0);
+  }
 }
 /* L'état de la glace pour UNE IMAGE : `st` = { lv, prev, f, rects, wet } (`rects` en px du monde : { x0, y0, x1, y1, age } —
    `age` (ms) : depuis que la lame a fini ce morceau ; `wet` : la durée du brillant). Posé juste après la glace de la case. */
@@ -17753,6 +17812,7 @@ export function buildSprites() {
     willow: { limbs: 4, spread: 0.95, dmin: 3.6, rise: 0.66, gnarl: 0.3, twig: "#a88c42", haze: "rgba(170,144,72,0.3)", weep: true },
     cherry: { limbs: 4, spread: 1.0, dmin: 3.5, rise: 0.66, gnarl: 0.55, twig: "#5e3b35", haze: "rgba(98,62,60,0.32)" },
     apple:  { limbs: 4, spread: 1.12, dmin: 3.5, rise: 0.58, gnarl: 1.25, twig: "#54402f", haze: "rgba(86,66,50,0.34)" },
+    mimosa: { limbs: 4, spread: 0.95, dmin: 3.3, rise: 0.7, gnarl: 0.5, twig: "#5a4a34", haze: "rgba(86,72,52,0.32)" },   // 2026-10-06 (soir) : le mimosa se dénude l'hiver
     magnolia: { limbs: 3, spread: 0.8, dmin: 3.4, rise: 0.7, gnarl: 0.3, twig: "#5c5250", haze: "rgba(96,88,86,0.3)" },
   };
   /* Un feuillu nu, au gabarit courant (`withTreeGeom`). Rend { c, mask } —
@@ -18250,7 +18310,6 @@ export function buildSprites() {
           if (!sp) return null;
           // Les conifères portent leur neige étage par étage, dessinée avec eux (`townConifer`).
           if (sp.conifer) { c = townTreeSprite(sized(sp), "autumn", frame, lvl, onSnow); native = true; }
-          else if (sp.id === "mimosa") c = townTreeSprite(sized(sp), "spring", frame, 0, onSnow);
           else { const r = bareTree(sized(sp), frame, BARE[sp.id] || BARE.oak, seed, onSnow); c = r.c; mask = r.mask; tips = r; }
         }
         winterSnowPass(c, native ? 0 : lvl, seed + lvl, mask);

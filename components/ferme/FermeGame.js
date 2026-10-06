@@ -22470,7 +22470,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         snowF.view(xL, Math.max(0, y0 - 1), xR, yBot);
         snowF.update(6, () => performance.now());
         const sfNow = snowF;
-        charSnowAt = (p) => sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T);
+        /* 2026-10-06 (soir) : la glace entretenue n'a pas de neige (la classe NONE du champ) — on n'y enfonce pas les patins. */
+        charSnowAt = (p) => (tw.rink && C.rinkInside(C.footX(p.x), C.footY(p.y)) ? 0 : sfNow.depthAt(C.footX(p.x) * T, C.footY(p.y) * T));
         charSnowZone = "town";
       }
       /* ╔══════════════════════════════════════════════════════════════════
@@ -22903,7 +22904,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
         if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
           A.drawRinkIceTile(ctx, x, y, px, py);
-          if (iceNow && iceNow.st) A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st);   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
+          if (iceNow && iceNow.st) { A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st); A.drawRinkGlossAt(ctx, x, y, px, py, iceNow.st); }   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
         }
         /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
         if (wetF && y >= y0 - 1) {
