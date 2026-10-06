@@ -90,7 +90,16 @@ Supabase factice du dépôt). L'émulation « tablette » du volet de navigateur
 ses clics sont des clics de souris, elle ne mesure ni la mémoire ni le coût d'un GPU d'iPad. **Mesures à relever** : ms par image, mémoire,
 lisibilité des textes, taille des cibles tactiles.
 
-**Pas fait** : tout. Premier pas raisonnable : une séance de vingt minutes sur iPad pour classer les lignes ci-dessus en « marche / gêne / cassé ».
+**Premier passage SANS iPad (2026-10-06 nuit, volet navigateur 1180 × 820, Mac M4 — pas de Xcode, donc pas de simulateur ; détail : journal de la ferme)** :
+| Ligne | Résultat |
+|---|---|
+| Entrée et déplacement | **marche** à VT en événements synthétiques (pavé, boutons) ; **gêne** à 744 × 1133 : le rang de boutons mord de 12 px sur la barre d'outils, l'invite « E : … » passe sous les boutons |
+| Rendu | VT hiver nuit : zoom 3 = 4,5 ms/image (M4, JS seul), zoom 2 = 7,2, zoom 4 = 4,3, **zoom 1 = 21,5 : hors budget** ; 19 215 → 11 950 appels de dessin/image après la garde X des guirlandes |
+| Mémoire | 905 canevas vivants, 89 Mo en ville (825 / 50 Mo à la ferme) — nombre, pas verdict |
+| Patinoire, marché, panneaux, réseau | **pas vu** |
+Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en monocœur), et WebKit coûte plus cher par appel canevas ; **le zoom 1 serait à ~25 images/s sur un iPad d'entrée de gamme**, extrapolation et non mesure.
+
+**Pas fait** : la séance sur un vrai iPad. Premier pas raisonnable : vingt minutes pour classer les lignes ci-dessus en « marche / gêne / cassé » ; décisions en attente : zoom 1 plafonné au tactile, pavé et boutons remontés, invite « E : » cachée au tactile, chaussée cuite dans l'atlas.
 
 ---
 

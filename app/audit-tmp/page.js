@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import FermeGame from "@/components/ferme/FermeGame";
 
+// MESURE iPad (2026-10-06) : compte chaque canevas créé, avant le montage du jeu. À SUPPRIMER avec le harnais.
+if (typeof window !== "undefined" && !window.__cvLog) {
+  window.__cvLog = [];
+  const ce = document.createElement.bind(document);
+  document.createElement = function (tag, ...r) { const el = ce(tag, ...r); if (String(tag).toLowerCase() === "canvas") window.__cvLog.push(new WeakRef(el)); return el; };
+}
+
 function installHelpers() {
   if (window.__auditReady) return;
   window.__auditReady = true;

@@ -11,31 +11,29 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-06 (suite) — MARCHÉ EN HAUT TOUTE L'ANNÉE, UNE SEULE OMBRE AU SAUT, TROIS PROJETS ÉCRITS — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-06 (nuit) — iPAD : AUDIT FAIT SANS iPAD, UN CORRECTIF DE FLUIDITÉ À VT — DANS L'ARBRE, NON COMMITÉ
 
-Récit : README de la ferme, journal « 2026-10-06 (suite) ». **Supabase : rien** (calque dérivé de la carte, détail de dessin). Le lot du patin
-(gerbes, vrille emballée, usure de la glace, surfaceuse, chute au bord…) est COMMITÉ ; ses jugements restent en tête de `docs/A-JUGER.md`.
-Fait, par questions : (1) **le marché ne revient plus au champ de foire** : `townSeasonWorld(tw, winter)` bâtit deux mondes dérivés du monde brut —
-`townMarketWorld` (trois saisons : « même marché, sans le froid », ni coin du feu ni ampoules, ni patinoire ; ancienne place = dallage entièrement vide,
-puits compris) et `townWinterWorld` (le même + patinoire) ; `getTownWorldCached` ne rend jamais le brut ; le générateur n'a PAS bougé ; (2) **une seule
-ombre au saut** : `sunCasting` (FermeGame.js) — le rejeu de l'ombre du soleil ne lève plus le patineur (vu avant/après) ; (3) **le lac du sud gèle DÉJÀ**
-(2026-10-04, 12,9 % de l'hiver, `render-glace`) : documenté, menu dev « ⛸️ Lac gelé » ; (4) **`docs/PROJETS.md`** : le catalogue Garfield (court terme),
-la teinte de peau + la coiffure à la création (les anciens ne choisissent que la teinte, à leur prochaine connexion), les tests iPad (le menu dev hors
-périmètre), les suites du marché — **rien de tout cela n'est codé**. Bancs : `verify-vallee` 358/358 (21 neufs), `verify-surfaceuse` 59/59, `verify-patin` 78/78,
-`verify-course` 30/30, `verify-strings` 1278, `verify-docs`, `render-marche-hiver`/`render-patinoire`, `no-undef`. Vu en jeu, un client : marché en hiver, été,
-automne ; place vide ; saut. **Pas vu** : printemps, nuit, deux clients, iPad.
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi
-par git). ⚠️ La boucle de rendu est montée une fois : recharger la page après toute édition de `FermeGame.js`. ⚠️ Un invité immobile n'émet aucun `pos`.
-Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
-**Décidé ensuite (2026-10-06, rien de codé, `docs/PROJETS.md` §4-§5)** : place hors hiver = skatepark (rollers/vélo/skate, figures, nettoyage à heure fixe), miroir d'eau à geysers, jeux Halloween/citrouilles/maison hantée ; **piscine municipale** (centre aquatique années 30, nord-est, GROS chantier). **Pas fait** : variantes saisonnières du marché (AUTRE chantier), résidents qui patinent, reflets des patineurs, V/B/C au tactile.
+Récit : README de la ferme, journal « 2026-10-06 (nuit) » ; résultats ligne par ligne : `docs/PROJETS.md` §3. **Supabase : rien.** Les lots d'avant (marché en haut,
+ombre du saut, patin, figures à deux, reflets) sont COMMITÉS ; leurs jugements et leurs « pas vu » : tête de `docs/A-JUGER.md` et journal 2026-10-06 du README.
+**Pas de Xcode ici (`simctl` absent) : aucun simulateur, et le jeu n'a TOUJOURS jamais été vu sur un vrai iPad.** Mesuré dans le volet navigateur (1180 × 820, Mac M4,
+Chromium), Valley Town, hiver, nuit : (1) JS par image, zoom 3 : 5,7 → **4,5 ms** après correctif (marche, p95 : 10,9 → 5,5) ; zoom 2 : 7,2 ; zoom 4 : 4,3 ;
+**zoom 1 : 21,5 ms, hors du budget de 16,7 ms, sur un M4** ; (2) ≈ 19 200 → **11 950 appels de dessin par image** : `drawRinkGarland` n'était écarté que selon Y — garde X
+ajoutée dans `FermeGame.js` (étendue du fil, rendu identique, vu en jeu au centre et au bord) ; (3) **905 canevas vivants, 89 Mo** en ville (50 Mo à la ferme) ; (4) pavé,
+boutons, zoom 🔍 : marchent (événements pointeur synthétiques) ; (5) mise en page 1180 × 820 : bonne ; **744 × 1133 : le rang de boutons mord de 12 px sur la barre d'outils
+et l'invite « E : … » passe sous les boutons** — NON corrigé (visuel, à décider avec lui). **Pas vu** : Safari/WebKit réel (coût par appel canevas ; `ctx.filter` absent ou non ?
+il n'agit à VT que sur l'arbre entamé), mémoire iPad, tactile réel (multi-touch, clavier virtuel), réseau, deux clients. Contrôles : `no-undef` sur FermeGame.js, 0 erreur (falsifié) ;
+`verify-*` non relancés (dessin seul, aucune logique).
+⚠️ `app/audit-tmp` (un compteur de canevas y est ajouté : `window.__cvLog`), `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent
+`tools/.cache/*.mjs` (suivi par git). ⚠️ Recharger la page après toute édition de `FermeGame.js` (boucle montée une fois). ⚠️ Un invité immobile n'émet aucun `pos`. ⚠️ Les numéros de
+ligne d'une pile d'appels du navigateur (webpack « eval ») NE SONT PAS ceux du source : se fier aux NOMS de fonctions. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas
+(`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
 
-**Ajouté le soir (2026-10-06, dans l'arbre, non commité, Supabase : rien)** : (a) le MIMOSA se dénude l'hiver (`BARE.mimosa`) — son sprite reste à refaire (prompt Gemini à proposer) ; (b) plus de bourrelet de neige aux patins sur la glace (`charSnowAt` de la ville rend 0 dans `C.rinkInside`) ; (c) le POLI de la glace (`drawRinkGlossAt`, `rinkGlossCanvas`, fermeArt.js, après `drawRinkWearAt`, poids `GLOSS_K` par usure) ET le REFLET du patineur sous ses lames (`drawCharacter`, branche `p.skate`, deux paliers, même poids) ; (d) **FIGURES À DEUX** (`components/ferme/duo.js` pur, banc `verify-duo`) : H tend la main au patineur chaussé le plus proche (H encore : ronde → cygne à deux → saut synchro), H chez lui accepte ; l'hôte arbitre (`hostDuo`, req `duoAsk`/`duoYes`) et ne diffuse que `{a,b,fig,hx,hy,len}` ; CHAQUE client calcule les deux patineurs depuis SA vue des départs (`duoPlan`/`duoAt`, `duoFrame`, `duoStepMe`, `duoOverride`, `duoFieldsOf` dans FermeGame.js ; les BRAS : `drawReachArm` + `view.hand` dans `drawSkate`, fermeArt.js — la manche de la feuille étirée de l'épaule à la main, le bras qui pend retiré du buste). Vu à deux clients (`app/audit-duo`) : offre, acceptation, ronde en cours, bras tendus. L'aide « ? » a sa ligne H. **Pas vu** : parade, saut synchro, gerbe d'atterrissage, reflet en jeu, iPad/tactile (pas de touche H), la fin de figure, le refus (trop près de la bande). Bancs : `verify-duo` 23/23, `verify-surfaceuse` 59/59, `verify-vallee` 358/358, `verify-patin` 78/78, `verify-strings` 1285.
+### ⏭️ ACTION SUIVANTE — UNE SÉANCE SUR UN VRAI iPAD, ET TRANCHER LE ZOOM 1
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER CES DEUX LOTS, PUIS LE CATALOGUE DE LA MAISON GARFIELD
-
-(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : le marché hors hiver et la place vide, l'ombre du saut, puis le lot du patin (gerbe, vrille, usure, surfaceuse,
-chute). (2) Ensuite, au choix de Guillaume : **le catalogue de la Maison Garfield** (court terme, `docs/PROJETS.md` §1 — poser les questions de forme d'abord) ; les
-résidents qui patinent ; la création du personnage (§2) ; une séance iPad (§3) ; marché de Noël + grand sapin ; sols de VT (FIX-004), lots B/C0, intérieurs.
+(1) Vingt minutes sur un vrai iPad (Safari, même réseau, `next dev` + `tools/fake-supabase.mjs`) : `docs/PROJETS.md` §3. (2) À décider avec Guillaume (rien de codé) : zoom 1 plafonné à 2 au tactile
+(le seul gros dépassement) ; pavé et boutons remontés de ~20 px (chevauchement de la barre d'outils en portrait) ; l'invite « E : » cachée au tactile ; **cuire dans l'atlas, à rendu identique,
+la chaussée (`drawTownRoadTile` : traces de roues, caniveau, ≈ 12 % des appels) et la fumée des cheminées**, redessinées case par case à chaque image. (3) Puis comme avant : juger les lots du
+patin et du marché (`docs/A-JUGER.md`), le catalogue de la Maison Garfield (`docs/PROJETS.md` §1).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 

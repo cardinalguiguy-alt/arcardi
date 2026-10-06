@@ -1,5 +1,38 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-06 (nuit) — iPAD À VALLEY TOWN : CE QU'ON A PU MESURER SANS iPAD, ET UNE GUIRLANDE QUI SE DESSINAIT HORS CHAMP
+
+« S'assurer que le jeu sur iPad est possible et aussi fluide que sur ordi, sur VT. » **Supabase : rien.** ⚠️ **Pas de Xcode sur cette machine (`xcrun simctl` : introuvable) :
+aucun simulateur iPad, donc aucune mesure de WebKit.** Tout ce qui suit vient du volet navigateur (Chromium, Mac M4, fenêtre 1180 × 820 = un iPad 11" en paysage, `devicePixelRatio` 2)
+avec le harnais jetable `app/audit-tmp` ; la bonne séance reste celle de `docs/PROJETS.md` §3, sur un vrai iPad.
+- *Le canevas ne coûte pas plus cher sur iPad qu'un Mac* : il est en pixels CSS (`canvas.width = window.innerWidth`, sans `devicePixelRatio`) — un iPad 11" dessine 0,97 Mpx, une fenêtre
+  de Mac de 1500 × 900 en dessine 1,35 ; le doublement de densité est une copie du navigateur, hors de notre boucle.
+- *Coût du JS par image* (somme des rappels `requestAnimationFrame` d'un tick du harnais ; ne compte PAS la rastérisation du GPU), VT, hiver, **nuit** : zoom 3 (le défaut) 5,7 ms ;
+  zoom 2 7,2 ; zoom 4 4,3 ; **zoom 1 : 21,5 ms** (4× plus de cases visibles qu'au zoom 2 : budget de 16,7 ms dépassé SUR UN M4). De jour : zoom 3, 5,7 immobile / 5,8 en marchant.
+  La nuit, marcher faisait des pointes (p95 10,9 ms, max 14,2) : des images qui BÂTISSENT un carreau neuf (`putImageData`) en entrant dans une zone — un coût de première visite.
+- *Le volume d'appels, pas les pixels, est ce qui fera mal à WebKit* : ≈ **19 200 appels de dessin par image** (3 700 `drawImage`, 12 900 `fillRect`) à zoom 3, nuit, hiver. Échantillonnage des
+  piles d'appels (⚠️ les numéros de ligne d'une pile du navigateur sont ceux du code « eval » de webpack, PAS ceux du source : on lit les NOMS de fonctions) : `drawTownFrame` 17,7 %,
+  **`drawRinkGarland` 16,7 %**, la ferronnerie des volets (`Array` anonyme) 13,3 %, `drawTownGrassTile` 9,2 %, `drawTownRoadTile` 6,8 % + `gutterCourse` 4 % + `softSpill` 1 %, `blitWorld` 5 %,
+  `drawChimneySmoke` 3,7 %.
+- *Le correctif* : la garde des guirlandes de la patinoire (`tw.rinkGarlands`, dans `drawTownFrame`) ne regardait que la hauteur (`gy < y0 - 6 || gy > yBot + 6`) ; un fil à l'autre bout
+  de la ville était redessiné en entier (branche, ampoules, nœuds : des centaines de `fillRect`) puis rogné en silence. Garde X ajoutée sur l'ÉTENDUE du fil (`max(x0,x1)/T < xL - 2 ||
+  min(x0,x1)/T > xR + 3`) — ⚠️ pas sur son milieu : les fils font 22 cases (x 39,5 → 61,5), le milieu d'un fil peut être hors champ quand sa moitié se voit. Rendu identique par construction
+  (seul ce que le canevas rognait est épargné ; marge de 2-3 cases pour les nœuds et les ampoules pendantes) ; vu en jeu au centre de la glace et au bord gauche (extrémité du fil encore dessinée).
+  Résultat, mêmes conditions : **19 215 → 11 950 appels/image** ; zoom 3 nuit **5,7 → 4,5 ms** immobile, **6,6 → 4,7 ms** en marchant (p95 10,9 → 5,5, max 14,2 → 8,0). Le zoom 1 ne bouge pas
+  (21,5 ms) : son coût est le nombre de cases.
+- *Mémoire* : **905 canevas vivants, ≈ 89 Mo de pixels** en ville (825 / 50 Mo à la ferme ; 749 des 825 ont ≤ 64 × 64 px ; le plus gros fait 4,2 Mpx) ; 10 863 canevas CRÉÉS depuis le chargement
+  (brassage, ramassé par le GC). Compteur : `window.__cvLog` du harnais (WeakRef sur chaque `createElement("canvas")`). Un nombre, pas un verdict : WebKit sur iPad plafonne ce total.
+- *Le tactile marche à VT* (événements pointeur synthétiques `pointerType:"touch"`, pas un vrai doigt) : `touchstart` allume l'interface ; le pavé flottant porte le personnage (6 → 13,8 cases en
+  1,5 s) et l'arrête au relâchement ; boutons 104 px (action contextuelle) et 72 px (🏃 🗺️ ✋ 🔍− 🔍+) ; 1180 × 820 : pavé à gauche, boutons à droite, rien ne se chevauche.
+- *À 744 × 1133 (iPad mini portrait) — non corrigé, visuel* : le rang de boutons (bas à 1041) mord de 12 px sur la barre d'outils (haut à 1029) ; l'invite « E : façonner une boule de neige » passe
+  SOUS les boutons ; le libellé du rond d'action est rogné (« façonner une boule de… »). Cause : `.ferme-touch-pad`/`.ferme-touch-btns` à `bottom: 92px` alors que la barre fait 72 px + 32 de marge.
+  La carte « À faire » est aussi mordue à gauche par les ronds taxi/torche (à toutes les tailles, bureau compris).
+- *Safari, à vérifier sur l'appareil* : `ctx.filter` n'est affecté qu'à VT pour assombrir l'arbre entamé (`che2`, ferme et ville), et à la ferme pour le loup et le zombie du lac maléfique — s'il est
+  absent de WebKit, l'effet disparaît sans erreur.
+**Pas vu** : Safari/WebKit réel, le coût de rastérisation, un vrai doigt (multi-touch pavé + bouton ensemble), le clavier virtuel, le réseau à deux clients, le printemps/été (hiver seulement mesuré).
+**Pas fait, par ordre de gain** : cuire la chaussée (traces de roues = jusqu'à 64 `fillRect` d'un pixel PAR CASE ET PAR IMAGE, caniveau, `softSpill`) dans l'atlas existant ; la fumée des cheminées ;
+la ferronnerie des volets ; plafonner le zoom 1 au tactile ; les deux réglages de mise en page ci-dessus.
+
 ## 2026-10-06 (suite) — LE MARCHÉ EN HAUT TOUTE L'ANNÉE, UNE SEULE OMBRE AU SAUT, LE LAC DU SUD (DÉJÀ GELÉ), TROIS PROJETS ÉCRITS
 
 « Déménagement définitif du marché toutes saisons en haut, à coder ; le personnage a deux ombres, lors du saut c'est flagrant (l'ellipse et l'ombre

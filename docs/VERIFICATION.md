@@ -148,6 +148,8 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   humaine.* ⚠️ Restent non pavés `S.pets` (39 portraits — `Sprite` découpe depuis (0,0) et ne sait
   pas lire un rectangle source, donc les paver demanderait de toucher six appelants pour un gain
   négligeable) et tout le reste des 779, jamais mesuré famille par famille.
+  ⚠️ **Remesuré le 2026-10-06 (Chromium, harnais `app/audit-tmp`, `window.__cvLog`) : 825 canevas vivants à la ferme (50 Mo), 905 à Valley Town (89 Mo, le plus gros 4,2 Mpx).** Toujours pas un
+  verdict : pas de Safari iPad sous la main (`xcrun simctl` introuvable, pas de Xcode).
 - ⚠️⚠️ **LE FAUX CANEVAS DES BANCS (`lib-canvas.mjs`) SAIT LES DÉGRADÉS DEPUIS LE 2026-09-25** (linéaire
   et radial, tenus par `verify-densite`) : `render-eau` et `render-parc`, morts depuis le 2026-09-02,
   tournent de nouveau, et les **24** `render-*` sont verts ce jour-là. ⚠️ **La leçon qui reste** : deux

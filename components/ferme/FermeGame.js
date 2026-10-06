@@ -26661,6 +26661,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (tw.rinkGarlands) for (const g of tw.rinkGarlands) {
         const gx = (g.x0 + g.x1) / 2 / T, gy = (g.y0 + g.y1) / 2 / T;
         if (gy < y0 - 6 || gy > yBot + 6) continue;
+        /* 2026-10-06 (mesure iPad) — ET SELON X AUSSI. La garde ne regardait que la hauteur : une guirlande à l'autre
+           bout de la ville était redessinée en entier (des centaines de `fillRect` par fil) puis rognée en silence par
+           le canevas — 16,7 % des appels de dessin d'une image de Valley Town en hiver, mesurés le 2026-10-06 avec la
+           patinoire hors champ. On teste l'ÉTENDUE du fil (pas son milieu : un fil de la largeur de la glace a son
+           milieu hors champ alors que sa moitié se voit), avec une marge de nœuds et d'ampoules pendantes. Rendu
+           pixel pour pixel identique : seul ce que le canevas rognait est épargné. */
+        if (Math.max(g.x0, g.x1) / T < xL - 2 || Math.min(g.x0, g.x1) / T > xR + 3) continue;
         const litG = LUM.lampLit(Math.floor(gx), Math.floor(gy), lampNa) ? Math.min(1, lampNa * 3) : 0;
         try { A.drawRinkGarland(ctx, g, now, litG, litG > 0.05 ? rinkBulbs : null, snowF ? Math.max(0, Math.min(1, (snowPk.g - 0.5) / 5)) : 0); } catch (e) { console.error("[FERME] guirlande ignorée", e); }   // 2026-10-06 : la neige se pose sur la branche
       }
