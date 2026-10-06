@@ -74,6 +74,17 @@ const gate = C.TOWN_RINK_GATES.find((g) => g.side === "e"), YG = (gate.a + gate.
   for (const l of legs) if (l.sweep) for (const [x, y] of [[l.x0, l.y0], [l.x1, l.y1]]) if (!C.rinkInside(x, y)) lanesInside = false;
   ok("elle franchit le portillon est (sur son axe) pour entrer et pour sortir", seenGate);
   ok("pendant les couloirs, ses deux extrémités sont toujours SUR la glace (elle ne mord ni la bande ni les coins arrondis)", lanesInside);
+  // 2026-10-06 — « coupée dans les angles » : tout le CORPS de la machine (pas seulement son centre) reste sur la glace pendant la passe.
+  {
+    let worst = -9, at = null;
+    for (let t = 1; t < S.PASS_MS; t += 10) {
+      const L = S.SURF_LEGS.find((l) => t >= l.t0 && t < l.t0 + l.ms);
+      if (!L || !L.sweep) continue;               // l'entrée et la sortie passent par le portillon : la bande y est ouverte
+      const p = S.surfacerAt(t), side = p.dir >= 2, hx = side ? 1.15 : 0.9, hy = side ? 0.45 : 0.55;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const d = C.rinkSignedDist(p.x + sx * hx, p.y + sy * hy); if (d > worst) { worst = d; at = [p.x.toFixed(2), p.y.toFixed(2)]; } }
+    }
+    ok("pendant les couloirs, le CORPS entier de la machine reste sur la glace, coins arrondis compris (jamais dans la planche)", worst <= -0.05, `pire coin du corps à ${worst.toFixed(2)} case du bord (${at})`);
+  }
   ok("elle passe l'essentiel de la passe sur la glace", onIce > outside * 3, `${onIce} instants sur la glace, ${outside} dehors`);
   // le cap suit le mouvement
   let capOk = 0, capBad = 0;

@@ -298,6 +298,26 @@ section("§11 — le freinage brut et la vrille emballée (2026-10-06)");
   })());
   ok("les durées des niveaux décroissent, les tours gagnés croissent", PT.TRICK.SPIN_LV.every((l, i, a) => i === 0 || (l.T < a[i - 1].T && l.G > a[i - 1].G)));
   ok("la courbe relue par les autres (même niveau, même départ) finit sur un tour entier aussi", [0, 0.37, 1.6].every((a0) => [0, 1, 2, 3].every((lv) => Math.abs(a0 + PT.skateTrickAt("spin", 1, lv, a0).spin - Math.round(a0 + PT.skateTrickAt("spin", 1, lv, a0).spin)) < 1e-9)));
+  // 2026-10-06 — « elle ne devrait pas s'arrêter d'un coup » : la rotation retombe à zéro à l'arrivée, sans jamais reculer.
+  const dSpin = (lv, a0, k) => { const e = 1e-4; return (PT.skateTrickAt("spin", Math.min(1, k + e), lv, a0).spin - PT.skateTrickAt("spin", k, lv, a0).spin) / (PT.skateTrickAt("spin", 1, lv, a0).dur * e); };
+  ok("la rotation ralentit jusqu'à l'arrêt : vitesse d'arrivée ≈ 0 (< 3 % de la moyenne), à chaque niveau", [0, 1, 2, 3].every((lv) => {
+    const tot = PT.skateTrickAt("spin", 1, lv, 0).spin, mean = tot / PT.skateTrickAt("spin", 1, lv, 0).dur;
+    return Math.abs(dSpin(lv, 0, 0.9999 - 1e-4)) < 0.03 * mean;
+  }));
+  ok("la vrille ne recule jamais (angle croissant sur toute sa durée) et le dernier quart ralentit franchement", [0, 1, 2, 3].every((lv) => {
+    let last = -1, mono = true; for (let i = 0; i <= 200; i++) { const a = PT.skateTrickAt("spin", i / 200, lv, 0).spin; if (a < last - 1e-12) mono = false; last = a; }
+    return mono && dSpin(lv, 0, 0.875) < 0.7 * dSpin(lv, 0, 0.3);
+  }));
+  ok("au raccord d'un V de plus (à 15, 30, 50, 70 % du segment), la rotation ne retombe pas de plus de 10 % — chaîne réelle lv0→lv3, angle repris", [0.15, 0.3, 0.5, 0.7].every((kb) => {
+    let a0 = 0, worst = 9;
+    for (let lv = 0; lv < 3; lv++) {
+      const before = dSpin(lv, a0, kb), seg = PT.skateTrickAt("spin", 1, lv, a0).spin, a1 = a0 + PT.skateTrickAt("spin", kb, lv, a0).spin - 0;
+      const after = dSpin(lv + 1, a1, 0);
+      worst = Math.min(worst, after / before); a0 = a1;
+    }
+    return worst >= 0.9;
+  }));
+  ok("le départ n'est pas figé : la vrille démarre déjà en rotation", dSpin(0, 0, 0) > 0.5 * PT.skateTrickAt("spin", 1, 0, 0).spin / PT.skateTrickAt("spin", 1, 0, 0).dur);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

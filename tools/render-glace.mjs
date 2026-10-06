@@ -283,6 +283,21 @@ if (LK) {
   let summer = 0;
   for (let d = 5; d < 45; d++) for (let t = C.DAY_START_MIN; t < C.DAY_END_MIN; t += 60) summer = Math.max(summer, NG.lakeCold(d, t, () => "summer", null, "town"));
   ok(summer < K0, "jamais l'été", `au plus ${summer.toFixed(2)}`);
+  /* 2026-10-06 — LE DÉGEL DU LAC NE VA PAS TROP VITE (Guillaume : « le dégel ne doit pas être trop court »). `lakeCover` :
+     jamais en avance sur le froid (le gel arrive à l'heure), et il ne redescend pas plus vite que ~1,6 × `LAKE_THAW` par
+     minute réelle tant qu'il y a de la glace (le brut, lui, tombait à 0,65 K/min : du large pris à plus rien en 1,5 min). */
+  const stepMin = 15, perMinReal = 16 / ((C.DAY_END_MIN - C.DAY_START_MIN) / stepMin), cov = [], raw = [];
+  for (let d = 5; d < 405; d++) for (let t = C.DAY_START_MIN; t < C.DAY_END_MIN; t += stepMin) { cov.push(NG.lakeCover(d, t, () => "winter", null, "town")); raw.push(NG.lakeCold(d, t, () => "winter", null, "town")); }
+  let early = 0, rawDrop = 0, covDrop = 0;
+  for (let i = 0; i < cov.length; i++) {
+    if (cov[i] < raw[i] - 1e-9) early++;
+    if (i && raw[i - 1] > K0 - 0.3) rawDrop = Math.max(rawDrop, (raw[i - 1] - raw[i]) / perMinReal);
+    if (i && cov[i - 1] > K0 - 0.3) covDrop = Math.max(covDrop, (cov[i - 1] - cov[i]) / perMinReal);
+  }
+  ok(early === 0, "le gel n'est jamais retardé : la couverture vaut au moins le froid du moment", `${early} lectures en retard sur ${cov.length}`);
+  ok(covDrop <= NG.NEIGE.LAKE_THAW * 1.6 && rawDrop > NG.NEIGE.LAKE_THAW * 4, "le dégel est borné : la couverture ne perd pas plus de 1,6 × LAKE_THAW par minute réelle (le brut : bien plus)", `couverture ${covDrop.toFixed(3)} K/min, brut ${rawDrop.toFixed(3)} K/min, borne ${NG.NEIGE.LAKE_THAW}`);
+  const a1 = NG.lakeCover(33, 700, () => "winter", null, "town"), a2 = NG.lakeCover(33, 700, () => "winter", null, "town");
+  ok(a1 === a2, "pure fonction de l'heure : deux lectures donnent le même nombre au bit près");
 }
 
 /* ═══ LA PLANCHE ════════════════════════════════════════════════════════════ */

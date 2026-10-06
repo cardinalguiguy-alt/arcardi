@@ -157,8 +157,17 @@ export function skateTrickAt(kind, u, lv, a0) {
      de l'angle où il démarre (`a0`, 0 pour la première). Les autres, qui estiment `a0` sur leur horloge, s'arrondissent
      eux-mêmes — ils retombent de face aussi. */
   const D = base.kind === "hop" ? TRICK.HOP : base.kind === "spin" ? { T: sl.T, TURNS: Math.ceil((a0 || 0) + sl.G - 1e-6) - (a0 || 0) } : TRICK.AXEL;
-  return { air: D.H ? D.H * Math.sin(k * Math.PI) : 0, spin: D.TURNS * (k * k * (3 - 2 * k) * 0.5 + k * 0.5), dur: D.T };   // départ et arrivée doux, milieu rapide
+  return { air: D.H ? D.H * Math.sin(k * Math.PI) : 0, spin: D.TURNS * spinEase(k), dur: D.T };
 }
+/* ⚠️ 2026-10-06 — LA VRILLE RALENTIT AVANT DE FINIR (Guillaume, en jouant : « elle ne devrait pas s'arrêter d'un coup »).
+   L'ancienne courbe, `½·smoothstep(k) + ½·k`, finissait à la MOITIÉ de sa vitesse moyenne (la partie linéaire ne s'annule jamais) :
+   le patineur tournait à pleine allure puis se retrouvait de face, immobile, d'une image à l'autre — d'autant plus brutal que le
+   niveau est haut (2,7 tours/s à l'arrivée au dernier). Maintenant : `f(k) = 1,3k + 0,4k² − 0,7k³`, avec f(0)=0, f(1)=1 et
+   `f'(1)=0` — la rotation retombe à ZÉRO exactement à l'arrivée, de face. ⚠️ Le DÉPART garde une vitesse non nulle (`f'(0)=1,3` fois
+   la moyenne), exprès : un V de plus repart d'un nouveau segment à ce régime, et la vitesse ne doit pas retomber à zéro au
+   raccord (le niveau supérieur est toujours plus vif : 1,35 → 2,6 → 3,8 → 5,4 tours/s ; vérifié au banc, `verify-patin`).
+   Le pic (≈ 1,38 × la moyenne, vers k = 0,2) est monotone : f' ≥ 0 sur [0,1], la vrille ne revient jamais en arrière. */
+export function spinEase(k) { return k * (1.3 + k * (0.4 - 0.7 * k)); }
 /* Lancer une figure. Rend `true` si elle part : chaussé, en glisse (pas tombé, pas déjà en figure), et pour l'axel avec
    de l'élan. `o.skates` : chaussé ; `o.free` : pratique libre (hors course). */
 export function skateTrickStart(st, kind, o) {

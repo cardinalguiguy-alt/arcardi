@@ -6,6 +6,16 @@
 
 ---
 
+### Jugé le 2026-10-06 (soir) — verdicts de Guillaume sur le lot du patin et du marché (seul à jouer : RIEN n'est vu à deux clients)
+
+**OK, plus rien à juger** : la gerbe (visible de jour), l'aide « ? » (fonctionne), les guirlandes (« ok pour l'instant »), l'usure de la glace, la location à 15 min (« très bon »), la chute
+sans patins, la fin de location qui fait tomber sur la glace, les prix du matériel, la bande, **la course (« super »)**, le bonhomme de neige (« ok pour l'instant »), les ombres du soleil
+(« pas mal, la logique générale est bonne » — des bugs à rapporter PAR LUI, plus tard, en détail : rien à chercher ici).
+**À corriger, corrigé dans l'arbre, à revoir en jeu** : la vrille emballée (« sympa, mais elle ne devrait pas s'arrêter d'un coup » → décélération), la surfaceuse (« coupée dans les angles,
+problème de collision » → trajet qui suit les coins), le lac du sud (« averti par un message quand il gèle ; le dégel ne doit pas être trop court » → toast + dégel étiré à 0,06 K/min).
+**Reporté** : la place vide hors hiver (« réglé dans les futures séances » : `docs/PROJETS.md` §4), les petits personnages en ville (« on les jugera plus tard »).
+**Pas jugé** : tout ce qui demande deux clients (le `snowFx` d'un autre, l'invité qui regarde une course ou une passe de surfaceuse) ; la nuit pour le bonhomme de neige et le patin.
+
 ### Jugé le 2026-10-04 — À REFAIRE (verdict de Guillaume, en jouant)
 
 « La netteté des maisons est super, mais les sols et les objets de jardin ne sont pas assez détaillés. » (Avant : « le réseau de chemins et de rues est super, le
@@ -23,18 +33,11 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Le 2026-10-06 (suite)** : **le marché en haut toute l'année** (hors hiver : le même marché, SANS coin du feu ni ampoules ; l'ancienne place est un dallage
-  entièrement vide, puits compris — à voir en jeu aux trois autres saisons, et la place vide : trop nue ? ; le **caillebotis**, peint « délavé par
-  l'hiver », est sombre sur l'herbe d'été : à garder jusqu'aux variantes saisonnières ?), **une seule ombre au saut** (le corps monte, l'ombre reste au sol ;
-  elle ne rétrécit pas avec la hauteur : voulu ?), **le lac du sud** (il gèle DÉJÀ, depuis la rive, 12,9 % de l'hiver : assez rare ? assez souvent ?
-  menu dev « ⛸️ Lac gelé » pour le voir).
-- **Le 2026-10-06** (décisions prises par questions, mais tout est à juger en jeu) : **la gerbe** (glisse ~moitié moins ; grande à l'atterrissage et au
-  **freinage brut, C tenue** — bouffées de poudreuse : se voient-elles DE JOUR sur la glace pâle ?), **la vrille emballée** (V, V, V : quatre niveaux — le
-  rythme de frappe, la vitesse de rotation, le toast « double / triple vrille »), **le « ? »** (la place, la taille, le contenu), **les guirlandes** (sapin,
-  ampoules pendantes, boules, nœuds rouges, neige, chenillard — jour et nuit, à zoom 3 et 5), **l'usure de la glace** (quatre états : se distinguent-ils ?
-  usée en ~7 min seul, ~2 min à trois : trop vite ? trop lent ?), **la surfaceuse** (sa taille contre le patineur, 34 s de passe, huit couloirs, ses
-  phares la nuit ; demandée au comptoir : le bouton se trouve-t-il ?), **la location à 15 min**, **la combinaison seulement sur la patinoire**, **la chute**
-  (30 s–2 min, déposé au bord ; le toast). Décidé « plus tard » : le marché d'hiver reste en haut toute l'année, la place de la patinoire servira aux autres saisons.
+- **Le 2026-10-06 (suite)** — verdicts du soir dans le bloc en tête ; **reste à juger** : le marché hors hiver (place vide, caillebotis sombre sur l'herbe d'été : traités aux futures séances,
+  `docs/PROJETS.md` §4), **l'ombre au saut** (le corps monte, l'ombre reste au sol ; elle ne rétrécit pas avec la hauteur : voulu ? — « quelques bugs » d'ombre à venir de lui), **le lac du
+  sud** (il gèle depuis la rive 12,9 % de l'hiver ; message de gel et dégel étiré : **à voir en jeu**, menu dev « ⛸️ Lac gelé » pour le décor mais il ne déclenche pas le message).
+- **Le 2026-10-06** — OK de Guillaume (gerbe, vrille, « ? », guirlandes, usure, surfaceuse, location, chute) : voir le bloc en tête. **Reste à revoir en jeu après correction** : la vrille qui
+  ralentit à l'arrivée, la surfaceuse dans les coins (et si son sprite haut mord sur la planche : non touché), **la combinaison seulement sur la patinoire** (pas dans ses réponses).
 - **Le 2026-10-05 (nuit, fin quater)** (« caveman on » : tout exécuté sans questions, donc TOUT À JUGER) : **le chalet de la patinoire collé à la
   glace** (au nord du portillon est ; celui du lac n'a pas bougé), **quatre braseros** aux portillons nord et sud, **la bande qui ne bloque plus que sa
   planche** (plus de mur invisible autour, plus de trou aux coins — à marcher le long de la bande, de jour et de nuit), **la glace rayée** (rayures,
@@ -43,7 +46,7 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
   cygne tout seul — la hauteur du saut, la durée, la lisibilité de la vrille, l'enchaînement affiché), **la gerbe derrière les lames** (assez visible
   sur une glace aussi pâle ? trop ?). Questions ouvertes : le matériel doit-il compter dans la COURSE (il y compte ; les résidents ont du matériel
   neutre, on les bat plus facilement) ? un casque avec la combinaison ? V/B au tactile ? les figures aussi sur le lac ? (elles y marchent déjà).
-- **Le 2026-10-05 (nuit, fin ter)** : **la course de la patinoire et le contre-la-montre** — privatiser au chalet (40 or), grille de 30 s,
+- **Le 2026-10-05 (nuit, fin ter)** — « la course est super » (2026-10-06 soir) ; reste la difficulté des résidents : **la course de la patinoire et le contre-la-montre** — privatiser au chalet (40 or), grille de 30 s,
   toujours quatre au départ (des résidents complètent), 5 tours autour de l'îlot de plots, aspiration, chute contre la bande au-dessus de
   6,4 cases/s ; l'écran de course (compte à rebours, tours, chrono, place, mini-carte, classement en direct, résultats, podium) ; le
   contre-la-montre seul contre le fantôme du record. Vu en jeu seul ET à deux (mêmes résultats au centième). À juger : la difficulté des

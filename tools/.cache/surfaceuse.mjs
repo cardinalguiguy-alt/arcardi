@@ -74,8 +74,39 @@ export const SURF = {
 };
 const GATE = C.TOWN_RINK_GATES.find((g) => g.side === "e");
 const YG = (GATE.a + GATE.b + 1) / 2;                              // l'axe du portillon est
-const XE = RK.x1 + 1 - SURF.HALF_LEN, XW = RK.x0 + SURF.HALF_LEN;  // le centre de la machine, bout à bout : la lame touche la bande
-const TOP = RK.y0 + 1.2, BOT = RK.y1 + 1 - 1.2;
+/* ⚠️ 2026-10-06 — LA MACHINE SUIT LES COINS ARRONDIS (Guillaume : « surfaceuse ok mais coupée dans les angles, problème de
+   collision »). Les couloirs allaient « bout à bout » : leurs extrémités à `HALF_LEN` de la bande, sur un rectangle — alors que
+   la glace a des coins de 3,5 cases de rayon. Mesuré avant correction : l'encombrement de la machine (11 + 9 cases, son
+   corps) dépassait de la glace jusqu'à 1,1 case aux quatre coins, DANS la bande. Maintenant l'extrémité de chaque couloir se
+   calcule pour sa propre ordonnée : le plus à l'extérieur où les quatre coins de l'encombrement (`FOOT`) restent sur la glace,
+   à `GAP` près de la planche (`rinkSignedDist`, la même figure que la collision et le dessin). Le rectangle de glace
+   refaite, lui, déborde de l'extrémité jusqu'au bord réel de la glace dans la bande du couloir (`ex*`) : rien n'est oublié
+   dans les coins, et il y arrive PROGRESSIVEMENT (il grandit avec la machine, jamais d'un coup en bout de couloir).
+   Les jambes de changement de couloir sont maintenant OBLIQUES (elles suivent la courbe) : leur rectangle est la boîte de
+   leur déplacement. L'encombrement est volontairement large (le même pour les deux orientations) : mieux vaut un demi-cran
+   de marge que la machine dans la planche. */
+const FOOT = { HX: 1.15, HY: 0.55, GAP: 0.1 };
+const footOn = (x, y) => [-1, 1].every((sx) => [-1, 1].every((sy) => C.rinkSignedDist(x + sx * FOOT.HX, y + sy * FOOT.HY) <= -FOOT.GAP));
+const xFrom = (west, i) => (west ? RK.x0 + i * 0.02 : RK.x1 + 1 - i * 0.02);
+/* Le centre le plus extérieur (x) où la machine tient sur la glace à l'ordonnée `y`, côté ouest ou est. */
+function laneEnd(y, west) {
+  for (let i = 0; i <= 600; i++) { const x = xFrom(west, i); if (footOn(x, y)) return x; }
+  return (RK.x0 + RK.x1 + 1) / 2;
+}
+/* Le bord de glace le plus extérieur dans la bande de largeur de la lame, autour de `y` (pour la glace refaite). */
+function bandEdge(y, west) {
+  let best = west ? Infinity : -Infinity;
+  const lo = Math.max(RK.y0 + 0.01, y - SURF.HALF_W), hi = Math.min(RK.y1 + 1 - 0.01, y + SURF.HALF_W);
+  for (let yy = lo; yy <= hi + 1e-9; yy += 0.05) {
+    for (let i = 0; i <= 600; i++) {
+      const x = xFrom(west, i);
+      if (C.rinkSignedDist(x, yy) <= 0) { best = west ? Math.min(best, x) : Math.max(best, x); break; }
+    }
+  }
+  return best;
+}
+const XE = laneEnd(YG, false);
+const TOP = RK.y0 + 1.0, BOT = RK.y1 + 1 - 1.0;                    // les couloirs extrêmes : la lame (2,6) touche la bande, le corps reste dedans
 /* Sa place, à l'est du chalet : garée de face (cap sud) — la lame du bas touche la glace de l'allée, le fanal éteint. */
 export const PARK = { x: RK.x1 + 1 + 4.2, y: YG + 3.4 };
 function buildLegs() {
@@ -83,12 +114,12 @@ function buildLegs() {
   add(PARK.x, PARK.y, false, 350);
   add(PARK.x, YG, false, 0);                                       // elle remonte vers l'axe du portillon
   add(XE, YG, false, 250);                                         // elle entre
-  add(XE, TOP, true, SURF.PAUSE_MS);                               // le long de la bande est, vers le nord
+  add(laneEnd(TOP, false), TOP, true, SURF.PAUSE_MS);              // le long de la bande est, vers le nord (elle suit le coin)
   const dy = (BOT - TOP) / (SURF.LANES - 1);
   for (let k = 0; k < SURF.LANES; k++) {
     const y = TOP + k * dy, west = k % 2 === 0;
-    if (k > 0) add(west ? XE : XW, y, true, SURF.PAUSE_MS);        // le changement de couloir (la machine descend d'un cran)
-    add(west ? XW : XE, y, true, SURF.PAUSE_MS);                   // le couloir
+    if (k > 0) add(laneEnd(y, !west), y, true, SURF.PAUSE_MS);     // le changement de couloir (la machine descend d'un cran, le long de la courbe)
+    add(laneEnd(y, west), y, true, SURF.PAUSE_MS);                 // le couloir
   }
   add(XE, YG, false, 250);                                         // elle remonte le long de la bande est
   add(PARK.x, YG, false, 0);                                       // elle ressort
@@ -99,7 +130,15 @@ function buildLegs() {
     const a = pts[i], b = pts[i + 1], len = Math.hypot(b.x - a.x, b.y - a.y);
     if (a.pause) { legs.push({ x0: a.x, y0: a.y, x1: a.x, y1: a.y, ms: a.pause, sweep: false, t0: t }); t += a.pause; }
     const ms = len / SURF.SPEED * 1000;
-    legs.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y, ms, sweep: b.sweep, t0: t });
+    const L = { x0: a.x, y0: a.y, x1: b.x, y1: b.y, ms, sweep: b.sweep, t0: t, exS: 0, exE: 0 };
+    // un couloir (surtout horizontal) : la glace refaite déborde jusqu'au bord réel de la glace, aux deux bouts
+    if (L.sweep && Math.abs(L.x1 - L.x0) >= Math.abs(L.y1 - L.y0) && Math.abs(L.y1 - L.y0) < 1e-9) {
+      const eastward = L.x1 > L.x0;
+      const sEdge = bandEdge(L.y0, eastward), eEdge = bandEdge(L.y0, !eastward);   // le bord de glace derrière le départ, devant l'arrivée
+      L.exS = Math.max(0, eastward ? (L.x0 - SURF.HALF_LEN) - sEdge : sEdge - (L.x0 + SURF.HALF_LEN));
+      L.exE = Math.max(0, eastward ? eEdge - (L.x1 + SURF.HALF_LEN) : (L.x1 - SURF.HALF_LEN) - eEdge);
+    }
+    legs.push(L);
     t += ms;
   }
   return { legs, total: t };
@@ -131,6 +170,18 @@ export function surfacerAt(ms) {
   const e = p < 0.5 ? 2 * p * p : 1 - 2 * (1 - p) * (1 - p), q = L.sweep ? p : (0.3 * e + 0.7 * p);
   return { x: L.x0 + (L.x1 - L.x0) * q, y: L.y0 + (L.y1 - L.y0) * q, dir, moving: !(L.x0 === L.x1 && L.y0 === L.y1), parked: false };
 }
+/* Le rectangle de glace refaite par la jambe `L` quand elle est faite à la fraction `p` (0..1) : la boîte du déplacement de la
+   lame, élargie de sa demi-longueur et de sa demi-largeur. UN couloir (horizontal) déborde en plus de `exS` derrière son départ
+   (acquis dès qu'elle y est) et de `exE · p` devant elle (il grandit avec la machine). Toujours croissant avec `p`. */
+function legRect(L, p) {
+  const bx = L.x0 + (L.x1 - L.x0) * p, by = L.y0 + (L.y1 - L.y0) * p;
+  const horiz = Math.abs(L.x1 - L.x0) >= Math.abs(L.y1 - L.y0);
+  const hl = SURF.HALF_LEN, hw = SURF.HALF_W;
+  const xa = Math.min(L.x0, bx), xb = Math.max(L.x0, bx), ya = Math.min(L.y0, by), yb = Math.max(L.y0, by);
+  if (!horiz) return { x0: xa - hw, x1: xb + hw, y0: ya - hl, y1: yb + hl };
+  const lowIsStart = L.x1 > L.x0;
+  return { x0: xa - hl - (lowIsStart ? L.exS : L.exE * p), x1: xb + hl + (lowIsStart ? L.exE * p : L.exS), y0: ya - hw, y1: yb + hw };
+}
 /* Les rectangles de glace DÉJÀ LISSÉE à `ms` : [{ x0, y0, x1, y1, t1 }] (cases ; `t1` : l'instant où la lame a fini ce morceau,
    ou `ms` si elle y est encore — le brillant de l'eau fraîche s'en sert). Hors passe (`ms` ≤ 0) : aucun. */
 export function sweptRects(ms) {
@@ -139,37 +190,25 @@ export function sweptRects(ms) {
   for (const L of PATH.legs) {
     if (!L.sweep || ms <= L.t0) continue;
     const p = Math.max(0, Math.min(1, (ms - L.t0) / L.ms));
-    const bx = L.x0 + (L.x1 - L.x0) * p, by = L.y0 + (L.y1 - L.y0) * p;
-    const horiz = Math.abs(L.x1 - L.x0) >= Math.abs(L.y1 - L.y0);
-    const hl = SURF.HALF_LEN, hw = SURF.HALF_W;
-    out.push(horiz
-      ? { x0: Math.min(L.x0, bx) - hl, x1: Math.max(L.x0, bx) + hl, y0: L.y0 - hw, y1: L.y0 + hw, t1: p >= 1 ? L.t0 + L.ms : ms }
-      : { x0: L.x0 - hw, x1: L.x0 + hw, y0: Math.min(L.y0, by) - hl, y1: Math.max(L.y0, by) + hl, t1: p >= 1 ? L.t0 + L.ms : ms });
+    out.push({ ...legRect(L, p), t1: p >= 1 ? L.t0 + L.ms : ms });
   }
   return out;
 }
-/* L'instant (ms depuis le début de la passe) où le point (cases) est lissé pour la première fois ; `Infinity` s'il ne l'est jamais. */
+const inRect = (r, px, py) => px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1;
+/* L'instant (ms depuis le début de la passe) où le point (cases) est lissé pour la première fois ; `Infinity` s'il ne l'est jamais.
+   Le rectangle d'une jambe ne fait que croître avec `p` : le premier instant se trouve par dichotomie. */
 export function sweepWhen(px, py) {
   for (const L of PATH.legs) {
-    if (!L.sweep) continue;
-    const horiz = Math.abs(L.x1 - L.x0) >= Math.abs(L.y1 - L.y0), hl = SURF.HALF_LEN, hw = SURF.HALF_W;
-    if (horiz) {
-      if (Math.abs(py - L.y0) > hw) continue;
-      const lo = Math.min(L.x0, L.x1) - hl, hi = Math.max(L.x0, L.x1) + hl;
-      if (px < lo || px > hi) continue;
-      const need = L.x1 > L.x0 ? px - hl : px + hl, p = (need - L.x0) / (L.x1 - L.x0);   // la position de la machine qui couvre le point
-      return L.t0 + L.ms * Math.max(0, Math.min(1, p));
-    }
-    if (Math.abs(px - L.x0) > hw) continue;
-    const lo = Math.min(L.y0, L.y1) - hl, hi = Math.max(L.y0, L.y1) + hl;
-    if (py < lo || py > hi) continue;
-    const need = L.y1 > L.y0 ? py - hl : py + hl, p = (need - L.y0) / (L.y1 - L.y0);
-    return L.t0 + L.ms * Math.max(0, Math.min(1, p));
+    if (!L.sweep || !inRect(legRect(L, 1), px, py)) continue;
+    let lo = 0, hi = 1;
+    if (inRect(legRect(L, 0), px, py)) return L.t0;
+    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (inRect(legRect(L, mid), px, py)) hi = mid; else lo = mid; }
+    return L.t0 + L.ms * hi;
   }
   return Infinity;
 }
 /* Le point est-il DANS la glace lissée à `ms` (au sens des rectangles) ? Sert à effacer les traces de lames. */
 export function isSwept(ms, px, py) {
-  for (const r of sweptRects(ms)) if (px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1) return true;
+  for (const r of sweptRects(ms)) if (inRect(r, px, py)) return true;
   return false;
 }

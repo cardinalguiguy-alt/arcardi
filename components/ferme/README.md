@@ -1,5 +1,25 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-06 (nuit, suite) — VERDICTS DE GUILLAUME SUR LE LOT DU PATIN, ET TROIS CORRECTIFS : VRILLE QUI RALENTIT, SURFACEUSE DANS LES COINS, LAC QUI GÈLE EN LE DISANT
+
+**Supabase : rien.** Guillaume a répondu aux questions en suspens (tout est reporté dans `docs/A-JUGER.md`, tête du fichier). Trois choses à corriger en sont sorties ; **aucune n'est vue en jeu**
+(bancs seulement) :
+- **La vrille ne finit plus d'un coup** (`patin.js`, `spinEase`) : l'ancienne courbe `½·smoothstep + ½·k` arrivait à la MOITIÉ de sa vitesse moyenne (2,7 tours/s au dernier niveau), puis plus rien.
+  Maintenant `f = 1,3k + 0,4k² − 0,7k³` : vitesse d'arrivée nulle (décélération sur le dernier tiers), départ non nul (×1,3 la moyenne) pour que le V suivant ne retombe pas au raccord.
+  `verify-patin` 82/82 (4 contrôles neufs, falsifiés contre l'ancienne courbe). ⚠️ Le saut-vrille (l'axel) partage la courbe : il ralentit aussi à l'arrivée. ⚠️ La vrille PARAÎT un peu plus courte
+  (le dernier quart tourne peu) : sa durée n'a pas bougé. Interprétation à confirmer : « s'arrêter d'un coup » = la rotation qui s'arrête, pas le niveau qui retombe.
+- **La surfaceuse suit les coins arrondis** (`surfaceuse.js`) : mesuré, son corps dépassait de la glace jusqu'à 1,1 case aux quatre coins (couloirs « bout à bout » sur un rectangle). Chaque couloir
+  s'arrête maintenant où les quatre coins de son encombrement (`FOOT`) tiennent sur la glace (`rinkSignedDist`) ; les changements de couloir sont obliques ; la glace refaite déborde jusqu'au bord réel
+  de la glace, progressivement (`exS`/`exE`). `verify-surfaceuse` 60/60 (corps entier sur la glace : −0,11 case, contre +1,14 avant — falsifié). La passe dure 32,1 s. **PAS VU en jeu** : le dessin
+  de la machine n'a pas bougé, mais si « coupée » voulait dire « le sprite haut mord sur la planche dessinée devant lui », ce n'est PAS corrigé (ordre de dessin non touché).
+- **Le lac du sud : un message au gel, un dégel étiré** (`neige.js` `lakeCover`, `NEIGE.LAKE_THAW`, `lakeWatchTick` dans FermeGame.js, `L.lakeFrozenToast`). `lakeCover` = `lakeCold` dont la
+  DESCENTE est bornée à `LAKE_THAW` = 0,06 K par minute réelle (enveloppe sur une grille absolue de 20 min de jeu, pure fonction de l'heure) ; le gel n'est pas touché (0 lecture en retard sur 32 000).
+  Mesuré (1 200 jours d'hiver) : le brut tombait à 0,65 K/min — du large pris à plus de glace en ~1,5 min, un dégel sur dix sous 1,6 min ; maintenant ≤ 0,09 K/min (**une journée de jeu pour un dégel
+  complet**, ~6 min pour un petit gel). Un petit gel garde un dégel court (peu de glace à fondre) : voulu. **Le message** part chez chacun (pas d'hôte, pas un `send()` de plus : le froid se déduit)
+  sur le passage « pas de glace → de la glace », où que l'on soit ; la première lecture ne dit rien (on arrive sur un lac déjà pris). Pas de message au dégel (non demandé). Contrôles : `render-glace`
+  33/33 (3 neufs, falsifiés avec `LAKE_THAW` = 0,6), `verify-strings` 1 286 clés. **Pas vu en jeu** (il faut un hiver froid) ; le menu dev « ⛸️ Lac gelé » force le froid sans déclencher le message.
+- Hors lot : `verify-portee` rougissait (`WeakRef` absent de sa liste de globaux, à cause du harnais `app/audit-tmp`) : ajouté, vert. `tools/.cache/patin.mjs` est réécrit par les bancs (suivi par git).
+
 ## 2026-10-06 (nuit) — iPAD À VALLEY TOWN : CE QU'ON A PU MESURER SANS iPAD, ET UNE GUIRLANDE QUI SE DESSINAIT HORS CHAMP
 
 « S'assurer que le jeu sur iPad est possible et aussi fluide que sur ordi, sur VT. » **Supabase : rien.** ⚠️ **Pas de Xcode sur cette machine (`xcrun simctl` : introuvable) :

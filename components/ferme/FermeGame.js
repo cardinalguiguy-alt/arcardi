@@ -2135,6 +2135,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      dernier changement, `pass` la passe de la surfaceuse en cours { t0 (daté à la réception), dur } — gardée WET_MS après sa fin
      (le brillant de l'eau fraîche). Chez l'hôte seulement : `host.use` (l'usage cumulé), `host.passUntil` (l'échéance de la passe). */
   const rinkIceRef = useRef({ lv: 0, prev: 0, fadeT0: 0, pass: null, host: { use: 0, passUntil: 0 } });
+  const lakeWatchRef = useRef({ at: 0, on: null });   // 2026-10-06 : le lac du sud a-t-il pris ? (le message du gel ; `null` : pas encore lu)
   const skateHelpVMRef = useRef(null);   // 2026-10-06 : la vue du « ? » du patinage (affiché en ville, près de la patinoire ou chaussé)
   const [skateHelpGet] = useState(() => () => (skateHelpVMRef.current ? skateHelpVMRef.current() : null));
   const invRef = useRef(null);
@@ -8952,7 +8953,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* 2026-10-04 — LE FROID DU LAC DU SUD (`NG.lakeCold`, ses seuils : `NEIGE.LAKE_K0`),
        et `lkEq`, ce qu'il vaut en cm d'étang (`GL.lakeIceEq`) : la seule grandeur que
        lisent le dessin, la faune et le patin. Forcé au menu dev (local, comme l'étang). */
-    pk.lk = dev.lake != null ? dev.lake : NG.lakeCold(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, pl);
+    pk.lk = dev.lake != null ? dev.lake : NG.lakeCover(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, pl);
     pk.lkEq = pl === "town" ? GL.lakeIceEq(pk.lk) : 0;
     mm.at = now; mm.pack = pk; mm.key = key;
     return pk;
@@ -12108,6 +12109,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let rects = null;
     if (v.pass && passMs > 0) rects = SU.sweptRects(passMs).map((r) => ({ x0: r.x0 * T2, y0: r.y0 * T2, x1: r.x1 * T2, y1: r.y1 * T2, age: Math.max(0, passMs - r.t1) }));
     return { idle, surf, passMs, st: idle ? null : { lv: v.lv, prev: v.prev, f, rects, wet: SU.ICE.WET_MS } };
+  }
+  /* ⚠️ 2026-10-06 — LE LAC DU SUD GÈLE : ON LE DIT (Guillaume : « quand le lac du sud gèle il faut qu'on soit averti par un
+     message »). CHEZ CHACUN, pas chez l'hôte : le froid du lac est une pure fonction de l'heure (`NG.lakeCover`, le même
+     nombre partout), donc chaque client voit le même passage de seuil sans qu'un seul message réseau de plus ne parte (§3 :
+     ce qui se déduit ne se diffuse pas). Où que l'on soit (ferme, ville, intérieur). La première lecture ne dit RIEN — on
+     arrive sur un lac déjà pris, ce n'est pas un événement — ; le message ne part que sur le passage « pas de glace → de la
+     glace ». Le menu dev (`snowDevRef`) n'y touche pas : on lit la vraie météo. Lecture toutes les 1,5 s réelles. */
+  function lakeWatchTick() {
+    const w = lakeWatchRef.current, now = Date.now();
+    if (now - w.at < 1500) return;
+    w.at = now;
+    const sh = sharedRef.current;
+    if (!sh || !sh.dayStartAt) return;
+    const day = sh.day || 1, ds = sh.dayStartAt;
+    const tm = C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN);
+    const on = GL.lakeIceEq(NG.lakeCover(day, tm, (d) => E.seasonTagAt(ds - (day - d) * C.DAY_REAL_MS), sh.forcedWeather || null, "town")) > 0;
+    if (w.on === false && on) pushToast(L.lakeFrozenToast);
+    w.on = on;
   }
   /* CHEZ L'HÔTE, à chaque image : l'usage des patineurs sur la glace → le niveau (diffusé s'il change) ; la fin de la passe. */
   function hostIceTick(dt) {
@@ -17683,6 +17702,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateWhistledHorses(dt);
       if (isHost) hostRinkTick();   // 2026-10-05 (nuit) : les échéances de la course de la patinoire
       if (isHost) hostIceTick(dt);   // 2026-10-06 : l'usure de la glace, et la fin de la passe de la surfaceuse
+      lakeWatchTick();   // 2026-10-06 : le message du gel du lac du sud (chacun, sans réseau)
       if (isHost) updateWolves(dt);
       updateRabbits(dt); // zip 366 : plus réservé à l'hôte — chaque client simule SES lapins, décoratifs et non diffusés (motif canard)
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)

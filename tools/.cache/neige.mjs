@@ -129,6 +129,13 @@ export const NEIGE = {
      `verify-neige` imprime ce que ça donne : la part de l'hiver où l'on peut patiner,
      la fréquence et la durée des vagues. */
   LAKE_K0: 5.35, LAKE_K1: 6.35, LAKE_DREF: 7,
+  /* ⚠️ 2026-10-06 — LE DÉGEL DU LAC NE VA PAS PLUS VITE QUE `LAKE_THAW` (Guillaume : « le dégel ne doit pas être trop court »).
+     `lakeCold` retombe aussi vite que la météo : mesuré sur 1 200 jours d'hiver, de la glace du large à plus de glace en
+     ~1,5 minute réelle au plus raide (0,65 K/min), un dégel médian de 13,6 min et un sur dix sous 1,6 min — un patineur
+     perdait sa glace presque sous les pieds. `lakeCover` (ci-dessous) borne la DESCENTE à `LAKE_THAW` unités de K par minute
+     réelle : 0,06 = une journée de jeu (16 min) pour passer du large pris (`LAKE_K1`) à plus de glace du tout ; un petit gel (pic
+     à 5,5) tient encore ~6 min en fondant. Le gel, lui, n'est pas touché. */
+  LAKE_THAW: 0.06,
 };
 /* Les secondes RÉELLES par heure de jeu : le « retard » des carpes (`iceLag`) se compte
    dans le temps de la faune, qui est le temps réel (faune.js, `env.t`). */
@@ -319,6 +326,30 @@ export function lakeCold(day, tm, seasonOfDay, force, place) {
     else sum += cum[cum.length - 1];
   }
   return sum;
+}
+/* ⚠️ 2026-10-06 — LE FROID QUE LE LAC « TIENT » : `lakeCold`, mais qui ne redescend jamais plus vite que `NEIGE.LAKE_THAW`
+   par minute réelle. Sur une grille ABSOLUE de `LAKE_GRID` minutes de jeu, `env_j = max(K_j, env_{j−1} − LAKE_THAW · Δ)` (Δ : la
+   durée réelle d'un pas) — l'enveloppe qui ne descend que d'un pas borné — calculée sur les `LAKE_LOOK_N` pas qui précèdent
+   (fenêtre FIXE : pure fonction de l'heure, sans état ; deux joueurs lisent le même nombre au bit près, §3 de ce fichier).
+   On interpole entre les deux pas qui encadrent `tm`, puis on prend le MAX avec `lakeCold` : elle ne peut que RETENIR, jamais
+   avancer — le gel arrive à l'heure, seul le dégel s'étire. Le lac lit CELLE-CI (`FermeGame.js`, `snowPackNow`).
+   ⚠️ Une grille ancrée à `tm` (remonter de τ en τ depuis maintenant) déplace ses points d'une image à l'autre et rate le
+   sommet d'un pic : la descente dépassait alors la borne (mesuré, premier jet). */
+const LAKE_GRID = 20, LAKE_LOOK_N = 150;   // 150 pas de 20 min de jeu : 2,5 jours, 2,4 K de retenue possible à 0,06 K/min (le pic du banc : 6,9, soit 1,8 K au-dessus du seuil)
+export function lakeCover(day, tm, seasonOfDay, force, place) {
+  day = Math.max(1, day | 0);
+  const L = DAY_B - DAY_A, G = LAKE_GRID;
+  const u0 = (day - 1) * L + (Math.max(DAY_A, Math.min(DAY_B, tm)) - DAY_A);
+  const drop = NEIGE.LAKE_THAW * G * ((C.DAY_REAL_MS / 60000) / L);   // ce que l'enveloppe peut perdre en un pas
+  const j1 = Math.floor(u0 / G), f = (u0 - j1 * G) / G;
+  let env = -Infinity, a = -Infinity, b = -Infinity;
+  for (let j = Math.max(0, j1 - LAKE_LOOK_N); j <= j1 + 1; j++) {
+    const u = j * G, dd = Math.floor(u / L) + 1, tt = DAY_A + (u - (dd - 1) * L);
+    const k = lakeCold(dd, tt, seasonOfDay, force, place);
+    env = env === -Infinity ? k : Math.max(k, env - drop);
+    if (j === j1) a = env; else if (j === j1 + 1) b = env;
+  }
+  return Math.max(lakeCold(day, tm, seasonOfDay, force, place), a + (b - a) * f);
 }
 /* L'état d'un arbre (0 nu, 1 légèrement enneigé, 2 alourdi) et le fondu entre
    deux états. `jit` (0..1, un hachage de la case) décale les seuils d'un arbre

@@ -5198,6 +5198,7 @@ export const FERME_STR = {
     })[k] || "🏁",
     /* 2026-10-06 — L'USURE DE LA GLACE ET LA SURFACEUSE (`surfaceuse.js`). */
     iceLevelName: (lv) => ["Glace lisse", "Glace marquée", "Glace rayée", "Glace usée"][lv] || "",
+    lakeFrozenToast: "🧊 Le lac du sud vient de geler : la rive est prise, sortez les patins !",
     iceShopTitle: "Entretien de la glace",
     iceShopHint: "La glace s'use avec les patineurs. Quand elle est abîmée, la surfaceuse la refait — c'est gratuit, à tout moment (sauf pendant une course).",
     iceShopAsk: "Demander la surfaceuse",
@@ -7444,6 +7445,7 @@ export const FERME_STR = {
     ],
     skateHelpNote: "Coasting fast, the swan happens on its own. No tricks during a race. Ask for the resurfacer at the chalet counter.",
     iceLevelName: (lv) => ["Smooth ice", "Marked ice", "Scratched ice", "Worn ice"][lv] || "",
+    lakeFrozenToast: "🧊 The southern lake has just frozen over: the shore is solid, get your skates!",
     iceShopTitle: "Ice maintenance",
     iceShopHint: "The ice wears down with skaters. When it is rough, the resurfacer redoes it — free, any time (except during a race).",
     iceShopAsk: "Ask for the resurfacer",

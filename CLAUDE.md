@@ -11,31 +11,26 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-06 (nuit) — iPAD : AUDIT FAIT SANS iPAD, UN CORRECTIF DE FLUIDITÉ À VT — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-06 (nuit, suite) — VERDICTS REÇUS SUR LE LOT DU PATIN, TROIS CORRECTIFS DANS L'ARBRE, NON COMMITÉS, PAS VUS EN JEU
 
-Récit : README de la ferme, journal « 2026-10-06 (nuit) » ; résultats ligne par ligne : `docs/PROJETS.md` §3. **Supabase : rien.** Les lots d'avant (marché en haut,
-ombre du saut, patin, figures à deux, reflets) sont COMMITÉS ; leurs jugements et leurs « pas vu » : tête de `docs/A-JUGER.md` et journal 2026-10-06 du README.
-**Pas de Xcode ici (`simctl` absent) : aucun simulateur, et le jeu n'a TOUJOURS jamais été vu sur un vrai iPad.** Mesuré dans le volet navigateur (1180 × 820, Mac M4,
-Chromium), Valley Town, hiver, nuit : (1) JS par image, zoom 3 : 5,7 → **4,5 ms** après correctif (marche, p95 : 10,9 → 5,5) ; zoom 2 : 7,2 ; zoom 4 : 4,3 ;
-**zoom 1 : 21,5 ms, hors du budget de 16,7 ms, sur un M4** ; (2) ≈ 19 200 → **11 950 appels de dessin par image** : `drawRinkGarland` n'était écarté que selon Y — garde X
-ajoutée dans `FermeGame.js` (étendue du fil, rendu identique, vu en jeu au centre et au bord) ; (3) **905 canevas vivants, 89 Mo** en ville (50 Mo à la ferme) ; (4) pavé,
-boutons, zoom 🔍 : marchent (événements pointeur synthétiques) ; (5) mise en page 1180 × 820 : bonne ; **744 × 1133 : le rang de boutons mord de 12 px sur la barre d'outils
-et l'invite « E : … » passe sous les boutons** — NON corrigé (visuel, à décider avec lui). **Pas vu** : Safari/WebKit réel (coût par appel canevas ; `ctx.filter` absent ou non ?
-il n'agit à VT que sur l'arbre entamé), mémoire iPad, tactile réel (multi-touch, clavier virtuel), réseau, deux clients. Contrôles : `no-undef` sur FermeGame.js, 0 erreur (falsifié) ;
-`verify-*` non relancés (dessin seul, aucune logique).
-⚠️ `app/audit-tmp` (un compteur de canevas y est ajouté : `window.__cvLog`), `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent
-`tools/.cache/*.mjs` (suivi par git). ⚠️ Recharger la page après toute édition de `FermeGame.js` (boucle montée une fois). ⚠️ Un invité immobile n'émet aucun `pos`. ⚠️ Les numéros de
-ligne d'une pile d'appels du navigateur (webpack « eval ») NE SONT PAS ceux du source : se fier aux NOMS de fonctions. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas
-(`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
+Récit : README de la ferme, journal « 2026-10-06 (nuit, suite) » ; verdicts ligne par ligne : tête de `docs/A-JUGER.md`. **Supabase : rien.** Les lots d'avant (marché en haut, ombre du saut, patin,
+figures à deux, reflets, correctif de fluidité iPad) sont COMMITÉS. **Dans l'arbre, non commité** : (1) la vrille ralentit avant de finir (`spinEase`, patin.js ; `verify-patin` 82/82) ; (2) la surfaceuse suit
+les coins arrondis (surfaceuse.js : corps entier sur la glace, −0,11 case contre +1,14 ; `verify-surfaceuse` 60/60) ; (3) le lac du sud : message au gel chez chacun (`lakeWatchTick`, FermeGame.js) et dégel
+étiré à 0,06 K/min réelle (`lakeCover`, neige.js ; `render-glace` 33/33). Aussi : `verify-portee` remis au vert (`WeakRef`). **Rien de tout cela n'est vu en jeu** (bancs seulement) ; la surfaceuse : si « coupée
+dans les angles » voulait dire que son sprite haut mord sur la planche dessinée, ce n'est PAS corrigé. Guillaume teste seul : **jamais vu à deux clients**. `verify-docs`, `verify-strings` (1 286 clés), `verify-vallee`,
+`verify-duo`, `verify-course`, `no-undef` : verts. **Le jeu n'a TOUJOURS jamais été vu sur un vrai iPad** (pas de Xcode ici ; mesures du volet navigateur, M4 : zoom 1 = 21,5 ms/image, hors budget ; 905 canevas / 89 Mo en ville ;
+744 × 1133 : le rang de boutons mord de 12 px sur la barre d'outils — NON corrigé) : `docs/PROJETS.md` §3.
+⚠️ `app/audit-tmp` (un compteur de canevas y ajoute `window.__cvLog`), `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git).
+⚠️ Recharger la page après toute édition de `FermeGame.js` (boucle montée une fois). ⚠️ Un invité immobile n'émet aucun `pos`. ⚠️ Les numéros de ligne d'une pile d'appels du navigateur (webpack « eval ») NE SONT PAS ceux du
+source : se fier aux NOMS de fonctions. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée ; le README de la ferme
+(« Une seule ombre au saut ») décrit l'ancien jet d'ombre, périmé.
 
-**2026-10-06 (soir) — DANS L'ARBRE, NON COMMITÉ** : (1) reflet de la bande nord de la patinoire étendu (`rinkIcePixel`, fermeArt.js : profondeur `A.H + 6`, poids lissé dans les coins) — vu au banc `render-patinoire`, PAS en jeu ; (2) gerbe du freinage brut réduite (`skateStopSpray`, FermeGame.js : ~3× moins d'éclats, plus petits, bouffées plus rares) — `verify-patin` 78/78, PAS vue en jeu. (3) ombre du soleil au saut : le rejeu LÈVE de nouveau le corps (décalage `skAir·(sx,sy)`, le calcul de `ombres.js`) et l'ellipse de contact s'estompe avec la hauteur — `verify-ombres` 27/27, PAS vu en jeu ; le README de la ferme (« Une seule ombre au saut ») décrit l'ancien jet, périmé. Dettes de ménage inchangées (dossiers `audit-*` à supprimer avant déploiement).
+### ⏭️ ACTION SUIVANTE — VOIR EN JEU LES TROIS CORRECTIFS, PUIS UNE SÉANCE SUR UN VRAI iPAD
 
-### ⏭️ ACTION SUIVANTE — UNE SÉANCE SUR UN VRAI iPAD, ET TRANCHER LE ZOOM 1
-
-(1) Vingt minutes sur un vrai iPad (Safari, même réseau, `next dev` + `tools/fake-supabase.mjs`) : `docs/PROJETS.md` §3. (2) À décider avec Guillaume (rien de codé) : zoom 1 plafonné à 2 au tactile
-(le seul gros dépassement) ; pavé et boutons remontés de ~20 px (chevauchement de la barre d'outils en portrait) ; l'invite « E : » cachée au tactile ; **cuire dans l'atlas, à rendu identique,
-la chaussée (`drawTownRoadTile` : traces de roues, caniveau, ≈ 12 % des appels) et la fumée des cheminées**, redessinées case par case à chaque image. (3) Puis comme avant : juger les lots du
-patin et du marché (`docs/A-JUGER.md`), le catalogue de la Maison Garfield (`docs/PROJETS.md` §1).
+(1) En jeu, hiver : la vrille emballée (V, V, V : elle ralentit à l'arrivée ?), une passe de surfaceuse aux quatre coins (rien ne mord la planche ?), un gel du lac (le message, puis le dégel : assez long ?) — **demander à
+Guillaume s'il veut que `LAKE_THAW` bouge (0,06) et si « s'arrêter d'un coup » était bien la rotation**. (2) Vingt minutes sur un vrai iPad (Safari, même réseau, `next dev` + `tools/fake-supabase.mjs`) ; décisions iPad en attente,
+rien de codé : zoom 1 plafonné à 2 au tactile, pavé et boutons remontés de ~20 px, invite « E : » cachée au tactile, chaussée (`drawTownRoadTile`, ≈ 12 % des appels) et fumée des cheminées cuites dans l'atlas. (3) Il rapportera
+lui-même les bugs de l'ombre du soleil ; « la place vide hors hiver » et les petits personnages : plus tard ; ensuite le catalogue de la Maison Garfield (`docs/PROJETS.md` §1).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
