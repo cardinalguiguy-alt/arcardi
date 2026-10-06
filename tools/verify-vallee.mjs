@@ -1511,6 +1511,79 @@ section("Valley Town — le marché du champ de foire (430)");
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-06 — LE MARCHÉ DE TROIS SAISONS (`E.townMarketWorld`) : le marché ne revient plus au champ de foire ;
+   hors hiver il est dans la prairie du nord, sans le froid (ni coin du feu, ni patinoire), et l'ancienne place
+   est un dallage entièrement vide.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — le marché de trois saisons (hors hiver)");
+{
+  const mw = E.townMarketWorld(tw), ww0 = E.townWinterWorld(tw), MK = C.TOWN_MARKET, WM = C.TOWN_WINTER_MARKET;
+  const inR = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
+  const PACKED = ["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"];
+  ok("le monde du marché est un AUTRE objet que le brut et que l'hiver, et il est mis en cache", mw && mw !== tw && mw !== ww0 && !mw.winter && mw.base === tw && E.townMarketWorld(tw) === mw);
+  ok("un monde dérivé redonne son jumeau (jamais un dérivé de dérivé) ; `townSeasonWorld` aiguille les deux", E.townMarketWorld(ww0) === mw && E.townWinterWorld(mw) === ww0 && E.townSeasonWorld(tw, false) === mw && E.townSeasonWorld(tw, true) === ww0);
+  ok("rien de prévu n'a été sauté", mw.layerSkipped.length === 0, mw.layerSkipped.join(" ") || "0 saut");
+  ok("le rectangle du marché est la prairie, pas le champ de foire", E.townMarketRect(mw) === WM && E.townMarketRect(ww0) === WM && E.townMarketRect(tw) === MK);
+  const stalls = mw.props.filter((p) => p.kind === "stall");
+  ok("neuf étals, tous dans la prairie, les mêmes qu'en hiver", stalls.length === 9 && stalls.every((p) => inR(p, WM)) && stalls.every((p) => ww0.props.some((q) => q.kind === "stall" && q.x === p.x && q.y === p.y && q.v === p.v)), `${stalls.length} étals`);
+  const left = mw.props.filter((p) => inR(p, MK) && PACKED.includes(p.kind));
+  ok("l'ancienne place est vide : ni étal, ni arche, ni puits, ni caisses", left.length === 0, left.map((p) => p.kind + "@" + p.x + "," + p.y).join(" ") || "rien");
+  ok("…et l'arche et le puits du champ de foire existent bien dans le monde brut (le calque les retire)", tw.props.some((p) => p.kind === "townWell" && inR(p, MK)) && tw.props.some((p) => p.kind === "marketArch" && inR(p, MK)));
+  ok("pas de patinoire hors hiver : ni glace, ni bande, ni portillons, ni guirlandes", !mw.rink && !mw.rinkBand && !mw.rinkGate && !mw.rinkGarlands);
+  ok("…ni son décor : bande, mâts, chalet des patins", !mw.props.some((p) => p.kind === "rinkBoards" || p.kind === "rinkPole" || (p.kind === "skateChalet" && p.rink)));
+  ok("…et l'hiver, lui, les a", !!ww0.rink && ww0.props.some((p) => p.kind === "rinkBoards") && ww0.props.some((p) => p.kind === "rinkPole") && ww0.props.some((p) => p.kind === "skateChalet" && p.rink));
+  const fireMk = mw.props.filter((p) => (p.kind === "brazier" || p.kind === "woodpileAxe") && inR(p, WM));
+  ok("pas de coin du feu hors hiver (ni brasero, ni tas de bois dans la prairie)", fireMk.length === 0, fireMk.map((p) => p.kind).join(" ") || "rien");
+  ok("…le banc du bout de l'allée reste, les lanternes de potence aussi", mw.props.some((p) => p.kind === "bench" && inR(p, WM)) && mw.props.filter((p) => p.kind === "hangLamp" && inR(p, WM)).length === 3);
+  ok("…et l'hiver garde son coin du feu", ww0.props.some((p) => p.kind === "brazier" && inR(p, WM)) && ww0.props.some((p) => p.kind === "woodpileAxe" && inR(p, WM)));
+  // l'ancienne place : aucune case solide neuve, aucun mur invisible
+  let freed = 0, ghost = [];
+  for (let i = 0; i < W * H; i++) {
+    if (mw.solid[i] && !tw.solid[i] && !mw.props.some((p) => p.y * W + p.x === i)) ghost.push(`(${i % W},${(i / W) | 0})`);
+    if (!mw.solid[i] && tw.solid[i]) freed++;
+  }
+  ok("aucune case solide neuve sans son décor (pas de mur invisible)", ghost.length === 0, ghost.slice(0, 6).join(" ") || "0");
+  const packedN = tw.props.filter((p) => inR(p, MK) && PACKED.includes(p.kind)).length;
+  ok("les cases rendues à l'ancienne place sont celles des décors remballés", freed === packedN, `${freed} cases, ${packedN} décors`);
+  // le parcours, depuis la descente du train
+  const seenM = new Uint8Array(W * H);
+  const walkM = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H || railBlocked(x, y)) return false;
+    const i = idx(x, y);
+    if (mw.solid[i] && !(mw.soft && mw.soft[i])) return false;
+    if (mw.ground[i] === C.G_WATER) return false;
+    const o = mw.objects[i];
+    return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
+  };
+  {
+    const sx = Math.round(C.TOWN_SPAWN.x), sy = Math.round(C.TOWN_SPAWN.y), q = [[sx, sy]]; seenM[idx(sx, sy)] = 1;
+    while (q.length) {
+      const [x, y] = q.pop(), e0 = mw.elev[idx(x, y)];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!walkM(nx, ny) || seenM[idx(nx, ny)] || Math.abs(mw.elev[idx(nx, ny)] - e0) > C.TOWN_STEP_MAX) continue;
+        seenM[idx(nx, ny)] = 1; q.push([nx, ny]);
+      }
+    }
+  }
+  const reachM = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !!seenM[idx(x, y)];
+  const front = stalls.filter((p) => !reachM(p.x, p.y + 1) && !reachM(p.x, p.y - 1));
+  ok("chaque étal s'atteint à pied depuis le quai (devant ou derrière)", front.length === 0, front.map((p) => p.x + "," + p.y).join(" ") || `${stalls.length}/${stalls.length}`);
+  ok("l'ancienne place s'atteint (un dallage vide, pas un enclos)", reachM(MK.x + (MK.w >> 1), MK.y + (MK.h >> 1)));
+  const lostM = []; for (let i = 0; i < W * H; i++) if (seen[i] && !seenM[i] && !mw.solid[i]) lostM.push(`(${i % W},${(i / W) | 0})`);
+  ok("le calque ne ferme aucune case qu'on atteignait dans le monde brut", lostM.length === 0, lostM.slice(0, 6).join(" ") || "0");
+  // la vente : la prairie, en toute saison, et plus l'ancienne place
+  const AX = C.TOWN_WINTER_MARKET_AX, AXIS = C.TOWN_WINTER_MARKET_AXIS;
+  const at = (x, y, w) => E.atMarket({ px: x, py: y, pz: "town" }, w);
+  ok("on vend dans l'allée du marché et devant ses étals", at(AX, AXIS, mw) && stalls.every((p) => at(p.x, p.y + 1, mw)));
+  ok("…et plus au milieu de l'ancienne place", !at(MK.x + MK.w / 2, MK.y + MK.h / 2, mw));
+  // le caillebotis : identique en hiver (sauf la case du brasero, qui y porte ses planches de toute façon)
+  let dn = 0, dbad = [], dw = 0;
+  for (let i = 0; i < W * H; i++) { if (mw.duck[i]) { dn++; if (mw.solid[i] || mw.ground[i] !== C.G_GRASS || mw.objects[i] !== C.O_NONE) dbad.push(`(${i % W},${(i / W) | 0})`); } if (ww0.duck[i]) dw++; }
+  ok("le caillebotis est le même hors hiver (mêmes planches, sur l'herbe libre, aucune sous un décor)", dn === dw && dn > 100 && dbad.length === 0, `${dn} cases / ${dw} l'hiver${dbad.length ? " ; fautives : " + dbad.slice(0, 5).join(" ") : ""}`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    2026-10-05 (nuit) — LE MARCHÉ D'HIVER (`E.townWinterWorld`) : l'hiver, l'esplanade se
    vide (elle deviendra la patinoire) et le marché s'installe dans la prairie du nord.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1519,7 +1592,7 @@ section("Valley Town — le marché d'hiver, dans la prairie");
   const ww = E.townWinterWorld(tw), MK = C.TOWN_MARKET, WM = C.TOWN_WINTER_MARKET;
   const inR = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
   ok("le monde d'hiver est un AUTRE objet (les caches indexés par la carte se reconstruisent)", ww && ww !== tw && ww.winter === true && E.townWinterWorld(tw) === ww);
-  ok("rien de prévu n'a été sauté (chaque case du calque était de l'herbe libre)", ww.winterSkipped.length === 0, ww.winterSkipped.join(" ") || "0 saut");
+  ok("rien de prévu n'a été sauté (chaque case du calque était de l'herbe libre)", ww.layerSkipped.length === 0, ww.layerSkipped.join(" ") || "0 saut");
   const sumStalls = tw.props.filter((p) => p.kind === "stall"), winStalls = ww.props.filter((p) => p.kind === "stall");
   ok("l'été ne bouge pas d'un étal (le monde d'été reste celui du générateur)", sumStalls.length === 10 && sumStalls.every((p) => inR(p, MK)), `${sumStalls.length} étals au champ de foire`);
   ok("l'hiver, neuf étals, tous dans la prairie", winStalls.length === 9 && winStalls.every((p) => inR(p, WM)), `${winStalls.length} étals`);

@@ -1,5 +1,38 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-06 (suite) — LE MARCHÉ EN HAUT TOUTE L'ANNÉE, UNE SEULE OMBRE AU SAUT, LE LAC DU SUD (DÉJÀ GELÉ), TROIS PROJETS ÉCRITS
+
+« Déménagement définitif du marché toutes saisons en haut, à coder ; le personnage a deux ombres, lors du saut c'est flagrant (l'ellipse et l'ombre
+portée) ; le body of water du sud de VT doit pouvoir geler aussi, lors des grosses vagues de froid » + trois projets à ÉCRIRE, pas à coder (le catalogue
+de la Maison Garfield, la teinte de peau et la coiffure à la création, les tests iPad). **Supabase : rien** (un calque dérivé de la carte, un détail
+de dessin ; aucun état, aucun message, aucune migration). Décidé AVEC lui, par questions : « même marché, sans le froid » hors hiver (les variantes
+saisonnières dessinées : un AUTRE chantier), l'ancienne place « dallage entièrement vide » (puits compris), le lac « rien : je le documente ».
+- *Le marché ne revient plus* : `townWinterWorld` est devenu `townSeasonWorld(tw, winter)` (fermeEngine.js) et bâtit DEUX mondes dérivés du monde brut
+  du générateur, mis en cache ensemble : **`townMarketWorld`** (les trois autres saisons : le marché de la prairie, l'ancienne place vidée, ni patinoire
+  ni coin du feu) et **`townWinterWorld`** (le même, plus la patinoire, le brasero et le tas de bois du marché, les ampoules des fanions). Le monde brut
+  n'est plus jamais joué (`getTownWorldCached` rend toujours l'un des deux ; ils portent `base`, `marketRect` = la prairie). ⚠️ **Le générateur n'a pas
+  bougé** (graine, `TOWN_MARKET`, prestige des adresses, dallage « market ») : le champ de foire y est l'ancien marché, le calque le retire. La patinoire
+  est ABSENTE de la carte hors hiver (`tw.rink` indéfini : c'est ce que le jeu lit). L'arrêt « Valley Town — marché » du menu dev vise l'allée de la
+  prairie en toute saison. Le banc `verify-vallee` gagne 21 contrôles (« le marché de trois saisons ») ; `winterSkipped` devient `layerSkipped`.
+- *Une seule ombre au saut* : `drawCharacter` posait l'ellipse de contact au sol, et `sunShadowPass` REJOUAIT le patineur levé de `skAir` px — la
+  silhouette se cisaille autour de la ligne de sol, donc l'ombre portée du corps en l'air décollait, à côté de l'ellipse restée en bas. Un drapeau
+  `sunCasting` (FermeGame.js, levé le temps du rejeu) dit à `drawCharacter` de ne pas lever le sprite : le corps monte, l'ombre reste au sol (la règle
+  des lapins et des animaux de compagnie). Les reflets, eux, lèvent encore le corps. **Vu en jeu avant/après**, au même instant d'un saut (9 px) :
+  avant, l'ellipse et la silhouette séparées ; après, une seule ombre continue.
+- *Le lac du sud gèle DÉJÀ* (depuis le 2026-10-04, `lakeCold`, `lakeIceEq`, `frozenAt`) : de la rive vers le large, par vagues de froid — `render-glace`
+  mesure « 12,9 % du temps d'hiver, 38 vagues en 600 jours, la plus longue 6 jours de jeu (96 min réelles) », jamais l'été ; le fleuve, lui, ne gèle pas.
+  Vu en jeu avec « ⛸️ Lac gelé » (la rive prend, la neige se pose). Pour le VOIR : menu dev → « ⛸️ La rive prise », « Lac à moitié pris », « Lac gelé »,
+  « ⛸️ Lac : météo » (rend la main à la météo). S'il doit geler PLUS souvent : `NEIGE.LAKE_K0` / `LAKE_K1` (neige.js), à mesurer avec `render-glace`.
+- *Trois projets écrits, rien de codé* : `docs/PROJETS.md` (§1 le catalogue Garfield, §2 la création du personnage — teinte de peau et coiffure, les
+  anciens ne choisissent que la teinte à leur prochaine connexion —, §3 les tests iPad, le menu dev hors périmètre, §4 les suites du marché).
+- Bancs : `verify-vallee` 358/358, `verify-surfaceuse` 59/59, `verify-patin` 78/78, `verify-course` 30/30, `render-marche-hiver` 3/3, `render-patinoire` 4/4,
+  `verify-taxi` 15/15, `verify-faune` 105/105, `verify-neige` 17/17, `verify-strings` 1278, `verify-collision`, `verify-compo`, `verify-docs`, bundle esbuild et
+  `no-undef` propres (le seul avertissement d'esbuild est `C.G_SOIL`, ancien). Vu en jeu, un client (`app/audit-tmp`) : le marché en hiver, en été et à
+  l'automne, l'ancienne place vide en été, la patinoire d'hiver, le saut. **Pas vu** : le printemps, la nuit, le jeu à deux, un iPad.
+- ⚠️ **Pas fait** : la bascule de saison reste INSTANTANÉE (au passage à l'hiver, la bande et les étals peuvent apparaître sous un joueur : rien ne le
+  dégage — inchangé) ; l'ombre portée d'un saut ne rétrécit pas avec la hauteur (seule l'ellipse le fait) ; le caillebotis, peint « délavé par l'hiver »,
+  est sombre sur l'herbe d'été (à juger).
+
 ## 2026-10-06 — GERBES MESURÉES, FREINAGE BRUT, VRILLE QUI S'EMBALLE, AIDE « ? », GUIRLANDES REFAITES, USURE DE LA GLACE ET SURFACEUSE, CHUTE AU BORD
 
 « Les gerbes sont trop importantes : les réduire un peu en patinant, les agrandir après l'atterrissage et à un freinage brut (nouvelle
@@ -58,8 +91,8 @@ début d'une passe, `ice: { lv: 0 }` à sa fin, `ice: { lv: 0, fast: 1 }` pour u
 - **Pas fait** : les résidents qui patinent ; les reflets des patineurs ; le son de la surfaceuse ; V, B et C au tactile (clavier
   seulement) ; la surfaceuse ne pousse personne (un patineur sur sa route la traverse). ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` :
   à supprimer avant déploiement. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git).
-- **Plus tard (décidé en passant, rien n'est fait)** : le marché d'hiver peut RESTER en haut toute l'année, et la place de la patinoire aura
-  d'autres usages aux autres saisons — à trouver (voir la mémoire du projet).
+- **Plus tard (décidé en passant)** : le marché d'hiver reste en haut toute l'année — FAIT le même jour (voir l'entrée ci-dessus) ; les autres
+  usages de la place, aux autres saisons, restent à trouver (`docs/PROJETS.md` §4).
 
 ## 2026-10-05 (nuit, fin quater) — LE CHALET COLLÉ À LA GLACE, LA BANDE AU POINT PRÈS, LE MATÉRIEL DE PATIN, LES FIGURES, LA GERBE
 

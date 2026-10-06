@@ -420,3 +420,11 @@ dépôt.
   blessé, au milieu de la piste. Aucune erreur, aucun banc : vu en jouant. Parade : toute téléportation / déplacement forcé lâche les
   touches (`keysRef.current = {}`, comme les vingt transitions qui le font déjà) ; `iceFallNow` le fait. À retenir pour la prochaine
   blessure qui laisserait le joueur à portée de ce qui l'a causée.
+- ⚠️⚠️ **UN DESSIN REJOUÉ EN OMBRE REJOUE AUSSI SES DÉCALAGES DE HAUTEUR : LE CORPS MONTE, SON OMBRE DOIT RESTER AU SOL** (2026-10-06). `sunShadowPass`
+  fait l'ombre du soleil en REJOUANT les dessins debout, cisaillés autour de leur ligne de sol : un point à la hauteur `h` se pose sur le sol décalé de
+  `h × (sx, sy)`. Le contrat du rejeu (`reflecting`) coupait les noms, les bulles et les escarbilles, mais pas la HAUTEUR : un patineur en plein saut
+  était rejoué levé de `skAir` px, donc son ombre portée décollait du sol d'autant, loin de l'ellipse de contact restée en bas — deux ombres,
+  flagrantes à chaque saut. Aucun banc ne compose le rejeu (le faux canevas ne sait pas) : vu en jeu, avant puis après, au même instant du saut.
+  Parade : un drapeau levé le temps du rejeu (`sunCasting`) que `drawCharacter` lit pour ne PAS lever le sprite ; le corps monte, l'ombre reste au sol —
+  la règle déjà tenue pour les lapins et les animaux de compagnie. Les REFLETS, eux, lèvent le corps (le miroir d'un corps en l'air est en l'air).
+  À relire à chaque nouveau décalage de hauteur d'un personnage (saut, vol, monture) : se demander ce que le rejeu en fait.

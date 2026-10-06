@@ -642,9 +642,11 @@ function getEvilWorldCached(E2, day) {
 // fixed seed, generated once per page load, shared by every remount.
 let townWorldModuleCache = null;
 /* ⚠️⚠️ 2026-10-05 (nuit) — LA CARTE DE LA VILLE DÉPEND DE LA SAISON : l'hiver, le monde dérivé
-   `E.townWinterWorld` (le marché hiverne dans la prairie — voir `TOWN_WINTER_MARKET`). UNE seule porte
-   pour les deux : tout ce qui demandait la carte la demande ici, et chaque cache indexé par son
-   identité (la navigation, les arrêts, la neige, les oiseaux…) se reconstruit seul au changement.
+   `E.townWinterWorld` (le marché dans la prairie + la patinoire) ; le reste de l'année, `E.townMarketWorld` (le même marché,
+   sans patinoire, l'ancienne place vide) — voir `TOWN_WINTER_MARKET`. Le monde BRUT du générateur n'est plus jamais joué
+   (2026-10-06 : le marché ne revient plus au champ de foire). UNE seule porte pour les deux : tout ce qui demandait la carte
+   la demande ici, et chaque cache indexé par son identité (la navigation, les arrêts, la neige, les oiseaux…) se
+   reconstruit seul au changement.
    La saison est relue au plus toutes les 500 ms (`seasonOf` n'est pas gratuit, et cette porte est
    appelée à chaque image) ; elle se DÉDUIT de l'heure et de la saison forcée partagée — rien ne circule. */
 const TOWN_SEASON_MEMO = { at: -1e12, winter: false };
@@ -655,7 +657,7 @@ function townWinterNow(E2) {
 }
 function getTownWorldCached(E2) {
   if (!townWorldModuleCache) townWorldModuleCache = E2.generateTownWorld();
-  return townWinterNow(E2) ? E2.townWinterWorld(townWorldModuleCache) : townWorldModuleCache;
+  return E2.townSeasonWorld(townWorldModuleCache, townWinterNow(E2));
 }
 // Zip 426 : l'intérieur du tribunal, MÊME motif de cache. Il est purement
 // déterministe (aucune graine, voir generateCourtWorld) : deux joueurs y voient
@@ -16979,9 +16981,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              emprise est bloquante, et arriver à l'intérieur d'un bâtiment
              coincerait le joueur — la même précaution que DEV_BRIDGE_OFFSET. */
           if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
-          else if (dk === "townMarket") {   // zip 426 ; 2026-10-05 : l'hiver, l'allée du marché de la prairie (le centre du rectangle y tombe sur un étal)
-            if (getTownWorldCached(E).winter) { m.x = C.TOWN_WINTER_MARKET_AX; m.y = C.TOWN_WINTER_MARKET_AXIS; }
-            else { m.x = C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2; m.y = C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2; }
+          else if (dk === "townMarket") {   // zip 426 ; 2026-10-05 : l'allée du marché de la prairie (le centre du rectangle y tombe sur un étal) ; 2026-10-06 : en toute saison
+            m.x = C.TOWN_WINTER_MARKET_AX; m.y = C.TOWN_WINTER_MARKET_AXIS;
           }
           else if (dk === "townLake") { m.x = C.TOWN_PIER.x + C.TOWN_PIER.w / 2; m.y = C.TOWN_LAKE.y - C.TOWN_QUAY_H - 1; }
           /* ⚠️ 2026-08-31 — LA PASSE. On se pose sur la BERGE, jamais dans
@@ -17281,6 +17282,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        un nom retourné au fond de l'eau serait un nom de plus. */
     let ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
     let reflecting = false;
+    /* 2026-10-06 — `sunCasting` : vrai le temps où `sunShadowPass` REJOUE les dessins pour en faire des ombres. ⚠️ Un SAUT n'y
+       compte pas : la silhouette se cisaille autour de la ligne de sol, donc un patineur rejoué en l'air jetait une ombre
+       décollée du sol, à côté de l'ellipse de contact restée en bas — deux ombres, flagrantes en plein saut (retour de
+       Guillaume). Le corps monte, l'ombre reste au sol (la règle des lapins et des animaux de compagnie) : `drawCharacter` ne
+       lève donc pas le sprite pendant ce rejeu. Les reflets, eux, le lèvent (le miroir d'un corps en l'air est en l'air). */
+    let sunCasting = false;
     /* ╔═══════════════════════════════════════════════════════════════════════
        ║ 2026-10-05 (nuit) — LA PASSE DES OMBRES PORTÉES DU SOLEIL (`ombres.js`), COMMUNE AUX DEUX CARTES.
        ╚═══════════════════════════════════════════════════════════════════════
@@ -17304,7 +17311,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
       g.clearRect(0, 0, bw, bh); g.imageSmoothingEnabled = false;
       const savedCtx = ctx;
-      reflecting = true;
+      reflecting = true; sunCasting = true;
       try {
         for (const d of drawsL) {
           const base = baseOf(d);
@@ -17313,7 +17320,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx = g;
           try { d.fn(); } catch (e) { /* une ombre en moins, jamais une image en moins */ }
         }
-      } finally { ctx = savedCtx; reflecting = false; }
+      } finally { ctx = savedCtx; reflecting = false; sunCasting = false; }
       if (bitmaps) {
         const reach = 260;   // px monde : un bâtiment hors de l'écran peut y jeter son ombre
         for (const b of bitmaps.values()) {
@@ -29819,7 +29826,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         let dS = p.dir | 0;
         if (p.skBack) dS = dS === 0 ? 1 : dS === 1 ? 0 : dS === 2 ? 3 : 2;
         if (p.skSpin) { const seq = [0, 3, 1, 2], i0 = seq.indexOf(dS); dS = seq[(i0 + Math.floor(p.skSpin * 4 + 0.5)) % 4]; }
-        const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - Math.round(p.skAir || 0);
+        const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - (sunCasting ? 0 : Math.round(p.skAir || 0));   // 2026-10-06 : pas de saut dans l'ombre du soleil (voir `sunCasting`)
         const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD });
         if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); }
         else drawSk(px);

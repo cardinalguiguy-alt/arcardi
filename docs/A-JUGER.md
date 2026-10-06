@@ -23,6 +23,11 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-06 (suite)** : **le marché en haut toute l'année** (hors hiver : le même marché, SANS coin du feu ni ampoules ; l'ancienne place est un dallage
+  entièrement vide, puits compris — à voir en jeu aux trois autres saisons, et la place vide : trop nue ? ; le **caillebotis**, peint « délavé par
+  l'hiver », est sombre sur l'herbe d'été : à garder jusqu'aux variantes saisonnières ?), **une seule ombre au saut** (le corps monte, l'ombre reste au sol ;
+  elle ne rétrécit pas avec la hauteur : voulu ?), **le lac du sud** (il gèle DÉJÀ, depuis la rive, 12,9 % de l'hiver : assez rare ? assez souvent ?
+  menu dev « ⛸️ Lac gelé » pour le voir).
 - **Le 2026-10-06** (décisions prises par questions, mais tout est à juger en jeu) : **la gerbe** (glisse ~moitié moins ; grande à l'atterrissage et au
   **freinage brut, C tenue** — bouffées de poudreuse : se voient-elles DE JOUR sur la glace pâle ?), **la vrille emballée** (V, V, V : quatre niveaux — le
   rythme de frappe, la vitesse de rotation, le toast « double / triple vrille »), **le « ? »** (la place, la taille, le contenu), **les guirlandes** (sapin,

@@ -11,33 +11,29 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-06 — GERBES, FREINAGE BRUT (C), VRILLE EMBALLÉE, « ? », GUIRLANDES, USURE DE LA GLACE + SURFACEUSE, LOCATION 15 MIN, CHUTE AU BORD — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-06 (suite) — MARCHÉ EN HAUT TOUTE L'ANNÉE, UNE SEULE OMBRE AU SAUT, TROIS PROJETS ÉCRITS — DANS L'ARBRE, NON COMMITÉ
 
-Récit : README de la ferme, journal « 2026-10-06 ». **Supabase : rien** (aucune migration ; `rinkIce` voyage dans l'instantané, jamais relu au chargement).
-Fait, les décisions structurantes prises PAR QUESTIONS (usure partagée et purement visuelle, surfaceuse peinte, demande libre en pratique, glace
-toujours lissée au départ d'une course) : (1) gerbe de glisse ~moitié moins, les grandes gerbes à l'atterrissage et au **freinage brut (C tenue,
-code `stop`)** avec des bouffées de poudreuse ; (2) **V répété = vrille qui s'emballe** (quatre niveaux, angle continu, le niveau dans le code
-du paquet) ; (3) le « ? » discret (`SkateHelp.js`) ; (4) guirlandes refaites (sapin, ampoules pendantes, boules, nœuds, neige, chenillard) ;
-(5) **usure de la glace** en quatre états (`surfaceuse.js`, calques cuits dans `fermeArt.js`), comptée par l'HÔTE seul (il ne diffuse que le niveau)
-et **surfaceuse** (trajet = fonction du temps depuis le début de la passe, 33,7 s, zéro position sur le réseau) demandée au comptoir du chalet ;
-(6) location **15 min** pour tout ; la **combinaison seulement sur la patinoire** (ni vue ni active sur un étang/lac) ; (7) chute sans patins :
-blessure **30 s–2 min**, déposé **au bord de la glace** (plus de retour à la ferme). Bancs : `verify-patin` 78/78, `verify-surfaceuse` 59/59 (NEUF),
-`verify-vallee` 337/337, `verify-strings` 1278, `verify-course` 30/30, `render-patin`/`render-patinoire` 4/4, `verify-docs`, `no-undef`, et les autres du routeur.
-Vu en jeu, un client puis DEUX (`app/audit-duo` : niveau, passe et fin identiques des deux côtés). ⚠️ `app/audit-tmp`, `app/audit-duo`,
-`app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git). ⚠️ Piège du
-dev : la boucle de rendu est montée une fois — recharger la page après toute édition de `FermeGame.js`. ⚠️ Un invité immobile n'émet aucun `pos`.
-Même motif NON corrigé : `f.injuredUntil | 0`. Vu en passant : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort.
-**Pas fait** : résidents qui patinent, reflets des patineurs, son de la surfaceuse, V/B/C au tactile ; la surfaceuse ne pousse personne.
-**PLUS TARD (décidé en passant, rien n'est fait)** : le marché d'hiver (en haut) RESTE toute l'année ; la place de la patinoire aura d'autres usages
-aux autres saisons — à trouver avec lui, par questions.
+Récit : README de la ferme, journal « 2026-10-06 (suite) ». **Supabase : rien** (calque dérivé de la carte, détail de dessin). Le lot du patin
+(gerbes, vrille emballée, usure de la glace, surfaceuse, chute au bord…) est COMMITÉ ; ses jugements restent en tête de `docs/A-JUGER.md`.
+Fait, par questions : (1) **le marché ne revient plus au champ de foire** : `townSeasonWorld(tw, winter)` bâtit deux mondes dérivés du monde brut —
+`townMarketWorld` (trois saisons : « même marché, sans le froid », ni coin du feu ni ampoules, ni patinoire ; ancienne place = dallage entièrement vide,
+puits compris) et `townWinterWorld` (le même + patinoire) ; `getTownWorldCached` ne rend jamais le brut ; le générateur n'a PAS bougé ; (2) **une seule
+ombre au saut** : `sunCasting` (FermeGame.js) — le rejeu de l'ombre du soleil ne lève plus le patineur (vu avant/après) ; (3) **le lac du sud gèle DÉJÀ**
+(2026-10-04, 12,9 % de l'hiver, `render-glace`) : documenté, menu dev « ⛸️ Lac gelé » ; (4) **`docs/PROJETS.md`** : le catalogue Garfield (court terme),
+la teinte de peau + la coiffure à la création (les anciens ne choisissent que la teinte, à leur prochaine connexion), les tests iPad (le menu dev hors
+périmètre), les suites du marché — **rien de tout cela n'est codé**. Bancs : `verify-vallee` 358/358 (21 neufs), `verify-surfaceuse` 59/59, `verify-patin` 78/78,
+`verify-course` 30/30, `verify-strings` 1278, `verify-docs`, `render-marche-hiver`/`render-patinoire`, `no-undef`. Vu en jeu, un client : marché en hiver, été,
+automne ; place vide ; saut. **Pas vu** : printemps, nuit, deux clients, iPad.
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi
+par git). ⚠️ La boucle de rendu est montée une fois : recharger la page après toute édition de `FermeGame.js`. ⚠️ Un invité immobile n'émet aucun `pos`.
+Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
+**Pas fait** : variantes saisonnières du marché (AUTRE chantier), usages de l'ancienne place, résidents qui patinent, reflets des patineurs, V/B/C au tactile.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER CE LOT, PUIS LES RÉSIDENTS QUI PATINENT
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER CES DEUX LOTS, PUIS LE CATALOGUE DE LA MAISON GARFIELD
 
-(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : la gerbe (assez réduite en glisse ? assez grande au freinage et à l'atterrissage, DE JOUR sur glace
-pâle ?), la vrille emballée (le rythme de V), les guirlandes (de jour et de nuit), les quatre états d'usure (se distinguent-ils ? l'usure vient-elle
-trop vite : usée en ~7 min seul, ~2 min à trois ?), la surfaceuse (taille, vitesse, durée de 34 s, le moment où elle sort), la chute au bord. (2) Ensuite :
-les **résidents qui patinent à l'occasion** (hors session ; aucun `rnd()` de plus dans la graine de la ville) et les reflets des patineurs. (3) Puis :
-l'usage des autres saisons de la place de la patinoire ; marché de Noël + grand sapin ; sols de VT (FIX-004), boutique d'hiver peinte, lots B/C0, intérieurs.
+(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : le marché hors hiver et la place vide, l'ombre du saut, puis le lot du patin (gerbe, vrille, usure, surfaceuse,
+chute). (2) Ensuite, au choix de Guillaume : **le catalogue de la Maison Garfield** (court terme, `docs/PROJETS.md` §1 — poser les questions de forme d'abord) ; les
+résidents qui patinent ; la création du personnage (§2) ; une séance iPad (§3) ; marché de Noël + grand sapin ; sols de VT (FIX-004), lots B/C0, intérieurs.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -70,7 +66,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Course de la patinoire, contre-la-montre | `components/ferme/course.js`, `CourseHud.js` ; `hostRinkReq` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Rink`) ; README ferme (journal 2026-10-05 nuit, fin ter) | `verify-course`, `render-patinoire` ; à deux : `app/audit-duo` |
 | Ombres portées du soleil (heure, saison, ciel) | `components/ferme/ombres.js` ; `sunShadowPass` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js sunShadowPass`) | `verify-ombres` |
-| Marché d'hiver, monde d'hiver de la ville (calque saisonnier) | `townWinterWorld` dans fermeEngine.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journal 2026-10-05 nuit, fin) | `verify-vallee`, `render-marche-hiver` |
+| Marché (en haut TOUTE l'année), mondes de saison de la ville (calque : marché + patinoire l'hiver), ancienne place vide | `townSeasonWorld` (`townMarketWorld`, `townWinterWorld`) dans fermeEngine.js ; `getTownWorldCached` dans FermeGame.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journaux 2026-10-06 suite et 2026-10-05 nuit fin) | `verify-vallee`, `render-marche-hiver` |
 | Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |
 | Carte ouverte (plan de Valley Town) | `components/ferme/planVille.js` ; `drawTownMap` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Map`) ; README ferme (journal 2026-10-03) | `render-plan` |
 | Sols de VT (pavements, herbe), arbres, intégrer une image Gemini de sol ou d'arbre | `refs/lot-gemini/00-LISEZ-MOI.md`, puis `refs/lot-gemini/A-sols-vt.md` ou `refs/lot-gemini/B-arbres.md` ; `tools/lib-mip.mjs`, `tools/build-lampadaires.mjs` (le modèle) | `render-rues`, `render-arbres`, `verify-densite` |
@@ -91,7 +87,8 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Autres jeux | `components/chess/`, `components/PetitsChevaux.js` + `ludoBot.js`, `public/candyluge/README.md` | `verify-echecs`, `verify-ludo`, `verify-ousthat` |
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
-| « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessous, puis `docs/A-JUGER.md` | — |
+| « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
+| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad | `docs/PROJETS.md` (§1 à §3) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
 
@@ -296,6 +293,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE BORNE DE BOUCLE RECALCULÉE À CHAQUE TOUR SUR CE QUE LA BOUCLE MODIFIE S'ARRÊTE TROP TÔT, SANS ERREUR
 - UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT
 - UN EFFET QUI SE DESSINE AILLEURS QUE SON OBJET (un reflet, une ombre longue) N'EXISTE QUE SI LA FILE DE DESSIN CONNAÎT L'OBJET HORS CADRE
+- UN DESSIN REJOUÉ EN OMBRE REJOUE AUSSI SES DÉCALAGES DE HAUTEUR : LE CORPS MONTE, SON OMBRE DOIT RESTER AU SOL
 - UN ÉTAT QU'ON RETIRE QUAND SA TAILLE CHANGE SE RETIRE À CHAQUE IMAGE D'UN FONDU
 - `floor(t × cadence)` AVEC `t` ABSOLU ET UNE CADENCE QUI VARIE TIRE UNE IMAGE AU HASARD
 - UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.
@@ -329,6 +327,7 @@ Tout « §N » cité dans le code, les README et les bancs reste valable : on le
 | 8 · 9 · 11 | qualité d'image (méthode de mesure), Blender et bitmaps (pipeline C), modes 3D autonomes ; **notes d'intégration d'image** | `docs/IMAGES-ET-BLENDER.md` |
 | 10 | vérification : bancs, jouer en local, automatisation du navigateur, « ce qui n'existe pas » | `docs/VERIFICATION.md` |
 | 13 · REPRISE « Toujours ouvert » | ce qui attend un jugement humain | `docs/A-JUGER.md` |
+| — | projets décidés, pas commencés (catalogue Garfield, création du personnage, iPad, suites du marché) | `docs/PROJETS.md` |
 | 14 | maintenir ce fichier (règles et leçons complètes) | `docs/ENTRETIEN.md` |
 | — | audit 2026-10 : graphismes (ferme, ville, intérieurs), fluidité à deux, corrections FIX-… | `docs/AUDIT-2026-10.md` |
 

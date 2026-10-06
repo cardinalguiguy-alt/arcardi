@@ -3707,8 +3707,13 @@ export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foi
    Décidé avec Guillaume : l'hiver, l'esplanade du champ de foire devient une
    GRANDE patinoire ; le marché « hiverne » dans la prairie à l'ouest de la Maison
    Garfield — « pas posé là, cohérent avec l'environnement, une vraie
-   installation vivante », les étals actuels pour l'instant — et revient au
-   printemps. ⚠️ LA VILLE EST TIRÉE D'UNE GRAINE : aucun `rnd()` de plus. Le marché
+   installation vivante », les étals actuels pour l'instant.
+   ⚠️ 2026-10-06 : IL NE REVIENT PLUS AU PRINTEMPS. Guillaume : « déménagement définitif du marché toutes
+   saisons en haut ». Le marché est donc dans la prairie TOUTE L'ANNÉE (`townMarketWorld`, sans le froid : ni coin du feu
+   ni ampoules) ; l'ancienne esplanade est un dallage vide hors hiver (la patinoire l'hiver) — ses autres usages sont à
+   trouver plus tard. `TOWN_MARKET` ne désigne plus que ce que le GÉNÉRATEUR a posé (le monde brut, jamais joué) : tout
+   ce qui parle du marché de la partie lit `townMarketRect(tw)`.
+   ⚠️ LA VILLE EST TIRÉE D'UNE GRAINE : aucun `rnd()` de plus. Le marché
    d'hiver n'est donc pas une passe du générateur, c'est un CALQUE posé sur la
    carte finie (`townWinterWorld`, fermeEngine.js) — un second monde, dérivé du
    premier, que le jeu prend l'hiver. Tous les caches de la ville étant indexés

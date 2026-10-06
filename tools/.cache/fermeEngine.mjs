@@ -8722,11 +8722,22 @@ export function generateTownWorld() {
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════
-   ║ 2026-10-05 (nuit) — LE MONDE D'HIVER DE VALLEY TOWN : LE MARCHÉ DANS LA PRAIRIE.
+   ║ 2026-10-05 (nuit) — LE MONDE DE SAISON DE VALLEY TOWN : LE MARCHÉ DANS LA PRAIRIE.
+   ║ 2026-10-06 — LE MARCHÉ NE REVIENT PLUS : IL EST EN HAUT TOUTE L'ANNÉE.
    ╚══════════════════════════════════════════════════════════════════════════
    Voir `TOWN_WINTER_MARKET` (fermeConstants.js) pour le POURQUOI du lieu. Ici, le
-   COMMENT : un second monde, DÉRIVÉ du premier, que le jeu prend l'hiver
-   (`getTownWorldCached`, FermeGame.js).
+   COMMENT : des mondes DÉRIVÉS du premier, que le jeu prend selon la saison
+   (`getTownWorldCached`, FermeGame.js). Il y en a DEUX, bâtis par la même fonction :
+   · le MONDE DU MARCHÉ (`townMarketWorld`, trois saisons) : le marché dans la prairie, l'ancien
+     champ de foire vidé de tout ce qu'un marché y laisse — jusqu'au puits (décidé avec Guillaume,
+     2026-10-06 : « dallage entièrement vide », les autres usages de la place viendront plus tard) ;
+   · le MONDE D'HIVER (`townWinterWorld`) : le même, PLUS la patinoire (glace, bande, mâts,
+     guirlandes, braseros, chalet), le coin du feu du marché et les ampoules de ses fanions.
+   ⚠️ « MÊME MARCHÉ, SANS LE FROID » : hors hiver, le caillebotis, les étals, l'arche et les lanternes
+   de potence restent identiques ; seuls le brasero et le tas de bois du coin du feu s'en vont (un feu en
+   plein été ne se lit pas), et les ampoules, qui ne s'allument que dans le monde d'hiver (`tw.winter`,
+   FermeGame.js). Les variantes saisonnières dessinées (caillebotis plus chaud, potier et fleurs de
+   retour) sont un AUTRE chantier, pas encore fait.
    ⚠️⚠️ UN AUTRE OBJET, PAS UNE MUTATION. La carte en cache est lue par trente
    endroits et une douzaine de caches indexés par son IDENTITÉ (`townNav`,
    `townSpots`, la neige, les oiseaux, le taxi…) : muter `solid` et `props` en
@@ -8737,19 +8748,26 @@ export function generateTownWorld() {
    ⚠️ CE QUI EST PARTAGÉ ET CE QUI NE L'EST PAS : `solid` et `props` sont COPIÉS
    (le calque les change) ; tout le reste (sol, relief, objets, haies…) est le
    MÊME tableau — la carte n'a qu'un sol, et ce que les joueurs y changent (les
-   arbres coupés, un calque de l'état partagé) vaut pour les deux saisons.
+   arbres coupés, un calque de l'état partagé) vaut pour toutes les saisons.
+   ⚠️ LE GÉNÉRATEUR, LUI, NE CHANGE PAS : la ville est tirée d'une graine, et le champ de foire y est
+   encore l'ancien marché (étals, puits, arche). Le monde brut n'est plus jamais celui qu'on joue : les
+   deux mondes dérivés portent `base` (le brut) et c'est eux que `getTownWorldCached` rend.
    ⚠️ AUCUN TIRAGE : tout se déduit de `AX` / `AXIS`, comme au champ de foire. Une
    case prévue qui ne serait pas de l'herbe libre est SAUTÉE, jamais déplacée —
-   `verify-vallee` (« le marché d'hiver ») exige qu'aucune ne le soit. */
-const WINTER_WORLDS = new WeakMap();
+   `verify-vallee` (« le marché d'hiver », « le marché de trois saisons ») exige qu'aucune ne le soit. */
+const SEASON_WORLDS = new WeakMap();   // monde brut → { market, winter }
 /* Ce que le marché remballe en quittant l'esplanade : les étals et ce qui traîne autour.
-   Les quatre lampadaires d'angle restent (ils éclaireront la patinoire). */
+   Les quatre lampadaires d'angle restent (ils éclaireront la patinoire l'hiver, la place le reste de l'année). */
 const FAIR_PACKED = new Set(["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"]);
-export function townWinterWorld(tw) {
+export function townMarketWorld(tw) { return townSeasonWorld(tw, false); }
+export function townWinterWorld(tw) { return townSeasonWorld(tw, true); }
+export function townSeasonWorld(tw, winter) {
   if (!tw) return null;
-  if (tw.winter) return tw;
-  const hit = WINTER_WORLDS.get(tw);
-  if (hit) return hit;
+  tw = tw.base || tw;   // un monde dérivé redonne son brut : on ne dérive jamais d'un dérivé
+  let pair = SEASON_WORLDS.get(tw);
+  if (!pair) { pair = { market: null, winter: null }; SEASON_WORLDS.set(tw, pair); }
+  const key = winter ? "winter" : "market";
+  if (pair[key]) return pair[key];
   const W = tw.w, H = tw.h, mk = C.TOWN_MARKET;
   const solid = Uint8Array.from(tw.solid);
   const inFair = (p) => p.x >= mk.x && p.y >= mk.y && p.x < mk.x + mk.w && p.y < mk.y + mk.h;
@@ -8800,7 +8818,12 @@ export function townWinterWorld(tw) {
     [11, AXIS + SO, "crate"], [12, AXIS - 3, "crate"], [12, AXIS + SO, "sacks"],
     [-12, AXIS + 2, "hangLamp"], [10, AXIS + 2, "hangLamp"], [20, AXIS - 2, "hangLamp"],
     [-14, AXIS, "brazier"], [-16, AXIS - 1, "woodpileAxe"], [-14, AXIS - 2, "bench"],
-  ]) put(AX + dx, oy, kind);
+  ]) {
+    /* 2026-10-06 — « même marché, sans le froid » : le feu (brasero, tas de bois) n'est que dans le monde d'hiver ; le banc,
+       lui, reste (on s'assoit au bout de l'allée en toute saison). */
+    if (!winter && (kind === "brazier" || kind === "woodpileAxe")) continue;
+    put(AX + dx, oy, kind);
+  }
   /* LE CAILLEBOTIS (`duck` : 1 = l'allée est-ouest, planches en travers ; 2 = un
      passage nord-sud). L'allée sur trois rangées (l'axe au milieu), du coin du feu
      au pied de l'escalier ; l'entrée, de l'arche à l'allée ; et une marche de
@@ -8815,60 +8838,69 @@ export function townWinterWorld(tw) {
   for (let y = AXIS + 2; y <= C.TOWN_WINTER_MARKET_ARCH_Y + 2; y++) for (let x = AX - 1; x <= AX + 1; x++) lay(x, y, 2);
   // (les lanternes, posées plus haut au bord des planches, ne sont pas sur ce passage)
   for (let y = AXIS - 3; y <= AXIS - 2; y++) lay(C.TOWN_WINTER_MARKET_STAIR_X, y, 2);
-  /* LA PATINOIRE (voir `TOWN_RINK`, fermeConstants.js) : la glace (`rink`, 1 par case), la BANDE (l'anneau extérieur
-     du dallage et les coins hors de l'arrondi, solides), les PORTILLONS (`rinkGate` : des trous dans la bande, qu'on
-     franchit chaussé — la règle de qui n'a pas de patins est dans le jeu, `rinkGateHold`). Un décor resté sur le dallage
-     (aucun : tout ce qui y était a été remballé plus haut) aurait été une case sautée, comptée par le banc. */
-  const RK = C.TOWN_RINK, rink = new Uint8Array(W * H), rinkGate = new Uint8Array(W * H), rinkBand = new Uint8Array(W * H);
-  const gateAt = (x, y) => C.TOWN_RINK_GATES.some((g) =>
-    (g.side === "n" && y === RK.y0 - 1 && x >= g.a && x <= g.b) || (g.side === "s" && y === RK.y1 + 1 && x >= g.a && x <= g.b) ||
-    (g.side === "e" && x === RK.x1 + 1 && y >= g.a && y <= g.b) || (g.side === "w" && x === RK.x0 - 1 && y >= g.a && y <= g.b));
-  for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) {
-    const i = y * W + x;
-    rinkBand[i] = 1;   // 2026-10-05 (fin quater) : toute case du dallage de la patinoire se lit AU POINT (`C.rinkBandSolid`) pour le joueur
-    if (tw.ground[i] !== C.G_PATH_STONE) { skipped.push(`patinoire@${x},${y}`); continue; }
-    if (C.rinkInside(x + 0.5, y + 0.5)) { if (solid[i]) skipped.push(`glace@${x},${y}`); rink[i] = 1; continue; }
-    if (gateAt(x, y)) { rinkGate[i] = 1; solid[i] = 0; continue; }
-    solid[i] = 1;
-  }
-  props.push({ x: RK.x0, y: RK.y1 + 1, kind: "rinkBoards" });   // l'ancre du dessin de la bande (une passe à part le découpe par rangée)
-  /* Les mâts (sur l'allée de terre battue qui longe les flancs) et les guirlandes tendues de l'un à l'autre, d'ouest en
-     est (`TOWN_RINK_POLES`) : px du monde, le haut du mât, là où le fil s'attache. */
-  const rinkGarlands = [];
-  for (const pair of C.TOWN_RINK_POLES) {
-    const ends = [];
-    for (const [px2, py2] of pair) {
-      const i = py2 * W + px2;
-      if (solid[i] || tw.objects[i] !== C.O_NONE || tw.ground[i] === C.G_WATER) { skipped.push(`mât@${px2},${py2}`); continue; }
-      props.push({ x: px2, y: py2, kind: "rinkPole" }); solid[i] = 1;
-      ends.push({ x: px2 * C.TILE + C.TILE / 2, y: (py2 + 1) * C.TILE - C.RINK_POLE_H + 3 });
+  /* La patinoire n'existe que dans le monde d'hiver (2026-10-06) : hors hiver, ni `rink`, ni `rinkBand`, ni mâts — leur ABSENCE sur
+     la carte est ce que le jeu lit pour savoir qu'il n'y a pas de glace (`tw.rink`). */
+  let rink = null, rinkGate = null, rinkBand = null, rinkGarlands = null;
+  if (winter) {
+    /* LA PATINOIRE (voir `TOWN_RINK`, fermeConstants.js) : la glace (`rink`, 1 par case), la BANDE (l'anneau extérieur
+       du dallage et les coins hors de l'arrondi, solides), les PORTILLONS (`rinkGate` : des trous dans la bande, qu'on
+       franchit chaussé — la règle de qui n'a pas de patins est dans le jeu, `rinkGateHold`). Un décor resté sur le dallage
+       (aucun : tout ce qui y était a été remballé plus haut) aurait été une case sautée, comptée par le banc. */
+    const RK = C.TOWN_RINK;
+    rink = new Uint8Array(W * H); rinkGate = new Uint8Array(W * H); rinkBand = new Uint8Array(W * H);
+    const gateAt = (x, y) => C.TOWN_RINK_GATES.some((g) =>
+      (g.side === "n" && y === RK.y0 - 1 && x >= g.a && x <= g.b) || (g.side === "s" && y === RK.y1 + 1 && x >= g.a && x <= g.b) ||
+      (g.side === "e" && x === RK.x1 + 1 && y >= g.a && y <= g.b) || (g.side === "w" && x === RK.x0 - 1 && y >= g.a && y <= g.b));
+    for (let y = RK.y0 - 1; y <= RK.y1 + 1; y++) for (let x = RK.x0 - 1; x <= RK.x1 + 1; x++) {
+      const i = y * W + x;
+      rinkBand[i] = 1;   // 2026-10-05 (fin quater) : toute case du dallage de la patinoire se lit AU POINT (`C.rinkBandSolid`) pour le joueur
+      if (tw.ground[i] !== C.G_PATH_STONE) { skipped.push(`patinoire@${x},${y}`); continue; }
+      if (C.rinkInside(x + 0.5, y + 0.5)) { if (solid[i]) skipped.push(`glace@${x},${y}`); rink[i] = 1; continue; }
+      if (gateAt(x, y)) { rinkGate[i] = 1; solid[i] = 0; continue; }
+      solid[i] = 1;
     }
-    if (ends.length === 2) rinkGarlands.push({ x0: ends[0].x, y0: ends[0].y, x1: ends[1].x, y1: ends[1].y, sag: 22, k: rinkGarlands.length * 7 + 3 });
+    props.push({ x: RK.x0, y: RK.y1 + 1, kind: "rinkBoards" });   // l'ancre du dessin de la bande (une passe à part le découpe par rangée)
+    /* Les mâts (sur l'allée de terre battue qui longe les flancs) et les guirlandes tendues de l'un à l'autre, d'ouest en
+       est (`TOWN_RINK_POLES`) : px du monde, le haut du mât, là où le fil s'attache. */
+    rinkGarlands = [];
+    for (const polePair of C.TOWN_RINK_POLES) {
+      const ends = [];
+      for (const [px2, py2] of polePair) {
+        const i = py2 * W + px2;
+        if (solid[i] || tw.objects[i] !== C.O_NONE || tw.ground[i] === C.G_WATER) { skipped.push(`mât@${px2},${py2}`); continue; }
+        props.push({ x: px2, y: py2, kind: "rinkPole" }); solid[i] = 1;
+        ends.push({ x: px2 * C.TILE + C.TILE / 2, y: (py2 + 1) * C.TILE - C.RINK_POLE_H + 3 });
+      }
+      if (ends.length === 2) rinkGarlands.push({ x0: ends[0].x, y0: ends[0].y, x1: ends[1].x, y1: ends[1].y, sag: 22, k: rinkGarlands.length * 7 + 3 });
+    }
+    /* Les BRASEROS de l'entrée (`TOWN_RINK_BRAZIERS`) : un point chaud de part et d'autre des portillons nord et sud, sur l'allée
+       de terre. Une case libre ou rien (jamais sur un arbre ni dans le passage) ; solide, comme celui du marché. */
+    for (const [bx0, by0] of C.TOWN_RINK_BRAZIERS) {
+      if (!freeOrPath(bx0, by0)) { skipped.push(`brasero@${bx0},${by0}`); continue; }
+      props.push({ x: bx0, y: by0, kind: "brazier" }); solid[by0 * W + bx0] = 1;
+    }
+    {
+      const CW = C.TOWN_SKATE_CHALET_W, CHh = C.TOWN_SKATE_CHALET_H, s0 = C.TOWN_RINK_CHALET;
+      let fits = true;
+      for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) if (!freeOrPath(s0.x + dx, s0.y + dy)) fits = false;
+      if (fits) {
+        for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) solid[(s0.y + dy) * W + s0.x + dx] = 1;
+        props.push({ x: s0.x + (CW >> 1), y: s0.y + CHh - 1, kind: "skateChalet", ox: -C.TILE / 2, rink: 1 });
+      } else skipped.push(`chalet@${s0.x},${s0.y}`);
+    }
   }
-  /* Les BRASEROS de l'entrée (`TOWN_RINK_BRAZIERS`) : un point chaud de part et d'autre des portillons nord et sud, sur l'allée
-     de terre. Une case libre ou rien (jamais sur un arbre ni dans le passage) ; solide, comme celui du marché. */
-  for (const [bx0, by0] of C.TOWN_RINK_BRAZIERS) {
-    if (!freeOrPath(bx0, by0)) { skipped.push(`brasero@${bx0},${by0}`); continue; }
-    props.push({ x: bx0, y: by0, kind: "brazier" }); solid[by0 * W + bx0] = 1;
-  }
-  {
-    const CW = C.TOWN_SKATE_CHALET_W, CHh = C.TOWN_SKATE_CHALET_H, s0 = C.TOWN_RINK_CHALET;
-    let fits = true;
-    for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) if (!freeOrPath(s0.x + dx, s0.y + dy)) fits = false;
-    if (fits) {
-      for (let dy = 0; dy < CHh; dy++) for (let dx = 0; dx < CW; dx++) solid[(s0.y + dy) * W + s0.x + dx] = 1;
-      props.push({ x: s0.x + (CW >> 1), y: s0.y + CHh - 1, kind: "skateChalet", ox: -C.TILE / 2, rink: 1 });
-    } else skipped.push(`chalet@${s0.x},${s0.y}`);
-  }
-  const out = Object.assign({}, tw, { solid, props, duck, rink, rinkGate, rinkBand, rinkGarlands, winter: true, summer: tw, marketRect: C.TOWN_WINTER_MARKET, winterSkipped: skipped });
-  delete out._arch;   // un cache de l'été (ses arches de pont ne changent pas, mais un cache se reconstruit, il ne se partage pas)
-  WINTER_WORLDS.set(tw, out);
+  const layer = { solid, props, duck, base: tw, marketRect: C.TOWN_WINTER_MARKET, layerSkipped: skipped };
+  if (winter) Object.assign(layer, { rink, rinkGate, rinkBand, rinkGarlands, winter: true });
+  const out = Object.assign({}, tw, layer);
+  delete out._arch;   // un cache du monde brut (ses arches de pont ne changent pas, mais un cache se reconstruit, il ne se partage pas)
+  pair[key] = out;
   return out;
 }
-/* Le rectangle du marché du monde donné : le champ de foire, ou la prairie l'hiver.
+/* Le rectangle du marché du monde donné : la prairie du nord (les deux mondes de saison), ou le champ de foire (le monde
+   brut du générateur, que le jeu ne joue plus).
    ⚠️ LU PAR LA VENTE (`atMarket`), LES RÉSIDENTS, LE CHAT DU MARCHÉ, LE TAXI ET LA
-   CARTE — jamais `C.TOWN_MARKET` en direct : sinon on vendrait l'hiver au milieu de
-   la patinoire. */
+   CARTE — jamais `C.TOWN_MARKET` en direct : sinon on vendrait au milieu de la patinoire,
+   ou sur une place vide. */
 export function townMarketRect(tw) {
   return (tw && tw.marketRect) || C.TOWN_MARKET;
 }
