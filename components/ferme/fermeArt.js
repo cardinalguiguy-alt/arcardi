@@ -1542,7 +1542,8 @@ export function rinkIcePixel(wx, wy) {
   return c;
 }
 const RINK_CACHE = { cells: new Map(), atlas: null, g: null, n: 0, rows: null, rowsSnow: null };
-export function drawRinkIceTile(ctx, x, y, px, py) {
+/* La cellule cuite de la case de glace (x, y) : le tampon (atlas) et sa place dedans — cuite à la première demande. */
+function rinkTileCell(x, y) {
   const T = SPR_T, key = y * 4096 + x;
   let cell = RINK_CACHE.cells.get(key);
   if (!cell) {
@@ -1562,7 +1563,196 @@ export function drawRinkIceTile(ctx, x, y, px, py) {
     cell = { img: RINK_CACHE.atlas, sx, sy };
     RINK_CACHE.cells.set(key, cell);
   }
+  return cell;
+}
+export function drawRinkIceTile(ctx, x, y, px, py) {
+  const T = SPR_T, cell = rinkTileCell(x, y);
   ctx.drawImage(cell.img, cell.sx, cell.sy, T, T, px, py, T, T);
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-06 — L'USURE DE LA GLACE : QUATRE ÉTATS (`surfaceuse.js`), ET LA GLACE LISSÉE PAR LA SURFACEUSE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Guillaume : « plusieurs états de lissage de la piste en fonction de l'usage ». Le niveau 0 est la glace neuve (le tampon de
+   `rinkIcePixel`, inchangé) ; les niveaux 1 à 3 sont des CALQUES TRANSPARENTS, cuits une fois chacun pour toute la patinoire
+   (`rinkWearCanvas`) puis posés case par case au-dessus de la glace :
+     1 · MARQUÉE   — un voile à peine givré, des rayures fines, clairsemées (les lames d'une heure) ;
+     2 · RAYÉE     — le voile plus net, le double de rayures croisées, quelques copeaux contre la bande ;
+     3 · USÉE      — la glace est mate, couverte de rayures et de sillons bleutés, des tas de copeaux, une crête de neige de
+                     lames le long de la bande.
+   ⚠️ LES TROIS CALQUES VIENT DE LA MÊME GRAINE ET DU MÊME ORDRE DE TIRAGE : le niveau 3 contient les rayures du niveau 2, qui
+   contient celles du niveau 1 — passer d'un niveau au suivant ajoute des marques, il n'en déplace aucune (le fondu ne grouille pas).
+   ⚠️ LA GLACE LISSÉE (`drawRinkWearAt`, `st.rects`) : sous chaque rectangle déjà passé par la lame, on REMET la glace neuve
+   (le tampon d'origine, recoupé au pixel) et on y pose le brillant de l'eau fraîche — la frontière suit la machine au pixel
+   près, pas à la case. */
+const RINK_WEAR_CV = [null, null, null, null];
+const RINK_WEAR_STROKES = [0, 170, 460, 940];
+function rinkWearCanvas(lv) {
+  if (RINK_WEAR_CV[lv]) return RINK_WEAR_CV[lv];
+  const R = C.TOWN_RINK, T = SPR_T, W = (R.x1 - R.x0 + 1) * T, H = (R.y1 - R.y0 + 1) * T, X0 = R.x0 * T, Y0 = R.y0 * T;
+  const px = new Uint8ClampedArray(W * H * 4);
+  const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H && rinkSD(X0 + x + 0.5, Y0 + y + 0.5) <= -1.5;
+  const put = (x, y, c, a) => {
+    x = Math.round(x); y = Math.round(y);
+    if (!inside(x, y)) return;
+    const o = (y * W + x) * 4, al = Math.min(255, Math.round(a * 255));
+    if (al <= px[o + 3]) return;
+    px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = al;
+  };
+  // 1 — le voile : un givre très fin, plus dense avec l'usure, modulé par un bruit large (des plaques plus mates que d'autres)
+  const hazeA = [0, 0.05, 0.1, 0.19][lv];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!inside(x, y)) continue;
+    const n = townNoise((X0 + x) / T, (Y0 + y) / T, 1.2, 520), m = 0.35 + 0.65 * Math.max(0, Math.min(1, (n + 1) / 2));
+    const o = (y * W + x) * 4, a = Math.round(hazeA * m * 255);
+    px[o] = 232; px[o + 1] = 240; px[o + 2] = 249; px[o + 3] = a;
+  }
+  // 2 — les rayures : des arcs courts de lames (clairs, plus rarement sombres), le même tirage à tous les niveaux
+  let sd = 0x6d2b79f5;
+  const rnd = () => { sd = (sd + 0x6d2b79f5) | 0; let t = Math.imul(sd ^ (sd >>> 15), 1 | sd); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  for (let k = 0; k < RINK_WEAR_STROKES[3]; k++) {
+    const x0 = rnd() * W, y0 = rnd() * H, th = rnd() * Math.PI * 2, cu = (rnd() - 0.5) * 0.16, len = 7 + rnd() * 20, dark = rnd() < 0.28, al = 0.2 + rnd() * 0.3;
+    if (k >= RINK_WEAR_STROKES[lv]) continue;   // le tirage avance toujours : un niveau plus bas garde les premières rayures
+    let x = x0, y = y0, a = th;
+    for (let i = 0; i < len; i++) {
+      put(x, y, dark ? [118, 148, 182] : [247, 251, 255], al * (i < 2 || i > len - 3 ? 0.6 : 1));
+      x += Math.cos(a); y += Math.sin(a) * 0.9; a += cu;
+    }
+  }
+  // 3 — les copeaux (niveaux 2 et 3) : de petits tas de neige de lames, plus nombreux contre la bande ; et au niveau 3 des sillons
+  if (lv >= 2) {
+    const nPiles = lv === 2 ? 46 : 150;
+    for (let k = 0; k < 150; k++) {
+      let x = rnd() * W, y = rnd() * H;
+      const nearBand = rnd() < 0.55;
+      if (nearBand) { // on tire un point, puis on le tire vers la bande (le long du gradient de la distance signée)
+        for (let it = 0; it < 6 && rinkSD(X0 + x, Y0 + y) < -4; it++) { const g = 1.6, sx = rinkSD(X0 + x + 1, Y0 + y) - rinkSD(X0 + x - 1, Y0 + y), sy = rinkSD(X0 + x, Y0 + y + 1) - rinkSD(X0 + x, Y0 + y - 1), l = Math.hypot(sx, sy) || 1; x += sx / l * g * 4; y += sy / l * g * 4; }
+      }
+      if (k >= nPiles) continue;
+      const n = 2 + Math.floor(rnd() * 4);
+      for (let i = 0; i < n; i++) put(x + rnd() * 3 - 1, y + rnd() * 2 - 0.5, [252, 254, 255], 0.55 + rnd() * 0.3);
+      put(x + 1, y + 1, [150, 176, 206], 0.35);
+    }
+  }
+  if (lv >= 3) {
+    for (let k = 0; k < 26; k++) {   // les sillons : de grands arcs bleutés, deux pixels de large
+      let x = rnd() * W, y = rnd() * H, a = rnd() * Math.PI * 2;
+      const cu = (rnd() - 0.5) * 0.07, len = 24 + rnd() * 42;
+      for (let i = 0; i < len; i++) { put(x, y, [104, 136, 176], 0.34); put(x + 1, y, [104, 136, 176], 0.18); x += Math.cos(a); y += Math.sin(a) * 0.9; a += cu; }
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {   // la crête de neige de lames, le long de la bande
+      const sd2 = -rinkSD(X0 + x + 0.5, Y0 + y + 0.5);
+      if (sd2 < 1.5 || sd2 > 5.5) continue;
+      const n = townNoise((X0 + x) / T, (Y0 + y) / T, 2.2, 521);
+      if (n > -0.15 && sd2 < 3 + 2 * n) put(x, y, [245, 249, 254], 0.34 + 0.2 * n);
+    }
+  }
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  cv.getContext("2d").putImageData(typeof ImageData !== "undefined" ? new ImageData(px, W, H) : { width: W, height: H, data: px }, 0, 0);
+  RINK_WEAR_CV[lv] = cv;
+  return cv;
+}
+/* L'état de la glace pour UNE IMAGE : `st` = { lv, prev, f, rects, wet } (`rects` en px du monde : { x0, y0, x1, y1, age } —
+   `age` (ms) : depuis que la lame a fini ce morceau ; `wet` : la durée du brillant). Posé juste après la glace de la case. */
+export function drawRinkWearAt(ctx, x, y, px, py, st) {
+  const T = SPR_T, R = C.TOWN_RINK, ox = (x - R.x0) * T, oy = (y - R.y0) * T;
+  const layers = st.f < 1 && st.prev !== st.lv ? [[st.prev, 1 - st.f], [st.lv, st.f]] : [[st.lv, 1]];
+  for (const [lv, al] of layers) {
+    if (lv <= 0 || al <= 0.01) continue;
+    if (al < 1) ctx.globalAlpha = al;
+    ctx.drawImage(rinkWearCanvas(lv), ox, oy, T, T, px, py, T, T);
+    ctx.globalAlpha = 1;
+  }
+  if (!st.rects || !st.rects.length) return;
+  const cell = rinkTileCell(x, y);
+  for (const r of st.rects) {
+    const wx0 = Math.max(Math.round(r.x0), px), wx1 = Math.min(Math.round(r.x1), px + T), wy0 = Math.max(Math.round(r.y0), py), wy1 = Math.min(Math.round(r.y1), py + T);
+    if (wx1 <= wx0 || wy1 <= wy0) continue;
+    ctx.drawImage(cell.img, cell.sx + (wx0 - px), cell.sy + (wy0 - py), wx1 - wx0, wy1 - wy0, wx0, wy0, wx1 - wx0, wy1 - wy0);   // la glace neuve
+    const a = 0.2 * Math.max(0, 1 - r.age / st.wet);
+    if (a > 0.004) { ctx.fillStyle = `rgba(212,236,252,${a.toFixed(3)})`; ctx.fillRect(wx0, wy0, wx1 - wx0, wy1 - wy0); }
+  }
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-06 — LA SURFACEUSE (`surfaceuse.js` : son trajet, sa place). Dessinée à la main, de profil (est ; l'ouest est son
+   ║ miroir), de face (sud) et de dos (nord). ~36 px de long : deux silhouettes de patineur bout à bout.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Une cabine claire, un grand bac à neige à l'arrière (rayé de rouge), un bandeau bleu marine, des roues noires, un gyrophare
+   ambre qui clignote quand elle roule, un panache de vapeur au pot. Rien que des `fillRect` (pas de rotation : les bancs ne
+   savent pas, et le dessin reste au pixel franc comme le reste de la ville).
+   `cx`, `by` : le centre et le SOL de la machine (px du monde) ; `dir` : 0 sud, 1 nord, 2 ouest, 3 est ; `st` :
+   { moving, lit (0..1, la nuit), ms (une horloge pour le gyrophare et la vapeur), seed }. */
+const SURF_COL = {
+  hi: "#f4f8fc", light: "#dfe8f2", lo: "#b3c3d6", navy: "#2d4a7a", navyLo: "#1f3358", red: "#c8323a", redLo: "#8f2229", glass: "#7fb0dc", glassHi: "#c4e4f8",
+  dark: "#25282f", tire: "#1b1d22", steel: "#8d98a8", steelHi: "#b9c3d0", lamp: "#f4d25a", amber: "#f0a030", snow: "#f7fafd",
+};
+export function drawRinkSurfacer(ctx, cx, by, dir, st) {
+  const K = SURF_COL, ms = (st && st.ms) || 0, lit = (st && st.lit) || 0, moving = !!(st && st.moving);
+  const side = dir === 2 || dir === 3, fx = dir === 2 ? -1 : 1;
+  const R = (dx, dy, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(side && fx < 0 ? cx - dx - w + 1 : cx + dx), Math.round(by + dy), w, h); };
+  // l'ombre au sol : trois rangées qui rétrécissent
+  const sh = "rgba(10,18,36,0.26)";
+  if (side) { R(-17, -2, 35, 3, sh); R(-15, -3, 31, 1, sh); R(-15, 1, 31, 1, sh); } else { R(-13, -2, 27, 3, sh); R(-11, -3, 23, 1, sh); R(-11, 1, 23, 1, sh); }
+  const beacon = moving ? (Math.floor(ms / 260) & 1) : (Math.floor(ms / 1300) & 1);
+  const wheel = (dx, w2) => { R(dx + 1, -8, w2 - 2, 8, K.tire); R(dx, -7, w2, 6, K.tire); R(dx + (w2 >> 1) - 1, -5, 2, 2, K.steel); };
+  if (side) {
+    // de profil (cap est : l'avant est à droite)
+    wheel(-14, 9); wheel(8, 9);
+    R(-18, -13, 37, 5, K.navy); R(-18, -9, 37, 1, K.navyLo); R(-18, -13, 37, 1, "#4466a0");   // le bandeau, sa lèvre claire et son ombre
+    // le bac à neige : couvercle, flanc, bande rouge, nervures
+    R(-17, -27, 16, 14, K.light); R(-17, -27, 16, 2, K.steel); R(-17, -28, 16, 1, K.steelHi); R(-16, -29, 14, 2, K.snow); R(-15, -30, 8, 1, K.snow);
+    R(-17, -17, 16, 3, K.red); R(-17, -15, 16, 1, K.redLo); R(-17, -26, 1, 12, K.lo);
+    for (const gx of [-13, -9, -5]) R(gx, -25, 1, 8, K.lo);
+    R(-17, -14, 16, 1, K.lo);
+    // la cabine : toit sombre, vitres, montant
+    R(-1, -30, 13, 17, K.light); R(-1, -30, 13, 1, K.hi); R(-2, -32, 15, 3, K.dark); R(-2, -32, 15, 1, "#3a3f49");
+    R(1, -28, 5, 9, K.glass); R(1, -28, 5, 2, K.glassHi); R(7, -28, 5, 9, K.glass); R(7, -28, 5, 2, K.glassHi); R(6, -28, 1, 9, K.light);
+    R(-1, -17, 13, 4, K.lo);
+    // le capot, la calandre, le phare, le pare-chocs
+    R(12, -21, 7, 9, K.light); R(12, -21, 7, 1, K.hi); R(17, -20, 2, 7, K.dark); R(18, -18, 1, 3, K.lamp); R(12, -13, 8, 3, K.steel); R(19, -12, 2, 4, K.steelHi);
+    // le conditionneur à l'arrière : la planche sombre, la goulotte d'eau
+    R(-22, -12, 4, 6, K.dark); R(-23, -7, 5, 1, K.steel);
+    if (moving) { R(-26, -2, 5, 1, "rgba(196,228,250,0.7)"); R(-29, -1, 6, 1, "rgba(196,228,250,0.5)"); }
+    // le pot et sa vapeur
+    R(-2, -37, 2, 6, K.steel); R(-2, -38, 2, 1, K.steelHi);
+    for (let k = 0; k < 3; k++) {
+      const age = ((ms / (moving ? 520 : 900)) + k / 3) % 1, a = (1 - age) * (moving ? 0.55 : 0.3);
+      ctx.fillStyle = `rgba(240,246,252,${a.toFixed(3)})`;
+      const sx = (side && fx < 0 ? cx + 1 : cx - 3) + (fx > 0 ? -1 : 1) * Math.round(age * 7), sy = by - 40 - Math.round(age * 9);
+      ctx.fillRect(Math.round(sx), sy, 2 + (k & 1), 2 + (k & 1));
+    }
+    // le gyrophare, au bout du toit
+    R(4, -35, 3, 3, beacon ? K.amber : "#8a5a1c"); if (beacon) R(5, -36, 1, 1, "#ffe9a8");
+    if (lit > 0.05) R(20, -19, 2, 5, `rgba(255,236,170,${(0.32 * lit).toFixed(3)})`);   // le halo du phare
+  } else if (dir === 0) {
+    // de face (cap sud)
+    R(-14, -8, 5, 8, K.tire); R(10, -8, 5, 8, K.tire); R(-13, -9, 3, 1, K.tire); R(11, -9, 3, 1, K.tire);
+    R(-12, -7, 25, 4, K.steel); R(-12, -7, 25, 1, K.steelHi); R(-11, -4, 23, 1, K.dark);     // le pare-chocs, la lame de raclage
+    R(-10, -19, 21, 12, K.light); R(-10, -19, 21, 1, K.hi); R(-10, -8, 21, 1, K.lo);
+    R(-6, -16, 13, 7, K.dark); for (let g = -5; g <= 5; g += 2) R(g, -15, 1, 5, K.steel);     // la calandre
+    R(-10, -15, 3, 3, K.lamp); R(8, -15, 3, 3, K.lamp);                                       // les phares
+    R(-10, -12, 21, 1, K.navy);
+    R(-9, -29, 19, 10, K.glass); R(-9, -29, 19, 2, K.glassHi); R(0, -29, 1, 10, K.light);       // le pare-brise
+    R(-10, -32, 21, 3, K.dark); R(-10, -32, 21, 1, "#3a3f49");
+    R(-14, -28, 4, 17, K.light); R(11, -28, 4, 17, K.light); R(-14, -28, 4, 1, K.steelHi); R(11, -28, 4, 1, K.steelHi);   // les flancs du bac, de part et d'autre de la cabine
+    R(-14, -18, 4, 3, K.red); R(11, -18, 4, 3, K.red);
+    R(0, -35, 3, 3, beacon ? K.amber : "#8a5a1c"); if (beacon) R(1, -36, 1, 1, "#ffe9a8");
+    if (lit > 0.05) { R(-11, -16, 5, 5, `rgba(255,236,170,${(0.3 * lit).toFixed(3)})`); R(8, -16, 5, 5, `rgba(255,236,170,${(0.3 * lit).toFixed(3)})`); }
+  } else {
+    // de dos (cap nord)
+    R(-14, -8, 5, 8, K.tire); R(10, -8, 5, 8, K.tire); R(-13, -9, 3, 1, K.tire); R(11, -9, 3, 1, K.tire);
+    R(-12, -8, 25, 6, K.dark); R(-12, -8, 25, 1, K.steel);                                      // la planche du conditionneur
+    R(-12, -28, 25, 20, K.light); R(-12, -28, 25, 2, K.steel); R(-11, -30, 23, 2, K.snow); R(-9, -31, 14, 1, K.snow);
+    R(-12, -19, 25, 3, K.red); R(-12, -16, 25, 1, K.redLo); R(-12, -12, 25, 1, K.lo);
+    R(-6, -25, 13, 8, K.steel); R(-6, -25, 13, 1, K.steelHi); R(0, -25, 1, 8, K.lo);               // la trappe du bac
+    R(-12, -14, 2, 3, K.red); R(11, -14, 2, 3, K.red);                                           // les feux
+    R(-1, -40, 2, 9, K.steel);
+    for (let k = 0; k < 3; k++) {
+      const age = ((ms / (moving ? 520 : 900)) + k / 3) % 1, a = (1 - age) * (moving ? 0.55 : 0.3);
+      ctx.fillStyle = `rgba(240,246,252,${a.toFixed(3)})`; ctx.fillRect(Math.round(cx - 1 + age * 4), by - 44 - Math.round(age * 9), 2 + (k & 1), 2 + (k & 1));
+    }
+    R(0, -35, 3, 3, beacon ? K.amber : "#8a5a1c"); if (beacon) R(1, -36, 1, 1, "#ffe9a8");
+    if (moving) { R(-10, -1, 21, 1, "rgba(196,228,250,0.65)"); }
+  }
 }
 /* La bande, découpée par rangée de sol : [{ row, cv, ox, oy }] (px monde). `snowy` : la rambarde porte un liseré de neige. */
 export function rinkBoardRows(snowy) {
@@ -1703,41 +1893,107 @@ export function rinkBoardOutline() {
   if (!RINK_CACHE.outline) rinkBoardRows(false);
   return RINK_CACHE.outline;
 }
-/* UNE GUIRLANDE AU-DESSUS DE LA GLACE (`tw.rinkGarlands`) : un fil sombre qui pend (`sag`, une parabole) et une ampoule
-   tous les 7 px, accrochée sous lui — blanc chaud, une sur trois ambrée, une sur sept rouge ou verte (c'est l'hiver) ;
-   allumées (`lit` 0..1), elles scintillent à peine, chacune à sa phase. `out` reçoit les ampoules allumées (les verres
-   qui brillent dans la passe de lumière). En px du monde. */
-export function drawRinkGarland(ctx, g, ms, lit, out) {
-  /* ⚠️ DU VERRE COLORÉ, ET PAS DES AMPOULES CLAIRES : premier jet au banc, de jour, des ampoules crème éteintes sur une
-     glace pâle ne se voyaient pas — il restait trois fils noirs tendus au-dessus de la patinoire, des lignes électriques.
-     Des ampoules de couleur (rouge, vert, or, bleu, blanc) se lisent éteintes ; le fil est vert sombre, pas noir. */
-  const dx = g.x1 - g.x0, dy = g.y1 - g.y0, L = Math.hypot(dx, dy) || 1, n = Math.ceil(L * 1.4);
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ UNE GUIRLANDE AU-DESSUS DE LA GLACE (`tw.rinkGarlands`) — REFAITE LE 2026-10-06 (Guillaume : « améliorer les guirlandes »).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Le premier jet était un fil sombre d'un pixel avec une ampoule d'un pixel tous les 6 : de près, une ligne électrique ; de loin,
+   rien. Elle est maintenant UNE BRANCHE DE SAPIN (deux pixels d'épaisseur, des aiguilles claires et sombres qui dépassent,
+   des baies rouges), tendue de mât en mât (`sag`, une parabole), et elle porte :
+     · des AMPOULES PENDANTES, de trois longueurs de fil qui alternent (un rideau de lumière, pas une rangée) — verre coloré
+       de deux pixels, culot, reflet ; allumées, leur éclat court le long du fil (un CHENILLARD : la phase décale d'une ampoule
+       à la suivante) au lieu de scintiller chacune dans son coin ;
+     · des BOULES (3 × 3, rouge, or, bleu) tous les ~40 px, avec leur point de lumière ;
+     · un NŒUD rouge à chaque mât, et une étoile d'or au milieu du fil ;
+     · de la NEIGE (`snowy`, 0..1) : des paquets blancs sur le dessus de la branche et sur les boules.
+   ⚠️ TOUT SE TIRE D'UN HACHAGE DÉTERMINISTE (l'indice du pas et `g.k`) : aucune horloge pour la FORME (seule la lumière en a une),
+   aucun `Math.random` — la branche est la même à chaque image et chez tous les joueurs.
+   ⚠️ DU VERRE COLORÉ, ET PAS DES AMPOULES CLAIRES (leçon du premier jet) : de jour, des ampoules crème éteintes sur une glace pâle
+   ne se voyaient pas ; des ampoules de couleur (rouge, vert, or, bleu, blanc) se lisent éteintes. Le sapin est vert sombre.
+   `out` reçoit les ampoules allumées (les verres qui brillent dans la passe de lumière). En px du monde. */
+const GARLAND_FIR = [[26, 62, 42], [40, 88, 56], [56, 116, 70], [88, 152, 96]];
+const GARLAND_GLASS = [[198, 58, 52], [52, 142, 84], [226, 170, 58], [70, 120, 200], [236, 230, 214]];
+const GARLAND_GLOW = [[255, 120, 100], [130, 240, 150], [255, 214, 120], [150, 190, 255], [255, 246, 214]];
+const GARLAND_BALL = [[[196, 44, 44], [250, 128, 110]], [[222, 168, 54], [255, 236, 150]], [[56, 108, 196], [150, 196, 255]]];
+export function drawRinkGarland(ctx, g, ms, lit, out, snowy) {
+  const dx = g.x1 - g.x0, dy = g.y1 - g.y0, L = Math.hypot(dx, dy) || 1, n = Math.ceil(L * 1.6);
   const at = (u) => [g.x0 + dx * u, g.y0 + dy * u + g.sag * 4 * u * (1 - u)];
-  ctx.fillStyle = "rgba(30,52,40,0.92)";
-  let lx = null, ly = null;
-  for (let i = 0; i <= n; i++) { const [x, y] = at(i / n), rx = Math.round(x), ry = Math.round(y); if (rx !== lx || ry !== ly) { ctx.fillRect(rx, ry, 1, 1); lx = rx; ly = ry; } }
-  const GLASS = [[198, 58, 52], [52, 142, 84], [226, 170, 58], [70, 120, 200], [236, 230, 214]];
-  const GLOW = [[255, 120, 100], [130, 240, 150], [255, 214, 120], [150, 190, 255], [255, 246, 214]];
+  const hh = (a, b) => { let x = (Math.imul(a + 1, 374761393) + Math.imul(b + 7, 668265263) + Math.imul(g.k + 3, 2246822519)) >>> 0; x = Math.imul(x ^ (x >>> 13), 1274126177) >>> 0; return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
+  const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const snow = Math.max(0, Math.min(1, +snowy || 0));
+  // 1 — LA BRANCHE : deux pixels d'épaisseur, des aiguilles qui dépassent dessus et dessous, quelques baies
+  let lx = null, ly = null, step = 0;
+  const trunk = [];
+  for (let i = 0; i <= n; i++) {
+    const [x, y] = at(i / n), rx = Math.round(x), ry = Math.round(y);
+    if (rx === lx && ry === ly) continue;
+    lx = rx; ly = ry; step++;
+    const r = hh(step, 1);
+    ctx.fillStyle = rgb(GARLAND_FIR[r < 0.4 ? 1 : r < 0.75 ? 0 : 2]); ctx.fillRect(rx, ry, 1, 2);
+    if (r > 0.66) { ctx.fillStyle = rgb(GARLAND_FIR[3]); ctx.fillRect(rx, ry - 1, 1, 1); }
+    if (r < 0.24) { ctx.fillStyle = rgb(GARLAND_FIR[0]); ctx.fillRect(rx, ry + 2, 1, 1); }
+    if (r > 0.45 && r < 0.5) { ctx.fillStyle = "#b8353a"; ctx.fillRect(rx, ry + 1, 1, 1); }          // une baie
+    trunk.push({ x: rx, y: ry, u: i / n, r });
+  }
+  if (snow > 0.05) for (const t of trunk) {
+    const r2 = hh(t.x * 3 + 11, 5);
+    if (r2 < 0.62 * snow) { ctx.fillStyle = r2 < 0.2 * snow ? "#ffffff" : "#e8eff8"; ctx.fillRect(t.x, t.y - 1, 1, 1); if (r2 < 0.12 * snow) ctx.fillRect(t.x, t.y - 2, 1, 1); }
+  }
+  // 2 — LES AMPOULES PENDANTES, et (de loin en loin) les boules
   let acc = 3, prev = at(0), bi = 0;
   for (let i = 1; i < n; i++) {
     const cur = at(i / n);
     acc += Math.hypot(cur[0] - prev[0], cur[1] - prev[1]); prev = cur;
-    if (acc < 6) continue;
+    if (acc < 7) continue;
     acc = 0; bi++;
-    const bx = Math.round(cur[0]), by = Math.round(cur[1]) + 1, ci = (g.k + bi) % GLASS.length;
-    ctx.fillStyle = "#2a3a30"; ctx.fillRect(bx, by - 1, 1, 1);                    // le culot
-    if (lit > 0.05) {
-      const a = Math.min(1, lit) * (0.82 + 0.18 * Math.sin(ms / 470 + g.k * 2.3 + bi * 1.9)), c = GLOW[ci];
-      ctx.fillStyle = `rgb(${GLASS[ci].join(",")})`; ctx.fillRect(bx, by, 1, 2);
-      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`; ctx.fillRect(bx, by, 1, 2);
-      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${(0.3 * a).toFixed(3)})`;
-      ctx.fillRect(bx - 1, by, 1, 2); ctx.fillRect(bx + 1, by, 1, 2); ctx.fillRect(bx, by + 2, 1, 1);
-      if (out) out.push({ x: bx, y: by });
-    } else {
-      const c = GLASS[ci];
-      ctx.fillStyle = `rgb(${c.join(",")})`; ctx.fillRect(bx, by, 1, 2);
-      ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fillRect(bx, by, 1, 1);         // le reflet du jour sur le verre
+    const bx = Math.round(cur[0]), by0 = Math.round(cur[1]) + 2;
+    if (bi % 6 === 0) {
+      // une boule : trois pixels de large, le fil d'un pixel, le point de lumière en haut à gauche, l'ombre en bas à droite
+      const bc = GARLAND_BALL[(g.k + bi) % GARLAND_BALL.length], sw = Math.sin(ms / 900 + bi * 1.7 + g.k) > 0.93;
+      ctx.fillStyle = "#2a3a30"; ctx.fillRect(bx, by0, 1, 1);
+      ctx.fillStyle = rgb(bc[0]); ctx.fillRect(bx - 1, by0 + 1, 3, 3);
+      ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(bx + 1, by0 + 3, 1, 1);
+      ctx.fillStyle = rgb(bc[1]); ctx.fillRect(bx - 1, by0 + 1, 1, 1);
+      if (snow > 0.3) { ctx.fillStyle = "#f2f6fb"; ctx.fillRect(bx, by0 + 1, 1, 1); }
+      if (lit > 0.05 && sw) { ctx.fillStyle = `rgba(255,250,220,${(0.9 * Math.min(1, lit)).toFixed(3)})`; ctx.fillRect(bx, by0 + 2, 1, 1); ctx.fillRect(bx - 2, by0 + 2, 1, 1); ctx.fillRect(bx + 2, by0 + 2, 1, 1); ctx.fillRect(bx, by0 + 4, 1, 1); }
+      continue;
     }
+    const drop = [2, 4, 3, 5][bi % 4], ci = (g.k + bi) % GARLAND_GLASS.length, by = by0 + drop;
+    ctx.fillStyle = "rgba(34,60,44,0.95)"; ctx.fillRect(bx, by0, 1, drop);                            // le fil de la ampoule
+    ctx.fillStyle = "#2a3a30"; ctx.fillRect(bx, by - 1, 1, 1);                                          // le culot
+    if (lit > 0.05) {
+      // le chenillard : une onde de lumière qui court le long du fil, plus un léger vacillement propre à chaque ampoule
+      const wave = 0.5 + 0.5 * Math.sin(ms / 340 - bi * 0.55 + g.k * 1.3), a = Math.min(1, lit) * (0.58 + 0.42 * wave) * (0.94 + 0.06 * Math.sin(ms / 130 + bi * 3.1)), c = GARLAND_GLOW[ci];
+      ctx.fillStyle = rgb(GARLAND_GLASS[ci]); ctx.fillRect(bx, by, 2, 2);
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`; ctx.fillRect(bx, by, 2, 2);
+      ctx.fillStyle = `rgba(255,255,255,${(0.55 * a).toFixed(3)})`; ctx.fillRect(bx, by, 1, 1);
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${(0.3 * a).toFixed(3)})`;
+      ctx.fillRect(bx - 1, by, 1, 2); ctx.fillRect(bx + 2, by, 1, 2); ctx.fillRect(bx, by + 2, 2, 1);
+      if (out) out.push({ x: bx, y: by, k: 0.55 + 0.45 * wave });
+    } else {
+      const c = GARLAND_GLASS[ci];
+      ctx.fillStyle = rgb(c); ctx.fillRect(bx, by, 2, 2);
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(bx + 1, by + 1, 1, 1);
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fillRect(bx, by, 1, 1);                              // le reflet du jour sur le verre
+    }
+  }
+  // 3 — LES NŒUDS rouges aux deux mâts, et l'ÉTOILE d'or au milieu du fil
+  const bow = (x, y, side) => {
+    ctx.fillStyle = "#8f1f26"; ctx.fillRect(x - 3, y - 2, 3, 4); ctx.fillRect(x + 1, y - 2, 3, 4);        // les deux boucles (l'ombre)
+    ctx.fillStyle = "#c93a3c"; ctx.fillRect(x - 3, y - 2, 3, 3); ctx.fillRect(x + 1, y - 2, 3, 3);
+    ctx.fillStyle = "#ee7a6c"; ctx.fillRect(x - 3, y - 2, 2, 1); ctx.fillRect(x + 2, y - 2, 2, 1);
+    ctx.fillStyle = "#a82a30"; ctx.fillRect(x, y - 1, 1, 2);                                              // le nœud
+    ctx.fillStyle = "#b8353a"; ctx.fillRect(x - 2 - side, y + 2, 1, 3); ctx.fillRect(x + 2 + side, y + 2, 1, 3);   // les rubans
+    ctx.fillStyle = "#7c1a22"; ctx.fillRect(x - 2 - side, y + 4, 1, 1); ctx.fillRect(x + 2 + side, y + 4, 1, 1);
+  };
+  const [ax, ay] = at(0.012), [zx, zy] = at(0.988);
+  bow(Math.round(ax) + 2, Math.round(ay) + 1, 0); bow(Math.round(zx) - 2, Math.round(zy) + 1, 0);
+  {
+    const [sx, sy] = at(0.5), px = Math.round(sx), py = Math.round(sy) + 2, tw2 = lit > 0.05 ? 0.78 + 0.22 * Math.sin(ms / 420 + g.k) : 1;
+    ctx.fillStyle = "#2a3a30"; ctx.fillRect(px, py - 1, 1, 1);
+    ctx.fillStyle = lit > 0.05 ? `rgba(255,214,110,${(Math.min(1, lit) * tw2).toFixed(3)})` : "#d9a93c";
+    ctx.fillRect(px, py, 1, 5); ctx.fillRect(px - 2, py + 2, 5, 1); ctx.fillRect(px - 1, py + 1, 3, 3);
+    ctx.fillStyle = lit > 0.05 ? "rgba(255,246,200,0.95)" : "#f4d57a"; ctx.fillRect(px, py + 2, 1, 1);
+    if (lit > 0.05 && out) out.push({ x: px, y: py + 2, k: tw2 });
   }
 }
 /* L'ombre de la bande, dans le tampon des ombres du soleil (`sunShadowPass`) : pour chaque morceau, le polygone entre

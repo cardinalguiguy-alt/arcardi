@@ -413,3 +413,10 @@ dépôt.
   rouge le suivant). Parade : comparer des nombres tels quels (`+x > 0`, `|| 0` pour un défaut), jamais `| 0` sur du temps ; et un
   banc qui joue la fonction à une vraie heure d'horloge dont les 32 bits bas sont négatifs (`verify-vallee`). ⚠️ Même motif repéré, pas
   corrigé : `f.injuredUntil | 0` (FermeGame.js, `resolveStarCandy`).
+- ⚠️⚠️ **UNE BLESSURE QUI REFUSE LES NOUVELLES ENTRÉES NE LÂCHE PAS LES TOUCHES DÉJÀ TENUES** (2026-10-06). Le garde de `onKeyDown` renvoie
+  tout net pendant une blessure (« aucune entrée en attendant la fin du repos forcé »), mais `keysRef` garde ce qui était DÉJÀ enfoncé :
+  tant que la chute sans patins renvoyait à la ferme, personne ne l'a vu ; le jour où l'on est déposé au bord de la glace, flèche encore
+  tenue, le joueur retournait sur la glace, y retombait (le garde `isInjured()` refusait la seconde blessure) et y restait immobilisé,
+  blessé, au milieu de la piste. Aucune erreur, aucun banc : vu en jouant. Parade : toute téléportation / déplacement forcé lâche les
+  touches (`keysRef.current = {}`, comme les vingt transitions qui le font déjà) ; `iceFallNow` le fait. À retenir pour la prochaine
+  blessure qui laisserait le joueur à portée de ce qui l'a causée.

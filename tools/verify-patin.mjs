@@ -15,7 +15,9 @@
          `SLIP_T`, le sol (`down`, la blessure) à `SLIP_T + FALL_T` ;
      §6  le choc contre la berge renvoie un peu, en sens inverse ;
      §7  la pose des autres se déduit (chaussés ou non, leur vitesse) ;
-     §8  la cadence d'image ne change pas la trajectoire (60 contre 144 i/s).
+     §8  la cadence d'image ne change pas la trajectoire (60 contre 144 i/s) ;
+     §9  le matériel ; §10 les figures ;
+     §11 (2026-10-06) le FREINAGE BRUT (C tenue), la VRILLE QUI S'EMBALLE (V répété), leurs codes dans le paquet de position.
    Chaque contrôle a été falsifié le jour de son écriture (la note en face dit
    comment). Usage : node tools/verify-patin.mjs
    ========================================================================== */
@@ -246,6 +248,56 @@ section("§10 — les figures de la pratique libre : saut, vrille, axel, marche 
     const run = (hz) => { const s5 = PT.skateNew(5, 0); PT.skateTrickStart(s5, "axel", o); let x = 0; for (let t = 0; t < 1.2; t += 1 / hz) { PT.skateStep(s5, 0, 0, 1 / hz, o); x += s5.vx / hz; } return x; };
     return Math.abs(run(60) - run(144)) < 0.1;
   })());
+}
+
+section("§11 — le freinage brut et la vrille emballée (2026-10-06)");
+{
+  const o = { skates: true, free: true };
+  // LE FREINAGE BRUT : C tenue, plus fort que le freinage à contresens, aucun ordre écouté, la machine le dit.
+  const cruise = () => { const st = PT.skateNew(); play(st, 4, 60, () => [1, 0], o); return st; };
+  const hb = cruise(), v0 = Math.hypot(hb.vx, hb.vy);
+  let t = 0, dist = 0, sawHard = false, sawPush = false;
+  while (Math.hypot(hb.vx, hb.vy) > 0.05 && t < 4) { PT.skateStep(hb, 1, 0, 1 / 60, { ...o, stop: true }); dist += Math.hypot(hb.vx, hb.vy) / 60; t += 1 / 60; sawHard = sawHard || hb.hard; sawPush = sawPush || hb.push === 1; }
+  const cb = cruise(); let t2 = 0, dist2 = 0;
+  while (Math.hypot(cb.vx, cb.vy) > 0.05 && t2 < 4) { PT.skateStep(cb, -1, 0, 1 / 60, o); dist2 += Math.hypot(cb.vx, cb.vy) / 60; t2 += 1 / 60; }
+  ok("C tenue : on s'arrête, vite (de la croisière à l'arrêt en moins d'une seconde)", t < 1 && Math.hypot(hb.vx, hb.vy) <= 0.05, `${v0.toFixed(1)} → 0 en ${t.toFixed(2)} s, ${dist.toFixed(2)} cases`);
+  ok("… plus court que le freinage à contresens (même vitesse d'entrée)", t < t2 && dist < dist2, `${t.toFixed(2)} s / ${dist.toFixed(2)} cases contre ${t2.toFixed(2)} s / ${dist2.toFixed(2)} cases`);
+  ok("… sans jamais repartir en arrière ni pousser, même avec un ordre en avant", hb.vx >= -1e-9 && !sawPush);
+  ok("… et la machine dit `hard` (la grande gerbe) tant qu'on va vite", sawHard);
+  const sl = PT.skateNew(0.9, 0); PT.skateStep(sl, 0, 0, 1 / 60, { ...o, stop: true });
+  ok("à très basse vitesse, le frein s'achève sans gerbe (`hard` faux sous STOP_MIN_V)", sl.hard === false);
+  ok("sans patins, C ne freine rien (on ne contrôle plus rien)", (() => { const s6 = PT.skateNew(5, 0); PT.skateStep(s6, 0, 0, 1 / 60, { skates: false, stop: true }); return s6.mode === "slip" && s6.hard === false; })());
+  ok("le code du paquet de position dit `stop` (les autres voient la gerbe)", PT.skateTrickCode(hb) === 0 && (() => { const s7 = cruise(); PT.skateStep(s7, 0, 0, 1 / 60, { ...o, stop: true }); return PT.skateTrickCode(s7) === PT.TRICK_CODE.stop && PT.skateSeen(true, s7.vx, s7.vy, PT.TRICK_CODE.stop) === "brake"; })());
+  ok("le brut est le plus fort des freins (brakeK des longues lames compris)", PT.TRICK.STOP_BRAKE > PT.SKATE.BRAKE);
+
+  // LA VRILLE QUI S'EMBALLE : chaque V pendant la vrille passe au niveau suivant, depuis le tour où l'on est.
+  const spinRun = (pressAt) => {
+    const st = PT.skateNew(5, 0); PT.skateTrickStart(st, "spin", o);
+    let t3 = 0, maxSpin = 0, jump = 0, prev = 0, lv = 0, ended = null, endSpin = 0, boosts = 0;
+    for (let k = 0; k < 60 * 3 && !ended; k++) {
+      if (pressAt.some((p) => Math.abs(p - t3) < 1 / 120) && PT.skateTrickBoost(st)) boosts++;
+      PT.skateStep(st, 0, 0, 1 / 60, o); t3 += 1 / 60;
+      if (st.trick) { jump = Math.max(jump, Math.abs(st.spin - prev)); prev = st.spin; maxSpin = Math.max(maxSpin, st.spin); lv = st.trick.lv; endSpin = st.spin; }
+      else ended = { t: t3, turns: st.landedTurns, lv: st.landedLv };
+    }
+    return { t: ended ? ended.t : 99, turns: ended ? ended.turns : 0, lv: ended ? ended.lv : lv, jump, boosts, maxSpin, endSpin };
+  };
+  const base = spinRun([]), dbl = spinRun([0.2]), many = spinRun([0.15, 0.3, 0.45]);
+  ok("une vrille seule : un tour, 0,74 s (comme avant)", base.turns === 1 && Math.abs(base.t - PT.TRICK.SPIN.T) < 0.04 && base.lv === 0, `${base.turns} tour(s) en ${base.t.toFixed(2)} s`);
+  ok("deux V rapprochés : plus de tours, et un angle qui ne saute JAMAIS (continuité)", dbl.boosts === 1 && dbl.turns >= 2 && dbl.jump < 0.12, `${dbl.turns} tours, saut max ${dbl.jump.toFixed(3)} tour/image`);
+  ok("V répété : de plus en plus vite (tours par seconde croissants, trois niveaux de plus au plus)", many.boosts === 3 && many.turns > dbl.turns && many.turns / many.t > dbl.turns / dbl.t && dbl.turns / dbl.t > base.turns / base.t, `base ${(base.turns / base.t).toFixed(1)} < double ${(dbl.turns / dbl.t).toFixed(1)} < rafale ${(many.turns / many.t).toFixed(1)} tours/s`);
+  ok("une vrille retombe toujours sur un tour ENTIER (on retombe de face)", [base, dbl, many].every((r) => Number.isInteger(r.turns)) && [dbl, many].every((r) => Math.abs(r.endSpin - Math.round(r.endSpin)) < 0.2), `fins : ${base.turns}, ${dbl.turns}, ${many.turns}`);
+  ok("au-delà du dernier niveau, un V de plus ne fait plus rien", (() => { const r = spinRun([0.1, 0.2, 0.3, 0.4, 0.5]); return r.boosts === 3 && r.lv === 3; })());
+  ok("des V pressés AVANT le départ de la vrille (`force`) la font partir déjà emballée, jusqu'au dernier niveau", (() => { const st = PT.skateNew(5, 0); PT.skateTrickStart(st, "spin", o); const a = PT.skateTrickBoost(st, true), b = PT.skateTrickBoost(st, true), c = PT.skateTrickBoost(st, true), d = PT.skateTrickBoost(st, true); return a && b && c && !d && st.trick.lv === 3; })());
+  ok("un V dans la même image que le départ de la vrille (rebond de touche) n'emballe pas", (() => { const st = PT.skateNew(5, 0); PT.skateTrickStart(st, "spin", o); return PT.skateTrickBoost(st) === false; })());
+  ok("ni le saut ni l'axel ne s'emballent", (() => { const a = PT.skateNew(5, 0); PT.skateTrickStart(a, "axel", o); PT.skateStep(a, 0, 0, 0.2, o); const h = PT.skateNew(5, 0); PT.skateTrickStart(h, "hop", o); PT.skateStep(h, 0, 0, 0.2, o); return !PT.skateTrickBoost(a) && !PT.skateTrickBoost(h); })());
+  // Les autres : le niveau voyage dans le code, la même courbe se relit.
+  ok("le niveau d'une vrille voyage dans le code (spin, spin1, spin2, spin3), et se relit", (() => {
+    const names = [0, 1, 2, 3].map((l) => (l ? "spin" + l : "spin"));
+    return names.every((nm, l) => PT.TRICK_CODE[nm] > 0 && PT.TRICK_NAMES[PT.TRICK_CODE[nm]] === nm && PT.skateTrickBase(nm).kind === "spin" && PT.skateTrickBase(nm).lv === l && PT.skateSeen(true, 3, 0, PT.TRICK_CODE[nm]) === "spin");
+  })());
+  ok("les durées des niveaux décroissent, les tours gagnés croissent", PT.TRICK.SPIN_LV.every((l, i, a) => i === 0 || (l.T < a[i - 1].T && l.G > a[i - 1].G)));
+  ok("la courbe relue par les autres (même niveau, même départ) finit sur un tour entier aussi", [0, 0.37, 1.6].every((a0) => [0, 1, 2, 3].every((lv) => Math.abs(a0 + PT.skateTrickAt("spin", 1, lv, a0).spin - Math.round(a0 + PT.skateTrickAt("spin", 1, lv, a0).spin)) < 1e-9)));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

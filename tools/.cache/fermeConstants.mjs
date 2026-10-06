@@ -964,7 +964,13 @@ export const BURN_INJURED_MS = 10 * 60 * 1000;
    la brûlure : optimiste chez soi, gardée et rediffusée par l'hôte (`iceFall`),
    retour à la maison, soignable au pansement par un coéquipier. La glissade qui y
    mène est dans `patin.js`. */
-export const ICE_INJURED_MS = 15 * 60 * 1000;
+export const ICE_INJURED_MS_LEGACY = 15 * 60 * 1000;   // (l'ancienne durée, gardée pour mémoire : plus lue par le jeu)
+/* ⚠️ 2026-10-06 — LA BLESSURE DE LA GLISSADE SANS PATINS DURE DE 30 SECONDES À 2 MINUTES (Guillaume : « la blessure pour
+   glissade sans patins doit être entre 30 secondes et 2 minutes ») — tirée au hasard dans cet intervalle à la chute (chez le
+   joueur, bornée par l'hôte : `iceFall`). Et on N'EST PLUS RENVOYÉ À LA FERME : on est déposé au bord de la glace, hors de la
+   piste (`iceShoreSpot`), et l'on y reste immobile le temps du repos (toute entrée est refusée pendant une blessure). */
+export const ICE_INJURED_MIN_MS = 30 * 1000;
+export const ICE_INJURED_MAX_MS = 2 * 60 * 1000;
 
 // Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
 // DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter
@@ -8763,13 +8769,16 @@ export const NET_PRICE = 300;            // l'épuisette, au marché (or de la c
    la boutique « très chic » de la demande, et c'est le seul objet qui ouvre un lieu. */
 /* 2026-10-05 — ⚠️ LES PATINS SE LOUENT, ILS NE S'ACHÈTENT PLUS (Guillaume : « les ice skates
    doivent être loués pour 10 minutes. pas achetés définitivement »). DIX MINUTES RÉELLES (le
-   chiffre qu'il a donné, comme les quinze minutes de la blessure : `ICE_INJURED_MS`), à
+   chiffre qu'il a donné ; la blessure de la chute a, elle, changé le 2026-10-06 : `ICE_INJURED_MIN_MS`…`ICE_INJURED_MAX_MS`), à
    compter de la location, que l'on patine ou non. Le prix passe de 450 or (la paire pour
    toujours) à `SKATES_RENT_PRICE` : un tarif de location, pas un équipement — à juger en
    jouant, comme tout nombre neuf. La location s'arrête sans rien demander (`E.skatesActive`) ;
    on est prévenu à `SKATES_WARN_MS` puis à `SKATES_WARN2_MS` de la fin. */
 export const SKATES_RENT_PRICE = 60;
-export const SKATES_RENT_MS = 10 * 60 * 1000;
+/* ⚠️ 2026-10-06 — QUINZE MINUTES (Guillaume : « augmenter le temps de location de patins et combi et tout à 15 minutes ») : la
+   location couvre tout le matériel du chalet (les patins, les longues lames, la combinaison). Le chiffre de dix minutes plus haut
+   est celui de la première demande ; celui-ci le remplace. */
+export const SKATES_RENT_MS = 15 * 60 * 1000;
 export const SKATES_WARN_MS = 60 * 1000;
 export const SKATES_WARN2_MS = 15 * 1000;
 export const NET_COOLDOWN_MS = 2200;     // un coup d'épuisette toutes les 2,2 s au plus (arbitré par l'hôte)

@@ -1,5 +1,66 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-06 — GERBES MESURÉES, FREINAGE BRUT, VRILLE QUI S'EMBALLE, AIDE « ? », GUIRLANDES REFAITES, USURE DE LA GLACE ET SURFACEUSE, CHUTE AU BORD
+
+« Les gerbes sont trop importantes : les réduire un peu en patinant, les agrandir après l'atterrissage et à un freinage brut (nouvelle
+commande) ; améliorer les guirlandes ; la vrille plus rapide quand on appuie plusieurs fois sur V ; un petit menu discret (« ? ») pour les
+commandes ; plusieurs états de lissage de la piste selon l'usage, et un lissage demandé au chalet ; la location à 15 minutes, la combi
+seulement sur la patinoire ; la blessure de 30 s à 2 min, et déposé au bord de la glace » (Guillaume). Décidé AVEC lui, par questions :
+l'usure est PARTAGÉE et purement VISUELLE (elle ne change pas la glisse), une SURFACEUSE peinte passe sur la glace, la demande est LIBRE en
+pratique normale, et pour le début d'une course la glace est toujours lissée. **Supabase : rien** (aucune migration ; `rinkIce` voyage dans
+l'instantané mais n'est jamais relu au chargement). **Réseau** : un message `ice: { lv }` quand le niveau change, `ice: { lv, smooth }` au
+début d'une passe, `ice: { lv: 0 }` à sa fin, `ice: { lv: 0, fast: 1 }` pour un lissage forcé ; une requête `rinkSmooth`.
+- *La gerbe* (`skateTrail`, `skateBurst`, `skateStopSpray`, FermeGame.js) : le sillage normal tombe de ~62/s à ~29/s à la croisière (éclats
+  d'un pixel, plus courts) ; l'atterrissage d'un saut (34 éclats) et d'un axel (56) est LA grande gerbe, avec des BOUFFÉES (`puff` : gros
+  carrés de poudreuse translucides, ombre bleue dessous — du blanc d'un pixel sur la glace de jour ne se voyait pas) ; une vrille emballée
+  gerbe d'autant plus. Local et décoratif, comme avant : rien ne circule de plus.
+- *Le freinage brut* (**C tenue**, `TRICK.STOP_BRAKE`, patin.js) : aucun ordre écouté, la vitesse fond (de la croisière à l'arrêt en
+  ~0,45 s, ~1,6 case ; le freinage à contresens garde 0,68 s / 2,2 cases), `st.hard` tant qu'on va vite → la grande gerbe en éventail ; le
+  code `stop` (6) voyage dans le paquet de position, les autres voient la pose d'arrêt ET la gerbe.
+- *La vrille emballée* (`TRICK.SPIN_LV`, `skateTrickBoost`) : un V PENDANT la vrille passe au niveau suivant depuis le tour où l'on est
+  (`a0` : l'angle ne saute jamais) ; quatre niveaux (1,3 → 2,4 → 3,8 → 5,4 tours/s), jamais plus de trois V utiles ; un double V si rapide
+  qu'il précède le départ de la vrille (elle attend 80 ms pour savoir si l'on veut l'axel) est COMPTÉ (`rq.spinN`, `force`). Une vrille
+  retombe toujours sur un tour entier (`ceil(a0 + G) − a0`). Le niveau est dans le code du paquet (`spin1`…`spin3`) ; les autres relisent la
+  même courbe en continuant leur dernier angle. Le toast nomme la figure (double, triple, quadruple vrille).
+- *L'aide* (`SkateHelp.js`, composant à part, ~4 lectures/s) : un rond « ? » discret en bas à droite, en ville près de la patinoire ou
+  chaussé ; un papier de commandes (`L.skateHelpRows`, une touche préfixée de « + » = « avec la précédente »). Le bouton refuse le focus :
+  Espace (le saut) ne le rouvre pas.
+- *Les guirlandes* (`drawRinkGarland`, fermeArt.js) : une BRANCHE DE SAPIN (deux pixels, aiguilles, baies), des ampoules PENDANTES de quatre
+  longueurs de fil, des boules (rouge, or, bleu), un nœud rouge à chaque mât, une étoile d'or au milieu, de la neige dessus
+  (`snowy`) ; allumées, un CHENILLARD (l'éclat court le long du fil). Tout par hachage déterministe, aucune horloge pour la forme.
+- *L'usure de la glace* (`surfaceuse.js` pur, `rinkWearCanvas`/`drawRinkWearAt` fermeArt.js, `iceApply`/`hostIceTick` FermeGame.js) : QUATRE états
+  (lisse, marquée, rayée, usée) — des calques transparents cuits une fois pour toute la patinoire, chacun CONTENANT les marques du précédent ;
+  l'hôte seul compte l'usage (la vitesse de chaque patineur sur la glace, ×1,8 en figure, ×2,6 au freinage brut) et ne diffuse que le NIVEAU :
+  seul à la croisière, usée en ~6,6 min ; à trois, en ~2,2 min. Un toast au niveau 3 dit où demander la surfaceuse.
+- *La surfaceuse* : peinte à la main, quatre caps (profil est/ouest, face, dos), gyrophare, vapeur, phares la nuit. Garée à l'est du chalet
+  (non solide quand elle roule ; garée, `RINK_SURF.parked` dit à `blockedTown` que sa place est prise). Le TRAJET est une fonction du temps
+  depuis le début de la passe (`surfacerAt`, 33,7 s) : entrée par le portillon est, huit couloirs, retour — chacun la calcule seul, zéro
+  position sur le réseau. La zone déjà lissée (`sweptRects`) remet la glace NEUVE au pixel près sous la lame (le tampon d'origine recoupé), pose
+  un brillant d'eau fraîche qui s'estompe en 9 s, et efface les traces de lames. Demandée au comptoir du chalet (un bouton dans le panneau :
+  l'état d'usure en quatre segments), arbitrée par l'hôte : refusée pendant une course, pendant une passe, loin du comptoir, glace déjà lisse.
+  **Au départ d'une course** (`hostIceFast`, à la réservation et au départ) : la glace est lissée en fondu, sans machine — et on ne réserve pas
+  PENDANT une passe.
+- *La location* : **15 minutes** pour tout (patins, longues lames, combinaison : `SKATES_RENT_MS`). *La combinaison* ne se voit et ne joue QUE sur
+  la patinoire (`skateKitHere`) : sur un étang ou un lac gelé, on ne sort que les patins (les longues lames et la couleur restent).
+- *La chute sans patins* : blessure TIRÉE de 30 s à 2 min (`ICE_INJURED_MIN_MS`/`MAX`, bornée par l'hôte) ; plus de retour à la ferme : on est
+  déposé au bord de la glace, hors de la piste (`skateShoreSpot` pur, `iceShoreSpot` pour la collision), et l'on y attend immobile.
+  ⚠️ Une blessure refuse les NOUVELLES entrées, pas les touches déjà tenues : le joueur déposé, flèche enfoncée, retournait sur la glace et y
+  restait bloqué — les touches tenues sont lâchées à la chute (vu en jeu).
+- **Vu en jeu** (un client, puis deux : `app/audit-duo`) : les quatre niveaux, une passe complète à la demande d'un invité (le niveau reçu, la
+  passe datée à ±16 ms chez l'hôte et l'invité, fin de passe à zéro des deux côtés), le freinage brut, la vrille emballée (niveaux 0 → 1 → 2),
+  le « ? », la combinaison visible sur la patinoire et absente sur l'étang, la chute et l'atterrissage au portillon est.
+- **Bancs** : `verify-patin` 78/78 (+19 : le frein, la vrille, les codes), `verify-surfaceuse` 59/59 (NEUF : seuils, trajet, COUVERTURE de toute la
+  glace, calques d'usure, glace neuve au pixel, garde-fous de source, la chute), `verify-vallee` 337/337 (la location à 15 min), `verify-strings`
+  1278 clés, `verify-course` 30/30, `render-patin` 4/4, `render-patinoire` 4/4, `verify-ombres` 27/27, `verify-neige` 17/17, `verify-pluie` 34/34,
+  `verify-meteo` 76/76, `verify-faune` 105/105, `verify-collision`, `verify-docs`, `verify-syntax`/`-portee`/`-scope`, `no-undef` sur les cinq
+  fichiers touchés. Falsifiés le jour de leur écriture : le frein affaibli, l'arrondi au tour entier, la lame trop étroite, la glace neuve sous
+  la lame, le plafond de vitesse, l'atterrissage sans vérification.
+- **Pas fait** : les résidents qui patinent ; les reflets des patineurs ; le son de la surfaceuse ; V, B et C au tactile (clavier
+  seulement) ; la surfaceuse ne pousse personne (un patineur sur sa route la traverse). ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` :
+  à supprimer avant déploiement. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git).
+- **Plus tard (décidé en passant, rien n'est fait)** : le marché d'hiver peut RESTER en haut toute l'année, et la place de la patinoire aura
+  d'autres usages aux autres saisons — à trouver (voir la mémoire du projet).
+
 ## 2026-10-05 (nuit, fin quater) — LE CHALET COLLÉ À LA GLACE, LA BANDE AU POINT PRÈS, LE MATÉRIEL DE PATIN, LES FIGURES, LA GERBE
 
 « Déplace le chalet de location à côté de la patinoire ; vérifie les collisions externes qui posent problème ; rends-la plus belle ;

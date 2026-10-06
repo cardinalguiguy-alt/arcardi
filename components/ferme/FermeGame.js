@@ -75,6 +75,8 @@ import * as PF from "./pixelFont";
 import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
 import * as OMB from "./ombres";    // 2026-10-05 (nuit) — les ombres portées du soleil, qui tournent et s'allongent avec l'heure
 import * as CO from "./course";     // 2026-10-05 (nuit) — la course de vitesse sur la patinoire (piste, tours, résidents-coureurs, fantôme)
+import * as SU from "./surfaceuse"; // 2026-10-06 — l'usure de la glace et la surfaceuse de la patinoire (pur)
+import SkateHelp from "./SkateHelp"; // 2026-10-06 — le « ? » du patinage (les commandes des figures)
 import CourseHud from "./CourseHud"; // 2026-10-05 (nuit) — l'écran de course (compte à rebours, tours, chrono, mini-carte, résultats)
 import * as EAU from "./eau";       // 2026-09-25 (phase 4) — l'eau cuite au pixel, sa surface, ses reflets
 import * as FAU from "./faune";     // 2026-09-26 (phase 5) — la faune : routines partagées sans message, réactions locales
@@ -228,6 +230,7 @@ const RINK_INSIST = { t: 0, toast: 0 };
 /* 2026-10-05 (nuit) — L'ÎLOT DE PLOTS DE LA COURSE EST SOLIDE tant qu'une course est ouverte (attente ou course) : on ne
    coupe pas par le milieu. Un drapeau de MODULE, posé à chaque image par la boucle (`blockedTown` le lit). */
 const RINK_RACE = { island: false };
+const RINK_SURF = { parked: false };   // 2026-10-06 : la surfaceuse est-elle garée (alors sa place est occupée, `blockedTown`) ?
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
@@ -2124,6 +2127,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* L'écran de course lit sa vue par une fonction STABLE (son `useEffect` ne repart pas à chaque rendu du jeu). */
   const raceVMRef = useRef(null);
   const [raceVMGet] = useState(() => () => (raceVMRef.current ? raceVMRef.current() : null));
+  /* 2026-10-06 — LA GLACE VUE PAR CHACUN (`surfaceuse.js`) : `lv` le niveau d'usure (0 lisse … 3 usée), `prev`/`fadeT0` le fondu du
+     dernier changement, `pass` la passe de la surfaceuse en cours { t0 (daté à la réception), dur } — gardée WET_MS après sa fin
+     (le brillant de l'eau fraîche). Chez l'hôte seulement : `host.use` (l'usage cumulé), `host.passUntil` (l'échéance de la passe). */
+  const rinkIceRef = useRef({ lv: 0, prev: 0, fadeT0: 0, pass: null, host: { use: 0, passUntil: 0 } });
+  const skateHelpVMRef = useRef(null);   // 2026-10-06 : la vue du « ? » du patinage (affiché en ville, près de la patinoire ou chaussé)
+  const [skateHelpGet] = useState(() => () => (skateHelpVMRef.current ? skateHelpVMRef.current() : null));
   const invRef = useRef(null);
   // AUDIT 2026-10 (FIX-004) — l'état affiché de l'interrupteur du dallage civique haute résolution (menu dev, local).
   const [civicHdUi, setCivicHdUi] = useState(() => HD.civicHD.on);
@@ -3283,6 +3292,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = E.generateWorld(payload.seed);
     E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills, sucreries: payload.sucreries, orchards: payload.orchards });
     worldRef.current = w;
+    if (!isHost && payload.rinkIce) iceApply(payload.rinkIce);   // 2026-10-06 : l'état de la glace d'un arrivant (niveau, âge de la passe)
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
     // Chantier reprise (demande Guillaume) : même nettoyage des sucreries
     // fantômes qu'au chargement initial (loadFarmByCode) — applySnapshot
@@ -3977,6 +3987,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       townChop: s.townChop || {},
       bushTrim: s.bushTrim || {},
       rinkRec: s.rinkRec || null, rink: s.rink || null,   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
+      rinkIce: iceSnapshot(),   // 2026-10-06 : l'usure de la glace et l'âge de la passe, pour un arrivant (jamais relus au chargement d'une sauvegarde)
       // 2026-10-05 : les bonshommes de neige, par le même chemin (et ce que chacun pousse, pour un invité qui arrive).
       snowmen: s.snowmen || [], snowRoll: s.snowRoll || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
@@ -5816,6 +5827,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now(), req.kit);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: r.price || C.SKATES_RENT_PRICE };
+    } else if (req.kind === "rinkSmooth") {
+      hostRinkSmooth(req, f, s, out);   // 2026-10-06 : la surfaceuse, demandée au chalet
     } else if (req.kind === "rinkBook" || req.kind === "rinkJoin" || req.kind === "rinkLeave" || req.kind === "rinkGo" || req.kind === "rinkFinish") {
       /* 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE (`hostRinkReq`) : l'hôte tient la session, rien d'autre. */
       hostRinkReq(req, f, s, out);
@@ -5825,7 +5838,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de la météo), l'hôte garde la blessure et la rediffuse en `injured` seul (un
          paquet `farmer` le ramènerait une seconde fois chez lui). Bornée comme les autres. */
       const nowI = Date.now();
-      const untilI = (typeof req.until === "number" && req.until > nowI && req.until <= nowI + C.ICE_INJURED_MS + 5000) ? req.until : nowI + C.ICE_INJURED_MS;
+      /* 2026-10-06 : de 30 s à 2 min — la durée vient du joueur (il la tire à la chute, optimiste) mais l'hôte la BORNE ; hors des
+         bornes (un client d'avant, qui envoie quinze minutes), c'est l'hôte qui tire. */
+      const untilI = (typeof req.until === "number" && req.until >= nowI + C.ICE_INJURED_MIN_MS - 3000 && req.until <= nowI + C.ICE_INJURED_MAX_MS + 5000) ? req.until
+        : nowI + C.ICE_INJURED_MIN_MS + Math.floor(Math.random() * (C.ICE_INJURED_MAX_MS - C.ICE_INJURED_MIN_MS + 1));
       f.injuredUntil = untilI;
       f.injuryKind = "ice";   // même famille que "burn" : soignable au pansement (req "heal")
       dirtyRef.current = true;
@@ -9237,6 +9253,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
     if (p.rink !== undefined) rinkApply(p.rink || null, p.rinkT || null);   // 2026-10-05 (nuit) — la session de course
+    if (p.ice) iceApply(p.ice);   // 2026-10-06 — l'usure de la glace / la passe de la surfaceuse
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     // Zip 366 : plus personne n'émet `rabbits` (simulation locale, voir
@@ -11927,7 +11944,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!hasSk) return no("rinkNeedSkates");
       if (E.townSkateChaletDist(tw, fx, fy) > C.TOWN_SKATE_CHALET_REACH + 1.5 && !near(2)) return no("rinkFar");
       if ((s.money | 0) < K.PRICE) return no("rinkNoGold");
+      if (rinkIceRef.current.host.passUntil) return no("rinkBookWait");   // 2026-10-06 : la surfaceuse est sur la piste
       s.money -= K.PRICE; out.state = shareState();
+      hostIceFast(out);   // 2026-10-06 : pour le début d'une course, la glace est toujours lissée
       s.rinkSeq = (s.rinkSeq | 0) + 1;
       s.rink = { sid: s.rinkSeq, mode, owner: f.id, ownerName: f.name || "?", ent: [{ id: f.id, name: f.name || "?" }], state: "lobby", seed: 0, bots: [], lanes: {}, fin: {}, res: null };
       loc.host.ghosts = new Map();
@@ -11989,6 +12008,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         rk.bots.push({ bi: order[j % 3], lane: k, rid: r.rid, name: r.name, gender: r.gender, outfit: r.outfit, overalls: !!r.overalls, cap: !!r.cap, look: r.look || null });
       }
     }
+    hostIceFast(out);   // 2026-10-06 : l'attente a pu user la glace — elle est lissée au départ
     rk.state = "race"; rk.fin = {}; rk.res = null; rk.newRec = [];
     loc.host.raceUntil = performance.now() + K.COUNTDOWN_MS + K.MAX_MS;
     out.rink = rk; out.rinkT = { startIn: K.COUNTDOWN_MS };
@@ -12019,6 +12039,104 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     loc.host.doneUntil = performance.now() + K.DONE_MS;
     out.rink = rk; out.rinkRec = rec;
     dirtyRef.current = true;
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-06 — L'USURE DE LA GLACE ET LA SURFACEUSE (`surfaceuse.js`).
+     ╚══════════════════════════════════════════════════════════════════════
+     Guillaume : « plusieurs états de lissage de la piste en fonction de l'usage ; pouvoir demander un lissage au chalet quand il
+     y a trop d'usure ; pour le début des courses, la glace est toujours lissée ». Tranché avec lui : usure PARTAGÉE et purement
+     VISUELLE, une surfaceuse peinte qui passe sur la glace, demande LIBRE en pratique normale.
+     ⚠️ QUI COMPTE, QUI DIFFUSE (§3) : l'HÔTE seul compte l'usage (`hostIceTick` : la vitesse de chaque patineur sur la glace, lue
+     sur les positions qu'il connaît déjà) et ne diffuse que le NIVEAU, quand il change (`ice: { lv }`) — quelques messages par
+     soirée. Une passe démarre par `ice: { lv, smooth: 0 }` (l'âge, en ms : un arrivant en cours de passe reçoit son âge réel) et
+     chacun la date À SA RÉCEPTION : la machine et la glace lissée sont UNE fonction du temps depuis ce début, calculée chez
+     chacun (zéro position de machine sur le réseau). Elle finit seule chez tous, et l'hôte le confirme par `ice: { lv: 0 }`.
+     ⚠️ UN LISSAGE FORCÉ (`fast`, au départ d'une course) ne fait pas rouler la machine : la glace passe à neuve en fondu, et les
+     traces de lames de la patinoire s'effacent. Une course n'est jamais réservée PENDANT une passe (la machine est sur la piste). */
+  function iceApply(ic) {
+    if (!ic) return;
+    const v = rinkIceRef.current, t = performance.now();
+    if (ic.fast) { v.prev = v.lv; v.lv = 0; v.fadeT0 = t; v.pass = null; skateMarksRef.current = skateMarksRef.current.filter((k) => !C.rinkInside((k.x0 + k.x1) / 2 / C.TILE, (k.y0 + k.y1) / 2 / C.TILE)); pushToast(L.iceSmoothFast); return; }
+    if (ic.smooth != null) {
+      v.pass = { t0: t - Math.max(0, +ic.smooth || 0), dur: SU.PASS_MS };
+      if ((+ic.smooth || 0) < 1500) pushToast(L.iceSmoothStart(Math.round(SU.PASS_MS / 1000)));
+    }
+    if (ic.lv != null) {
+      const nl = Math.max(0, Math.min(SU.ICE_LEVELS - 1, ic.lv | 0));
+      if (nl !== v.lv && !(v.pass && nl === 0 && t - v.pass.t0 < SU.PASS_MS)) {   // pendant la passe, le niveau 0 attend la fin de la passe (chacun la voit finir à son heure)
+        v.prev = v.lv; v.lv = nl; v.fadeT0 = t;
+        if (nl >= 3) pushToast(L.iceWornToast);
+      }
+    }
+  }
+  /* L'instantané pour un arrivant : le niveau, et l'âge de la passe s'il y en a une. */
+  function iceSnapshot() {
+    const v = rinkIceRef.current, t = performance.now();
+    return { lv: v.lv, smooth: v.pass && t - v.pass.t0 < SU.PASS_MS ? Math.round(t - v.pass.t0) : undefined };
+  }
+  /* ⚠️ 2026-10-06 — LA COMBINAISON N'EST QUE POUR LA PATINOIRE (Guillaume : « la combi doit apparaître que sur l'ice rink, pas sur
+     les étangs et plans d'eau gelés ; on ne sortira que les patins dans ces cas-là ») : sur un étang ou un lac, le matériel porté
+     perd sa combinaison — elle ne se VOIT plus, et son gain de vitesse non plus (une combinaison invisible qui court plus vite
+     serait un avantage sans cause). Les patins, la couleur et les longues lames restent. Rend le matériel d'origine tel quel
+     sur la patinoire, une copie sans combinaison ailleurs. `p` : un joueur (cases `x`, `y` de personnage). */
+  function skateKitHere(kit, p) {
+    if (!kit || !kit.suit) return kit;
+    return C.rinkInside(C.footX(p.x), C.footY(p.y)) ? kit : { type: kit.type, suit: 0, color: kit.color };
+  }
+  /* L'état de la glace pour UNE IMAGE : ce que le dessin lit (`st`, null quand il n'y a rien à poser) et la machine (`surf`, en
+     cases). Fait aussi avancer le fondu et la fin de passe. */
+  function iceDrawState(t) {
+    const v = rinkIceRef.current, T2 = C.TILE;
+    let passMs = -1;
+    if (v.pass) {
+      passMs = t - v.pass.t0;
+      if (passMs >= SU.PASS_MS && v.lv !== 0) { v.prev = 0; v.lv = 0; v.fadeT0 = 0; }                 // la passe est finie : toute la glace est lisse
+      if (passMs >= SU.PASS_MS + SU.ICE.WET_MS) { v.pass = null; passMs = -1; }
+    }
+    const f = v.fadeT0 ? Math.min(1, (t - v.fadeT0) / SU.ICE.FADE_MS) : 1;
+    if (f >= 1 && v.prev !== v.lv) v.prev = v.lv;
+    const surf = SU.surfacerAt(v.pass ? passMs : -1), idle = v.lv === 0 && !v.pass && f >= 1;
+    let rects = null;
+    if (v.pass && passMs > 0) rects = SU.sweptRects(passMs).map((r) => ({ x0: r.x0 * T2, y0: r.y0 * T2, x1: r.x1 * T2, y1: r.y1 * T2, age: Math.max(0, passMs - r.t1) }));
+    return { idle, surf, passMs, st: idle ? null : { lv: v.lv, prev: v.prev, f, rects, wet: SU.ICE.WET_MS } };
+  }
+  /* CHEZ L'HÔTE, à chaque image : l'usage des patineurs sur la glace → le niveau (diffusé s'il change) ; la fin de la passe. */
+  function hostIceTick(dt) {
+    const tw = townWorldRef.current;
+    if (!tw || !tw.rink) return;
+    const v = rinkIceRef.current, h = v.host, t = performance.now();
+    if (h.passUntil) {
+      if (t >= h.passUntil) { h.passUntil = 0; h.use = 0; hostSend({ type: "broadcast", event: "apply", payload: { ice: { lv: 0 } } }); }
+      return;   // pas d'usure pendant la passe : la machine refait la glace
+    }
+    const onRink = (p) => (p.zone || "farm") === "town" && C.rinkInside(C.footX(p.x), C.footY(p.y));
+    const me2 = meRef.current, stMe = skateRef.current;
+    if (me2 && stMe && onRink(me2) && E.skatesActive(invRef.current, Date.now())) h.use = SU.iceUseAdd(h.use, Math.hypot(stMe.vx, stMe.vy), dt, stMe.hard ? SU.ICE.STOP_K : stMe.trick ? SU.ICE.TRICK_K : 1);
+    for (const p of playersRef.current.values()) {
+      if (!onRink(p) || !remoteHasSkates(p.id)) continue;
+      h.use = SU.iceUseAdd(h.use, Math.hypot(p.vx || 0, p.vy || 0), dt, SU.iceTrickK(p.tk | 0));
+    }
+    const lv = SU.iceLevelOf(h.use);
+    if (lv !== v.lv) hostSend({ type: "broadcast", event: "apply", payload: { ice: { lv } } });
+  }
+  /* Le lissage forcé du départ d'une course : le compteur retombe à zéro, un fondu (`fast`) pour ceux qui regardent. */
+  function hostIceFast(out) {
+    const v = rinkIceRef.current, h = v.host;
+    if (h.passUntil) return;
+    h.use = 0;
+    if (v.lv !== 0) out.ice = { lv: 0, fast: 1 };
+  }
+  /* La demande du chalet (`rinkSmooth`) : la surfaceuse sort — si la glace n'est pas réservée, pas déjà en passe, pas déjà lisse. */
+  function hostRinkSmooth(req, f, s, out) {
+    const tw = getTownWorldCached(E), rk = s.rink, v = rinkIceRef.current, h = v.host;
+    const no = (key) => { out.toast = { id: f.id, key }; };
+    if (!tw.rink) return no("rinkClosed");
+    if (E.townSkateChaletDist(tw, C.footX(f.x || 0), C.footY(f.y || 0)) > C.TOWN_SKATE_CHALET_REACH + 1.5) return no("rinkSmoothFar");
+    if (rk && rk.state !== "done") return no("rinkSmoothBusy");
+    if (h.passUntil) return no("rinkSmoothRunning");
+    if (!(h.use > 0)) return no("rinkSmoothClean");
+    h.passUntil = performance.now() + SU.PASS_MS;
+    out.ice = { lv: v.lv, smooth: 0 };
   }
   /* Les échéances de la session, chez l'hôte, à chaque image : la fin de l'attente part toute seule, une course trop
      longue se clôt (les non-arrivés en dernier), les résultats s'effacent. */
@@ -12123,6 +12241,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return vm;
   }
   raceVMRef.current = raceVM;
+  skateHelpVMRef.current = () => {
+    const m = meRef.current, tw = townWorldRef.current;
+    if (!m || (m.zone || "farm") !== "town" || !tw || !tw.rink) return null;
+    const R = C.TOWN_RINK, fx = C.footX(m.x), fy = C.footY(m.y), M = 9;
+    const near = fx >= R.x0 - M && fx <= R.x1 + 1 + M && fy >= R.y0 - M && fy <= R.y1 + 1 + M;
+    return near || E.skatesActive(invRef.current, Date.now()) ? { show: true } : null;
+  };
   /* Les AUTRES coureurs (joueurs inscrits, en ville, et résidents), pour l'aspiration et le classement. */
   function rinkOthersPos() {
     const rk = sharedRef.current.rink, me = meRef.current, out = rinkBotPos();
@@ -17539,6 +17664,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
       if (isHost) hostRinkTick();   // 2026-10-05 (nuit) : les échéances de la course de la patinoire
+      if (isHost) hostIceTick(dt);   // 2026-10-06 : l'usure de la glace, et la fin de la passe de la surfaceuse
       if (isHost) updateWolves(dt);
       updateRabbits(dt); // zip 366 : plus réservé à l'hôte — chaque client simule SES lapins, décoratifs et non diffusés (motif canard)
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
@@ -21049,6 +21175,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-10-05 : un bonhomme de neige (ou une boule posée) se contourne. Le joueur seul : `townNav` ne le voit pas.
       if (BN.snowmanBlocks(sharedRef.current.snowmen, "town", x, y, Date.now())) return true;
       if (RINK_RACE.island && tw.rink && CO.islandSD(x, y) < 0.15) return true;   // 2026-10-05 (nuit) : l'îlot de plots d'une course
+      if (RINK_SURF.parked && tw.rink && Math.abs(x - SU.PARK.x) < 0.95 && Math.abs(y - (SU.PARK.y - 0.2)) < 0.55) return true;   // 2026-10-06 : la surfaceuse garée (roulante, elle ne bloque personne)
       const i = fy * tw.w + fx;
       /* ⚠️ 425 : LES BÂTIMENTS ET LE MOBILIER SONT DANS `solid`, calculé une
          fois par le générateur (voir generateTownWorld). La boucle sur
@@ -21298,6 +21425,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        quelqu'un coincé À CHEVAL sur une falaise doit pouvoir en descendre. */
     function townStepOk(tw, m, nx, ny, fromE) {
       return canStandTown(tw, nx, ny, fromE) || !canStandTown(tw, m.x, m.y);
+    }
+    /* 2026-10-06 — OÙ ON ATTERRIT APRÈS UNE CHUTE SANS PATINS : la case libre la plus proche HORS de toute glace (la patinoire,
+       l'étang, le lac), au bord. Une recherche en anneaux croissants autour de la semelle ; un point convient si le corps entier
+       tient (`canStandTown`, la collision de la marche), qu'aucun de ses points n'est sur la glace, et que la semelle n'est ni
+       sur la glace ni sur le liseré de berge que la collision de glace tolère (`townIceWalkable`). Le cap regarde la glace.
+       ⚠️ ICI, DANS LA BOUCLE : `canStandTown` n'existe pas au niveau du composant (§4) — `iceFallNow` reçoit le résultat. */
+    function iceShoreSpot(tw, m) {
+      const clear = (x, y) => {
+        if (!canStandTown(tw, x, y)) return false;
+        for (const [bx, by] of C.bodyPoints(x, y)) if (townIceAt(tw, bx, by)) return false;
+        return !townIceWalkable(tw, C.footX(x), C.footY(y));
+      };
+      return PT.skateShoreSpot(m.x, m.y, clear);   // la recherche est pure (`patin.js`), la collision reste ici
     }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -21592,8 +21732,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            la croisière monte un peu (`CO.draftK`). */
         /* 2026-10-05 (nuit, fin quater) — LE MATÉRIEL (`patin.js` : longues lames, combinaison) change la machine (`stats`) ;
            B tenue : la marche arrière (`back`) ; hors course seulement, la pratique libre (`free`) ouvre les figures. */
-        const kitMe = PT.skateKitNorm(invRef.current && invRef.current.skateKit);
-        const skOpt = { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked), stats: PT.skateKitStats(kitMe), back: hasSk && !racingMe && !!keysRef.current.KeyB, free: !racingMe };
+        const kitMe = skateKitHere(PT.skateKitNorm(invRef.current && invRef.current.skateKit), m);   // 2026-10-06 : la combinaison ne s'enfile que sur la patinoire
+        const skOpt = { skates: hasSk, run: hasSk && isRunningNow(dt, uiBlocked), stats: PT.skateKitStats(kitMe), back: hasSk && !racingMe && !!keysRef.current.KeyB, stop: hasSk && !!keysRef.current.KeyC, free: !racingMe };   // 2026-10-06 : C tenue = le freinage brut
         skateTrickConsume(st, skOpt);
         if (hasSk && !racingMe && !skateHintRef.current.hint) { skateHintRef.current.hint = 1; pushToast(L.skateTrickHint); }   // les touches des figures, une fois par session
         rLoc.draft = 0;
@@ -21603,7 +21743,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         PT.skateStep(st, ix, iy, dt, skOpt);
         if (raceHold) { st.vx = 0; st.vy = 0; }
-        if (st.mode === "down") { iceFallNow(); return; }
+        if (st.mode === "down") { iceFallNow(iceShoreSpot(tw, m)); return; }   // 2026-10-06 : déposé au bord de la glace, plus renvoyé à la ferme
         if (st.landed) skateLanded(m, st);
         /* Les résidents-coureurs se BOUSCULENT : à moins de 0,62 case, on est repoussé (eux suivent leur ligne — ils sont
            tirés d'une graine, rien ne peut les dévier sans le dire à tout le monde). */
@@ -21623,7 +21763,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Le cap suit la COURSE (on regarde où l'on file), à défaut l'ordre donné.
         if (spd > 0.4) { if (Math.abs(st.vx) > Math.abs(st.vy)) m.dir = st.vx < 0 ? 2 : 3; else m.dir = st.vy < 0 ? 1 : 0; }
         else if (moving) { if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else m.dir = 0; }
-        if (st.brake && spd > 1.2) skateSpray(m, spd, -st.vx / spd, -st.vy / spd);
+        /* 2026-10-06 — LE FREINAGE BRUT (C tenue) JETTE LA GRANDE GERBE (`skateStopSpray`, de plus en plus fournie avec la vitesse) ;
+           l'arrêt à contresens (`st.brake === 1`) garde la petite d'avant. */
+        if (st.hard) skateStopSpray(m, st.vx, st.vy, { key: "me" });
+        else if (st.brake === 1 && spd > 1.2) skateSpray(m, spd * 0.7, -st.vx / spd, -st.vy / spd);
         /* LA GERBE DERRIÈRE LES LAMES (comme sur la luge) : de petits éclats qui partent en arrière et retombent — en l'air,
            la glace ne se coupe plus, rien ne sort. */
         if (hasSk && spd > 1.8 && !(st.trick && st.trick.h)) skateTrail(m, st.vx, st.vy, { key: "me", push: st.push, long: kitMe.type === "race" });
@@ -22143,6 +22286,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(tw.w - 1, Math.ceil((cam.x + cam.vw) / T));
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(tw.h - 1, Math.ceil((cam.y + cam.vh) / T));
+      /* 2026-10-06 — L'ÉTAT DE LA GLACE pour cette image (`iceDrawState`) : le calque d'usure, la glace lissée, la surfaceuse.
+         `RINK_SURF.parked` dit à `blockedTown` si sa place est occupée. */
+      const iceNow = tw.rink ? iceDrawState(performance.now()) : null;
+      RINK_SURF.parked = !!(iceNow && iceNow.surf.parked);
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 425 — LE RELIEF À L'ÉCRAN, EN TROIS LIGNES DE PRINCIPE.
          ──────────────────────────────────────────────────────────────────────
@@ -22747,7 +22894,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (tw.duck && tw.duck[y * tw.w + x]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
         /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
            (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
-        if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) A.drawRinkIceTile(ctx, x, y, px, py);
+        if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
+          A.drawRinkIceTile(ctx, x, y, px, py);
+          if (iceNow && iceNow.st) A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st);   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
+        }
         /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
         if (wetF && y >= y0 - 1) {
           const wc = wetF.cell(x, y);
@@ -24560,6 +24710,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              : art === "poor" ? (lit ? sprites.townLampPoor : sprites.townLampPoorOff)
              : (lit ? sprites.plazaLamp : sprites.plazaLampOff);
       };
+      /* 2026-10-06 — LA SURFACEUSE : garée à l'est du chalet, ou en passe sur la glace. Une seule image dessinée, au sol à la
+         position que lui donne `surfacerAt` ; triée comme un décor debout (par son pied). Hors du cadre : rien. */
+      if (iceNow && tw.rink && !reflecting) {
+        const sf = iceNow.surf;
+        if (sf.x > x0 - 4 && sf.x < x1 + 4 && sf.y > yR0 - 3 && sf.y < yBot + 4) {
+          const smx = Math.round(sf.x * T), smy = Math.round(sf.y * T) + 4, litS = Math.max(0, Math.min(1, nightAlpha() * 3));
+          pushE(smy, 0, () => A.drawRinkSurfacer(ctx, smx, smy, sf.dir, { moving: sf.moving, lit: litS, ms: now }), 0, null);
+        }
+      }
       for (const pr of (tw.props || [])) {
         // 2026-10-05 (nuit) : la bande de la patinoire a son ancre au coin sud-ouest, mais s'étend sur toute la glace —
         // elle se découpe elle-même par rangée (plus bas) ; l'écarter sur son ancre l'effaçait dès qu'on regardait le nord.
@@ -26483,7 +26642,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const gx = (g.x0 + g.x1) / 2 / T, gy = (g.y0 + g.y1) / 2 / T;
         if (gy < y0 - 6 || gy > yBot + 6) continue;
         const litG = LUM.lampLit(Math.floor(gx), Math.floor(gy), lampNa) ? Math.min(1, lampNa * 3) : 0;
-        try { A.drawRinkGarland(ctx, g, now, litG, litG > 0.05 ? rinkBulbs : null); } catch (e) { console.error("[FERME] guirlande ignorée", e); }
+        try { A.drawRinkGarland(ctx, g, now, litG, litG > 0.05 ? rinkBulbs : null, snowF ? Math.max(0, Math.min(1, (snowPk.g - 0.5) / 5)) : 0); } catch (e) { console.error("[FERME] guirlande ignorée", e); }   // 2026-10-06 : la neige se pose sur la branche
       }
       /* 2026-09-30 — LES FEUILLES QUI TOMBENT ET QUI VOLENT (`FL.makeLeafFlurry`),
          LOCALES : après le monde (une feuille passe devant tout), avant la lumière
@@ -26622,7 +26781,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // petites et plus faibles, se fondent en une bande de lumière sous le fil
           for (let k = 1; k <= 11; k++) { const u = k / 12; lights.push({ x: (g.x0 + (g.x1 - g.x0) * u) / T, y: (g.y0 + (g.y1 - g.y0) * u + g.sag * 4 * u * (1 - u)) / T + 2.6, r: 2.0, c: "lamp", k: 0.3 }); }
         }
-        for (const b of rinkBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 });
+        /* 2026-10-06 — LA SURFACEUSE LA NUIT : un grand phare devant elle quand elle roule (une flaque sur la glace), un petit halo
+           de cabine, et son gyrophare ambre qui clignote (le même rythme que son dessin). */
+        if (iceNow && tw.rink) {
+          const sf = iceNow.surf;
+          if (sf.x > x0 - 6 && sf.x < x1 + 6 && sf.y > y0 - 6 && sf.y < yBot + 6) {
+            const dxv = sf.dir === 3 ? 1 : sf.dir === 2 ? -1 : 0, dyv = sf.dir === 0 ? 1 : sf.dir === 1 ? -1 : 0;
+            if (sf.moving) lights.push({ x: sf.x + dxv * 1.7, y: sf.y + dyv * 1.1 - 0.2, r: 3.8, c: "lamp", k: 0.85 });
+            lights.push({ x: sf.x, y: sf.y - 0.1, r: 1.5, c: "lamp", k: 0.35 });
+            if (sf.moving ? (Math.floor(now / 260) & 1) : (Math.floor(now / 1300) & 1)) heads.push({ x: Math.round(sf.x * T) + (sf.dir === 3 ? 5 : sf.dir === 2 ? -5 : 1.5), y: Math.round(sf.y * T) + 4 - 33.5, r: 1.4, k: 0.9 });
+          }
+        }
+        for (const b of rinkBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 * (b.k || 1) });   // 2026-10-06 : le chenillard règle aussi l'éclat du verre
         for (const b of buntingBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 });
         for (const wl of townWinLights) lights.push(wl);
         /* 2026-09-26 (phase 5) — les lucioles : une lumière minuscule au sol (au
@@ -28068,28 +28238,45 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isSelf) {
         const st = skateRef.current; if (!st) return {};
         const pose = PT.skatePose(st); if (!pose) return {};
-        const tv = PT.skateTrickView(st), kit = PT.skateKitNorm(invRef.current && invRef.current.skateKit);
+        const tv = PT.skateTrickView(st), kit = skateKitHere(PT.skateKitNorm(invRef.current && invRef.current.skateKit), p);   // 2026-10-06 : la combinaison ne se voit que sur la patinoire
         return { skate: pose, skPh: pose === "glide" ? st.stride : pose === "slip" ? st.t * 3.2 : pose === "spin" || pose === "axel" ? st.spin : st.t,
           skAir: st.air || 0, skSpin: tv && (tv.kind === "spin" || tv.kind === "axel") ? st.spin : 0, skBack: !!(tv && tv.kind === "back"), skKit: kit };
       }
       const twR = townWorldRef.current;
       if (!twR || !townIceAt(twR, C.footX(p.x), C.footY(p.y))) return {};
-      const has = remoteHasSkates(p.id), kitR = remoteSkateKit(p.id);
+      const has = remoteHasSkates(p.id), kitR = skateKitHere(remoteSkateKit(p.id), p);   // 2026-10-06 : idem pour les autres
       /* LA FIGURE D'UN AUTRE : le code et l'âge reçus (`tk`, daté à la réception) → la progression sur MON horloge, et l'arc
          se relit par la même fonction que la machine (`PT.skateTrickAt`). Passée sa durée, il ne reste que la glisse. */
-      const rp = playersRef.current.get(p.id), tkc = rp ? (rp.tk | 0) : 0, nmT = PT.TRICK_NAMES[tkc];
+      const rp = playersRef.current.get(p.id), tkc = rp ? (rp.tk | 0) : 0, nmT = PT.TRICK_NAMES[tkc], bsT = PT.skateTrickBase(nmT);
       let air = 0, spinT = 0, tkLive = 0, back = false;
-      if (has && (nmT === "hop" || nmT === "spin" || nmT === "axel")) {
-        const D = PT.skateTrickAt(nmT, 0), u = (performance.now() - (rp.tkT0 || 0)) / 1000 / D.dur;
-        if (u < 1) { const arc = PT.skateTrickAt(nmT, u); air = arc.air; spinT = nmT === "hop" ? 0 : arc.spin; tkLive = tkc; }
-      } else if (has && (nmT === "swan")) tkLive = tkc;
+      if (has && (bsT.kind === "hop" || bsT.kind === "spin" || bsT.kind === "axel")) {
+        /* 2026-10-06 — UNE VRILLE EMBALLÉE : chaque niveau est un segment qui repart de l'angle déjà tourné (`a0`). Chez nous, la
+           continuité se garde en lisant le dernier angle dessiné ; un segment qui n'a pas été dessiné depuis 200 ms est un
+           segment neuf (`a0` = 0). */
+        const nowT = performance.now();
+        let sg = rp.tkSeg;
+        if (!sg || sg.code !== tkc) {
+          const cont = sg && bsT.kind === "spin" && PT.skateTrickBase(PT.TRICK_NAMES[sg.code]).kind === "spin" && nowT - sg.liveAt < 200;
+          sg = rp.tkSeg = { code: tkc, a0: cont ? sg.last : 0, last: 0, liveAt: 0 };
+        }
+        const D = PT.skateTrickAt(nmT, 0, bsT.lv, sg.a0), u = (nowT - (rp.tkT0 || 0)) / 1000 / D.dur;
+        if (u < 1) {
+          const arc = PT.skateTrickAt(nmT, u, bsT.lv, sg.a0);
+          air = arc.air; spinT = bsT.kind === "hop" ? 0 : (bsT.kind === "spin" ? sg.a0 : 0) + arc.spin; tkLive = tkc;
+          sg.last = spinT; sg.liveAt = nowT;
+        }
+      } else if (has && (nmT === "swan" || nmT === "stop")) tkLive = tkc;
       else if (has && nmT === "back") back = true;
       const pose = PT.skateSeen(has, p.vx, p.vy, tkLive);
       const seen = skateSeenRef.current;
       let e = seen.get(p.id);
       if (!e) { e = { x: p.x, y: p.y, d: 0 }; seen.set(p.id, e); }
       e.d += Math.min(1, Math.hypot(p.x - e.x, p.y - e.y)); e.x = p.x; e.y = p.y;
-      if (has && Math.hypot(p.vx || 0, p.vy || 0) > 0.8 && !air) { skateMarkStep(p, 0, false, p.id); skateTrail(p, p.vx || 0, p.vy || 0, { key: p.id, long: kitR.type === "race" }); }
+      if (has && Math.hypot(p.vx || 0, p.vy || 0) > 0.8 && !air) {
+        skateMarkStep(p, 0, nmT === "stop", p.id);
+        if (nmT === "stop") skateStopSpray(p, p.vx || 0, p.vy || 0, { key: p.id });   // 2026-10-06 : le freinage brut d'un autre
+        else skateTrail(p, p.vx || 0, p.vy || 0, { key: p.id, long: kitR.type === "race" });
+      }
       const tS = performance.now() / 1000;
       return { skate: pose, skPh: pose === "glide" ? PT.skateSeenStride(e.d) : pose === "slip" ? tS * 3.2 : pose === "spin" || pose === "axel" ? spinT : tS,
         skAir: air, skSpin: pose === "spin" || pose === "axel" ? spinT : 0, skBack: back, skKit: kitR };
@@ -28105,8 +28292,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!M2.length && !SP.length) return;
       const tN = performance.now(), seenM = skateSeenRef.current;
       if (M2.length && tN > (seenM.get("purgeAt") || 0)) {
-        seenM.set("purgeAt", tN + 2000);
-        const keep = M2.filter(k => townIceAt(tw, (k.x0 + k.x1) / 2 / T, (k.y0 + k.y1) / 2 / T));
+        /* 2026-10-06 — LA SURFACEUSE EFFACE LES TRACES : tant qu'une passe est en cours (ou vient de finir), on purge toutes les
+           250 ms les traces dont le milieu est dans la glace déjà lissée (`SU.sweptRects`) ; sinon, toutes les deux secondes. */
+        const vP = rinkIceRef.current, passMsP = vP.pass ? tN - vP.pass.t0 : -1;
+        seenM.set("purgeAt", tN + (passMsP > 0 && passMsP < SU.PASS_MS + 600 ? 250 : 2000));
+        const rcs = passMsP > 0 ? SU.sweptRects(Math.min(passMsP, SU.PASS_MS)) : null;
+        const keep = M2.filter(k => {
+          const mx = (k.x0 + k.x1) / 2 / T, my = (k.y0 + k.y1) / 2 / T;
+          if (rcs) for (const r of rcs) if (mx >= r.x0 && mx <= r.x1 && my >= r.y0 && my <= r.y1) return false;
+          return townIceAt(tw, mx, my);
+        });
         if (keep.length !== M2.length) skateMarksRef.current = keep;
       }
       const siNow = snowPackNow("town").si || 0;
@@ -28134,8 +28329,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* ⚠️ BLANC SUR GLACE PÂLE NE SE VOIT PAS (premier jet, vu en jeu : la gerbe de la luge se lit sur une piste sombre, la
              glace de la patinoire est presque blanche) : chaque éclat porte son OMBRE bleue, un pixel plus bas et à droite. */
           const fa = 1 - age / life, sz = q.sz || 1, rx = Math.round(x), ry = Math.round(y);
-          if (q.life) { ctx.fillStyle = `rgba(72,106,164,${(0.75 * fa).toFixed(3)})`; ctx.fillRect(rx + 1, ry + 1, sz, sz); }
-          ctx.fillStyle = q.b ? `rgba(206,232,255,${(0.95 * fa).toFixed(3)})` : `rgba(255,255,255,${(0.95 * fa).toFixed(3)})`;
+          /* 2026-10-06 — LES BOUFFÉES (`puff`) : de gros carrés de neige poudreuse, translucides, qui gonflent un peu en montant et
+             s'effacent — ce qui fait LIRE une grande gerbe de loin (du blanc d'un pixel sur une glace pâle ne se voyait pas). */
+          if (q.puff) {
+            // de l'ombre bleue dessous, du blanc dessus : une masse de neige qui a du volume (blanc seul, elle se fondait dans la glace)
+            const g2 = Math.max(2, Math.round(sz * (0.7 + 0.5 * (age / life)))), h2 = g2 >> 1;
+            ctx.fillStyle = `rgba(128,166,214,${(0.5 * fa).toFixed(3)})`; ctx.fillRect(rx - h2 + 1, ry - h2 + 2, g2, g2);
+            ctx.fillStyle = `rgba(255,255,255,${(0.82 * fa + 0.05).toFixed(3)})`; ctx.fillRect(rx - h2, ry - h2, g2 - 1, g2 - 1);
+            continue;
+          }
+          if (q.life) { ctx.fillStyle = `rgba(58,92,150,${(0.92 * fa).toFixed(3)})`; ctx.fillRect(rx + 1, ry + 1, sz, sz); }   // 2026-10-06 : l'ombre plus franche — du blanc sur la glace de jour ne se voyait pas
+          ctx.fillStyle = q.b ? `rgba(176,216,250,${(0.98 * fa).toFixed(3)})` : `rgba(255,255,255,${(0.98 * fa).toFixed(3)})`;
           ctx.fillRect(rx, ry, sz, sz);
         }
         skateSprayRef.current = live;
@@ -31667,26 +31871,63 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const seen = skateSeenRef.current, key = "tr:" + (o.key || "me"), t = performance.now();
     let e = seen.get(key); if (!e) { e = { acc: 0, t, side: 1 }; seen.set(key, e); }
     const dtS = Math.min(0.1, Math.max(0, (t - e.t) / 1000)); e.t = t;
-    e.acc += Math.min(54, (spd - 1.4) * 7.5) * (o.long ? 1.3 : 1) * (o.push ? 1.35 : 1) * dtS;
+    /* 2026-10-06 : TROP DE GERBE EN PATINAGE NORMAL (Guillaume : « les réduire un peu ») — environ moitié moins qu'avant (62/s à
+       la croisière en poussant) : ~29/s, qui monte avec la vitesse (≈ 9/s à 3 cases/s) ; les grandes gerbes sont celles de
+       l'atterrissage et du freinage brut. */
+    e.acc += Math.min(28, (spd - 1.8) * 4.2) * (o.long ? 1.2 : 1) * (o.push ? 1.2 : 1) * dtS;
     let n = Math.floor(e.acc); e.acc -= n; n = Math.min(n, 5);
     if (!n) return;
     const L2 = skateSprayRef.current, ux = vx / spd, uy = vy / spd, fx = C.footX(p.x) * C.TILE, fy = C.footY(p.y) * C.TILE;
     for (let k = 0; k < n; k++) {
       e.side = -e.side;
-      const a = Math.atan2(-uy, -ux) + (Math.random() - 0.5) * 1.2, sp = 0.7 + Math.random() * 1.3 + spd * 0.13;
-      L2.push({ x: fx - uy * 1.5 * e.side + ux * -2, y: fy - 1 + ux * 1.5 * e.side * 0.5, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 9 - 16 - Math.random() * 34,
-        t0: t, life: 0.4 + Math.random() * 0.36, sz: Math.random() < 0.34 ? 2 : 1, b: Math.random() < 0.3 });
+      const a = Math.atan2(-uy, -ux) + (Math.random() - 0.5) * 1.2, sp = 0.5 + Math.random() * 1.0 + spd * 0.08;
+      L2.push({ x: fx - uy * 1.5 * e.side + ux * -2, y: fy - 1 + ux * 1.5 * e.side * 0.5, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 9 - 10 - Math.random() * 22,
+        t0: t, life: 0.32 + Math.random() * 0.34, sz: Math.random() < 0.12 ? 2 : 1, b: Math.random() < 0.3 });
     }
-    if (L2.length > 360) L2.splice(0, L2.length - 360);
+    if (L2.length > 560) L2.splice(0, L2.length - 560);
   }
-  /* Une gerbe tout autour du pied (l'atterrissage d'un saut, la fin d'une vrille) : `n` éclats, `pw` la force. */
+  /* Une gerbe tout autour du pied (l'atterrissage d'un saut, la fin d'une vrille) : `n` éclats, `pw` la force.
+     2026-10-06 : l'atterrissage est LA grande gerbe de la glisse (avec le freinage brut) — davantage d'éclats, plus gros, qui
+     montent plus haut et vivent plus longtemps ; un anneau bas (la glace qui part en nappe) et une fusée verticale. */
   function skateBurst(p, n, pw) {
     const L2 = skateSprayRef.current, t = performance.now(), fx = C.footX(p.x) * C.TILE, fy = C.footY(p.y) * C.TILE;
     for (let k = 0; k < n; k++) {
-      const a = Math.random() * Math.PI * 2, sp = (0.8 + Math.random() * 1.6) * pw;
-      L2.push({ x: fx, y: fy - 1, vx: Math.cos(a) * sp * 15, vy: Math.sin(a) * sp * 8 - 16 - Math.random() * 12, t0: t, life: 0.38 + Math.random() * 0.2, sz: Math.random() < 0.2 ? 2 : 1, b: Math.random() < 0.35 });
+      if (k % 6 === 0) {   // une bouffée de poudreuse autour du pied
+        const a3 = Math.random() * Math.PI * 2, sp3 = (0.5 + Math.random() * 1.2) * pw;
+        L2.push({ x: fx + Math.cos(a3) * 2, y: fy - 2, vx: Math.cos(a3) * sp3 * 12, vy: Math.sin(a3) * sp3 * 6 - 6 - Math.random() * 14, t0: t, life: 0.5 + Math.random() * 0.35 + pw * 0.05, sz: 4 + Math.floor(Math.random() * (3 + pw * 2)), puff: true });
+        continue;
+      }
+      const ring = k % 3 !== 2;   // deux éclats sur trois partent en nappe (bas, larges), le troisième monte
+      const a = Math.random() * Math.PI * 2, sp = (ring ? 1.1 + Math.random() * 1.7 : 0.4 + Math.random() * 0.9) * pw;
+      L2.push({ x: fx, y: fy - 1, vx: Math.cos(a) * sp * 15, vy: Math.sin(a) * sp * 8 - (ring ? 14 : 38) - Math.random() * (ring ? 14 : 30), t0: t,
+        life: 0.45 + Math.random() * 0.4 + pw * 0.06, sz: Math.random() < 0.4 ? (pw > 1.4 && Math.random() < 0.4 ? 4 : 3) : (Math.random() < 0.5 ? 2 : 1), b: Math.random() < 0.35 });
     }
-    if (L2.length > 360) L2.splice(0, L2.length - 360);
+    if (L2.length > 560) L2.splice(0, L2.length - 560);
+  }
+  /* 2026-10-06 — LA GERBE DU FREINAGE BRUT (C tenue, `st.hard`) : l'arrêt de hockey jette la glace vers l'avant et sur les côtés,
+     en éventail, et d'autant plus fort qu'on va vite (de ~35/s à 2 cases/s à ~140/s à la croisière). `e.acc` reporte la
+     fraction d'éclat d'une image à l'autre (la cadence ne dépend pas du taux d'images). Les autres la voient aussi : le code
+     `stop` voyage dans le paquet de position, la vitesse qu'ils ont publiée fait le reste (rien de plus ne circule). */
+  function skateStopSpray(p, vx, vy, o) {
+    const spd = Math.hypot(vx, vy); if (spd < 1.2) return;
+    const seen = skateSeenRef.current, key = "st:" + (o.key || "me"), t = performance.now();
+    let e = seen.get(key); if (!e) { e = { acc: 0, t }; seen.set(key, e); }
+    const dtS = Math.min(0.1, Math.max(0, (t - e.t) / 1000)); e.t = t;
+    e.acc += (90 + spd * 30) * dtS;
+    let n = Math.floor(e.acc); e.acc -= n; n = Math.min(n, 22);
+    if (!n) return;
+    const L2 = skateSprayRef.current, ux = vx / spd, uy = vy / spd, fx = C.footX(p.x) * C.TILE, fy = C.footY(p.y) * C.TILE;
+    for (let k = 0; k < n; k++) {
+      if (k % 5 === 0) {   // une bouffée de poudreuse, plus lente, qui s'étale et s'efface
+        const sd2 = Math.random() < 0.5 ? -1 : 1, a2 = Math.atan2(uy, ux) + sd2 * (0.4 + Math.random() * 1.0), sp2 = 0.8 + Math.random() * 1.6 + spd * 0.12;
+        L2.push({ x: fx - uy * sd2 * 3, y: fy - 3 + ux * sd2 * 1.5, vx: Math.cos(a2) * sp2 * 16, vy: Math.sin(a2) * sp2 * 9 - 8 - Math.random() * 16, t0: t, life: 0.55 + Math.random() * 0.4, sz: 5 + Math.floor(Math.random() * 5), puff: true });
+        continue;
+      }
+      const side = Math.random() < 0.5 ? -1 : 1, a = Math.atan2(uy, ux) + side * (0.3 + Math.random() * 1.15), sp = 2.2 + Math.random() * 3.4 + spd * 0.3;   // un éventail vers l'avant et les côtés (pas seulement en travers : on le voit alors à côté du patineur, pas dessous)
+      L2.push({ x: fx - uy * side * 2.5, y: fy - 1 + ux * side * 1.2, vx: Math.cos(a) * sp * 16, vy: Math.sin(a) * sp * 10 - 30 - Math.random() * 56,
+        t0: t, life: 0.5 + Math.random() * 0.6, sz: (() => { const r = Math.random(); return r < 0.15 ? 1 : r < 0.6 ? 2 : r < 0.9 ? 3 : 4; })(), b: Math.random() < 0.3 });
+    }
+    if (L2.length > 560) L2.splice(0, L2.length - 560);
   }
   /* LES TOUCHES DES FIGURES (pratique libre) : Espace = saut, V = vrille, les deux ensemble = axel (un saut vrillé, qui exige
      de l'élan). Une touche ne lance rien elle-même : elle POSE une demande datée (`skateTrickReqRef`) que la boucle
@@ -31697,29 +31938,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current, st = skateRef.current;
     if (!m || (m.zone || "farm") !== "town" || !st || !E.skatesActive(invRef.current, Date.now())) return false;
     const rq = skateTrickReqRef.current, now = performance.now();
-    if (which === "hop") rq.hop = now; else rq.spin = now;
+    if (which === "hop") rq.hop = now; else { rq.spinN = rq.spin ? (rq.spinN | 0) + 1 : 1; rq.spin = now; }   // 2026-10-06 : on COMPTE les V pressés avant que la vrille démarre
     return true;
   }
   function skateTrickConsume(st, o) {
     const rq = skateTrickReqRef.current, now = performance.now();
     if (!rq.hop && !rq.spin) return;
+    /* 2026-10-06 — UN V PENDANT LA VRILLE L'EMBALLE (`PT.skateTrickBoost` : niveau suivant, depuis le tour où l'on est). Toute
+       autre touche pendant une figure est jetée, comme avant (la machine refuserait de toute façon d'en lancer une). */
+    if (st.trick) {
+      if (rq.spin && st.trick.kind === "spin") PT.skateTrickBoost(st);
+      rq.hop = 0; rq.spin = 0; return;
+    }
     let kind = null;
     if (rq.hop && rq.spin && Math.abs(rq.hop - rq.spin) <= TRICK_COMBO_MS * 2) kind = "axel";
     else if (rq.hop && now - rq.hop >= TRICK_COMBO_MS) kind = "hop";
     else if (rq.spin && now - rq.spin >= TRICK_COMBO_MS) kind = "spin";
     if (!kind) return;
-    rq.hop = 0; rq.spin = 0;
+    const nSpin = Math.max(1, rq.spinN | 0);
+    rq.hop = 0; rq.spin = 0; rq.spinN = 0;
     if (!PT.skateTrickStart(st, kind, o)) {
       if (kind === "axel" && o.skates && o.free !== false && st.mode === "glide" && !st.trick) pushToast(L.skateTrickNeedSpeed);
       return;
     }
+    /* Deux V (ou trois) pressés avant le départ de la vrille : elle part déjà emballée, d'autant de niveaux — jusqu'au dernier. */
+    if (kind === "spin") for (let k = 1; k < nSpin; k++) PT.skateTrickBoost(st, true);
   }
   /* L'atterrissage : la gerbe (forte après un saut, légère après une vrille), et — pour un axel ou un enchaînement — le mot. */
   function skateLanded(m, st) {
     const kind = st.landed;
-    if (kind === "hop" || kind === "axel") skateBurst(m, kind === "axel" ? 22 : 14, kind === "axel" ? 1.5 : 1.1);
-    else skateBurst(m, 8, 0.7);
-    if (st.chain >= 2 || kind === "axel") pushToast(L.skateTrickToast(kind, st.chain));
+    /* 2026-10-06 : LA PLUS GRANDE GERBE DE LA GLISSE — le saut (34), l'axel (56) ; une vrille retombe plus modestement (16), mais
+       elle grossit avec ses tours (une vrille emballée projette la glace d'autant plus). */
+    if (kind === "hop" || kind === "axel") skateBurst(m, kind === "axel" ? 56 : 34, kind === "axel" ? 1.9 : 1.5);
+    else skateBurst(m, 16 + (st.landedLv | 0) * 10, 0.9 + (st.landedLv | 0) * 0.25);
+    if (st.chain >= 2 || kind === "axel" || (kind === "spin" && st.landedTurns >= 2)) pushToast(L.skateTrickToast(kind, st.chain, st.landedTurns));   // 2026-10-06 : une vrille emballée se nomme (double, triple…)
   }
   /* Les traces de lames : deux sillons parallèles (une lame par pied, à ±1,5 px du
      centre, en travers de la course), un segment par pas de 3 px — plus larges à
@@ -31755,18 +32007,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = farmersRef.current && farmersRef.current[id];
     return PT.skateKitNorm(f && f.inv && f.inv.skateKit);
   }
-  /* LA CHUTE : la blessure de quinze minutes, le retour à la maison — le contrat exact
-     de la brûlure (`starTryBurn`) : optimiste ici, gardée par l'hôte (`iceFall`), et la
-     zone remise à `farm` EN MÊME TEMPS que x/y (le piège des deux cartes, §4). */
-  function iceFallNow() {
+  /* LA CHUTE : la blessure (de 30 s à 2 min, `C.ICE_INJURED_MIN_MS`…`MAX`), optimiste ici, gardée par l'hôte (`iceFall`) — le
+     contrat de la brûlure (`starTryBurn`). ⚠️ 2026-10-06 : ON N'EST PLUS RENVOYÉ À LA FERME (Guillaume : « ne pas te TP
+     directement à la farm, mais en dehors de la zone, sur le bord de l'étang ou du plan d'eau, hors de la piste ») : `spot` (de
+     `iceShoreSpot`, qui vit dans la boucle avec la collision) est la case libre la plus proche HORS de la glace — la zone reste
+     `town`, et l'on y attend, immobile, la fin du repos. Faute de case (aucune, en théorie), l'ancien retour à la ferme sert de
+     secours (la zone remise à `farm` EN MÊME TEMPS que x/y : le piège des deux cartes, §4). */
+  function iceFallNow(spot) {
     const m = meRef.current; skateRef.current = null;
     if (!m || (m.zone || "farm") !== "town" || isInjured()) return;
-    const until = Date.now() + C.ICE_INJURED_MS;
+    const dur = C.ICE_INJURED_MIN_MS + Math.floor(Math.random() * (C.ICE_INJURED_MAX_MS - C.ICE_INJURED_MIN_MS + 1));
+    const until = Date.now() + dur;
     injuredUntilRef.current = until; setInjuredUntil(until);
     sendReq({ kind: "iceFall", until });
-    m.zone = "farm"; m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false; m.vx = 0; m.vy = 0;
+    if (spot) { m.x = spot.x; m.y = spot.y; m.dir = spot.dir == null ? m.dir : spot.dir; }
+    else { m.zone = "farm"; m.x = C.SPAWN.x; m.y = C.SPAWN.y; }
+    m.moving = false; m.vx = 0; m.vy = 0;
+    /* ⚠️ LES TOUCHES TENUES SONT LÂCHÉES (comme à chaque transition) : une blessure refuse les NOUVELLES entrées, pas celles qui sont
+       déjà tenues — le joueur déposé au bord, flèche encore enfoncée, serait retourné sur la glace et y resterait bloqué, blessé
+       (vu en jeu au premier essai). */
+    keysRef.current = {};
     sendPos();
-    pushToast(L.iceFallToast);
+    pushToast(L.iceFallToast(Math.round(dur / 1000)));
   }
   /* ╔══════════════════════════════════════════════════════════════════════
      ║ 2026-10-05 — LE BONHOMME DE NEIGE, CÔTÉ JOUEUR (`bonhomme.js` pour les règles).
@@ -39653,6 +39915,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {/* 2026-10-05 (nuit) — L'ÉCRAN DE LA COURSE DE LA PATINOIRE (`CourseHud.js`) : il se redessine seul. */}
+      <SkateHelp getVM={skateHelpGet} L={L} />
       <CourseHud getVM={raceVMGet} L={L} onJoin={() => sendReq({ kind: "rinkJoin" })} onLeave={() => sendReq({ kind: "rinkLeave" })}
         onGo={() => sendReq({ kind: "rinkGo" })} onCloseResults={() => { rinkLocalRef.current.resultsOpen = false; }} />
       {skateShopOpen && (() => {
@@ -39722,6 +39985,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={!winter || (hud.money | 0) < total} onClick={() => sendReq({ kind: "rentSkates", kit: dk })}>{L.skatesRent(total, C.SKATES_RENT_MS / 60000)}</button>
               </div>
             )}
+            {/* 2026-10-06 — L'ENTRETIEN DE LA GLACE : l'état d'usure (quatre niveaux, partagés) et la demande de la surfaceuse —
+                libre à tout moment, sauf pendant une course. Le bouton ne fait que demander : l'hôte arbitre (`hostRinkSmooth`). */}
+            {winter && (townWorldRef.current && townWorldRef.current.rink) && (() => {
+              const vI = rinkIceRef.current;
+              const passLeft = vI.pass ? Math.max(0, SU.PASS_MS - (performance.now() - vI.pass.t0)) : 0, rkI = sharedRef.current.rink, busyI = !!(rkI && rkI.state !== "done");
+              const segCol = ["#bfe0f6", "#9fc2de", "#c9a98a", "#b0705a"];
+              return (
+                <div className="ferme-race-shop">
+                  <h3>🧊 {L.iceShopTitle}</h3>
+                  <div className="ferme-hint" style={{ margin: "2px 0 6px" }}>{L.iceShopHint}</div>
+                  <div className="ferme-shop-row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <div title={L.iceLevelName(vI.lv)} style={{ display: "flex", gap: 3 }}>
+                      {[0, 1, 2, 3].map(i => <span key={i} style={{ width: 30, height: 10, borderRadius: 3, background: i <= vI.lv ? segCol[i] : "rgba(0,0,0,.12)", border: "1px solid rgba(0,0,0,.35)" }} />)}
+                    </div>
+                    <b>{L.iceLevelName(vI.lv)}</b>
+                    <button disabled={busyI || passLeft > 0} onClick={() => { sendReq({ kind: "rinkSmooth" }); setSkateShopOpen(false); }}>
+                      {passLeft > 0 ? L.iceShopRunning(Math.ceil(passLeft / 1000)) : busyI ? L.iceShopBusy : "🧊 " + L.iceShopAsk}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             {/* 2026-10-05 (nuit) — PRIVATISER LA PATINOIRE : une course à quatre (des résidents complètent) ou un
                 contre-la-montre contre le fantôme du record. Chaussé, l'hiver, quand la glace est libre. */}
             {winter && (townWorldRef.current && townWorldRef.current.rink) && (() => {

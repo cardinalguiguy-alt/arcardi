@@ -23,6 +23,13 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le 2026-10-06** (décisions prises par questions, mais tout est à juger en jeu) : **la gerbe** (glisse ~moitié moins ; grande à l'atterrissage et au
+  **freinage brut, C tenue** — bouffées de poudreuse : se voient-elles DE JOUR sur la glace pâle ?), **la vrille emballée** (V, V, V : quatre niveaux — le
+  rythme de frappe, la vitesse de rotation, le toast « double / triple vrille »), **le « ? »** (la place, la taille, le contenu), **les guirlandes** (sapin,
+  ampoules pendantes, boules, nœuds rouges, neige, chenillard — jour et nuit, à zoom 3 et 5), **l'usure de la glace** (quatre états : se distinguent-ils ?
+  usée en ~7 min seul, ~2 min à trois : trop vite ? trop lent ?), **la surfaceuse** (sa taille contre le patineur, 34 s de passe, huit couloirs, ses
+  phares la nuit ; demandée au comptoir : le bouton se trouve-t-il ?), **la location à 15 min**, **la combinaison seulement sur la patinoire**, **la chute**
+  (30 s–2 min, déposé au bord ; le toast). Décidé « plus tard » : le marché d'hiver reste en haut toute l'année, la place de la patinoire servira aux autres saisons.
 - **Le 2026-10-05 (nuit, fin quater)** (« caveman on » : tout exécuté sans questions, donc TOUT À JUGER) : **le chalet de la patinoire collé à la
   glace** (au nord du portillon est ; celui du lac n'a pas bougé), **quatre braseros** aux portillons nord et sud, **la bande qui ne bloque plus que sa
   planche** (plus de mur invisible autour, plus de trou aux coins — à marcher le long de la bande, de jour et de nuit), **la glace rayée** (rayures,

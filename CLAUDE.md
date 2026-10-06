@@ -11,32 +11,33 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-05 (nuit, fin quater) — CHALET COLLÉ À LA PATINOIRE, BANDE AU POINT PRÈS, MATÉRIEL DE PATIN, FIGURES, GERBE — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-06 — GERBES, FREINAGE BRUT (C), VRILLE EMBALLÉE, « ? », GUIRLANDES, USURE DE LA GLACE + SURFACEUSE, LOCATION 15 MIN, CHUTE AU BORD — DANS L'ARBRE, NON COMMITÉ
 
-Récit : README de la ferme, journal « (nuit, fin quater) » (le précédent, « fin ter », décrit la course et la patinoire). **Supabase : rien.**
-Fait en « caveman on » (sans questions) : (1) le chalet de la patinoire est AU NORD DU PORTILLON EST (celui du lac n'a pas bougé), quatre
-braseros aux portillons nord/sud ; (2) la COLLISION DE LA BANDE se lit AU POINT (`C.rinkBandSolid`, `tw.rinkBand`) : plus de mur invisible, plus
-de trou aux coins ; `tw.solid` reste plein pour les résidents ; (3) glace rayée + médaillon ; (4) `patin.js` : DEUX PAIRES (patinage / longues
-lames : +10 %, virages en carres `carry`), COMBINAISON (+5 %), HUIT COULEURS, choisis au chalet, normalisés par l'hôte (`inv.skateKit`) ;
-(5) les FIGURES en pratique libre : Espace saute, V vrille, les deux = axel, B tenue = à reculons, cygne automatique — vues par les autres via
-`tk` dans le paquet de position ; (6) la gerbe de glace continue derrière les lames (`skateTrail`). ⚠️ Défaut ancien corrigé : `skatesUntil | 0`
-tronquait un horodatage à 32 bits (un invité ne voyait pas les patins de l'hôte) ; même motif NON corrigé : `f.injuredUntil | 0`.
-Bancs relancés : `verify-patin` 59/59, `verify-vallee` 337/337, `render-patin` 4/4 (nouveau), `render-patinoire` 4/4, `verify-course` 30/30,
-`verify-ombres` 27/27, `verify-neige` 17/17, `verify-pluie` 34/34, `verify-faune` 105/105, `verify-meteo` 76/76, `verify-collision`,
-`verify-strings`, `verify-docs`, `verify-syntax`/`-portee`/`-scope`. Vu en jeu, seul et à deux fenêtres.
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent
-`tools/.cache/*.mjs` (suivi par git). ⚠️ Un invité immobile n'émet aucun `pos` : l'hôte ne le connaît pas, aucun `apply` ne part (faire bouger
-l'invité d'une touche avant de juger à deux). ⚠️ Piège du dev : la boucle de rendu est montée une fois — recharger la page après toute édition de
-`FermeGame.js` avant de juger (le rechargement à chaud laisse l'ANCIEN code dans la boucle). Vu en passant, pas corrigé : `C.G_SOIL` n'existe
-pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison du monde de la ville est instantanée.
+Récit : README de la ferme, journal « 2026-10-06 ». **Supabase : rien** (aucune migration ; `rinkIce` voyage dans l'instantané, jamais relu au chargement).
+Fait, les décisions structurantes prises PAR QUESTIONS (usure partagée et purement visuelle, surfaceuse peinte, demande libre en pratique, glace
+toujours lissée au départ d'une course) : (1) gerbe de glisse ~moitié moins, les grandes gerbes à l'atterrissage et au **freinage brut (C tenue,
+code `stop`)** avec des bouffées de poudreuse ; (2) **V répété = vrille qui s'emballe** (quatre niveaux, angle continu, le niveau dans le code
+du paquet) ; (3) le « ? » discret (`SkateHelp.js`) ; (4) guirlandes refaites (sapin, ampoules pendantes, boules, nœuds, neige, chenillard) ;
+(5) **usure de la glace** en quatre états (`surfaceuse.js`, calques cuits dans `fermeArt.js`), comptée par l'HÔTE seul (il ne diffuse que le niveau)
+et **surfaceuse** (trajet = fonction du temps depuis le début de la passe, 33,7 s, zéro position sur le réseau) demandée au comptoir du chalet ;
+(6) location **15 min** pour tout ; la **combinaison seulement sur la patinoire** (ni vue ni active sur un étang/lac) ; (7) chute sans patins :
+blessure **30 s–2 min**, déposé **au bord de la glace** (plus de retour à la ferme). Bancs : `verify-patin` 78/78, `verify-surfaceuse` 59/59 (NEUF),
+`verify-vallee` 337/337, `verify-strings` 1278, `verify-course` 30/30, `render-patin`/`render-patinoire` 4/4, `verify-docs`, `no-undef`, et les autres du routeur.
+Vu en jeu, un client puis DEUX (`app/audit-duo` : niveau, passe et fin identiques des deux côtés). ⚠️ `app/audit-tmp`, `app/audit-duo`,
+`app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git). ⚠️ Piège du
+dev : la boucle de rendu est montée une fois — recharger la page après toute édition de `FermeGame.js`. ⚠️ Un invité immobile n'émet aucun `pos`.
+Même motif NON corrigé : `f.injuredUntil | 0`. Vu en passant : `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort.
+**Pas fait** : résidents qui patinent, reflets des patineurs, son de la surfaceuse, V/B/C au tactile ; la surfaceuse ne pousse personne.
+**PLUS TARD (décidé en passant, rien n'est fait)** : le marché d'hiver (en haut) RESTE toute l'année ; la place de la patinoire aura d'autres usages
+aux autres saisons — à trouver avec lui, par questions.
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER CE LOT, PUIS LES RÉSIDENTS QUI PATINENT
 
-(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : le chalet et la bande (marcher le long, de jour et de nuit), les prix et l'écart des deux paires,
-la combinaison, les figures (hauteur du saut, durée, vrille), la gerbe (visible sur glace pâle ?), la glace rayée ; puis la course avec le
-matériel (les résidents ont du matériel neutre : trop facile ?). (2) Ensuite : les **résidents qui patinent à l'occasion** (hors session ;
-aucun `rnd()` de plus dans la graine de la ville) et les reflets des patineurs. (3) Puis : marché de Noël + grand sapin ; sols de VT (FIX-004),
-boutique d'hiver peinte, lots B/C0, intérieurs ; casque de la combinaison ; V/B au tactile.
+(1) Juger en jeu (`docs/A-JUGER.md`, en tête) : la gerbe (assez réduite en glisse ? assez grande au freinage et à l'atterrissage, DE JOUR sur glace
+pâle ?), la vrille emballée (le rythme de V), les guirlandes (de jour et de nuit), les quatre états d'usure (se distinguent-ils ? l'usure vient-elle
+trop vite : usée en ~7 min seul, ~2 min à trois ?), la surfaceuse (taille, vitesse, durée de 34 s, le moment où elle sort), la chute au bord. (2) Ensuite :
+les **résidents qui patinent à l'occasion** (hors session ; aucun `rnd()` de plus dans la graine de la ville) et les reflets des patineurs. (3) Puis :
+l'usage des autres saisons de la place de la patinoire ; marché de Noël + grand sapin ; sols de VT (FIX-004), boutique d'hiver peinte, lots B/C0, intérieurs.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -61,7 +62,8 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Tâche | Lire, dans l'ordre | Bancs à relancer |
 |---|---|---|
 | Neige, hiver, glace, feuilles mortes | `components/ferme/neige.js`, `glace.js`, `feuilles.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles` |
-| Patin, matériel (paires, combinaison, couleurs), figures, gerbe, glace du lac, chalets, collision de la bande | `components/ferme/patin.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journal 2026-10-05, « fin quater ») ; `C.rinkBandSolid` (fermeConstants.js) | `verify-patin`, `render-patin`, `render-glace`, `verify-vallee` |
+| Patin, matériel (paires, combinaison, couleurs), figures (vrille emballée, freinage brut), gerbe, aide « ? », glace du lac, chalets, collision de la bande, chute sans patins | `components/ferme/patin.js`, `SkateHelp.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journaux 2026-10-06 et 2026-10-05 « fin quater ») ; `C.rinkBandSolid` (fermeConstants.js) | `verify-patin`, `verify-surfaceuse` (§7), `render-patin`, `render-glace`, `verify-vallee` |
+| Usure de la glace (quatre états), surfaceuse, lissage demandé au chalet, guirlandes de la patinoire | `components/ferme/surfaceuse.js` (pur) ; `rinkWearCanvas`, `drawRinkWearAt`, `drawRinkSurfacer`, `drawRinkGarland` dans fermeArt.js ; `iceApply`, `hostIceTick`, `hostRinkSmooth` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Ice`) ; README ferme (journal 2026-10-06) | `verify-surfaceuse`, `render-patinoire` ; à deux : `app/audit-duo` |
 | Bonhomme de neige (coups de pied, boule portée, chapeaux) | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme`, `render-bonhomme` |
 | Pluie, flaques, sol mouillé | `components/ferme/pluie.js` ; README ferme (« PLUIE », 12b) ; piège « surface qui revient » | `verify-pluie`, `render-pluie` |
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
@@ -277,6 +279,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE RESYNCHRONISE QUE SUR L'ÉVÉNEMENT QUI LE MET À JOUR — JAMAIS TOUT SEUL
 - UN COMPOSANT DÉCLARÉ DANS LE RENDU D'UN AUTRE EST UN TYPE NEUF À CHAQUE RENDU : REACT REMPLACE TOUS SES NŒUDS DOM
 - UN EFFET MONTÉ UNE FOIS (le canal réseau) VOIT POUR TOUJOURS L'ÉTAT DE SON PREMIER RENDU
+- UNE BLESSURE QUI REFUSE LES NOUVELLES ENTRÉES NE LÂCHE PAS LES TOUCHES DÉJÀ TENUES
 - UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE COMPOSANT
 - ET L'INVERSE : UNE FONCTION DU COMPOSANT EST MASQUÉE PAR UNE VARIABLE DU MÊME NOM DANS LA BOUCLE
 - UN MOTIF DE SOL SE JUGE ASSEMBLÉ, ET SA PÉRIODE COMPTE PLUS QUE SES DÉTAILS
