@@ -63,6 +63,7 @@ import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandy
    `Map` recréée à chaque image oublierait la position précédente et la vitesse
    resterait nulle — une traîne qui ne se déclenche jamais, sans aucune erreur. */
 const STAR_LEAN_MEM = new Map();
+let SK_REFL_CV = null;   // 2026-10-07 : canevas de travail du reflet du patineur (dégradé) — voir `REFL_LEN`
 const FIND_ME_MS = 2600;   // 2026-09-27 (phase 11) : durée du repère de la touche L
 import { loadBitmap, peekBitmap } from "./bitmapAssets";
 /* ⚠️ 2026-09-27 (phase 11) — L'UNIQUE CHARGEMENT DES TOUFFES D'HERBE HAUTE
@@ -29878,15 +29879,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            (`GLOSS_K` : plein sur la glace lisse, nul sur l'usée). Seulement sur la glace entretenue, jamais dans l'ombre du soleil. */
         const twR = townWorldRef.current, lvR = rinkIceRef.current ? rinkIceRef.current.lv | 0 : 0;
         if (!sunCasting && twR && twR.rink && C.rinkInside(C.footX(p.x), C.footY(p.y)) && lvR < 3) {
-          const aR = [0.34, 0.2, 0.08][lvR], fyR = py + 15;
-          for (const [d0, d1, k] of [[0, 5, 1], [5, 10, 0.5]]) {
-            ctx.save();
-            ctx.beginPath(); ctx.rect(px - 12, fyR + d0, 40, d1 - d0); ctx.clip();
-            ctx.globalAlpha = aR * k;
-            ctx.translate(0, 2 * fyR); ctx.scale(1, -1);
-            if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); } else drawSk(px);
-            ctx.restore();
-          }
+          /* 2026-10-07 — ÉTAIT DEUX PALIERS DURS (10 px, puis rien) : le reflet s'arrêtait net aux hanches (Guillaume : « il se
+             coupe d'un coup »). Le corps renversé est maintenant peint sur un canevas de travail, EFFACÉ PAR UN DÉGRADÉ
+             (plein sous la semelle, nul à `REFL_LEN` px), puis posé d'un coup : un seul dessin du patineur, un fondu continu. */
+          const aR = [0.34, 0.2, 0.08][lvR], fyR = py + 15, REFL_LEN = 16;
+          const cv = SK_REFL_CV || (SK_REFL_CV = document.createElement("canvas"));
+          if (cv.width !== 40 || cv.height !== REFL_LEN) { cv.width = 40; cv.height = REFL_LEN; }
+          const cx = cv.getContext("2d");
+          cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, 40, REFL_LEN);
+          cx.save();
+          cx.translate(-(px - 12), -fyR);              // repère monde → canevas de travail
+          cx.beginPath(); cx.rect(px - 12, fyR, 40, REFL_LEN); cx.clip();
+          cx.translate(0, 2 * fyR); cx.scale(1, -1);
+          if (flipS) { cx.translate(px + 16, 0); cx.scale(-1, 1); A.drawSkate(cx, sheetS, rowS, 0, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS }); }
+          else A.drawSkate(cx, sheetS, rowS, px, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
+          cx.restore();
+          cx.globalCompositeOperation = "destination-in";
+          const gR = cx.createLinearGradient(0, 0, 0, REFL_LEN);
+          gR.addColorStop(0, "rgba(0,0,0,1)"); gR.addColorStop(1, "rgba(0,0,0,0)");
+          cx.fillStyle = gR; cx.fillRect(0, 0, 40, REFL_LEN);
+          cx.globalCompositeOperation = "source-over";
+          const a0R = ctx.globalAlpha; ctx.globalAlpha = a0R * aR; ctx.drawImage(cv, px - 12, fyR); ctx.globalAlpha = a0R;
         }
         if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); }
         else drawSk(px);

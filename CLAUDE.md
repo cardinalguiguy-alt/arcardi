@@ -14,7 +14,7 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ### 2026-10-06 (nuit, suite) — VERDICTS REÇUS SUR LE LOT DU PATIN, TROIS CORRECTIFS DANS L'ARBRE, NON COMMITÉS, PAS VUS EN JEU
 
 Récit : README de la ferme, journal « 2026-10-06 (nuit, suite) » ; verdicts ligne par ligne : tête de `docs/A-JUGER.md`. **Supabase : rien.** Les lots d'avant (marché en haut, ombre du saut, patin,
-figures à deux, reflets, correctif de fluidité iPad) sont COMMITÉS. **Dans l'arbre, non commité** : (1) la vrille ralentit avant de finir (`spinEase`, patin.js ; `verify-patin` 82/82) ; (2) la surfaceuse suit
+figures à deux, reflets, correctif de fluidité iPad) sont COMMITÉS. **Dans l'arbre, non commité** : (0) le REFLET du patineur sur la glace se fond en dégradé continu sur 16 px (canevas de travail `SK_REFL_CV`, FermeGame.js, au lieu de deux paliers durs qui le coupaient net aux hanches) — vu en jeu (un client, glisse et arrêt), pas à deux ; (1) la vrille ralentit avant de finir (`spinEase`, patin.js ; `verify-patin` 82/82) ; (2) la surfaceuse suit
 les coins arrondis (surfaceuse.js : corps entier sur la glace, −0,11 case contre +1,14 ; `verify-surfaceuse` 60/60) ; (3) le lac du sud : message au gel chez chacun (`lakeWatchTick`, FermeGame.js) et dégel
 étiré à 0,06 K/min réelle (`lakeCover`, neige.js ; `render-glace` 33/33). Aussi : `verify-portee` remis au vert (`WeakRef`). **Rien de tout cela n'est vu en jeu** (bancs seulement) ; la surfaceuse : si « coupée
 dans les angles » voulait dire que son sprite haut mord sur la planche dessinée, ce n'est PAS corrigé. Guillaume teste seul : **jamais vu à deux clients**. `verify-docs`, `verify-strings` (1 286 clés), `verify-vallee`,
