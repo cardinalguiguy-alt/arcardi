@@ -1,5 +1,13 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-07 — LE REFLET DU PATINEUR EST LE CORPS ENTIER, COMME SUR L'ÉTANG GELÉ
+
+Demande de Guillaume : « le même type de réflexion que sur l'étang gelé : le corps complet ». **Supabase : rien.** Le reflet de la patinoire (FermeGame.js, branche `p.skate` de `drawCharacter`, canevas de travail `SK_REFL_CV`)
+s'arrêtait à 16 px, en fondu vers zéro : il se perdait aux hanches. Maintenant : patineur renversé EN ENTIER (`REFL_LEN` = 40 px : 24 de sprite + 14 de saut max), teinte d'eau de `eau.js` (`REFL_TINT`, 0,46), voile qui ne tombe qu'à 0,6
+vers la tête (jamais nul), poids selon le poli (0,50 / 0,30 / 0,12 ; avant 0,34 / 0,20 / 0,08), et **rogné au rectangle arrondi de la glace** (un reflet de 24 px dépasserait la bande au sud). Pas de houle par rangée : la glace est lisse.
+`verify-patin` 82/82, `verify-portee` vert. **Vu en jeu** (un client, harnais `app/audit-tmp`, hiver forcé, zoom 4) : au centre et près de la bande sud, le reflet descend sous les pieds sur toute la hauteur du corps et s'arrête à la bande.
+**Pas vu** : à deux clients, la nuit, un saut, un niveau de glace usé, un iPad. ⚠️ Le reflet de la patinoire reste un second dessin du patineur (pas celui de `eau.js`) : tout nouveau choix de pose se fait dans `drawSkate`, qui sert aux deux.
+
 ## 2026-10-06 (nuit, suite) — VERDICTS DE GUILLAUME SUR LE LOT DU PATIN, ET TROIS CORRECTIFS : VRILLE QUI RALENTIT, SURFACEUSE DANS LES COINS, LAC QUI GÈLE EN LE DISANT
 
 **Supabase : rien.** Guillaume a répondu aux questions en suspens (tout est reporté dans `docs/A-JUGER.md`, tête du fichier). Trois choses à corriger en sont sorties ; **aucune n'est vue en jeu**

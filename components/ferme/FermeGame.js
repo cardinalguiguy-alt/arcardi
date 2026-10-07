@@ -29875,29 +29875,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const handS = p.skHand ? { x: flipS ? px + 16 - p.skHand.x : p.skHand.x, y: p.skHand.y } : null;
         const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
         /* 2026-10-06 (soir) — LE REFLET DU PATINEUR (Guillaume : « la réflexion du patineur joue sur l'aspect lisse de la glace »).
-           Le corps renversé sous la semelle, sur dix pixels, deux paliers qui s'éteignent ; son poids suit le poli de la glace
+           Le corps renversé sous la semelle (en entier depuis le 2026-10-07, voir plus bas) ; son poids suit le poli de la glace
            (`GLOSS_K` : plein sur la glace lisse, nul sur l'usée). Seulement sur la glace entretenue, jamais dans l'ombre du soleil. */
         const twR = townWorldRef.current, lvR = rinkIceRef.current ? rinkIceRef.current.lv | 0 : 0;
         if (!sunCasting && twR && twR.rink && C.rinkInside(C.footX(p.x), C.footY(p.y)) && lvR < 3) {
-          /* 2026-10-07 — ÉTAIT DEUX PALIERS DURS (10 px, puis rien) : le reflet s'arrêtait net aux hanches (Guillaume : « il se
-             coupe d'un coup »). Le corps renversé est maintenant peint sur un canevas de travail, EFFACÉ PAR UN DÉGRADÉ
-             (plein sous la semelle, nul à `REFL_LEN` px), puis posé d'un coup : un seul dessin du patineur, un fondu continu. */
-          const aR = [0.34, 0.2, 0.08][lvR], fyR = py + 15, REFL_LEN = 16;
+          /* 2026-10-07 — LE REFLET EST LE CORPS ENTIER, comme sur l'étang gelé (Guillaume : « le même type de réflexion que sur
+             l'étang : le corps complet »). Avant : deux paliers durs (10 px) puis un dégradé sur 16 px — le reflet s'arrêtait aux
+             hanches. Même recette que `eau.js` § 7 : le patineur renversé sous la semelle EN ENTIER (`REFL_LEN` = 24 px de sprite
+             + 14 px de saut max, `skAir`), teinté d'eau sombre, un voile qui s'éclaircit seulement vers la tête (jamais nul : le
+             corps ne se coupe pas). Peint sur un canevas de travail pour rogner sur la glace — un reflet ne passe pas la bande. */
+          const aR = [0.5, 0.3, 0.12][lvR], fyR = py + 15, REFL_LEN = 40, REFL_W = 40;
           const cv = SK_REFL_CV || (SK_REFL_CV = document.createElement("canvas"));
-          if (cv.width !== 40 || cv.height !== REFL_LEN) { cv.width = 40; cv.height = REFL_LEN; }
+          if (cv.width !== REFL_W || cv.height !== REFL_LEN) { cv.width = REFL_W; cv.height = REFL_LEN; }
           const cx = cv.getContext("2d");
-          cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, 40, REFL_LEN);
+          cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalCompositeOperation = "source-over"; cx.clearRect(0, 0, REFL_W, REFL_LEN);
           cx.save();
           cx.translate(-(px - 12), -fyR);              // repère monde → canevas de travail
-          cx.beginPath(); cx.rect(px - 12, fyR, 40, REFL_LEN); cx.clip();
+          {   // la glace seule : le rectangle arrondi de `rinkInside`, en px monde
+            const RK = C.TOWN_RINK, TT = C.TILE, X0 = RK.x0 * TT, X1 = (RK.x1 + 1) * TT, Y0 = RK.y0 * TT, Y1 = (RK.y1 + 1) * TT, rr = RK.r * TT;
+            cx.beginPath(); cx.moveTo(X0 + rr, Y0); cx.arcTo(X1, Y0, X1, Y1, rr); cx.arcTo(X1, Y1, X0, Y1, rr); cx.arcTo(X0, Y1, X0, Y0, rr); cx.arcTo(X0, Y0, X1, Y0, rr); cx.closePath(); cx.clip();
+          }
+          cx.save();
           cx.translate(0, 2 * fyR); cx.scale(1, -1);
           if (flipS) { cx.translate(px + 16, 0); cx.scale(-1, 1); A.drawSkate(cx, sheetS, rowS, 0, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS }); }
           else A.drawSkate(cx, sheetS, rowS, px, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
           cx.restore();
+          cx.restore();
+          cx.globalCompositeOperation = "source-atop";
+          cx.fillStyle = "rgba(16, 38, 62, 0.46)"; cx.fillRect(0, 0, REFL_W, REFL_LEN);   // la teinte d'eau de `eau.js` (REFL_TINT)
           cx.globalCompositeOperation = "destination-in";
           const gR = cx.createLinearGradient(0, 0, 0, REFL_LEN);
-          gR.addColorStop(0, "rgba(0,0,0,1)"); gR.addColorStop(1, "rgba(0,0,0,0)");
-          cx.fillStyle = gR; cx.fillRect(0, 0, 40, REFL_LEN);
+          gR.addColorStop(0, "rgba(0,0,0,1)"); gR.addColorStop(1, "rgba(0,0,0,0.6)");
+          cx.fillStyle = gR; cx.fillRect(0, 0, REFL_W, REFL_LEN);
           cx.globalCompositeOperation = "source-over";
           const a0R = ctx.globalAlpha; ctx.globalAlpha = a0R * aR; ctx.drawImage(cv, px - 12, fyR); ctx.globalAlpha = a0R;
         }
