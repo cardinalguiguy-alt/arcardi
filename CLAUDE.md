@@ -13,7 +13,7 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ### 2026-10-09 — BRASERO : FLAMME PLUS RÉELLE + BRÛLURE AU CONTACT (DANS L'ARBRE, NON COMMITÉ, PAS VU EN JEU)
 
-**Brasero** : flamme à 8 images / 85 ms, trois couches (`townBrazierSprites`, fermeArt.js — planche regardée, bon) ; rester plein contre un brasero 5 s (avertissement à 3 s) repousse de 3 cases et blesse 10 s (`brazierHeatTick`/`brazierBurnNow`, FermeGame.js ; req hôte `brazierBurn`, constantes `BRAZIER_*`). `verify-strings` vert ; **jamais joué** (contact, case d'atterrissage, à deux : à tester en jeu). Le reste du bloc ci-dessous est l'état d'avant.
+**Brasero** : flamme à 8 images / 85 ms, trois couches (`townBrazierSprites`, fermeArt.js — planche regardée, bon). **Collision au point** : seul son pied bloque (`C.BRAZIER_CORE`, `brazierCoreHit` ; `blockedTown` via `brazierMapFor`, FermeGame.js) — on se colle au feu ; `townNav` garde la case. **Brûlure** : BUTER (pas refusé par le pied, `noteBrazierBump`) 5 s (avertissement à 3 s) repousse de 3 cases et blesse 10 s (`brazierHeatTick`/`brazierBurnNow` ; req hôte `brazierBurn`, `BRAZIER_*`) ; longer ou frôler ne compte pas. `verify-collision`/`verify-strings`/`verify-docs` verts ; **jamais joué** (le pied ±0,34 × 0,55–0,9 est à régler au ressenti ; à deux aussi). Le reste du bloc ci-dessous est l'état d'avant.
 
 ### 2026-10-07 — REFLET DU PATINEUR EN CORPS ENTIER (comme l'étang) : DANS L'ARBRE, NON COMMITÉ ; LES TROIS CORRECTIFS DU PATIN D'AVANT AUSSI
 

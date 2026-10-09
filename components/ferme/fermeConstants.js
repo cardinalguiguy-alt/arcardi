@@ -971,10 +971,17 @@ export const ICE_INJURED_MS_LEGACY = 15 * 60 * 1000;   // (l'ancienne durée, ga
    piste (`iceShoreSpot`), et l'on y reste immobile le temps du repos (toute entrée est refusée pendant une blessure). */
 export const ICE_INJURED_MIN_MS = 30 * 1000;
 export const ICE_INJURED_MAX_MS = 2 * 60 * 1000;
-/* 2026-10-09 — LE BRASERO BRÛLE : rester PLEIN CONTRE (semelle à moins de `BRAZIER_TOUCH` case de la case du brasero) plus de
+/* 2026-10-09 — LE BRASERO BRÛLE : BUTER contre le brasero (pousser vers lui, le pas refusé par son pied) plus de
    `BRAZIER_BURN_MS` d'affilée, c'est se brûler — on est repoussé de `BRAZIER_PUSH` cases et blessé `BRAZIER_INJURED_MS` (même
    mécanique que la chute sur la glace : `iceFall`/`brazierBurn`, optimiste chez soi, gardée par l'hôte). */
-export const BRAZIER_TOUCH = BODY_RX + 0.12;
+/* ⚠️ La collision d'un brasero se lit AU POINT (comme la bande, `rinkBandSolid`), pas à la case : seul son PIED bloque (la dalle et
+   les trois pattes, ±`hx` autour de l'axe, de `y0` à `y1` dans la case), si bien que la semelle vient se coller contre le brasero
+   au lieu de cogner à un demi-pas de lui. La profondeur `y1 − y0` reste > celle de la semelle (`BODY_DEPTH`, 0,31) : plus mince,
+   la semelle passerait À TRAVERS entre ses points du haut et du bas. `townNav` (les résidents) garde la case entière. */
+export const BRAZIER_CORE = { hx: 0.34, y0: 0.55, y1: 0.9 };
+export function brazierCoreHit(bx, by, x, y) {
+  return Math.abs(x - (bx + 0.5)) < BRAZIER_CORE.hx && y > by + BRAZIER_CORE.y0 && y < by + BRAZIER_CORE.y1;
+}
 export const BRAZIER_BURN_MS = 5000;
 export const BRAZIER_WARN_MS = 3000;
 export const BRAZIER_INJURED_MS = 10 * 1000;

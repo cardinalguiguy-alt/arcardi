@@ -2390,8 +2390,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartedAtRef = useRef(null);
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
-  const brazierHeatRef = useRef({ t: 0, warned: false }); // 2026-10-09 : secondes passées plein contre un brasero
-  const brazierListCache = useRef(new WeakMap()).current; // 2026-10-09 : les braseros de chaque monde de ville
+  const brazierHeatRef = useRef({ t: 0, warned: false, bump: null, bumpAt: 0 }); // 2026-10-09 : secondes passées plein contre un brasero
+  const brazierListCache = useRef(new WeakMap()).current; // 2026-10-09 : les braseros de chaque monde de ville (index de case → brasero)
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
   const evilRodProtectedAtRef = useRef(0); // 2026-09-13 (D10) : miroir synchrone de evilRodProtectedAt (lu dans startFishingEvil)
@@ -21247,7 +21247,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de son dallage (`tw.rinkBand`) ne bloquent que l'épaisseur de la planche — plus de mur invisible tout autour, plus de
          trou aux coins que l'arrondi traverse. `townNav` (les résidents) garde la case entière, plus pessimiste. */
       if (tw.rinkBand && tw.rinkBand[i]) return C.rinkBandSolid(x, y);
-      if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) return true;
+      if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) {
+        const bz = brazierMapFor(tw).get(i);   // 2026-10-09 : un brasero ne bloque que son pied (`C.brazierCoreHit`)
+        return bz ? C.brazierCoreHit(bz.x, bz.y, x, y) : true;
+      }
       /* 2026-10-04 — L'EAU GELÉE PORTE (l'étang l'hiver, le lac par grand froid), au
          point près : la même règle que le dessin (`townIceAt` → `GL.frozenAt`). Sans
          patins on y glisse et on tombe (`patin.js`) — c'est le pas sur la glace qui le
@@ -21588,27 +21591,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           || starPlaqueOpenRef.current   // 2026-09-07 — la plaque du chantier, ouverte en ville
           || document.activeElement === chatInputRef.current;
     }
-    /* 2026-10-09 — LA CHALEUR DU BRASERO : on cumule le temps passé semelle contre la case d'un brasero (le corps de 0,3 case
-       ne peut pas entrer dans la case, donc « plein contre » = à `BRAZIER_TOUCH` du bord) ; un pas de recul remet le compteur à
-       zéro. Passé `BRAZIER_BURN_MS`, `brazierBurnNow` reçoit une case libre à `BRAZIER_PUSH` cases, hors glace. ⚠️ ICI, DANS LA
-       BOUCLE : `canStandTown` n'existe pas au niveau du composant (§4). */
+    /* 2026-10-09 — LES BRASEROS DU MONDE : index de case → { x, y }, calculé une fois par monde (la collision au point, plus bas, et la
+       chaleur le lisent). */
+    function brazierMapFor(tw) {
+      let mp = brazierListCache.get(tw);
+      if (!mp) { mp = new Map(); for (const p of (tw.props || [])) if (p.kind === "brazier") mp.set(p.y * tw.w + p.x, { x: p.x, y: p.y }); brazierListCache.set(tw, mp); }
+      return mp;
+    }
+    /* Ce pas, refusé, l'est-il PAR LE PIED D'UN BRASERO ? (les points de la semelle en (x, y) dans un pied) — appelé par le pas de
+       marche à chaque axe refusé : c'est ce qui dit « on bute ». */
+    function noteBrazierBump(tw, x, y) {
+      const mp = brazierMapFor(tw); if (!mp.size) return;
+      for (const [px, py] of C.bodyPoints(x, y)) {
+        const b = mp.get(Math.floor(py) * tw.w + Math.floor(px));
+        if (b && C.brazierCoreHit(b.x, b.y, px, py)) { brazierHeatRef.current.bump = b; brazierHeatRef.current.bumpAt = performance.now(); return; }
+      }
+    }
+    /* LA CHALEUR DU BRASERO : on cumule le temps passé À BUTER contre son pied (le pas vers lui refusé par lui, `noteBrazierBump`) —
+       longer, frôler ou rester debout à côté ne compte pas, il faut pousser dessus. Plus de poussée depuis 0,25 s : le compteur
+       redescend (deux fois plus vite qu'il ne monte). Passé `BRAZIER_BURN_MS`, `brazierBurnNow` reçoit une case libre à
+       `BRAZIER_PUSH` cases, hors glace. ⚠️ ICI, DANS LA BOUCLE : `canStandTown` n'existe pas au niveau du composant (§4). */
     function brazierHeatTick(tw, m, dt) {
       const h = brazierHeatRef.current;
-      if (!m || (m.zone || "farm") !== "town" || isInjured()) { h.t = 0; h.warned = false; return; }
-      let list = brazierListCache.get(tw);
-      if (!list) { list = (tw.props || []).filter((p) => p.kind === "brazier"); brazierListCache.set(tw, list); }
-      const fx = C.footX(m.x), fy = C.footY(m.y);
-      let hit = null;
-      for (const b of list) {
-        if (Math.abs(b.x + 0.5 - fx) > 2 || Math.abs(b.y + 0.5 - fy) > 2) continue;
-        const dx = Math.max(b.x - fx, 0, fx - (b.x + 1)), dy = Math.max(b.y - fy, 0, fy - (b.y + 1));
-        if (Math.hypot(dx, dy) <= C.BRAZIER_TOUCH) { hit = b; break; }
-      }
+      if (!m || (m.zone || "farm") !== "town" || isInjured()) { h.t = 0; h.warned = false; h.bump = null; return; }
+      const hit = h.bump && performance.now() - h.bumpAt < 250 ? h.bump : null;
       if (!hit) { h.t = Math.max(0, h.t - dt * 2); if (h.t === 0) h.warned = false; return; }
+      const fx = C.footX(m.x), fy = C.footY(m.y);
       h.t += dt;
       if (!h.warned && h.t * 1000 >= C.BRAZIER_WARN_MS) { h.warned = true; pushToast(L.brazierWarnToast); }
       if (h.t * 1000 < C.BRAZIER_BURN_MS) return;
-      h.t = 0; h.warned = false;
+      h.t = 0; h.warned = false; h.bump = null;
       // la case libre à ~3 cases, en s'éloignant du brasero d'abord, puis en tournant autour
       const ax = fx - (hit.x + 0.5), ay = fy - (hit.y + 0.5), a0 = Math.atan2(ay, ax);
       const clear = (x, y) => {
@@ -21954,8 +21966,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            d'escalier change de marche sur l'axe X puis se voit refuser l'axe Y
            s'il compare encore à l'altitude d'avant — on se retrouve à monter en
            crabe, une case sur deux. Deux lectures d'un tableau ne coûtent rien. */
-        if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx; else if (dx) noteTreeBump(tw, nx, m.y);
-        if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny; else if (dy) noteTreeBump(tw, m.x, ny);
+        if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx; else if (dx) { noteTreeBump(tw, nx, m.y); noteBrazierBump(tw, nx, m.y); }
+        if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny; else if (dy) { noteTreeBump(tw, m.x, ny); noteBrazierBump(tw, m.x, ny); }
         /* 2026-10-05 — LA BOULE QU'ON POUSSE : elle avance devant, grossit, creuse sa traînée ;
            si elle bute (un mur, un arbre, l'eau), le pas est annulé — on ne la traverse pas. */
         if (snowRollRef.current && !snowRollStep(m, snowPx, snowPy, (bx, by) => blockedTown(tw, bx, by))) { m.x = snowPx; m.y = snowPy; }
