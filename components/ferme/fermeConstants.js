@@ -971,6 +971,14 @@ export const ICE_INJURED_MS_LEGACY = 15 * 60 * 1000;   // (l'ancienne durée, ga
    piste (`iceShoreSpot`), et l'on y reste immobile le temps du repos (toute entrée est refusée pendant une blessure). */
 export const ICE_INJURED_MIN_MS = 30 * 1000;
 export const ICE_INJURED_MAX_MS = 2 * 60 * 1000;
+/* 2026-10-09 — LE BRASERO BRÛLE : rester PLEIN CONTRE (semelle à moins de `BRAZIER_TOUCH` case de la case du brasero) plus de
+   `BRAZIER_BURN_MS` d'affilée, c'est se brûler — on est repoussé de `BRAZIER_PUSH` cases et blessé `BRAZIER_INJURED_MS` (même
+   mécanique que la chute sur la glace : `iceFall`/`brazierBurn`, optimiste chez soi, gardée par l'hôte). */
+export const BRAZIER_TOUCH = BODY_RX + 0.12;
+export const BRAZIER_BURN_MS = 5000;
+export const BRAZIER_WARN_MS = 3000;
+export const BRAZIER_INJURED_MS = 10 * 1000;
+export const BRAZIER_PUSH = 3;
 
 // Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
 // DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter

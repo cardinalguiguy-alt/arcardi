@@ -8391,14 +8391,8 @@ export function buildSprites() {
     const W = 18, H = 26, cx = 9;
     const IRON = "#2e2724", IRON_M = "#4a3f38", IRON_L = "#7c6a5b";
     const frames = [];
-    // Les langues de flamme de chaque image : [axe x, hauteur, largeur] — fixées, pas tirées.
-    const TONGUES = [
-      [[6, 9, 3], [9, 12, 4], [12, 8, 3]],
-      [[6, 7, 3], [9, 13, 3], [11, 10, 3]],
-      [[7, 10, 3], [9, 11, 4], [12, 7, 2]],
-      [[6, 8, 2], [8, 12, 3], [11, 11, 4]],
-    ];
-    for (let f = 0; f < 4; f++) {
+    const NF = 8;   // 2026-10-09 : huit images (quatre faisaient un clignotement de lanterne, pas un feu)
+    for (let f = 0; f < NF; f++) {
       const [c, g] = cv(W, H);
       const base = 12;   // le haut des braises (y)
       /* LA DALLE : le brasero est posé sur le caillebotis, sur une pierre plate qui le protège (comme sur les vrais
@@ -8437,17 +8431,37 @@ export function buildSprites() {
         const hgt = x === 4 || x === 13 ? 1 : x === 5 || x === 12 ? 2 : 3;
         for (let k = 0; k < hgt; k++) P(g, x, base - 1 - k, 1, 1, k === hgt - 1 ? ((x + f) & 1 ? "#ffd76a" : "#ff9a3c") : "#e5561c");
       }
-      // les flammes : rouge-orangé dehors, jaune au cœur, la pointe presque blanche
-      for (const [tx, th, tw] of TONGUES[f]) {
-        for (let k = 0; k < th; k++) {
-          const y = base - 3 - k, w = Math.max(1, Math.round(tw * (1 - k / th) + 0.4));
-          const x0 = Math.round(tx - w / 2 + Math.sin((k + f * 2) * 0.9) * 0.6);
-          const col = k > th - 3 ? "#fff3c4" : k > th * 0.5 ? "#ffd25a" : "#ff8a2a";
-          P(g, x0, y, w, 1, "#e5541e");
-          if (w > 1) P(g, x0 + (w > 2 ? 1 : 0), y, Math.max(1, w - 2), 1, col);
-          else P(g, x0, y, 1, 1, col);
+      /* 2026-10-09 — LA FLAMME, PLUS VRAIE : trois couches emboîtées (rouge-orangé dehors, orange, cœur jaune pâle), chacune
+         une colonne par colonne dont la hauteur vacille (harmoniques ENTIÈRES de la phase : la boucle de huit images se
+         referme sans saut) et dont le haut ondule de côté (le panache dérive avec la hauteur, comme dans un courant d'air).
+         La pointe est translucide, en damier (le feu n'a pas de bord net), et une étincelle de flamme se détache parfois
+         au-dessus. Tout est fixé par l'image, jamais tiré (§4). */
+      const ph = (f / NF) * Math.PI * 2;
+      const LAYERS = [
+        { s: 1.0, w: 1.0, low: "#d2380f", mid: "#ee5a1a", tip: [238, 84, 30] },
+        { s: 0.74, w: 0.72, low: "#ff7a1c", mid: "#ff9d2e", tip: [255, 168, 50] },
+        { s: 0.44, w: 0.4, low: "#ffd45a", mid: "#ffe98a", tip: [255, 244, 200] },
+      ];
+      for (const L of LAYERS) {
+        for (let x = 3; x <= 14; x++) {
+          const xr = (x - 8.5) / 5.5;
+          if (Math.abs(xr) > L.w) continue;
+          const env = 1 - Math.pow(Math.abs(xr) / L.w, 1.7);
+          const flick = 0.78 + 0.2 * Math.sin(ph + xr * 4.1 + L.s * 3) + 0.12 * Math.sin(ph * 2 - xr * 7.3) + 0.07 * Math.sin(ph * 3 + xr * 11);
+          const h = Math.round(11 * L.s * env * flick + 1);
+          for (let k = 0; k < h; k++) {
+            const sway = k < 4 ? 0 : Math.round(Math.sin(ph + k * 0.34 + L.s * 2) * 0.9 * Math.min(1, (k - 3) / 6));
+            const y = base - 3 - k;
+            if (y < 0) break;
+            const tipZone = k >= h - 2;
+            if (tipZone && k > 1 && ((x + k + f) & 1)) continue;   // le bout du feu s'effiloche, un pixel sur deux
+            if (tipZone && k > 2) { g.fillStyle = `rgba(${L.tip[0]},${L.tip[1]},${L.tip[2]},0.7)`; g.fillRect(x + sway, y, 1, 1); }
+            else P(g, x + sway, y, 1, 1, k < h * 0.5 ? L.low : L.mid);
+          }
         }
       }
+      // une étincelle de flamme qui se détache, au-dessus du panache (une image sur deux)
+      if (f % 2 === 0) { const wx = 6 + ((f * 5) % 6); P(g, wx, 0 + (f % 4 === 0 ? 1 : 2), 1, 1, "rgba(255,170,60,0.75)"); }
       frames.push(c);
     }
     return frames;

@@ -2390,6 +2390,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartedAtRef = useRef(null);
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
+  const brazierHeatRef = useRef({ t: 0, warned: false }); // 2026-10-09 : secondes passées plein contre un brasero
+  const brazierListCache = useRef(new WeakMap()).current; // 2026-10-09 : les braseros de chaque monde de ville
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
   const evilRodProtectedAtRef = useRef(0); // 2026-09-13 (D10) : miroir synchrone de evilRodProtectedAt (lu dans startFishingEvil)
@@ -5857,6 +5859,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "brazierBurn") {
+      /* 2026-10-09 — LE BRASERO BRÛLE. Calque d'« iceFall » : la durée est fixe (10 s), l'hôte borne et rediffuse en `injured`. */
+      const nowZ = Date.now();
+      const untilZ = (typeof req.until === "number" && req.until > nowZ && req.until <= nowZ + C.BRAZIER_INJURED_MS + 3000) ? req.until : nowZ + C.BRAZIER_INJURED_MS;
+      f.injuredUntil = untilZ;
+      f.injuryKind = "burn";
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { injured: { id: f.id, until: f.injuredUntil } } });
     } else if (req.kind === "netCatch") {
       const r = E.resolveNetCatch(f, req.what, req.sp, Date.now(), Math.random);
       if (r.ok) {
@@ -21578,9 +21588,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           || starPlaqueOpenRef.current   // 2026-09-07 — la plaque du chantier, ouverte en ville
           || document.activeElement === chatInputRef.current;
     }
+    /* 2026-10-09 — LA CHALEUR DU BRASERO : on cumule le temps passé semelle contre la case d'un brasero (le corps de 0,3 case
+       ne peut pas entrer dans la case, donc « plein contre » = à `BRAZIER_TOUCH` du bord) ; un pas de recul remet le compteur à
+       zéro. Passé `BRAZIER_BURN_MS`, `brazierBurnNow` reçoit une case libre à `BRAZIER_PUSH` cases, hors glace. ⚠️ ICI, DANS LA
+       BOUCLE : `canStandTown` n'existe pas au niveau du composant (§4). */
+    function brazierHeatTick(tw, m, dt) {
+      const h = brazierHeatRef.current;
+      if (!m || (m.zone || "farm") !== "town" || isInjured()) { h.t = 0; h.warned = false; return; }
+      let list = brazierListCache.get(tw);
+      if (!list) { list = (tw.props || []).filter((p) => p.kind === "brazier"); brazierListCache.set(tw, list); }
+      const fx = C.footX(m.x), fy = C.footY(m.y);
+      let hit = null;
+      for (const b of list) {
+        if (Math.abs(b.x + 0.5 - fx) > 2 || Math.abs(b.y + 0.5 - fy) > 2) continue;
+        const dx = Math.max(b.x - fx, 0, fx - (b.x + 1)), dy = Math.max(b.y - fy, 0, fy - (b.y + 1));
+        if (Math.hypot(dx, dy) <= C.BRAZIER_TOUCH) { hit = b; break; }
+      }
+      if (!hit) { h.t = Math.max(0, h.t - dt * 2); if (h.t === 0) h.warned = false; return; }
+      h.t += dt;
+      if (!h.warned && h.t * 1000 >= C.BRAZIER_WARN_MS) { h.warned = true; pushToast(L.brazierWarnToast); }
+      if (h.t * 1000 < C.BRAZIER_BURN_MS) return;
+      h.t = 0; h.warned = false;
+      // la case libre à ~3 cases, en s'éloignant du brasero d'abord, puis en tournant autour
+      const ax = fx - (hit.x + 0.5), ay = fy - (hit.y + 0.5), a0 = Math.atan2(ay, ax);
+      const clear = (x, y) => {
+        if (!canStandTown(tw, x, y)) return false;
+        for (const [bx, by] of C.bodyPoints(x, y)) if (townIceAt(tw, bx, by)) return false;
+        return true;
+      };
+      let spot = null;
+      for (const r of [C.BRAZIER_PUSH, C.BRAZIER_PUSH + 1, C.BRAZIER_PUSH - 1, C.BRAZIER_PUSH + 2]) {
+        for (const da of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
+          const a = a0 + da, nx = hit.x + 0.5 + Math.cos(a) * r - C.BODY_CX, ny = hit.y + 0.5 + Math.sin(a) * r - C.BODY_FY;
+          if (clear(nx, ny)) { spot = { x: nx, y: ny, dir: Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? (Math.cos(a) > 0 ? 2 : 3) : (Math.sin(a) > 0 ? 1 : 0) }; break; }
+        }
+        if (spot) break;
+      }
+      brazierBurnNow(spot);
+    }
     function updateMeTown(dt) {
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
+      brazierHeatTick(tw, m, dt);
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 432 — EN COURSE, LE PASSAGER EST LE VÉHICULE.
          ╚══════════════════════════════════════════════════════════════════════
@@ -24873,12 +24922,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           continue;
         }
-        /* 2026-10-05 (nuit) — LE BRASERO DU MARCHÉ D'HIVER : quatre images de flamme à cadence FIXE (110 ms, §4 :
+        /* 2026-10-05 (nuit) — LE BRASERO DU MARCHÉ D'HIVER : huit images de flamme à cadence FIXE (85 ms, §4 :
            une cadence qui varie tirerait une image au hasard), et ses escarbilles (`A.drawBrazierSparks`). */
         if (pr.kind === "brazier") {
           const fr = sprites.townBrazier;
           if (fr && fr.length) {
-            const bimg = fr[Math.floor(now / 110) & 3];
+            const bimg = fr[Math.floor(now / 85) % fr.length];
             const bx = pr.x * T + T / 2 - bimg.width / 2, bty = (pr.y + 1) * T - bimg.height + 1, seedB = pr.x * 31 + pr.y;
             pushE((pr.y + 1) * T, elAt(pr.x, pr.y), () => {
               ctx.fillStyle = "rgba(20,12,8,0.28)"; fillPixEllipse(ctx, pr.x * T + T / 2, (pr.y + 1) * T - 1, 7, 2);
@@ -32213,6 +32262,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (r && r.skateKit) return r.skateKit;
     const f = farmersRef.current && farmersRef.current[id];
     return PT.skateKitNorm(f && f.inv && f.inv.skateKit);
+  }
+  /* 2026-10-09 — LA BRÛLURE DU BRASERO : même contrat que la chute (`iceFallNow`), 10 s fixes, et l'on reste en ville, repoussé de
+     quelques cases (`spot` vient de `brazierHeatTick`, qui a la collision) — face au brasero, immobile, touches lâchées. */
+  function brazierBurnNow(spot) {
+    const m = meRef.current; if (!m || (m.zone || "farm") !== "town" || isInjured() || !spot) return;
+    const until = Date.now() + C.BRAZIER_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "brazierBurn", until });
+    m.x = spot.x; m.y = spot.y; m.dir = spot.dir;
+    m.moving = false; m.vx = 0; m.vy = 0;
+    keysRef.current = {};
+    sendPos();
+    pushToast(L.brazierBurnToast(Math.round(C.BRAZIER_INJURED_MS / 1000)));
   }
   /* LA CHUTE : la blessure (de 30 s à 2 min, `C.ICE_INJURED_MIN_MS`…`MAX`), optimiste ici, gardée par l'hôte (`iceFall`) — le
      contrat de la brûlure (`starTryBurn`). ⚠️ 2026-10-06 : ON N'EST PLUS RENVOYÉ À LA FERME (Guillaume : « ne pas te TP

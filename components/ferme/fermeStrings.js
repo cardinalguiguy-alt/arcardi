@@ -5526,6 +5526,8 @@ export const FERME_STR = {
     skatesEndedToast: "⛸️ Location terminée : les patins sont rendus au chalet.",
     iceNoSkatesWarn: "🧊 La glace est vive : sans patins, on n'y tient pas debout. Le chalet du lac en loue l'hiver.",
     /* 2026-10-06 : la durée tirée (30 s à 2 min) est dite, et l'on reste au bord de la glace (plus de retour à la ferme). */
+    brazierWarnToast: "🔥 Ça chauffe… recule du brasero !",
+    brazierBurnToast: (s) => `🔥 Aïe ! Brûlé contre le brasero. ${s} s de repos, le temps de souffler sur la brûlure.`,
     iceFallToast: (s) => `🤕 Patatras ! Sans patins, la glace ne pardonne pas. ${s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}` : `${s} s`} de repos, le temps de reprendre ses esprits au bord de la glace.`,
     fishFrozen: "🧊 L'eau est prise : la ligne rebondirait sur la glace.",
     /* 2026-10-05 — le bonhomme de neige (`bonhomme.js`). */
@@ -7465,6 +7467,8 @@ export const FERME_STR = {
     skatesWarn2Toast: (s) => `⛸️ ${s} seconds! The skates are taken back at the end — get off the ice.`,
     skatesEndedToast: "⛸️ Rental over: the skates are back at the chalet.",
     iceNoSkatesWarn: "🧊 Bare ice: without skates you won't stay on your feet. The lake chalet rents them in winter.",
+    brazierWarnToast: "🔥 It's getting hot… step back from the brazier!",
+    brazierBurnToast: (s) => `🔥 Ouch! Burned against the brazier. ${s} s of rest, blowing on the burn.`,
     iceFallToast: (s) => `🤕 Whoops! Without skates the ice is merciless. ${s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}` : `${s} s`} of rest, catching your breath at the edge of the ice.`,
     fishFrozen: "🧊 The water's frozen: your line would bounce off the ice.",
     /* 2026-10-05 — the snowman (`bonhomme.js`). */
