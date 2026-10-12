@@ -328,7 +328,8 @@ export function renderWetChunk(st, wp, out, mask) {
 export const wetActive = (p) => p.wet > 0.03 || p.pud > 0.03;
 export function makeWetLayer(tw, env) {
   const NX = Math.ceil(tw.w * T / CH), NY = Math.ceil(tw.h * T / CH);
-  const ATL = 2048, PER = ATL / CH, NSLOT = PER * PER;
+  // 2026-10-12 : `env.atlas` (px, multiple de CH) — la flaque de la glace fondue du chantier n'a besoin que de la patinoire
+  const ATL = env.atlas || 2048, PER = ATL / CH, NSLOT = PER * PER;
   let atlas = null, ag = null, scratch = null;
   const chunks = new Map();          // clé → { slot, ver, use, cx, cy, mask, rip }
   const free = [];

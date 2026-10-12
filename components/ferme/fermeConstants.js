@@ -7908,6 +7908,8 @@ export const DEV_TELEPORTS = [
      téléporteur pointé sur l'herbe. */
   { key: "townBoutique",  zone: "town" },  // zip 427 : la Haute-Ville, devant la Maison Garfield (le seul quartier qu'on n'atteint qu'en montant)
   { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
+  { key: "townPark",      zone: "town" },  // 2026-10-12 : le skatepark de l'ancienne place (son entrée est) — le park n'y est que posé (menu dev) ou au printemps
+  { key: "townPlaceEast", zone: "town" },  // 2026-10-12 : l'allée de l'est de l'ancienne place, d'où l'on regarde le chantier (la place est fermée)
   { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
   { key: "townHall",      zone: "town" },  // 2026-09-02 : le perron de l'hôtel de ville (test PNG) — pour juger le sprite/les marches/l'horloge sans traverser la ville à chaque rechargement
   { key: "townChurch",    zone: "town" },  // 2026-09-20 : le parvis de l'église (test PNG) — jusqu'ici seule sa nef avait un arrêt ; sans façade directe, un rechargement pour juger la nouvelle façade demandait de deviner sa dernière position en ville (§10 CLAUDE.md, la leçon payée sur townHall)
@@ -8801,6 +8803,11 @@ export const SKATES_RENT_PRICE = 60;
 export const SKATES_RENT_MS = 15 * 60 * 1000;
 export const SKATES_WARN_MS = 60 * 1000;
 export const SKATES_WARN2_MS = 15 * 1000;
+/* 2026-10-11 — LES MONTURES DU SKATEPARK SE LOUENT à la cabane du park, comme les patins au chalet (même durée, même mécanique :
+   un bail daté dans le sac, `rideUntil`). Le prix de BASE ici ; l'écart par monture (le BMX coûte plus, la trottinette moins) est
+   dans `RIDE_KIT` (monture.js), avec elle. */
+export const RIDE_RENT_PRICE = 50;
+export const RIDE_RENT_MS = 15 * 60 * 1000;
 export const NET_COOLDOWN_MS = 2200;     // un coup d'épuisette toutes les 2,2 s au plus (arbitré par l'hôte)
 export const NET_ODDS = { carp: 0.4, bfly: 0.55 };   // chance d'attraper (tirée par l'hôte)
 export const NET_REACH = { carp: 2.6, bfly: 1.3 };   // portée, en cases, du pied du joueur à la bête (carpe : 1,9 au premier jet — vu en jeu, les carpes gardent le large, jamais à portée depuis la berge)

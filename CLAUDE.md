@@ -11,30 +11,24 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-09 — BRASERO : FLAMME PLUS RÉELLE + BRÛLURE AU CONTACT (DANS L'ARBRE, NON COMMITÉ, PAS VU EN JEU)
+### 2026-10-12 — LE SKATEPARK DE LA PLACE ET SON CHANTIER DE 3 H — DANS L'ARBRE, NON COMMITÉ, PAS AU PUBLIC
 
-**Brasero** : flamme à 8 images / 85 ms, trois couches (`townBrazierSprites`, fermeArt.js — planche regardée, bon). **Collision au point** : seul son pied bloque (`C.BRAZIER_CORE`, `brazierCoreHit` ; `blockedTown` via `brazierMapFor`, FermeGame.js) — on se colle au feu ; `townNav` garde la case. **Brûlure** : BUTER (pas refusé par le pied, `noteBrazierBump`) 5 s (avertissement à 3 s) repousse de 3 cases et blesse 10 s (`brazierHeatTick`/`brazierBurnNow` ; req hôte `brazierBurn`, `BRAZIER_*`) ; longer ou frôler ne compte pas. `verify-collision`/`verify-strings`/`verify-docs` verts ; **jamais joué** (le pied ±0,34 × 0,55–0,9 est à régler au ressenti ; à deux aussi). Le reste du bloc ci-dessous est l'état d'avant.
+**Le park** (2026-10-11 ; récit : journal du README de la ferme) : relief (`skatepark.js`) et dessin 3/4 (`skateparkArt.js`), quatre montures (`monture.js`, `montureArt.js`, `sonPark.js`),
+cabane de location (`rentRide`), réseau (`rd` dans le paquet de position). **Le chantier** (2026-10-12) : la patinoire démontée, le park monté, le lundi du printemps de 14 h à 17 h heure de
+Paris (`chantier.js` : pure fonction de l'heure, aucun message ; `chantierArt.js` : engins, barrière, gestes, glace qui fond au pixel ; `sonChantier.js`) ; l'eau de la fonte est celle de la
+pluie (`pluie.js`, `env.atlas`). **`SPK.PARK_OPEN = false`** : ni park ni chantier pour les joueurs. Voir : **menu dev, section « Skatepark et chantier »** (park chez soi,
+monture d'essai, chantier à l'heure et à la vitesse voulues, arrêts « skatepark » et « allée de l'est ») — local, rien ne circule (`PARK_DEV`) ; ou `?skatepark=1`, `?monture=…`, `?chantier=…`. Bancs : `verify-chantier` 23/23, `verify-monture` 24/24, `render-skatepark` 7/7, `verify-vallee` 358/358, `verify-pluie` 34/34,
+`verify-ombres` 27/27, `verify-pont`, `verify-collision`, `verify-strings`, `verify-docs` verts. **Vu en jeu** : chaque phase du chantier (montage et démontage), 62 i/s pendant la fonte, aucune
+erreur ; un air de quarter, un 50-50, la location d'un BMX, deux clients qui se voient rider. **Pas vu** : aucun son (volet muet), le chantier en temps réel d'un bout à l'autre, à deux, iPad.
+**Supabase : rien.** Aussi dans l'arbre, non commité : la qualité adaptative (`PERF`, `?perf=1`), jamais vue sur un Mac lent.
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs`. ⚠️ Volet du navigateur masqué : attendre par
+la file `requestAnimationFrame` du harnais (`__ws`, `docs/VERIFICATION.md` §10), jamais `setTimeout` ; `__setHour` décale `Date.now` (un chantier en vitesse > 0 saute alors de minute).
+⚠️ Recharger la page après toute édition de `FermeGame.js`. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
 
-### 2026-10-07 — REFLET DU PATINEUR EN CORPS ENTIER (comme l'étang) : DANS L'ARBRE, NON COMMITÉ ; LES TROIS CORRECTIFS DU PATIN D'AVANT AUSSI
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER PARK ET CHANTIER PAR GUILLAUME EN JEU, AVEC LE SON
 
-Récit : README de la ferme, journal « 2026-10-06 (nuit, suite) » ; verdicts ligne par ligne : tête de `docs/A-JUGER.md`. **Supabase : rien.** Les lots d'avant (marché en haut, ombre du saut, patin,
-figures à deux, reflets, correctif de fluidité iPad) sont COMMITÉS. **Dans l'arbre, non commité** : (0) le REFLET du patineur sur la glace est le CORPS ENTIER (40 px, teinte d'eau de `eau.js`, rogné à la glace ; canevas de travail `SK_REFL_CV`, FermeGame.js) — vu en jeu (un client, zoom 4, centre et bande sud), pas à deux, pas la nuit, pas en saut ; (1) la vrille ralentit avant de finir (`spinEase`, patin.js ; `verify-patin` 82/82) ; (2) la surfaceuse suit
-les coins arrondis (surfaceuse.js : corps entier sur la glace, −0,11 case contre +1,14 ; `verify-surfaceuse` 60/60) ; (3) le lac du sud : message au gel chez chacun (`lakeWatchTick`, FermeGame.js) et dégel
-étiré à 0,06 K/min réelle (`lakeCover`, neige.js ; `render-glace` 33/33). Aussi : `verify-portee` remis au vert (`WeakRef`). **Rien de tout cela n'est vu en jeu** (bancs seulement) ; la surfaceuse : si « coupée
-dans les angles » voulait dire que son sprite haut mord sur la planche dessinée, ce n'est PAS corrigé. Guillaume teste seul : **jamais vu à deux clients**. `verify-docs`, `verify-strings` (1 286 clés), `verify-vallee`,
-`verify-duo`, `verify-course`, `no-undef` : verts. **Le jeu n'a TOUJOURS jamais été vu sur un vrai iPad** (pas de Xcode ici ; mesures du volet navigateur, M4 : zoom 1 = 21,5 ms/image, hors budget ; 905 canevas / 89 Mo en ville ;
-744 × 1133 : le rang de boutons mord de 12 px sur la barre d'outils — NON corrigé) : `docs/PROJETS.md` §3.
-⚠️ `app/audit-tmp` (un compteur de canevas y ajoute `window.__cvLog`), `app/audit-duo`, `app/api/audit-cap` (SUIVIS PAR GIT) : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs` (suivi par git).
-⚠️ Recharger la page après toute édition de `FermeGame.js` (boucle montée une fois). ⚠️ Un invité immobile n'émet aucun `pos`. ⚠️ Les numéros de ligne d'une pile d'appels du navigateur (webpack « eval ») NE SONT PAS ceux du
-source : se fier aux NOMS de fonctions. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas (`orchardRefusal`) ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée ; le README de la ferme
-(« Une seule ombre au saut ») décrit l'ancien jet d'ombre, périmé.
-
-### ⏭️ ACTION SUIVANTE — VOIR EN JEU LES TROIS CORRECTIFS, PUIS UNE SÉANCE SUR UN VRAI iPAD
-
-(1) En jeu, hiver : la vrille emballée (V, V, V : elle ralentit à l'arrivée ?), une passe de surfaceuse aux quatre coins (rien ne mord la planche ?), un gel du lac (le message, puis le dégel : assez long ?) — **demander à
-Guillaume s'il veut que `LAKE_THAW` bouge (0,06) et si « s'arrêter d'un coup » était bien la rotation**. (2) Vingt minutes sur un vrai iPad (Safari, même réseau, `next dev` + `tools/fake-supabase.mjs`) ; décisions iPad en attente,
-rien de codé : zoom 1 plafonné à 2 au tactile, pavé et boutons remontés de ~20 px, invite « E : » cachée au tactile, chaussée (`drawTownRoadTile`, ≈ 12 % des appels) et fumée des cheminées cuites dans l'atlas. (3) Il rapportera
-lui-même les bugs de l'ombre du soleil ; « la place vide hors hiver » et les petits personnages : plus tard ; ensuite le catalogue de la Maison Garfield (`docs/PROJETS.md` §1).
+(1) Les deux blocs en tête de `docs/A-JUGER.md` (le park, puis le chantier à `?chantier=0&chantierv=30`, depuis l'allée de l'est). (2) Ensuite (`docs/PROJETS.md` §4.1) : l'équipe de
+nettoyage, le tactile, l'ouverture (`PARK_OPEN`), l'équipe resservie (chantier d'hiver, voirie, façades). (3) Toujours en attente : l'amie au Mac lent (`?perf=1`), vingt minutes sur un iPad.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -89,7 +83,9 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
 | « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
-| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors hiver (skatepark, miroir d'eau, Halloween), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
+| **Skatepark** (relief, dessin, montures, figures, grinds, cabane, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; README ferme (journal 2026-10-11) | `verify-monture`, `render-skatepark` |
+| **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
+| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
 

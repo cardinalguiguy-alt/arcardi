@@ -22,6 +22,8 @@
 import * as C from "./fermeConstants.mjs";
 import * as PT from "./patin.mjs";   // 2026-10-05 (nuit, fin quater) : le matériel de patin (`skateKitNorm`, `skateKitPrice`) — pur, il n'importe rien
 import * as WX from "./meteo.mjs";   // 2026-10-05 : l'étiquette de la saison (`seasonTagAt`, fin de saison — meteo.js § 0 bis)
+import * as SPK from "./skatepark.mjs";   // 2026-10-11 : le relief du skatepark (pur, il n'importe que les constantes)
+import * as MO from "./monture.mjs";     // 2026-10-11 : la location des montures (`rideKitNorm`, `rideKitPrice`) — pure, elle n'importe que le relief
 /* ⚠️⚠️ ZIP 444 — LE MOTEUR N'IMPORTE PLUS AUCUNE QUÊTE, ET C'EST UNE RÉPARATION
    AUTANT QU'UN RETRAIT. Le 442 lui faisait emprunter `enqMarketMod` : une issue
    d'enquête déplaçait la cote du marché. Le 442 avait pris la peine d'écrire
@@ -1188,6 +1190,10 @@ export function normalizeFarmer(f) {
      le dernier choix, gardé après la location (le panneau le propose de nouveau), diffusé avec le sac pour que les
      autres le VOIENT. Toujours normalisé : un sac ancien ou un paquet tronqué retombe sur le patin ordinaire blanc. */
   f.inv.skateKit = PT.skateKitNorm(f.inv.skateKit);
+  /* 2026-10-11 — la MONTURE louée à la cabane du skatepark : son bail (`rideUntil`, horloge de l'hôte, comme `skatesUntil`) et le
+     dernier choix (monture, couleur), gardé après la location et diffusé avec le sac. */
+  if (typeof f.inv.rideUntil !== "number") f.inv.rideUntil = 0;
+  f.inv.rideKit = MO.rideKitNorm(f.inv.rideKit);
   if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
   for (const k of Object.keys(f.inv.catMilk)) {
     const e = f.inv.catMilk[k];
@@ -1524,6 +1530,32 @@ export function resolveRentSkates(f, money, season, near, now, kit) {
   f.inv.skateKit = k;
   return { ok: true, moneyDelta: -price, until: f.inv.skatesUntil, price, kit: k };
 }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-11 — LA LOCATION D'UNE MONTURE À LA CABANE DU SKATEPARK. Même contrat que `resolveRentSkates` : l'hôte tient la portée
+   ║ (`near`), l'ouverture (`open` : le monde de la ville porte le park), le prix (`rideKitPrice`, sur le choix NORMALISÉ ici, jamais
+   ║ cru tel quel). On ne loue pas deux fois de suite ; un autre choix pendant le bail attend la fin.
+   ╚══════════════════════════════════════════════════════════════════════════ */
+export function rideActive(inv, now) { return !!inv && +inv.rideUntil > 0 && inv.rideUntil > now; }
+export function rideLeftMs(inv, now) { return rideActive(inv, now) ? inv.rideUntil - now : 0; }
+export function resolveRentRide(f, money, open, near, now, kit) {
+  normalizeFarmer(f);
+  if (rideActive(f.inv, now)) return { ok: false, reason: "have", moneyDelta: 0 };
+  if (!open) return { ok: false, reason: "closed", moneyDelta: 0 };
+  if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
+  const k = MO.rideKitNorm(kit || f.inv.rideKit), price = MO.rideKitPrice(k, C.RIDE_RENT_PRICE);
+  if ((money | 0) < price) return { ok: false, reason: "noGold", moneyDelta: 0, price };
+  f.inv.rideUntil = now + C.RIDE_RENT_MS;
+  f.inv.rideKit = k;
+  return { ok: true, moneyDelta: -price, until: f.inv.rideUntil, price, kit: k };
+}
+/* La distance (cases) d'un point au comptoir de la cabane du park : 0 dedans, Infinity sans park. */
+export function parkShedDist(tw, fx, fy) {
+  if (!tw || !tw.skatepark) return Infinity;
+  const r = SPK.SHED;
+  const dx = Math.max(r.x - fx, 0, fx - (r.x + r.w)), dy = Math.max(r.y - fy, 0, fy - (r.y + r.h));
+  return Math.hypot(dx, dy);
+}
+
 /* Le chalet : son emprise (cases) une fois la ville générée — le décor `skateChalet`
    qu'a posé le générateur, ou `null`. Et la distance d'un point (semelle, cases) au
    bord de cette emprise : 0 dedans. */
@@ -8759,14 +8791,23 @@ const SEASON_WORLDS = new WeakMap();   // monde brut → { market, winter }
 /* Ce que le marché remballe en quittant l'esplanade : les étals et ce qui traîne autour.
    Les quatre lampadaires d'angle restent (ils éclaireront la patinoire l'hiver, la place le reste de l'année). */
 const FAIR_PACKED = new Set(["stall", "marketArch", "townWell", "crate", "barrel", "sacks", "flowerCart"]);
-export function townMarketWorld(tw) { return townSeasonWorld(tw, false); }
-export function townWinterWorld(tw) { return townSeasonWorld(tw, true); }
-export function townSeasonWorld(tw, winter) {
+export function townMarketWorld(tw) { return townSeasonWorld(tw, "market"); }
+export function townWinterWorld(tw) { return townSeasonWorld(tw, "winter"); }
+/* 2026-10-11 — LE MONDE DU PRINTEMPS : le même marché, PLUS le skatepark sur le dallage de la place (`skatepark.js`). */
+export function townParkWorld(tw) { return townSeasonWorld(tw, "park"); }
+/* `kind` : "winter", "park" ou "market" (un booléen, l'ancienne signature, vaut "winter" / "market"). */
+export function townSeasonWorld(tw, kind) {
   if (!tw) return null;
   tw = tw.base || tw;   // un monde dérivé redonne son brut : on ne dérive jamais d'un dérivé
+  const key = kind === true ? "winter" : kind === "winter" || kind === "park" || kind === "chantier" ? kind : "market";
+  /* 2026-10-11 — LE MONDE DU CHANTIER (`chantier.js`) : les trois heures où la patinoire fond et où le park se monte. La place est
+     FERMÉE (tout le dallage solide : on regarde depuis l'allée) ; elle porte la patinoire (sa glace, sa bande, ses mâts, ses braseros,
+     son chalet — le dessin les retire à leur minute) ET le park (que le dessin montre en charpente, puis feuille par feuille). Rien
+     n'y change de forme pendant le chantier : la collision est celle d'une place close du début à la fin. */
+  const chantier = key === "chantier";
+  const winter = key === "winter";
   let pair = SEASON_WORLDS.get(tw);
-  if (!pair) { pair = { market: null, winter: null }; SEASON_WORLDS.set(tw, pair); }
-  const key = winter ? "winter" : "market";
+  if (!pair) { pair = { market: null, winter: null, park: null, chantier: null }; SEASON_WORLDS.set(tw, pair); }
   if (pair[key]) return pair[key];
   const W = tw.w, H = tw.h, mk = C.TOWN_MARKET;
   const solid = Uint8Array.from(tw.solid);
@@ -8841,7 +8882,7 @@ export function townSeasonWorld(tw, winter) {
   /* La patinoire n'existe que dans le monde d'hiver (2026-10-06) : hors hiver, ni `rink`, ni `rinkBand`, ni mâts — leur ABSENCE sur
      la carte est ce que le jeu lit pour savoir qu'il n'y a pas de glace (`tw.rink`). */
   let rink = null, rinkGate = null, rinkBand = null, rinkGarlands = null;
-  if (winter) {
+  if (winter || chantier) {
     /* LA PATINOIRE (voir `TOWN_RINK`, fermeConstants.js) : la glace (`rink`, 1 par case), la BANDE (l'anneau extérieur
        du dallage et les coins hors de l'arrondi, solides), les PORTILLONS (`rinkGate` : des trous dans la bande, qu'on
        franchit chaussé — la règle de qui n'a pas de patins est dans le jeu, `rinkGateHold`). Un décor resté sur le dallage
@@ -8889,8 +8930,41 @@ export function townSeasonWorld(tw, winter) {
       } else skipped.push(`chalet@${s0.x},${s0.y}`);
     }
   }
+  /* 2026-10-11 — LE SKATEPARK (printemps) : son emprise (le dallage de la place, et les deux cases d'allée où descend l'escalier
+     de la galerie) est SOLIDE pour les résidents (`townNav` : ils en font le tour, comme une patinoire) et marquée dans
+     `parkCell`, où le joueur lit le relief AU POINT PRÈS (`SPK.walkBlocked`, `SPK.walkStepOk` — FermeGame.js), comme la
+     bande de la patinoire. Une case du dallage qui ne serait pas de la pierre libre est sautée et comptée (le banc l'exige
+     vide). Le dessin a son ancre (`skatepark`), qui se découpe lui-même en tranches par rangée. */
+  let parkCell = null;
+  if (key === "park" || chantier) {
+    parkCell = new Uint8Array(W * H);
+    const P = SPK.PARK, G = SPK.GALLERY;
+    const mark = (x, y, needStone) => {
+      const i = y * W + x;
+      if (needStone && (tw.ground[i] !== C.G_PATH_STONE || solid[i] || tw.objects[i] !== C.O_NONE)) { skipped.push(`park@${x},${y}`); return; }
+      parkCell[i] = 1; solid[i] = 1;
+    };
+    for (let y = P.y0; y < P.y0 + P.h; y++) for (let x = P.x0; x < P.x0 + P.w; x++) mark(x, y, true);
+    for (let y = P.y0 + Math.floor(G.stairV0); y < P.y0; y++) for (let x = P.x0 + Math.floor(G.stairU0); x < P.x0 + Math.ceil(G.stairU1); x++) mark(x, y, false);
+    props.push({ x: P.x0, y: P.y0 + P.h - 1, kind: "skatepark" });
+    // la cabane de location : sur l'herbe libre, solide (on loue au comptoir, côté sud) — une case non libre est sautée, comptée
+    const SH = SPK.SHED;
+    let shedOk = true;
+    for (let y = SH.y; y < SH.y + SH.h; y++) for (let x = SH.x; x < SH.x + SH.w; x++) if (!free(x, y)) shedOk = false;
+    if (shedOk) {
+      for (let y = SH.y; y < SH.y + SH.h; y++) for (let x = SH.x; x < SH.x + SH.w; x++) solid[y * W + x] = 1;
+      props.push({ x: SH.x + (SH.w >> 1), y: SH.y + SH.h - 1, kind: "parkShed", ox: -C.TILE / 2 });
+    } else skipped.push(`cabane@${SH.x},${SH.y}`);
+  }
   const layer = { solid, props, duck, base: tw, marketRect: C.TOWN_WINTER_MARKET, layerSkipped: skipped };
   if (winter) Object.assign(layer, { rink, rinkGate, rinkBand, rinkGarlands, winter: true });
+  if (parkCell && !chantier) Object.assign(layer, { parkCell, skatepark: true });
+  if (chantier) {
+    // la place close : tout le dallage solide (sans `parkCell`, le joueur lit `solid` comme les résidents) ; pas de guirlandes (on les
+    // décroche en premier) ; la glace, la bande, le park : pour le dessin seul
+    for (let y = SPK.PARK.y0; y < SPK.PARK.y0 + SPK.PARK.h; y++) for (let x = SPK.PARK.x0; x < SPK.PARK.x0 + SPK.PARK.w; x++) solid[y * W + x] = 1;
+    Object.assign(layer, { rink, rinkGate, rinkBand, rinkGarlands: [], chantier: true });
+  }
   const out = Object.assign({}, tw, layer);
   delete out._arch;   // un cache du monde brut (ses arches de pont ne changent pas, mais un cache se reconstruit, il ne se partage pas)
   pair[key] = out;

@@ -1906,6 +1906,33 @@ sillage seulement) ; le classement aux temps ; le fantôme (aller-retour au huit
 (un passage de ligne compte toujours) rougit 8 contrôles. ⚠️ Ce qu'il ne voit pas : le réseau, l'écran (`CourseHud.js`), le
 dessin — la course à deux se joue avec `app/audit-duo` (docs/VERIFICATION.md §10).
 
+## `verify-monture.mjs` — LES MONTURES DU SKATEPARK SE JOUENT-ELLES ? (2026-10-11, 24 contrôles)
+
+Un banc qui JOUE (comme `verify-maire`) : la vraie physique (`monture.js`) sur le vrai relief (`skatepark.js`), pilotée par des ordres scriptés à 60 images/s. Poussée des quatre montures (le BMX
+arrache le premier), roue libre, pompage dans la mini-rampe (sans pomper on ne monte pas ; en pompant on sort au coping et l'on retombe en fakie ; le pompage plafonne), conservation de l'énergie
+(sans frottement, dix allers-retours gardent leur hauteur), air au quarter (le skate en fakie, le BMX qui tombe sans demi-tour et retombe avec), la funbox (décollage à la lèvre ; un ollie à la lèvre
+passe la table), l'ollie, le choc contre un flanc (lent : arrêt ; vite : chute), la barrière, le 50-50 sur le rail plat, le kickflip (tôt : propre ; tard : chute). ⚠️ Il a été rouge, sur de vrais
+défauts, pendant son écriture : un départ à l'arrêt (`!want` vaut vrai pour un ordre vers l'est), un décollage sous le coping (courbure échantillonnée trop loin), une lèvre jamais quittée (seuil en
+position sur un pas de 1/240 s), un pompage dix fois trop faible puis sans plafond. ⚠️ Ni dessin, ni réseau, ni son : ça se juge en jeu.
+
+## `verify-chantier.mjs` — LE CHANTIER DE LA PLACE SE TIENT-IL ? (2026-10-11/12, 23 contrôles)
+
+Il JOUE la journée sur la vraie horloge et le vrai script (`chantier.js`), sur le vrai plan du park : la fenêtre (le lundi du changement de saison,
+14 h–17 h à Paris, en heure d'été comme d'hiver) ; ce que la place porte avant, pendant, après (patinoire, chantier à sa minute, park, place vide ;
+rien de daté si le park est fermé ou la saison forcée) ; chaque cadre avant ses feuilles ; puis l'équipe, au dixième de minute : personne à pied
+dans un module déjà monté, personne hors des abords (l'allée pavée de l'est compte, le chariot y attend), des marches à vitesse humaine, tout le
+monde remonté à la fin, chaque geste au moins une fois ; la barrière (le tour, posée en douze minutes, retirée à la fin) et, au centième de minute,
+**personne ne l'enjambe** : un pas qui coupe une de ses lignes hors des portes (le point de coupe interpolé — un échantillon pris juste après une
+porte est déjà à côté d'elle). ⚠️ Rouge sur de vrais défauts à l'écriture : un chef qui filait en ligne droite à travers la barrière (il partait de
+l'emprise du futur quarter : aucun chemin n'en sortait), un porteur planté dans la mini-rampe qu'on soudait autour de lui. ⚠️ Ni dessin, ni son :
+ça se regarde en jeu (menu dev, « Skatepark et chantier » ; ou `?chantier=<minute>&chantierv=<vitesse>&chantiert=demontage`, `__chantier(m, v, type)`).
+
+## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11, 7 contrôles)
+
+Le vrai relief et son vrai dessin (`skateparkArt.js`) sur le dallage du monde de printemps, à 8 h 30, 13 h, 18 h 30 (le contact au sol, l'ombre du soleil sur le dallage passée comme dans le jeu, les
+tranches dans l'ordre de leur clé), et un gros plan de la mini-rampe et de la galerie. Contrôles : clés de tri croissantes, aucune tranche vide, atlas < 2 Mpx, pied du quarter au sol, coping à sa
+hauteur, angles de coping (70-82°). Planches : `tools/out/skatepark-8h5.png`, `skatepark-13h.png`, `skatepark-18h5.png`, `skatepark-zoom.png`. ⚠️ Ni riders, ni nuit, ni lumière dynamique.
+
 ## `render-patinoire.mjs` — LA PATINOIRE DU CHAMP DE FOIRE (2026-10-05, 4 contrôles)
 
 Peint la glace, la bande et ses ombres depuis le VRAI monde d'hiver (`E.townWinterWorld`) : la glace suit le rectangle

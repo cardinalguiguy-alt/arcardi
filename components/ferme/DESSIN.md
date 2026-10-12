@@ -202,6 +202,11 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   plafond de profondeur, un seuil de sable : des bandes droites à travers le fleuve. Corollaire, même
   séance : une règle décidée **case par case** (« pas de plage à trois cases d'un quai ») redessine la
   grille. On déforme le champ par un bruit lent, ou on le lie à une grandeur à deux dimensions.
+- ⚠️⚠️ **DANS LA VUE 3/4, LE NORD ET LE HAUT TOMBENT SUR LE MÊME AXE D'ÉCRAN** (la grue du chantier, 2026-10-12 :
+  `écran y = (y − z)·T`). Un bras qui vise un point au nord ET plus haut se peint en MÂT VERTICAL, un objet qui
+  monte et un objet qui recule se confondent. Ce qui doit se lire en trois dimensions (une flèche, un câble, un
+  saut) se place pour avoir une composante EST-OUEST — on choisit où se gare l'engin, pas comment on le dessine.
+  Corollaire, même jour : ce qui pend SOUS un bras venu du sud se peint AVANT le bras (il passe devant).
 
 ---
 

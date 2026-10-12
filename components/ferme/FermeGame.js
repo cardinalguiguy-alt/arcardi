@@ -91,6 +91,14 @@ import * as PO from "./poussiere"; // 2026-10-04 — la poussière soulevée par
 import * as GL from "./glace";
 import * as PT from "./patin";
 import * as DU from "./duo"; // 2026-10-06 (soir) — les figures à deux sur la glace (pur)
+import * as SPK from "./skatepark";      // 2026-10-11 — le skatepark de la place (printemps) : son relief, ses garde-corps, la marche (pur)
+import * as SPA from "./skateparkArt";   // 2026-10-11 — son dessin : le relief projeté en 3/4, éclairé, découpé en tranches de tri
+import * as MO from "./monture";       // 2026-10-11 — la physique des montures du park (skate, rollers, trottinette, BMX), pure
+import * as MA from "./montureArt";    // 2026-10-11 — leur dessin (le véhicule en 3D sur la surface, le corps du rider)
+import { parkSoundUpdate, parkSoundEvent, parkSoundStop } from "./sonPark";   // 2026-10-11 — leurs sons, synthétisés
+import { chantierSoundUpdate, chantierSoundStop, chantierSoundClank } from "./sonChantier";   // 2026-10-12 — le chantier de la place s'entend
+import * as CH from "./chantier";      // 2026-10-11 — les chantiers de la place : l'horloge, l'équipe, les engins (pur)
+import * as CA from "./chantierArt";   // 2026-10-11 — leur dessin : engins, barrière, gestes des ouvriers
 import * as BN from "./bonhomme";   // 2026-10-05 — le bonhomme de neige : croissance des boules, empilement, décor, dégel (pur)      // 2026-10-04 — le patin à glace : la machine d'état du patineur (pure)      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
@@ -116,6 +124,48 @@ const ZOOM = 3;
    tombe donc exactement sur le même cran que le dézoom automatique des
    monuments, jamais un second nombre qui pourrait diverger de lui. */
 const ZOOM_LEVELS = [1, 2, 3, 4, 5];
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-11 — QUALITÉ ADAPTATIVE : LE JEU S'ALLÈGE SEUL SUR UNE MACHINE QUI RAME.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Une amie joue sur un vieux MacBook, sans qu'on puisse la faire mesurer. La ville rejoue les mêmes dessins trois fois par
+   image (monde, ombres du soleil, reflets) : on retire ces rejeux, dans l'ordre, quand le temps moyen par image reste
+   mauvais. `PERF.tier` : 0 plein ; 1 sans ombres portées du soleil (`sunShadowPass`, les ombres de contact restent) ;
+   2 sans reflets dans l'eau. Sur une machine qui tient (≈ 60 i/s) RIEN ne change : le seuil est une mesure, pas un réglage.
+   · Fenêtre de 3 s de temps réel, 5 s de chauffe (cuisson de l'eau, arrivée de zone) ; un intervalle > 250 ms (onglet masqué)
+     n'est pas une mesure.
+   · Un palier qui n'améliore pas la moyenne d'au moins 10 % est ANNULÉ et fige tout (un affichage plafonné à 30 Hz par
+     l'économie d'énergie ne rame pas : l'alléger serait perdre du dessin pour rien).
+   · Il faut DEUX fenêtres lentes de suite pour monter d'un palier.
+   · Retour d'un palier après 90 s de bonne tenue ; s'il re-dégrade dans les 15 s, tout est figé jusqu'au rechargement.
+   · `?perf=1` dans l'URL affiche fps / ms / palier en haut à gauche ; `window.__arcardiPerf` les donne à la console. */
+const PERF = { tier: 0, ms: 0, fps: 0, worst: 0, lock: false, show: false, _t0: 0, _n: 0, _sum: 0, _worst: 0, _chg: 0, _before: 0, _probe: false, _slowN: 0 };
+const PERF_SLOW_MS = 26, PERF_FAST_MS = 18, PERF_WARMUP_MS = 5000, PERF_WINDOW_MS = 3000, PERF_RETRY_MS = 90000, PERF_PROBE_MS = 15000, PERF_MAX_TIER = 2;
+function perfTick(rawMs, now) {
+  const P = PERF;
+  if (!P._t0) {
+    P._t0 = now;
+    try { P.show = /[?&]perf=1/.test(location.search); if (typeof window !== "undefined") window.__arcardiPerf = P; } catch (e) { /* hors navigateur */ }
+  }
+  if (rawMs <= 0 || rawMs > 250 || now - P._t0 < PERF_WARMUP_MS) return;
+  P._n++; P._sum += rawMs; if (rawMs > P._worst) P._worst = rawMs;
+  if (P._sum < PERF_WINDOW_MS) return;
+  const avg = P._sum / P._n;
+  P.ms = avg; P.fps = 1000 / avg; P.worst = P._worst;
+  P._n = 0; P._sum = 0; P._worst = 0;
+  if (P.lock) return;
+  const since = now - P._chg;
+  if (P._chg && since < PERF_WINDOW_MS * 1.5 && P._before && avg > P._before * 0.9 && P.tier > 0 && !P._probe) {
+    P.tier--; P.lock = true; return;   // le palier n'a rien amélioré : on le rend, et on ne touche plus à rien
+  }
+  P._slowN = avg > PERF_SLOW_MS ? P._slowN + 1 : 0;
+  if (avg > PERF_SLOW_MS && P.tier < PERF_MAX_TIER && P._slowN >= 2) {   // deux fenêtres lentes de suite : un pic isolé (chargement, zone) ne dégrade rien
+    if (P._probe) { P.lock = true; return; }   // on a rendu un palier et ça re-rame : définitif
+    P._before = avg; P._chg = now; P.tier++; P._slowN = 0; return;
+  }
+  if (P._probe && since > PERF_PROBE_MS) P._probe = false;
+  if (P.tier > 0 && avg < PERF_FAST_MS && since > PERF_RETRY_MS) { P.tier--; P._chg = now; P._before = 0; P._probe = true; }
+}
 
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-09-25 (phase 1 de la feuille de route graphique) — UN MONUMENT PEINT,
@@ -651,15 +701,71 @@ let townWorldModuleCache = null;
    reconstruit seul au changement.
    La saison est relue au plus toutes les 500 ms (`seasonOf` n'est pas gratuit, et cette porte est
    appelée à chaque image) ; elle se DÉDUIT de l'heure et de la saison forcée partagée — rien ne circule. */
-const TOWN_SEASON_MEMO = { at: -1e12, winter: false };
-function townWinterNow(E2) {
-  const t = Date.now();
-  if (t - TOWN_SEASON_MEMO.at > 500 || t < TOWN_SEASON_MEMO.at) { TOWN_SEASON_MEMO.at = t; TOWN_SEASON_MEMO.winter = E2.seasonOf().key === "winter"; }
-  return TOWN_SEASON_MEMO.winter;
+const TOWN_SEASON_MEMO = { at: -1e12, kind: "market" };
+/* ⚠️ 2026-10-11 — LE SKATEPARK N'OUVRE PAS ENCORE AU PUBLIC (`SPK.PARK_OPEN`, faux tant qu'on ne peut pas y rouler) : le
+   printemps garde la place vide. Les outils de chantier qui suivent jouent tout CHEZ SOI (le monde de la ville est calculé par
+   chaque client : rien ne circule, et l'autre joueur, lui, ne voit rien) — des outils, pas des réglages de partie :
+     · `forced` : le park posé en toute saison (`?skatepark=1`) ;
+     · `monture` : une monture sans louer (`?monture=skate|roller|scooter|bmx`, F pour monter et descendre, dans le park) ;
+     · `chantier` : le chantier joué à partir d'une minute, à une vitesse (`?chantier=<minute>&chantierv=<vitesse>&chantiert=demontage`).
+   ⚠️ 2026-10-12 : réglables aussi au MENU DEV (Guillaume : « pour tester tu peux juste ajouter des boutons menu dev ») — d'où un
+   objet qu'on modifie, et non plus trois constantes lues dans l'adresse une fois pour toutes. */
+const PARK_DEV = (() => {
+  const o = { forced: false, monture: null, chantier: null, v: 1 };
+  if (typeof window === "undefined") return o;
+  const q = window.location.search || "";
+  o.forced = /[?&]skatepark=1\b/.test(q);
+  const mo = /[?&]monture=(\w+)/.exec(q);
+  o.monture = mo && MO.VEH[mo[1]] ? mo[1] : null;
+  const mm = /[?&]chantier=([\d.]+)/.exec(q);
+  if (mm) {
+    const vv = /[?&]chantierv=([\d.]+)/.exec(q), ty = /[?&]chantiert=(montage|demontage)/.exec(q);
+    o.v = vv ? +vv[1] : 1;
+    o.chantier = { m0: +mm[1], v: o.v, type: ty ? ty[1] : "montage", t0: Date.now() };
+  }
+  // à la console aussi (banc à l'écran : une capture par phase sans recharger) — `__chantier(90)`, `__chantier(0, 30, "demontage")`
+  window.__chantier = (m, v = 0, type) => parkDevChantier(m, v, type);
+  return o;
+})();
+/* Règle le chantier d'essai : `m` null l'arrête ; sinon il repart de la minute `m`, à la vitesse `v`, du type `type` (par défaut celui
+   d'avant). La place se relit tout de suite (la mémoire de 200 ms est vidée). */
+function parkDevChantier(m, v, type) {
+  const c = PARK_DEV.chantier;
+  if (v != null) PARK_DEV.v = v;
+  PARK_DEV.chantier = m == null ? null : { m0: m, v: PARK_DEV.v, type: type || (c && c.type) || "montage", t0: Date.now() };
+  TOWN_SEASON_MEMO.at = -1e12;
+  return PARK_DEV.chantier;
 }
+/* La minute du chantier d'essai en cours (ou null). */
+function parkDevMinute() { const c = PARK_DEV.chantier; return c ? c.m0 + (Date.now() - c.t0) / 60000 * c.v : null; }
+/* CE QUE LA PLACE PORTE MAINTENANT (`CH.placeStateAt`) : la patinoire, le park, la place vide, ou le chantier à sa minute. Une saison
+   forcée au menu dev (la clé que rend `seasonOf` diffère de celle de l'horloge) ne date rien. Relu au plus toutes les 200 ms. */
+function placeStateNow(E2) {
+  if (PARK_DEV.chantier) {
+    const t = parkDevMinute(), ty = PARK_DEV.chantier.type;
+    return t < CH.CHANTIER.DUR_MIN ? { kind: "chantier", type: ty, t } : { kind: ty === "demontage" ? "market" : "park" };
+  }
+  if (PARK_DEV.forced) return { kind: "park" };
+  const ms = Date.now(), k = Math.floor(Math.max(0, ms - C.SEASON_EPOCH) / C.SEASON_REAL_MS);
+  const real = ["spring", "summer", "autumn", "winter"][k % 4], now = E2.seasonOf().key;
+  return CH.placeStateAt(ms, SPK.PARK_OPEN, now !== real ? now : null);
+}
+function townSeasonKindNow(E2) {
+  const t = Date.now();
+  if (t - TOWN_SEASON_MEMO.at > 200 || t < TOWN_SEASON_MEMO.at) {
+    TOWN_SEASON_MEMO.at = t;
+    TOWN_SEASON_MEMO.state = placeStateNow(E2);
+    TOWN_SEASON_MEMO.kind = TOWN_SEASON_MEMO.state.kind;
+  }
+  return TOWN_SEASON_MEMO.kind;
+}
+/* Le chantier en cours ({ type, t }) ou null — lu par le dessin. */
+function chantierNow() { const st = TOWN_SEASON_MEMO.state; return st && st.kind === "chantier" ? st : null; }
+/* 2026-10-11 — la fabrique de canevas du skatepark (sa cuisson vit au niveau du module, comme le monde de la ville). */
+const parkCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
 function getTownWorldCached(E2) {
   if (!townWorldModuleCache) townWorldModuleCache = E2.generateTownWorld();
-  return E2.townSeasonWorld(townWorldModuleCache, townWinterNow(E2));
+  return E2.townSeasonWorld(townWorldModuleCache, townSeasonKindNow(E2));
 }
 // Zip 426 : l'intérieur du tribunal, MÊME motif de cache. Il est purement
 // déterministe (aucune graine, voir generateCourtWorld) : deux joueurs y voient
@@ -1188,6 +1294,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const daySkyMemoRef = useRef({ at: 0, b: null });        // 2026-09-29 (phase 12c) : les bornes du ciel de la saison
   const wetFrameRef = useRef(null);                       // ce que la pluie sait du sol, cette image (les ronds des flaques)
   const wetLayerRef = useRef(null);                      // { tw, sf, layer } : la couche mouillée de la ville
+  const meltWetRef = useRef(null);                       // 2026-10-12 — { tw, layer } : l'eau de la glace fondue (chantier de la place)
   const wetStepsRef = useRef(new Map());                 // 2026-09-29 (audit pluie) : la foulée de chaque marcheur, pour ses éclaboussures
   const snowDevRef = useRef({ depth: null, trees: null, ice: null, lake: null });
   /* 2026-10-04 — LE PATIN (`patin.js`). `skateRef` : ma machine d'état tant que je suis
@@ -1197,6 +1304,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      berge, une fois par session ; `skateSeenRef` : la foulée des autres, déduite de leur
      distance parcourue (rien ne circule de plus). */
   const skateRef = useRef(null);
+  const rideRef = useRef(null);   // 2026-10-11 — la monture du skatepark (`monture.js`), null à pied
+  const parkFxRef = useRef({ list: [], anchor: null, hint: false, gateAt: 0, sparks: [], skidAt: 0 });
+  const parkCamRef = useRef({ v: 0 });   // 2026-10-11 — la caméra qui suit (à moitié, lissée) la hauteur du rider
+  const chantierCraneRef = useRef(null);   // 2026-10-11 — la grue du chantier de cette image (sa flèche se peint après le monde trié)
+  const chantierSndRef = useRef({});       // 2026-10-12 — ce que le son du chantier compare d'une image à l'autre (engins, crochet, minute)   // 2026-10-11 — les noms de figures qui montent au-dessus du rider
   const skateMarksRef = useRef([]);
   const skateSprayRef = useRef([]);
   const duoRef = useRef({ act: null, ask: null, out: null, seq: 0, host: { pend: {}, busy: {} } });   // 2026-10-06 (soir) : les figures à deux (`duo.js`)
@@ -1205,6 +1317,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const skateWarnRef = useRef(0);
   const skateSeenRef = useRef(new Map());
   const [skateShopOpen, setSkateShopOpen] = useState(false);
+  const [parkShopOpen, setParkShopOpen] = useState(false);   // 2026-10-11 — la cabane de location du skatepark
+  const [parkKitDraft, setParkKitDraft] = useState(null);
   const [skateKitDraft, setSkateKitDraft] = useState(null);   // 2026-10-05 (fin quater) : le matériel en cours de choix au chalet (null : le dernier choix du sac)
   /* 2026-10-05 — LE BONHOMME DE NEIGE (`bonhomme.js`). `snowRollRef` : la boule que JE pousse
      ({ r, zone, ux, uy, bx, by, at, trail }) — locale, optimiste ; `snowRemoteRef` : celle des
@@ -1230,6 +1344,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      partagée : `forcedSeasonP`, `E.seasonProgressAt`.) */
   const leafFlurryRef = useRef(null);
   const [snowDevUi, setSnowDevUi] = useState({ depth: null, trees: null, ice: null, lake: null });
+  const [, setParkDevUi] = useState(0);   // 2026-10-12 — redessine les boutons du park et du chantier (l'état vit dans `PARK_DEV`)
   const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
@@ -2324,6 +2439,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ Le client lit `skatesUntil` dans SON sac (diffusé par l'hôte à la location) et le compare à sa
      propre horloge, comme `injuredUntil` : à quelques secondes d'écart d'horloge près, sur dix minutes. */
   const [skateClock, setSkateClock] = useState(0);
+  useEffect(() => {
+    if (!parkShopOpen) return undefined;   // 2026-10-11 : la cabane du park relit le temps restant, comme le chalet
+    setSkateClock(Date.now());
+    const id = setInterval(() => setSkateClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [parkShopOpen]);
   useEffect(() => {
     if (!skateShopOpen) return undefined;
     setSkateClock(Date.now());
@@ -3682,6 +3803,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          l'autre. Un champ qui voyage sans être lu ne lève aucune erreur : il
          coûte des octets et ne fait rien. */
       r.sit = Array.isArray(payload.sit) ? payload.sit : null;
+      /* 2026-10-11 — LA MONTURE D'UN AUTRE (voir `pubMe`) : datée à la réception, jamais à l'émission. */
+      r.rd = Array.isArray(payload.rd) ? payload.rd : null; r.rdT0 = performance.now(); r.rdc = payload.rdc | 0;
       /* ⚠️⚠️ ZIP 469 — LA FOUILLE ARRIVE EN DEUX NOMBRES, ET ON DATE À LA
          RÉCEPTION. `payload.dig[1]` est l'ÂGE du geste chez l'émetteur, pas une
          date : on ne compare jamais une horloge à une autre (§3 de `CLAUDE.md`),
@@ -5835,6 +5958,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now(), req.kit);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
       out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: r.price || C.SKATES_RENT_PRICE };
+    } else if (req.kind === "rentRide") {
+      /* 2026-10-11 — UNE MONTURE DU SKATEPARK SE LOUE à la cabane du park (`E.resolveRentRide`) : même contrat que les patins — la
+         portée sur la dernière position connue (une case de marge pour la latence), l'ouverture sur le monde de la ville de l'HÔTE
+         (il porte le park, ou non), le choix normalisé par le résolveur. */
+      const twR = getTownWorldCached(E);
+      const nearR = E.parkShedDist(twR, C.footX(f.x || 0), C.footY(f.y || 0)) <= SPK.SHED.reach + 1;
+      const r = E.resolveRentRide(f, s.money, !!(twR && twR.skatepark), nearR, Date.now(), req.kit);
+      if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
+      out.toast = { id: f.id, key: r.ok ? "rideRented" : "ride_" + r.reason, n: r.price || MO.rideKitPrice(req.kit, C.RIDE_RENT_PRICE) };
     } else if (req.kind === "duoAsk" || req.kind === "duoYes") {
       hostDuo(req, f, out);   // 2026-10-06 (soir) : les figures à deux — l'hôte arbitre l'offre et l'acceptation
     } else if (req.kind === "rinkSmooth") {
@@ -9502,6 +9634,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "skatesBought") return L.skatesBoughtToast(n | 0, C.SKATES_RENT_MS / 60000);
     if (key && key.startsWith("duo") && typeof L.duoToast === "function") return L.duoToast(key);   // 2026-10-06 (soir)
     if (key && key.startsWith("rink") && typeof L.rinkToast === "function") return L.rinkToast(key, CO.COURSE.PRICE);   // 2026-10-05 (nuit) : la course de la patinoire
+    if (key === "rideRented") return L.parkRentToast(n | 0, C.RIDE_RENT_MS / 60000);   // 2026-10-11 : la cabane du park
+    if (key === "ride_have") return L.parkHaveToast;
+    if (key === "ride_closed") return L.parkClosedToast;
+    if (key === "ride_far") return L.parkFarToast;
+    if (key === "ride_noGold") return L.parkNoGoldToast(n | 0);
     if (key === "skates_have") return L.skatesHaveToast;
     if (key === "skates_closed") return L.skatesClosedToast;
     if (key === "skates_far") return L.skatesFarToast;
@@ -10355,6 +10492,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* 2026-10-05 (fin quater) — LA FIGURE DU PATINEUR : `tk = [code, âge ms]`, dans le paquet qui part déjà (§3 : aucun
        message de plus). Deux nombres, comme la fouille (`dig`) : le récepteur date l'âge sur SON horloge. Absent hors figure. */
     { const stT = skateRef.current; if (stT && m.zone === "town") { const c = PT.skateTrickCode(stT); if (c) pub.tk = [c, Math.round(((stT.trick && stT.trick.t) || 0) * 1000)]; } }
+    /* 2026-10-11 — LA MONTURE DU SKATEPARK : `rd = [type, cap, mode]` (mode 0 au sol, 1 en l'air, 2 à terre), et EN L'AIR la
+       hauteur, la vitesse verticale et la vitesse de rotation à l'émission — le récepteur reconstruit la parabole et la vrille sur
+       SON horloge (§3 : des durées, jamais une date ; rien de plus ne part, c'est le paquet de position). Absent à pied. */
+    { const rdS = rideRef.current; if (rdS && m.zone === "town") {
+      const md = rdS.mode === "air" ? 1 : rdS.mode === "bail" ? 2 : rdS.mode === "grind" ? 3 : 0;
+      pub.rd = [MO.VEH_KINDS.indexOf(rdS.kind), +rdS.th.toFixed(2), md];
+      if (rdS.color) pub.rdc = rdS.color | 0;   // la couleur louée
+      if (md === 1) {
+        pub.rd.push(+rdS.z.toFixed(3), +rdS.vz.toFixed(2), +(rdS.om || 0).toFixed(1));
+        if (rdS.trick) pub.rd.push(rdS.trick.name, Math.round(rdS.trick.t * 1000));   // la figure en cours : son nom, son âge
+      } else if (md === 3) pub.rd.push(+rdS.z.toFixed(3));   // en glisse : la hauteur de la ligne
+    } }
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
@@ -10407,7 +10556,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* 2026-10-05 (fin quater) — LA FIGURE DU PATINEUR (`PT.skateTrickCode`) change la clé : sans elle, une vrille sur place
        n'émettrait aucun paquet (rien d'autre ne change) et personne ne la verrait. Avant `active` : `endsWith("a")` lit la fin. */
     const stT = skateRef.current, tk = stT && m && (m.zone || "farm") === "town" ? PT.skateTrickCode(stT) : 0;
-    return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + (tk ? "t" + tk : "") + active;
+    /* 2026-10-11 — LA MONTURE change la clé : sa présence, son mode (décoller, retomber, tomber : un paquet chacun), le sens de sa
+       rotation en l'air, son cap au seizième de tour (un virage au sol se voit). */
+    const rdK = rideRef.current, rk = rdK && m && (m.zone || "farm") === "town"
+      ? "r" + rdK.kind[0] + rdK.mode[0] + (rdK.mode === "air" ? Math.sign(rdK.om || 0) + (rdK.trick ? rdK.trick.name : "") : "") + Math.round(rdK.th / (Math.PI / 8)) : "";
+    return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + (tk ? "t" + tk : "") + rk + active;
   }
   /* ⚠️ 2026-10-05 (nuit) — `pubMe` lit `meRef.current` sans garde : appelé avant que le joueur existe
      (un `join` reçu pendant le chargement), il levait une TypeError dans le gestionnaire réseau. Sans
@@ -11867,6 +12020,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function toggleMount() {
     const m = meRef.current; if (!m) return;
+    if (parkMountToggle(m)) return;   // 2026-10-11 : dans le skatepark, F monte sur la monture ou en descend
     if (myHorse()) {
       // Noyade (décision Guillaume 2026-07) : descendre du cheval en pleine
       // eau = le fermier coule et est ramené chez lui (C.SPAWN) avec une
@@ -17018,6 +17172,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              emprise est bloquante, et arriver à l'intérieur d'un bâtiment
              coincerait le joueur — la même précaution que DEV_BRIDGE_OFFSET. */
           if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
+          /* 2026-10-12 — le skatepark (son entrée est, sur le dallage) et l'allée de l'est d'où l'on regarde le chantier (au nord du
+             chalet des patins). Dérivés du plan du park (`SPK.PARK`), jamais recopiés. */
+          else if (dk === "townPark") { m.x = SPK.PARK.x0 + SPK.PARK.w - 1.2 - C.BODY_CX; m.y = SPK.PARK.y0 + SPK.EAST_GATE.v0 + 1.5 - C.BODY_FY; }
+          else if (dk === "townPlaceEast") { m.x = SPK.PARK.x0 + SPK.PARK.w + 2.2 - C.BODY_CX; m.y = SPK.PARK.y0 + 5.2 - C.BODY_FY; }
           else if (dk === "townMarket") {   // zip 426 ; 2026-10-05 : l'allée du marché de la prairie (le centre du rectangle y tombe sur un étal) ; 2026-10-06 : en toute saison
             m.x = C.TOWN_WINTER_MARKET_AX; m.y = C.TOWN_WINTER_MARKET_AXIS;
           }
@@ -17339,6 +17497,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function sunShadowPass(drawsL, baseOf, season, bitmaps, extra) {   // `extra(g, sh, ox, oy)` : des ombres dessinées à part (la bande de la patinoire)
       const hrS = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
       const [riseS, setS] = WX.sunHoursOfTag(season);
+      if (PERF.tier >= 1) return null;   // 2026-10-11 : machine qui rame, palier 1 (voir PERF)
       const shS = OMB.sunShadow(hrS, riseS, setS, season, wxFrame());
       if (!shS || shS.a <= 0.01) return null;
       const M0 = ctx.getTransform(), zS = M0.a;
@@ -17580,7 +17739,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ `starGuideToggle` reste intact pour tout le reste de la quête : cette
          branche ne s'ouvre que sur l'objectif de la verte, et seulement tant qu'elle
          n'est pas trouvée (`starGoalKey` cesse alors de rendre `townGreen*`). */
-      if (e.code === "KeyG" && !e.repeat) {
+      if (e.code === "KeyG" && !e.repeat && !rideRef.current) {   // 2026-10-11 : monté dans le skatepark, G est une touche de figure
         const gk = Q.starGoalKey(sharedRef.current.star, starGoalCtx());
         if (gk === "townGreen" || gk === "townGreenAway" || gk === "townGreenLed") starGreenAsk();
         else starGuideToggle();
@@ -17650,6 +17809,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       raf = requestAnimationFrame(loop);
       const now = performance.now();
       const epochNow = Date.now(); // pousse/arrosage/production animale sont en temps réel (horloge murale)
+      perfTick(now - last, now);   // 2026-10-11 : qualité adaptative (voir PERF, en tête de fichier)
+      // 2026-10-12 — le chantier ne s'entend plus quand on ne le dessine plus (on a quitté la ville, le chantier est fini)
+      { const cs = chantierSndRef.current; if (cs.at && now - cs.at > 300) { chantierSoundStop(); cs.at = 0; cs.mt = null; } }
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       // 2026-09-22 ter : fait avancer le fondu du zoom manuel, UNE fois par
       // image, avant toute branche de zone — `curZoom()` lira sa valeur du
@@ -20055,6 +20217,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const fa = zoneFadeAlpha();
       if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
+      if (PERF.show) {   // 2026-10-11 : `?perf=1`
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.font = "12px monospace";
+        ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(4, 4, 250, 18);
+        ctx.fillStyle = "#fff"; ctx.fillText(`${PERF.fps.toFixed(0)} i/s · ${PERF.ms.toFixed(1)} ms · max ${PERF.worst.toFixed(0)} · palier ${PERF.tier}${PERF.lock ? " (figé)" : ""}`, 8, 17);
+      }
     }
     raf = requestAnimationFrame(loop);
 
@@ -20071,6 +20238,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const fx = sc0 ? m.x + (sc0.x - m.x) * sc0.k : m.x;
       const fy = sc0 ? m.y + (sc0.y - m.y) * sc0.k : m.y;
       let cx = (fx + 0.5) * T - vw / 2, cy = (fy + 0.5) * T - vh / 2;
+      /* 2026-10-11 — MONTÉ DANS LE SKATEPARK, LA CAMÉRA SUIT À MOITIÉ LA HAUTEUR DU RIDER (lissée) : au sommet d'un air de quarter, il
+         monterait de cent pixels d'écran au-dessus de son ancre au sol ; suivi en entier, c'est le park qui sauterait à chaque saut. */
+      { const rdC = rideRef.current, want = rdC ? rdC.z * T * 0.5 : 0, pc = parkCamRef.current;
+        pc.v += (want - pc.v) * 0.12; if (Math.abs(pc.v) < 0.05 && !rdC) pc.v = 0; cy -= pc.v; }
       cx = Math.max(0, Math.min(w.w * T - vw, cx)); cy = Math.max(0, Math.min(w.h * T - vh, cy));
       const out = { x: cx, y: cy, vw, vh };
       starViewRef.current = { cam: out, zoom: zmF };   // zip 445 : la scène en a besoin pour situer l'impact
@@ -21247,6 +21418,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de son dallage (`tw.rinkBand`) ne bloquent que l'épaisseur de la planche — plus de mur invisible tout autour, plus de
          trou aux coins que l'arrondi traverse. `townNav` (les résidents) garde la case entière, plus pessimiste. */
       if (tw.rinkBand && tw.rinkBand[i]) return C.rinkBandSolid(x, y);
+      /* 2026-10-11 — LE SKATEPARK SE LIT AU POINT PRÈS (`SPK.walkBlocked` : les garde-corps, les rails, les pentes trop raides
+         pour un piéton) ; le dénivelé, qui dépend d'où l'on vient, est dans `townStepOk`. `townNav` garde l'emprise pleine. */
+      if (tw.parkCell && tw.parkCell[i]) return SPK.walkBlocked(x, y);
       if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) {
         const bz = brazierMapFor(tw).get(i);   // 2026-10-09 : un brasero ne bloque que son pied (`C.brazierCoreHit`)
         return bz ? C.brazierCoreHit(bz.x, bz.y, x, y) : true;
@@ -21408,6 +21582,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        banc vérifie SÉPARÉMENT que le tablier monte à l'image et reste plat pour
        la marche. */
     function archPxTown(tw, x, y) {
+      /* 2026-10-11 — LE RELIEF DU SKATEPARK EST LE MÊME GENRE DE GRANDEUR que le dos d'âne : un décalage d'IMAGE, continu, qui
+         monte qui s'y tient (joueurs, familiers, décors posés) sans toucher au tri ni à la collision. */
+      if (tw.skatepark && SPK.inPark(x, y)) return SPK.liftPx(x, y);
       const a = E.townArchRise(tw);
       if (!a) return 0;
       const fx = Math.floor(x), fy = Math.floor(y);
@@ -21475,8 +21652,91 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        elle ne peut pas servir à traverser un mur depuis une position valide.
        ⚠️ ET ELLE NE REGARDE PAS L'ALTITUDE (`fromE` omis à l'appel de secours) :
        quelqu'un coincé À CHEVAL sur une falaise doit pouvoir en descendre. */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-10-11 — MONTÉ DANS LE SKATEPARK : la physique des montures (`monture.js`) remplace le pas.
+       ╚══════════════════════════════════════════════════════════════════════
+       L'ordre (les flèches, en axes du monde), Maj tenue (pousser fort sur le plat, POMPER dans les courbes), Espace tenue puis
+       lâchée (le saut : ollie, bunny hop), C tenue (le frein). La machine travaille aux PIEDS (`footX/footY`) ; elle connaît
+       le relief, les garde-corps, la porte du park (on n'en sort pas en roulant) — `townStepOk` ne la voit pas. Rend vrai si
+       elle a posé le joueur (le pas de marche est sauté). */
+    function rideStepMe(tw, m, dx, dy, dt) {
+      const st = rideRef.current;
+      if (!st) return false;
+      if (!tw.skatepark || (m.zone || "farm") !== "town") { rideRef.current = null; parkSoundStop(); return false; }
+      // la location finie : on descend dès qu'on est posé (jamais en l'air), la monture retourne à la cabane
+      if (!PARK_DEV.monture && !E.rideActive(invRef.current, Date.now()) && st.mode === "ground") {
+        rideRef.current = null; parkSoundStop(); m.vx = 0; m.vy = 0; m.moving = false; pushToast(L.parkEndToast); sendPos(); return false;
+      }
+      const keys = keysRef.current;
+      let ix = 0, iy = 0;
+      if (dx || dy) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
+      const mode0 = st.mode, kick0 = st.kick;
+      MO.rideStep(st, { ix, iy, push: !!(keys.ShiftLeft || keys.ShiftRight), jump: !!keys.Space, stop: !!keys.KeyC, trick: !!keys.KeyV, trick2: !!keys.KeyG }, dt);
+      /* LES SONS (`sonPark.js`) : le roulement suit la vitesse et la surface (le bois des modules, le pavé de la place) ; les
+         événements se lisent sur la machine — le saut voulu claque (`popped`), la réception sonne selon sa dureté. */
+      {
+        const onWood = SPK.heightAt(st.x, st.y) > 0.01;
+        parkSoundUpdate({ speed: Math.abs(st.u), rolling: st.mode === "ground", surface: onWood ? "wood" : "stone", grinding: st.mode === "grind", dist: st.dist });
+        if (mode0 === "ground" && st.mode === "air" && st.popped) parkSoundEvent("pop");
+        if (st.landed) parkSoundEvent("land", Math.min(1, (st.landed.hard || 0) / 5));
+        if (st.bailed) parkSoundEvent("bail");
+        if (st.kick > 0.9 && kick0 < 0.5) parkSoundEvent("kick");
+        if (st.grinded) parkSoundEvent("grind");
+        if (st.flipped) parkSoundEvent("flip");
+      }
+      /* LA POUSSIÈRE ET LES ÉTINCELLES : une bouffée à la réception (le pavé gris, la sciure du bois), au frein appuyé ; des étincelles
+         d'acier pendant un grind, qui partent vers l'arrière et retombent. Locales (rien ne circule), peintes à la hauteur du relief. */
+      {
+        const fx = parkFxRef.current, nowF = performance.now(), wood = SPK.heightAt(st.x, st.y) > 0.01, c = Math.cos(st.th), sn = Math.sin(st.th);
+        if (st.landed && (st.landed.hard || 0) > 1.4) dustFor("town").burst(st.x * T, st.y * T, st.z * T / C.TOWN_ELEV_PX, -c, -sn, "land", wood ? "wood" : "stone", nowF);
+        if (st.brake && Math.abs(st.u) > 2 && nowF - fx.skidAt > 90) { fx.skidAt = nowF; dustFor("town").burst(st.x * T, st.y * T, st.z * T / C.TOWN_ELEV_PX, c * Math.sign(st.u), sn * Math.sign(st.u), "skid", wood ? "wood" : "stone", nowF); }
+        if (st.mode === "grind" && st.u > 1) {
+          const n = st.u > 4 ? 2 : 1, seed = (nowF * 7.13) | 0;
+          for (let k = 0; k < n; k++) {
+            const h1 = ((seed * 9301 + k * 49297) % 233280) / 233280, h2 = ((seed * 4513 + k * 7919) % 104729) / 104729;
+            const v = MO.rideView(st);
+            fx.sparks.push({ x: st.x * T, y: st.y * T, z: st.z * T, vx: -v.vx * T * (0.25 + 0.3 * h1) + (h2 - 0.5) * 30, vy: -v.vy * T * (0.25 + 0.3 * h2) + (h1 - 0.5) * 20, vz: 25 + 45 * h1, t0: nowF, life: 220 + 180 * h2 });
+          }
+          if (fx.sparks.length > 60) fx.sparks.splice(0, fx.sparks.length - 60);
+        }
+      }
+      /* LES NOMS DE FIGURES (`parkFxRef`) : à la réception d'une figure (et de sa rotation au demi-tour près), au bout d'une glisse
+         (sa longueur en mètres), à la chute. De l'affichage seul : rien ne se compte, rien ne se gagne (« figures libres »). */
+      {
+        const fx = parkFxRef.current, now = performance.now(), T2 = MO.TRICK_LABEL;
+        const pushFx = (text, kind) => { if (text) { fx.list.push({ text, kind, t0: now }); if (fx.list.length > 4) fx.list.shift(); } };
+        const gName = (style) => T2[st.kind === "bmx" && style === "5050" ? "gpegs" : "g" + style];
+        if (st.grinded) pushFx(gName(st.grinded.style), "grind");
+        if (st.grindDone && st.grindDone.len > 0.6) pushFx(`${gName(st.grindDone.style)} · ${L.parkMeters((st.grindDone.len * 1.15).toFixed(1))}`, "grind");
+        if (st.landed) {
+          const deg = Math.round(Math.abs(st.landed.spin || 0) / Math.PI) * 180;
+          const names = [...(st.landed.tricks || []), st.landed.trick].filter(Boolean).map((k) => T2[k]).filter(Boolean);
+          const parts = [deg >= 180 ? L.parkSpinLabel(deg) : null, ...names, st.landed.fakie && (deg >= 180 || names.length) ? L.parkFakie : null].filter(Boolean);
+          if (parts.length) pushFx(parts.join(" "), "trick");
+        }
+        if (st.bailed) pushFx(L.parkBail, "bail");
+        if (st.gateHit && now - fx.gateAt > 4000) { fx.gateAt = now; pushToast(L.parkGateNo); }
+      }
+      m.x = st.x - C.footX(0); m.y = st.y - C.footY(0);
+      const v = MO.rideView(st);
+      m.vx = v.vx; m.vy = v.vy; m.moving = v.speed > 0.05 || st.mode !== "ground";
+      const c = Math.cos(st.th), sn = Math.sin(st.th);
+      m.dir = Math.abs(c) > Math.abs(sn) ? (c < 0 ? 2 : 3) : (sn < 0 ? 1 : 0);
+      return true;
+    }
     function townStepOk(tw, m, nx, ny, fromE) {
-      return canStandTown(tw, nx, ny, fromE) || !canStandTown(tw, m.x, m.y);
+      return (canStandTown(tw, nx, ny, fromE) && parkStepOk(tw, m, nx, ny)) || !canStandTown(tw, m.x, m.y);
+    }
+    /* 2026-10-11 — LE PAS SUR LE RELIEF DU SKATEPARK : chaque point de la semelle d'arrivée doit tenir dans une marche de la
+       hauteur sous les pieds d'où l'on part (`SPK.walkStepOk`) — on monte l'escalier et les tremplins, pas une plateforme ;
+       on saute de la caisse. Hors du park (ou monde sans park) : rien à dire. */
+    function parkStepOk(tw, m, nx, ny) {
+      if (!tw.skatepark) return true;
+      const fx = C.footX(nx), fy = C.footY(ny);
+      if (!SPK.inPark(fx, fy) && !SPK.inPark(C.footX(m.x), C.footY(m.y))) return true;
+      const h0 = SPK.heightAt(C.footX(m.x), C.footY(m.y));
+      for (const [px, py] of C.bodyPoints(nx, ny)) if (!SPK.walkStepOk(h0, px, py)) return false;
+      return true;
     }
     /* 2026-10-06 — OÙ ON ATTERRIT APRÈS UNE CHUTE SANS PATINS : la case libre la plus proche HORS de toute glace (la patinoire,
        l'étang, le lac), au bord. Une recherche en anneaux croissants autour de la semelle ; un point convient si le corps entier
@@ -21789,6 +22049,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (duoStepMe(m)) { maybeSendPos(); return; }   // 2026-10-06 (soir) : en figure à deux, la figure me pose
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) starInputAtRef.current = performance.now();
+      if (rideStepMe(tw, m, moving ? dx : 0, moving ? dy : 0, dt)) { maybeSendPos(); return; }   // 2026-10-11 : monté, dans le skatepark
       /* ╔══════════════════════════════════════════════════════════════
          ║ 2026-10-04 — SUR LA GLACE, ON PATINE (`patin.js`).
          ╚══════════════════════════════════════════════════════════════
@@ -22588,6 +22849,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!snowF) sfw.evict();
       }
       wetFrameRef.current = wetF ? { layer: wetF, pud: wetP.pud, wet: wetP.wet } : null;
+      /* 2026-10-12 — L'EAU DE LA GLACE FONDUE (chantier de la place) : la même eau que la pluie (`pluie.js` : le dallage assombri, les
+         flaques dans les creux et les joints, le ciel qui s'y reflète), mais à elle seule — sa propre couche, son petit atlas, la
+         patinoire seule. Elle monte avec la fonte, les raclettes la chassent (34-44), le soleil sèche le reste (jusqu'à 56). */
+      let meltWet = null;
+      { const chW = tw.chantier ? chantierNow() : null;
+        if (chW && chW.type === "montage" && chW.t > CH.PHASE.MELT[0] && chW.t < 56) {
+          const t = chW.t, cl = (v) => Math.max(0, Math.min(1, v));
+          const wet = cl((t - 5) / 6) * (1 - cl((t - 44) / 12) * 0.98);
+          const pud = 0.85 * cl((t - 7) / 18) * (1 - 0.6 * cl((t - 34) / 6)) * (1 - cl((t - CH.PHASE.PUDDLE[0]) / (CH.PHASE.PUDDLE[1] - CH.PHASE.PUDDLE[0])));
+          const cur = meltWetRef.current;
+          if (!cur || cur.tw !== tw) {
+            const sfm = townSnowField(tw);
+            meltWetRef.current = { tw, layer: PL.makeWetLayer(tw, { atlas: 512, makeCanvas: (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }, staticOf: (cx, cy) => sfm.staticOf(cx, cy) }) };
+          }
+          meltWet = meltWetRef.current.layer;
+          meltWet.setParams({ wet, pud, run: 0, sky: PL.skyReflect(wxFrame().dark) });
+          const RK = C.TOWN_RINK;
+          meltWet.view(RK.x0, RK.y0, RK.x1, RK.y1);
+          meltWet.update(3, () => performance.now());
+        } else if (meltWetRef.current && !tw.chantier) meltWetRef.current = null;
+      }
       /* LES PAS DANS LA NEIGE (locaux, décision de Guillaume) : chaque client
          creuse ce qu'il voit marcher. ⚠️ Ce qui marche SUR le grand escalier
          au-dessus de la chaussée (`townOverpassCell`, niveau de marche) ne
@@ -22997,8 +23279,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
            (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
         if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
+          const chI = tw.chantier ? chantierNow() : null;
+          if (chI) {
+            /* 2026-10-11 — LA GLACE QUI FOND (le froid coupé, `CH.PHASE.MELT`) : elle s'efface en paliers, du bord vers le milieu (la
+               bande protégeait mal les bords) ; dessous, la pierre MOUILLÉE (un voile froid) et des flaques qui rétrécissent jusqu'à la fin
+               des flaques (`PUDDLE`). Au démontage, il n'y a pas de glace. */
+            /* ⚠️ 2026-10-12 : premier jet, une opacité PAR CASE en paliers (vu en jeu : un carré de glace intacte au milieu, des marches
+               d'une case à l'autre) et une flaque rectangulaire par case. Maintenant : l'eau de la pluie dessous (`meltWet`), la glace
+               fondue AU PIXEL par-dessus (`CA.rinkMeltCanvas`). */
+            if (chI.type === "montage") {
+              if (meltWet) { const wc = meltWet.cell(x, y); if (wc) ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, py, T, T); }
+              const [m0, m1] = CH.PHASE.MELT;
+              if (chI.t < m1) {
+                const mc = CA.rinkMeltCanvas((w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }, C.TOWN_RINK, Math.max(0, (chI.t - m0) / (m1 - m0)));
+                ctx.drawImage(mc, (x - C.TOWN_RINK.x0) * T, (y - C.TOWN_RINK.y0) * T, T, T, px, py, T, T);
+              }
+            }
+          } else {
           A.drawRinkIceTile(ctx, x, y, px, py);
           if (iceNow && iceNow.st) { A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st); A.drawRinkGlossAt(ctx, x, y, px, py, iceNow.st); }   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
+          }
         }
         /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
         if (wetF && y >= y0 - 1) {
@@ -24824,7 +25124,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const pr of (tw.props || [])) {
         // 2026-10-05 (nuit) : la bande de la patinoire a son ancre au coin sud-ouest, mais s'étend sur toute la glace —
         // elle se découpe elle-même par rangée (plus bas) ; l'écarter sur son ancre l'effaçait dès qu'on regardait le nord.
-        if (pr.kind !== "rinkBoards" && (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2)) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
+        if (pr.kind !== "rinkBoards" && pr.kind !== "skatepark" && (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < yR0 - 1 || pr.y > yBot + 2)) continue;   // yR0 : voir TOWN_REFL_ROWS (les reflets)
+        /* 2026-10-11 — LE SKATEPARK (`skateparkArt.js`) : le relief cuit une fois, découpé en tranches par rangée de sol
+           d'origine — chacune triée à la fin de sa rangée, comme la bande de la patinoire : on passe devant ce qui est au nord
+           de soi, derrière ce qui est au sud. Ni ombre rejouée (il porte la sienne, cuite) ni reflet. */
+        /* 2026-10-11 — AU CHANTIER, ce que l'équipe a déjà retiré ne se dessine plus : les mâts et les braseros (`CH.PHASE.POLES`,
+           l'un après l'autre d'ouest en est), le chalet des patins (il part au crochet de la grue : `CH.CHALET_LIFT`, dessiné par la grue). */
+        if (tw.chantier) {
+          const chP = chantierNow();
+          if (chP && (pr.kind === "rinkPole" || pr.kind === "brazier")) {
+            if (chP.type !== "montage" || chP.t > CH.PHASE.POLES[0] + (CH.PHASE.POLES[1] - CH.PHASE.POLES[0]) * ((pr.x - 36) / 30)) continue;
+          }
+          if (chP && pr.kind === "skateChalet" && (chP.type !== "montage" || chP.t >= CH.CHALET_LIFT.pick)) continue;
+          if (chP && pr.kind === "parkShed" && (chP.type === "montage" ? chP.t < CH.SHED_LIFT.set : chP.t > CH.CHANTIER.DUR_MIN - CH.SHED_LIFT.set)) continue;
+        }
+        /* 2026-10-11 — LA CABANE DE LOCATION DU PARK (`MA.parkShedSprite`) : debout, elle porte son ombre et se reflète. */
+        if (pr.kind === "parkShed") {
+          const im = MA.parkShedSprite(parkCanvas), bxS = pr.x * T + T / 2 - im.width / 2 + (pr.ox || 0), byS = (pr.y + 1) * T - im.height;
+          pushE((pr.y + 1) * T, elAt(pr.x, pr.y), () => ctx.drawImage(im, bxS, byS), 0, pr.x);
+          continue;
+        }
+        if (pr.kind === "skatepark") {
+          if (reflecting) continue;
+          const pk = SPA.bakePark(parkCanvas);
+          const wy0 = (y0 - 3) * T, wy1 = (yBot + 4) * T;
+          for (const st of pk.strips) {
+            if (st.key < wy0 || st.dy > wy1) continue;
+            pushE(st.key, 0, () => ctx.drawImage(pk.atlas, st.sx, st.sy, st.w, st.h, st.dx, st.dy, st.w, st.h));
+          }
+          continue;
+        }
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
         /* 2026-09-27 (nuit) — le grand escalier : piliers, balustrades, rampes,
            pots. Une rampe au-dessus de la chaussée porte l'altitude de SA marche
@@ -24928,8 +25257,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            liseré de neige sur la rambarde dès qu'il en tombe ou qu'il en reste. Debout : elle porte son ombre. */
         if (pr.kind === "rinkBoards") {
           const snowyB = !!(snowF && snowPk.g > 1);
+          const chB = tw.chantier ? chantierNow() : null;
+          if (chB && chB.type !== "montage") continue;
           for (const rw of A.rinkBoardRows(snowyB)) {
             if (rw.row < y0 - 2 || rw.row > yBot + 2) continue;
+            // 2026-10-11 — au chantier, la bande se démonte rangée par rangée, du nord au sud (`CH.PHASE.BAND`)
+            if (chB && chB.t > CH.PHASE.BAND[0] + (CH.PHASE.BAND[1] - CH.PHASE.BAND[0]) * (rw.row - C.TOWN_RINK.y0 + 1) / (C.TOWN_RINK.y1 - C.TOWN_RINK.y0 + 3)) continue;
             pushE((rw.row + 1) * T - 0.5, 0, () => ctx.drawImage(rw.cv, rw.ox, rw.oy));   // (son ombre : `A.drawRinkBoardShadow`, d'un seul tenant)
           }
           continue;
@@ -26204,7 +26537,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-10-04 — sur la glace, la pose du patin, DÉDUITE (`skateDraw`) : la ville
            dessine ses camarades ici, pas par `drawRemote` (la ferme) — premier jet branché
            là-bas seulement, donc invisible en ville, là où la glace existe. */
-        else pushE((p.y + 1) * T, pe, () => { const sk = skateDraw(p, false); drawCharacter(sk.skate ? { ...p, ...sk } : p, false); }, pl, Math.floor(p.x + 0.5));
+        else pushE((p.y + 1) * T, pe, () => { const sk = skateDraw(p, false); drawCharacter(sk.skate || sk.ride ? { ...p, ...sk } : p, false); }, pl, tw.skatepark && pl > 0.5 && SPK.inPark(C.footX(p.x), C.footY(p.y)) ? null : Math.floor(p.x + 0.5));
       }
       /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ; la
          cloche, elle, est une hauteur d'IMAGE et part dans `myLift` — c'est la
@@ -26227,8 +26560,122 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          donnerait un fermier debout sur le toit — et comme sa position est
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
-      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, Math.floor(m.x + 0.5));
+      /* 2026-10-11 — monté sur le relief du skatepark, on ne rejoue pas son ombre au soleil : le rejeu la poserait sur le
+         dallage, sous le bois (le tampon des ombres est posé avant le monde trié), loin des pieds — l'ellipse de contact,
+         montée avec le corps, la remplace. */
+      const myParkUp = tw.skatepark && myLift > 0.5 && SPK.inPark(C.footX(m.x), C.footY(m.y));
+      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, myParkUp ? null : Math.floor(m.x + 0.5));
       if (!inCar && !m.sleeping && !jpv.active && !m.sitOn) snowWalk("me", "boot", C.footX(m.x), C.footY(m.y), myE);
+      /* 2026-10-11 — LES ÉTINCELLES DES GRINDS (`parkFxRef.sparks`) : un pixel blanc-jaune qui vire à l'orange, en balistique, trié à sa
+         rangée et monté de sa hauteur (`liftPx`). */
+      {
+        const sp = parkFxRef.current.sparks, nowS = performance.now();
+        for (let i = sp.length - 1; i >= 0; i--) if (nowS - sp[i].t0 > sp[i].life) sp.splice(i, 1);
+        for (const q of sp) {
+          const t = (nowS - q.t0) / 1000, u = (nowS - q.t0) / q.life;
+          const x = q.x + q.vx * t, y = q.y + q.vy * t, z = Math.max(0, q.z + q.vz * t - 220 * t * t);
+          pushE(y, 0, () => { ctx.fillStyle = u < 0.35 ? "#fffbe0" : u < 0.7 ? "#ffd56a" : "#ff9a3c"; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }, z);
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-10-11 — LE CHANTIER DE LA PLACE (`chantier.js`, `chantierArt.js`) : la barrière, l'équipe, les engins, le dépôt.
+         ╚══════════════════════════════════════════════════════════════════════
+         Tout se lit sur l'HEURE (`chantierNow`) : chacun voit le même ouvrier au même endroit, rien ne circule. Le DÉMONTAGE (l'été) rejoue
+         le film à l'envers (minute `180 − t`) : les ouvriers marchent alors dans l'autre sens, leur regard est retourné. */
+      const chD = tw.chantier ? chantierNow() : null;
+      if (chD) {
+        const rev = chD.type === "demontage", mt = rev ? CH.CHANTIER.DUR_MIN - chD.t : chD.t;
+        const sprC = spritesRef.current, PK = SPK.PARK;
+        // la barrière de chantier : un panneau apparaît quand son porteur l'a posé, disparaît quand il l'a retiré
+        for (const f of CH.fencePanels()) {
+          if (mt < f.on || (f.off != null && mt >= f.off)) continue;
+          // un panneau nord-sud (par la tranche) se trie par son bout SUD : il descend jusque-là à l'écran
+          pushE((f.along === "y" ? f.y + 1.1 : f.y) * T, 0, () => CA.drawFencePanel(ctx, f.x * T, f.y * T, f.along), 0, Math.floor(f.x));
+        }
+        // la palette des panneaux, sur l'accotement du boulevard
+        { const n = CH.palletAt(mt), PL0 = CH.PALLET; pushE(PL0[1] * T, 0, () => CA.drawFencePallet(ctx, PL0[0] * T, PL0[1] * T, n), 0, Math.floor(PL0[0])); }
+        // le dépôt : les piles de contreplaqué et les cadres d'acier livrés par le chariot
+        { const dp = CH.depotStack(mt); if (dp.sheets || dp.frames) pushE(dp.y * T, 0, () => {
+          const bx = Math.round(dp.x * T), by = Math.round(dp.y * T);
+          ctx.fillStyle = "rgba(20,16,12,0.25)"; ctx.fillRect(bx - 9, by - 1, 20, 3);
+          for (let k = 0; k < dp.sheets; k++) { ctx.fillStyle = k % 2 ? "#d9b27a" : "#c79e62"; ctx.fillRect(bx - 8, by - 3 - k * 2, 16, 2); }
+          if (dp.sheets) { ctx.fillStyle = "#f0d6a8"; ctx.fillRect(bx - 8, by - 3 - (dp.sheets - 1) * 2, 16, 1); }
+          for (let k = 0; k < dp.frames; k++) { ctx.fillStyle = k % 2 ? "#8a919b" : "#5a616b"; ctx.fillRect(bx + 10, by - 2 - k * 2, 9, 1); ctx.fillRect(bx + 10, by - 2 - k * 2, 1, 2); ctx.fillRect(bx + 18, by - 2 - k * 2, 1, 2); }
+        }, 0, Math.floor(dp.x)); }
+        // l'équipe
+        const hatOf = (lk) => (/^chef/.test(lk) ? "#eceae4" : /conducteur/.test(lk) ? "#2f6fd0" : "#f2c21b");
+        const posOf = (id) => { const w = CH.workerAt(id, mt); if (w && rev && w.moving) w.dir = [1, 0, 3, 2][w.dir]; return w; };
+        const snd = { weld: 0, drill: 0 }, lxS = C.footX(m.x), lyS = C.footY(m.y);
+        const fall = (x, y) => Math.max(0, 1 - Math.hypot(x - lxS, y - lyS) / 22) ** 2;   // on l'entend à vingt cases, fort à cinq
+        for (const cw of CH.CREW) {
+          const w = posOf(cw.id);
+          if (!w || w.act === "ride") continue;
+          if (w.act === "weld") snd.weld = Math.max(snd.weld, fall(w.x, w.y) * (Math.sin(w.phase * 23) > -0.6 ? 1 : 0.25));
+          else if (w.act === "screw") snd.drill = Math.max(snd.drill, fall(w.x, w.y));
+          const p = { id: "crew-" + cw.id, x: w.x - C.footX(0), y: w.y - C.footY(0), dir: w.dir, moving: w.moving, animT: w.phase * 7, gender: cw.gender, outfit: cw.outfit, look: cw.look, zone: "town" };
+          const special = w.act !== "walk" && w.act !== "stand";
+          pushE((p.y + 1) * T, 0, () => {
+            if (!special) { drawCharacter(p, false); return; }
+            const sheet = sprC.getChar(cw.gender, cw.outfit, false, false, false, false, false, false, cw.look);
+            const row = w.dir === 0 ? 0 : w.dir === 1 ? 1 : 2, px = Math.round(p.x * T), py = Math.round(p.y * T), frame = w.moving ? Math.floor(w.phase * 7) % 4 : 0;
+            ctx.fillStyle = "rgba(0,0,0,0.25)"; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, 6, C.CHAR_SHADOW_RY);
+            let hand;
+            if (w.dir === 2) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); hand = CA.drawWorkerAct(ctx, sheet, row, 0, py, w.act, w.phase, frame); ctx.restore(); if (hand) hand = { x: px + 16 - hand.x, y: hand.y }; }
+            else hand = CA.drawWorkerAct(ctx, sheet, row, px, py, w.act, w.phase, frame);
+            // la charge portée : à deux (une feuille entre les deux paires de mains), seul (un panneau de barrière)
+            if (w.act === "carry" && hand) {
+              const pw = w.with ? posOf(w.with) : null;
+              if (pw && pw.act === "carry") { if (cw.id < w.with) CA.drawCarriedLoad(ctx, hand.x, hand.y, Math.round(pw.x * T), Math.round(pw.y * T) - 25, "sheet"); }
+              else if (!w.with) CA.drawCarriedLoad(ctx, hand.x - 7, hand.y, hand.x + 7, hand.y, "fence");
+            }
+          }, 0, Math.floor(w.x));
+        }
+        // les engins
+        const MA0 = CH.machinesAt(mt), chefHat = hatOf("chef:0");
+        if (MA0.van) { const v = MA0.van; pushE(v.y * T + 0.4, 0, () => CA.drawVan(ctx, v.x * T, v.y * T, rev ? (v.dir === 3 ? 2 : 3) : v.dir, { door: v.door }), 0, Math.floor(v.x)); }
+        if (MA0.tele) { const te = MA0.tele; pushE(te.y * T + 0.4, 0, () => CA.drawTelehandler(ctx, te.x * T, te.y * T, rev ? (te.dir === 3 ? 2 : 3) : te.dir, te.lift, te.load, te.driven ? hatOf("conducteur") : null), 0, Math.floor(te.x)); }
+        // au démontage (l'été), pas de chalet à reposer : la visite du chalet n'a pas lieu
+        if (MA0.truck && !(rev && MA0.truck.visit === "chalet")) {
+          const tr = MA0.truck, bedCargo = tr.bed;
+          pushE(tr.y * T + 0.5, 0, () => {
+            CA.drawCraneTruckBody(ctx, tr.x * T, tr.y * T, tr.dir, { legs: tr.legs, flash: tr.flash, driver: tr.crane ? null : chefHat, stowed: tr.stowed });
+            const bx = Math.round(tr.x * T + (tr.dir === 2 ? 18 : -18)), by = Math.round(tr.y * T - CA.TRUCK.BED_H);
+            if (bedCargo === "chalet" && sprC.townSkateChaletClosed) { const im = sprC.townSkateChaletClosed; ctx.drawImage(im, bx - im.width / 2, by - im.height + 2); }
+            else if (bedCargo === "container") { const im = MA.parkShedSprite(parkCanvas, true); ctx.drawImage(im, bx - im.width / 2, by - im.height + 4); }
+            else if (bedCargo === "stack") {   // deux piles de contreplaqué cerclées, un fagot de cadres d'acier
+              for (const ox of [-36, -14]) { for (let k = 0; k < 6; k++) { ctx.fillStyle = k % 2 ? "#d9b27a" : "#c79e62"; ctx.fillRect(bx + ox, by - 2 - k * 2, 20, 2); } ctx.fillStyle = "#f0d6a8"; ctx.fillRect(bx + ox, by - 13, 20, 1); ctx.fillStyle = "#3a3d44"; ctx.fillRect(bx + ox + 5, by - 13, 1, 12); ctx.fillRect(bx + ox + 14, by - 13, 1, 12); }
+              for (let k = 0; k < 3; k++) { ctx.fillStyle = k % 2 ? "#8a919b" : "#5a616b"; ctx.fillRect(bx + 10, by - 3 - k * 3, 26, 1); ctx.fillRect(bx + 10, by - 5 - k * 3, 1, 3); ctx.fillRect(bx + 35, by - 5 - k * 3, 1, 3); }
+            }
+          }, 0, Math.floor(tr.x));
+          // l'ombre de ce qui pend au crochet, au sol (sous son pied) : c'est elle qui dit la hauteur de la charge
+          if (tr.hang && tr.hang.z > 0.05 && !(rev && tr.hang.kind === "chalet")) { const hg = tr.hang; pushE(hg.y * T - 2, 0, () => { ctx.fillStyle = "rgba(20,16,12,0.22)"; fillPixEllipse(ctx, hg.x * T, hg.y * T - 6, 30 - Math.round(hg.z * 4), 6); }); }
+          chantierCraneRef.current = { tr, rev };
+        } else chantierCraneRef.current = null;
+        /* 2026-10-12 — LE SON, d'où je suis : le diesel (le plus proche des engins qui tournent), son régime (un engin qui roule), le
+           bip quand le camion recule, les vérins quand le crochet bouge, la soudure, la visseuse ; un clang à chaque panneau posé ou
+           retiré. Les vitesses se mesurent d'une image à l'autre, en temps réel (le camion roule à six centièmes de case par seconde). */
+        {
+          const L = chantierSndRef.current, nowS = performance.now(), dts = L.at ? Math.max(0.001, (nowS - L.at) / 1000) : 0;
+          let eng = 0, rpm = 0, back = 0, hyd = 0;
+          const moved = (a, b) => dts > 0 && a && Math.hypot(b[0] - a[0], b[1] - a[1], (b[2] || 0) - (a[2] || 0)) / dts > 0.01;
+          if (MA0.van) eng = Math.max(eng, 0.45 * fall(MA0.van.x, MA0.van.y));
+          if (MA0.tele && MA0.tele.driven) { const te = MA0.tele; eng = Math.max(eng, 0.75 * fall(te.x, te.y)); if (moved(L.tele, [te.x, te.y])) rpm = Math.max(rpm, 0.6); L.tele = [te.x, te.y]; }
+          const trS = MA0.truck && !(rev && MA0.truck.visit === "chalet") ? MA0.truck : null;
+          if (trS) {
+            const f = fall(trS.x, trS.y);
+            eng = Math.max(eng, f);
+            if (moved(L.truck, [trS.x, trS.y])) { rpm = 1; if ((trS.x < L.truck[0]) === (trS.dir === 3)) back = f; }
+            if (trS.crane) { const hk = [trS.crane.tx, trS.crane.ty, trS.crane.tz]; if (moved(L.hook, hk)) { hyd = f; rpm = Math.max(rpm, 0.45); } L.hook = hk; } else L.hook = null;
+            L.truck = [trS.x, trS.y];
+          } else { L.truck = null; L.hook = null; }
+          chantierSoundUpdate({ engine: eng, rev: rpm, reverse: back, hyd, weld: snd.weld, drill: snd.drill });
+          if (L.mt != null && Math.abs(mt - L.mt) < 0.5) for (const f of CH.fencePanels()) {
+            const cross = (b) => b != null && (L.mt - b) * (mt - b) < 0;
+            if (cross(f.on) || cross(f.off)) chantierSoundClank(fall(f.x, f.y));
+          }
+          L.mt = mt; L.at = nowS;
+        }
+      } else chantierCraneRef.current = null;
       // 2026-10-04 — les bouffées de poussière, en file de tri (voir poussiere.js).
       {
         const dT = dustFor("town"), dNow = performance.now();
@@ -26487,7 +26934,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const items = [];
           for (const d of draws) if (d.rb != null && d.re < 0.01) items.push(d);
           for (const d of reflOnly) items.push(d);
-          if (items.length) {
+          if (items.length && PERF.tier < 2) {   // 2026-10-11 : palier 2 de PERF = plus de reflets
             const M0 = ctx.getTransform();
             /* ⚠️ 2026-09-27 (phase 9, audit : ce qui est « en retrait de la rive
                se reflète au ras de l'eau ») — L'AXE DU MIROIR EST LE PLAN DE L'EAU,
@@ -26716,8 +27163,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ Les ombres de CONTACT restent (l'ellipse sous chaque chose) : sous un ciel couvert, c'est tout ce qui
          reste, et c'est juste — l'ombre portée vient du soleil, l'autre de la lumière du ciel. */
       {
-        sunShadowPass(draws, (d) => (d.rb != null ? d.rb - (d.re || 0) * EP : null), snowSeason, SUN_SHADOW.bitmaps,
-          tw.rink ? (g, sh, ox, oy) => A.drawRinkBoardShadow(g, sh, ox, oy) : null);
+        /* 2026-10-11 — LE SKATEPARK AU SOL : le contact de ses modules avec le dallage (la lumière du ciel qui n'entre pas
+           dessous), posé avec le sol, avant les ombres ; son ombre portée sur le dallage va dans LE tampon commun (une
+           silhouette, pas une somme) ; celle qui tombe sur son propre bois est recuite dans ses tranches quand le soleil a tourné. */
+        const parkNow = tw.skatepark || tw.chantier ? SPA.bakePark(parkCanvas) : null;
+        // 2026-10-12 : en chantier, seulement les modules qui ont déjà pris corps (`CH.primsBuiltAt`) — premier jet : aucun, le park fini à plat
+        const chS = tw.chantier ? chantierNow() : null, parkBuilt = chS ? CH.primsBuiltAt(chS.type === "demontage" ? CH.demontageMinute(chS.t) : chS.t) : null;
+        if (parkNow) { const ct = SPA.parkContactLayer(parkNow, parkBuilt); ctx.drawImage(ct.cv, ct.x0, ct.y0); }
+        const shTown = sunShadowPass(draws, (d) => (d.rb != null ? d.rb - (d.re || 0) * EP : null), snowSeason, SUN_SHADOW.bitmaps,
+          (tw.rink || parkNow) ? (g, sh, ox, oy) => {
+            if (tw.rink && chS && chS.type === "montage") {
+              /* 2026-10-12 — au chantier, la bande se démonte du nord au sud (rangée par rangée, voir « rinkBoards ») : son ombre
+                 ne garde que les rangées encore debout */
+              const RK = C.TOWN_RINK, [b0, b1] = CH.PHASE.BAND, yCut = RK.y0 - 1 + Math.max(0, chS.t - b0) * (RK.y1 - RK.y0 + 3) / (b1 - b0);
+              if (yCut < RK.y1 + 1) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.beginPath(); g.rect(0, Math.round(yCut * T - oy), g.canvas.width, g.canvas.height); g.clip(); A.drawRinkBoardShadow(g, sh, ox, oy); g.restore(); }
+            } else if (tw.rink && !chS) A.drawRinkBoardShadow(g, sh, ox, oy);
+            if (parkNow) SPA.parkFloorShadow(parkNow, g, sh, ox, oy, parkBuilt);
+          } : null);
+        /* le park au soleil ; au chantier, à sa minute (charpente, feuilles posées) — le masque passe APRÈS le soleil */
+        if (parkNow) { const chR = tw.chantier ? chantierNow() : null; if (chR) SPA.parkBuildAt(parkNow, chR.t, chR.type, shTown, OMB.OMBRE.RGB); else { if (parkNow.build && parkNow.build.key !== "full") SPA.parkBuildAt(parkNow, null, null, shTown, OMB.OMBRE.RGB); SPA.relightPark(parkNow, shTown, OMB.OMBRE.RGB); } }
         /* Le relevé des bâtiments pour l'image suivante : leur rectangle, rendu au MONDE par la caméra de cette
            image (ce que `drawScreenExactBitmap` voit est l'écran, altitude de la case comprise). */
         const Mc = ctx.getTransform();
@@ -26738,6 +27202,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
       BITMAP_LOG.fn = null;   // 2026-10-05 : le relevé des bâtiments ne vaut que pour le monde de la ville, cette image
+      /* 2026-10-11 — LA FLÈCHE DE LA GRUE ET SA CHARGE, au-dessus du monde trié (elles passent au-dessus de tout ce qui est au sol) :
+         le crochet vise sa cible (`CH.machinesAt`), le chalet ou le conteneur y pend par le toit. */
+      { const cc = chantierCraneRef.current; if (cc && cc.tr.crane) { try {
+        /* ⚠️ 2026-10-12 — LA CHARGE D'ABORD, LA FLÈCHE ENSUITE (premier jet : l'inverse — le chalet couvrait la flèche, qui ne
+           dépassait plus que par en dessous : « un chalet sur un bâton »). La flèche part du camion, au SUD de ce qu'elle porte : elle
+           passe devant. Les élingues (quatre brins du crochet aux coins du toit) par-dessus tout. */
+        const tr = cc.tr, cr = tr.crane, hg = tr.hang, hook = CA.craneHookAt(cr.tx, cr.ty, cr.tz);
+        const im = hg && !(cc.rev && hg.kind === "chalet") ? (hg.kind === "chalet" ? spritesRef.current.townSkateChaletClosed : MA.parkShedSprite(parkCanvas, true)) : null;
+        // le pied de la charge (son milieu, son bord sud) levé de `z` : posée, elle est exactement là où le décor la dessinait
+        const lx = im ? Math.round(hg.x * T - im.width / 2) : 0, ly = im ? Math.round((hg.y - hg.z) * T - im.height) : 0;
+        if (im) ctx.drawImage(im, lx, ly);
+        CA.drawCraneBoom(ctx, tr.x * T, tr.y * T, tr.dir, cr.tx, cr.ty, cr.tz, cr.out);
+        if (im) for (const fx of [0.12, 0.88]) {
+          const ex = lx + im.width * fx, ey = ly + 3, n = Math.ceil(Math.hypot(ex - hook[0], ey - hook[1]));
+          for (let k = 0; k <= n; k++) { ctx.fillStyle = k & 1 ? "#3a3d44" : "#2a2c31"; ctx.fillRect(Math.round(hook[0] + (ex - hook[0]) * k / n), Math.round(hook[1] + 1 + (ey - hook[1] - 1) * k / n), 1, 1); }
+        }
+      } catch (e) { console.error("[FERME] grue", e); } } }
       /* 2026-10-05 (nuit) — LES GUIRLANDES AU-DESSUS DE LA PATINOIRE (`tw.rinkGarlands`) : après le monde trié (elles
          pendent à la hauteur des mâts, au-dessus des patineurs), avant la lumière ; allumées avec les lanternes (le même
          prédicat, lu au milieu du fil), leurs ampoules déclarées en verres qui brillent (`rinkBulbs`). */
@@ -28234,6 +28715,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ceux qui restent dans le sac ne suivent plus le joueur.
     function drawMyPets(m, dt2) { drawPetsFor(me.id, walkPetsRef.current, m, dt2); }
     function drawRemotePets(p, dt2) { drawPetsFor(p.id, p.pets, p, dt2); }
+    /* 2026-10-11 — CE QUE LE DESSIN LIT DE MA MONTURE : la pose se déduit de la machine (en l'air, au sol en poussant, au frein,
+       à la chute), la hauteur au-dessus du relief part en `skAir` (le corps monte, l'ombre de contact rétrécit et reste au sol). */
+    function rideDrawOf(st) {
+      const V = MO.VEH[st.kind], view = MO.rideView(st);
+      let pose = "stand", ph = 0;
+      if (st.mode === "air") pose = "hop";
+      else if (st.brake) pose = "brake";
+      else if (V.push === "kick" && st.kick > 0) { pose = "push"; ph = 1 - st.kick; }
+      else if (V.push !== "kick" && Math.abs(st.u) > 0.4 && st.stride) { pose = "glide"; ph = st.stride; }
+      // les genoux : on se ramasse en chargeant le saut, et l'on plie-déplie en pompant
+      if (st.mode === "grind") pose = "grind";
+      const bend = st.mode === "ground" ? Math.max(Math.round(st.charge * 3), st.pumpK > 0.05 ? 2 : 0, Math.abs(st.lean) > 0.4 ? 1 : 0, Math.ceil((st.landT || 0) * 18)) : st.mode === "grind" ? 2 : 0;
+      const ang = MO.trickAngles(st.trick);
+      return { ride: { kind: st.kind, th: st.th, air: view.air, mode: st.mode, pose, ph, color: st.color | 0, bend, lean: Math.round(st.lean * 2), back: st.u < -0.3 && st.kind === "roller",
+        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: view.air * T };
+    }
+    /* 2026-10-11 — LA MONTURE D'UN AUTRE, DÉDUITE (§3) : le cap reçu ; en l'air, la parabole et la vrille reconstruites depuis
+       la réception (`rdT0`) ; au sol, la hauteur est celle du relief sous ses pieds (déjà dans `liftPx`). La pose se lit du mode. */
+    function remoteRideDrawOf(p, rp) {
+      const rd = rp.rd, kind = MO.VEH_KINDS[rd[0] | 0] || "skate", md = rd[2] | 0;
+      const t = Math.max(0, (performance.now() - (rp.rdT0 || 0)) / 1000);
+      let th = +rd[1] || 0, air = 0, pose = "stand";
+      let ang = null;
+      if (md === 1 && rd.length >= 6) {
+        const z = rd[3] + rd[4] * t - 0.5 * MO.G * t * t;
+        air = Math.max(0, z - SPK.heightAt(C.footX(p.x), C.footY(p.y)));
+        th += (rd[5] || 0) * Math.min(t, 1.5);
+        pose = "hop";
+        const def = rd[6] ? MO.trickByName(kind, rd[6]) : null;   // la figure : relue par la même fonction, sur MON horloge
+        if (def) ang = MO.trickAngles({ ...def, t: (rd[7] || 0) / 1000 + t });
+      } else if (md === 3 && rd.length >= 4) { air = Math.max(0, rd[3] - SPK.heightAt(C.footX(p.x), C.footY(p.y))); pose = "grind"; }
+      return { ride: { kind, th, air, mode: md === 1 ? "air" : md === 2 ? "bail" : md === 3 ? "grind" : "ground", pose, ph: t * 2, color: rp.rdc | 0, bend: md === 3 ? 2 : 0, lean: 0,
+        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: air * T };
+    }
     function drawSelf(m) {
       // Zip 427 : ma tenue vient du même endroit que celle des autres (voir
       // wardrobeLookOf) — un joueur doit se voir exactement comme on le voit.
@@ -28346,6 +28861,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function skateDraw(p, isSelf) {
       if (!p || (p.zone || "farm") !== "town") return {};
+      if (isSelf && rideRef.current) return rideDrawOf(rideRef.current);   // 2026-10-11 : monté dans le skatepark
+      if (!isSelf) { const rpR = playersRef.current.get(p.id); if (rpR && rpR.rd && townWorldRef.current && townWorldRef.current.skatepark) return remoteRideDrawOf(p, rpR); }
       { const dqf = duoFieldsOf(p, isSelf); if (dqf) return dqf; }   // 2026-10-06 (soir) : en figure à deux, la pose du plan
       if (isSelf) {
         const st = skateRef.current; if (!st) return {};
@@ -29630,6 +30147,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       st.queue = null;
       if (q) paintLabels(ctx, q, st.fade, st.dt);
       drawFindMe(st.self);
+      drawParkFx();
+    }
+    /* 2026-10-11 — LES NOMS DE FIGURES DU SKATEPARK : ils naissent au-dessus de la tête, montent et s'effacent en 1,6 s, empilés
+       (le plus récent en bas). La police pixel des noms, au pas du pixel d'art ; or pour une figure, acier pour une glisse,
+       rouge pour une chute. */
+    function drawParkFx() {
+      const fx = parkFxRef.current, a = fx.anchor;
+      if (!fx.list.length || !a) return;
+      const now = performance.now(), DUR = 1600;
+      fx.list = fx.list.filter((f) => now - f.t0 < DUR);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const n = fx.list.length;
+      fx.list.forEach((f, i) => {
+        const u = (now - f.t0) / DUR, rise = Math.round((4 + 14 * Math.sqrt(u)) * a.s), stack = (n - 1 - i) * 9 * a.s;
+        ctx.globalAlpha = Math.min(1, (1 - u) * 2.2) * Math.min(1, u * 12);
+        const col = f.kind === "bail" ? "#ff8a7a" : f.kind === "grind" ? "#cfe4ff" : "#ffe27a";
+        if (PF.pixelTextSupported(f.text)) PF.drawPixelText(ctx, mkLabelCanvas, f.text, a.sx, a.sy - rise - stack, a.s, col, "#1a120c");
+        else { ctx.font = `bold ${7 * a.s}px monospace`; ctx.textAlign = "center"; ctx.fillStyle = col; ctx.fillText(f.text, a.sx, a.sy - rise - stack); }
+      });
+      ctx.restore();
     }
     /* ⚠️ 2026-09-27 (phase 11) — L COMME « LÀ » : OÙ SUIS-JE ? Guillaume, sur le
        feuillage qui s'effaçait devant le joueur : « ce n'est pas un problème que
@@ -29915,6 +30452,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const drawDig = (ox, mir) => A.drawStarDig(ctx, sheet, row, ox, py, ph, (p.digFx || 1) * mir);
         if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawDig(0, -1); }
         else drawDig(px, 1);
+      } else if (p.ride) {
+        /* 2026-10-11 — LE RIDER DU SKATEPARK (`montureArt.js`) : le véhicule en 3D sur la surface, le corps par-dessus. */
+        MA.drawRide(ctx, sheet, px, py, p, p.gender === "f");
+        if (isSelf && !reflecting && !sunCasting) {   // l'ancre des noms de figures : au-dessus de la tête, en coordonnées ÉCRAN
+          const Mx = ctx.getTransform(), ax = px + 8, ay = py - 14 - Math.round(p.skAir || 0);
+          parkFxRef.current.anchor = { sx: Mx.a * ax + Mx.c * ay + Mx.e, sy: Mx.b * ax + Mx.d * ay + Mx.f, s: Math.max(1, Math.round(Math.abs(Mx.a))) };
+        }
       } else if (p.skate) {
         /* ╔══════════════════════════════════════════════════════════════
            ║ 2026-10-04 — LES POSES DU PATIN. Même contrat que les poses du cratère :
@@ -29939,7 +30483,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            Le corps renversé sous la semelle (en entier depuis le 2026-10-07, voir plus bas) ; son poids suit le poli de la glace
            (`GLOSS_K` : plein sur la glace lisse, nul sur l'usée). Seulement sur la glace entretenue, jamais dans l'ombre du soleil. */
         const twR = townWorldRef.current, lvR = rinkIceRef.current ? rinkIceRef.current.lv | 0 : 0;
-        if (!sunCasting && twR && twR.rink && C.rinkInside(C.footX(p.x), C.footY(p.y)) && lvR < 3) {
+        if (!sunCasting && twR && twR.rink && !twR.chantier && C.rinkInside(C.footX(p.x), C.footY(p.y)) && lvR < 3) {   // 2026-10-12 : pas sur la glace qui fond
           /* 2026-10-07 — LE REFLET EST LE CORPS ENTIER, comme sur l'étang gelé (Guillaume : « le même type de réflexion que sur
              l'étang : le corps complet »). Avant : deux paliers durs (10 px) puis un dégradé sur 16 px — le reflet s'arrêtait aux
              hanches. Même recette que `eau.js` § 7 : le patineur renversé sous la semelle EN ENTIER (`REFL_LEN` = 24 px de sprite
@@ -30071,7 +30615,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
         ctx.restore();
       }
-      queueNameTag(p, isSelf, px + 8, py - 10);   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité
+      queueNameTag(p, isSelf, px + 8, py - 10 - (p.ride ? Math.round(p.skAir || 0) : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
       // ⚠️ L'état du contexte que laissait l'ancienne écriture du nom : les
       // icônes ci-dessous (🩹, 🏆) comptaient sur son `textAlign` centré.
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
@@ -31385,7 +31929,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      sur l'offrande à l'étoile, autant ne pas la repayer sur son réveil.
      ⚠️ IL REND `true` QUAND IL A CONSOMMÉ L'APPUI, sans quoi la même frappe
      ferait sauter le fermier d'un rebord pendant qu'il frappe. */
-  function pressJumpOrAct() { if (starWakePress()) return; if (evilStarRevivePress()) return; if (skateTrickPress("hop")) return; if (!townJumpNow()) doAction(); }
+  /* 2026-10-11 — MONTER SUR SA MONTURE, EN DESCENDRE (F), DANS LE SKATEPARK. On monte là où l'on se tient, le nez dans le sens où
+     l'on regarde ; on ne descend que posé (ni en l'air, ni en pleine chute). Rend vrai si la touche a servi ici. */
+  function parkMountToggle(m) {
+    const tw = townWorldRef.current;
+    if ((m.zone || "farm") !== "town" || !tw || !tw.skatepark) return false;
+    const fx = C.footX(m.x), fy = C.footY(m.y);
+    const cur = rideRef.current;
+    if (cur) {
+      if (cur.mode !== "ground") return true;
+      rideRef.current = null; m.vx = 0; m.vy = 0; m.moving = false; sendPos(); parkSoundStop();
+      return true;
+    }
+    const kitM = MO.rideKitNorm(invRef.current && invRef.current.rideKit);
+    if (!(PARK_DEV.monture || E.rideActive(invRef.current, Date.now())) || !SPK.inPark(fx, fy)) return false;
+    rideRef.current = MO.rideNew(PARK_DEV.monture || kitM.kind, fx, fy, [Math.PI / 2, -Math.PI / 2, Math.PI, 0][m.dir | 0]);
+    rideRef.current.color = kitM.color;
+    sendPos();
+    if (!parkFxRef.current.hint) { parkFxRef.current.hint = true; pushToast(L.parkRideHint); }   // les commandes, une fois par session
+    return true;
+  }
+  function pressJumpOrAct() { if (rideRef.current) return; if (starWakePress()) return; if (evilStarRevivePress()) return; if (skateTrickPress("hop")) return; if (!townJumpNow()) doAction(); }
   /* Le bouton d'action tactile. ⚠️ IL SUIT LA MÊME PRIORITÉ QUE L'INVITE, et
      c'est ce qui le rend lisible : ce que le bandeau annonce est ce que le
      bouton fait. En ville, le saut de rebord passe avant l'interaction (règle du
@@ -32519,6 +33083,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     acc.trail = 0;
     const print = { a: 1.6, b: Math.max(1.2, r * C.TILE * 0.72), gap: 0, stride: 0, k: 1, rim: 0.35 };
     rec.f.stamp(print, x * C.TILE, y * C.TILE, ux, uy, 1);   // (x, y) : le point où la boule touche le sol
+  }
+  /* 2026-10-11 — le comptoir de la cabane du park : la semelle à `SHED.reach` cases de son emprise. */
+  function nearParkShed() {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || m.zone !== "town") return false;
+    return E.parkShedDist(tw, C.footX(m.x), C.footY(m.y)) <= SPK.SHED.reach;
   }
   /* Le comptoir du chalet : la semelle à `TOWN_SKATE_CHALET_REACH` cases de son emprise. */
   function nearSkateChalet() {
@@ -36839,6 +37409,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (starGreenGuideOn()) { starGreenWalkToggle(); return; }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
       if (nearSkateChalet()) { setSkateShopOpen(true); return; }        // 2026-10-04 — le chalet des patins
+      if (!rideRef.current && nearParkShed()) { setParkShopOpen(true); return; }   // 2026-10-11 — la cabane du skatepark
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
         // quand un résident traîne dans le parc. Sinon, on l'admet.
@@ -40199,6 +40770,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       <SkateHelp getVM={skateHelpGet} L={L} />
       <CourseHud getVM={raceVMGet} L={L} onJoin={() => sendReq({ kind: "rinkJoin" })} onLeave={() => sendReq({ kind: "rinkLeave" })}
         onGo={() => sendReq({ kind: "rinkGo" })} onCloseResults={() => { rinkLocalRef.current.resultsOpen = false; }} />
+      {/* 2026-10-11 — LA CABANE DU SKATEPARK : choisir une monture et sa couleur, louer (une `req` arbitrée par l'hôte, `rentRide`).
+          L'aperçu est dessiné par les MÊMES fonctions que le jeu (`MA.drawRideKitPreview`) ; le prix se relit du résolveur de l'hôte
+          (`MO.rideKitPrice`). Louée, la monture est figée jusqu'à la fin du temps. */}
+      {parkShopOpen && (() => {
+        const nowP = Math.max(skateClock, 0) || Date.now();
+        const leftMs = E.rideLeftMs(myInv, nowP), owned = leftMs > 0;
+        const twP = townWorldNow(), open = !!(twP && twP.skatepark);
+        const mm = Math.floor(leftMs / 60000), ss = Math.floor((leftMs % 60000) / 1000);
+        const close = () => { setParkShopOpen(false); setParkKitDraft(null); };
+        const dk = MO.rideKitNorm(owned ? (myInv && myInv.rideKit) : (parkKitDraft || (myInv && myInv.rideKit)));
+        const setK = (patch) => setParkKitDraft(MO.rideKitNorm({ ...dk, ...patch }));
+        const total = MO.rideKitPrice(dk, C.RIDE_RENT_PRICE);
+        let prev = null;
+        try {
+          const pc = document.createElement("canvas"); pc.width = 48; pc.height = 24;
+          const pg = pc.getContext("2d"); pg.imageSmoothingEnabled = false;
+          MA.drawRideKitPreview(pg, dk);
+          prev = pc.toDataURL();
+        } catch (e) { prev = null; }
+        const onStyle = { background: "#3a3226", color: "#ffeec8", boxShadow: "inset 0 0 0 2px #ffeec8" };
+        return (
+        <div className="ferme-modal open" onClick={close}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={close}>✕</button>
+            <h2>🛹 {L.parkShopTitle}</h2>
+            <div className="ferme-hint">{open ? (owned ? L.parkRentedDesc : L.parkShopHint(C.RIDE_RENT_MS / 60000)) : L.parkShopClosed}</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 6, flexWrap: "wrap" }}>
+              {prev && <img src={prev} alt="" width={192} height={96} style={{ imageRendering: "pixelated", flex: "0 0 auto", background: "linear-gradient(#9ab0c4,#c9d6e0)", borderRadius: 6 }} />}
+              <div style={{ flex: "1 1 280px", minWidth: 0 }}>
+                {MO.VEH_KINDS.map(k => (
+                  <button key={k} className="ferme-dev-btn" disabled={owned} aria-pressed={dk.kind === k} onClick={() => setK({ kind: k })}
+                    style={{ display: "block", width: "100%", boxSizing: "border-box", whiteSpace: "normal", textAlign: "left", marginBottom: 4, ...(dk.kind === k ? onStyle : null) }}>
+                    <b>{L.parkKindName(k)}</b>{` — ${MO.rideKitPrice({ kind: k }, C.RIDE_RENT_PRICE)}`}<br /><span style={{ fontSize: "0.85em", opacity: 0.85 }}>{L.parkKindDesc(k)}</span>
+                  </button>
+                ))}
+                <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
+                  <span style={{ minWidth: 60 }}>{L.parkColor}</span>
+                  {MA.BOARD_COLORS.map((c, i) => (
+                    <button key={i} disabled={owned} aria-pressed={dk.color === i} onClick={() => setK({ color: i })}
+                      style={{ width: 24, height: 24, borderRadius: 5, background: c.deck, border: "2px solid " + (dk.color === i ? "#ffeec8" : "#3a3226"), boxShadow: dk.color === i ? "0 0 0 2px #3a3226" : "none", cursor: "pointer", padding: 0 }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="ferme-shop-row" style={{ justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
+              {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.parkRentedLeft(mm, ss)}</span>
+                : <button disabled={!open || (hud.money | 0) < total} onClick={() => { sendReq({ kind: "rentRide", kit: dk }); close(); }}>{L.parkRent(total, C.RIDE_RENT_MS / 60000)}</button>}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
       {skateShopOpen && (() => {
         /* 2026-10-05 — LA LOCATION : le panneau dit combien de temps il reste (re-lu chaque seconde,
            `skateClock`), et propose de louer SEULEMENT quand la précédente est finie. */
@@ -42613,6 +43236,44 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <button key={"devcat-" + i} className="ferme-dev-btn" onClick={() => devStandByCat(i)}>{L.devFaunaCat(i)}</button>
                   ))}
                 </div>
+                {/* 2026-10-12 — LE SKATEPARK ET LE CHANTIER DE LA PLACE, LOCAUX (`PARK_DEV`) : le park chez soi, une monture d'essai, le
+                    chantier joué à la minute et à la vitesse voulues. Rien ne circule, rien ne s'achète. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devParkSection}</div>
+                <div className="ferme-dev-hint">{L.devParkHint}</div>
+                <div className="ferme-dev-grid">
+                  <button className={"ferme-dev-btn" + (PARK_DEV.forced ? " on" : "")} onClick={() => { PARK_DEV.forced = !PARK_DEV.forced; TOWN_SEASON_MEMO.at = -1e12; setParkDevUi(n => n + 1); }}>{L.devParkForce}</button>
+                  <button className="ferme-dev-btn" onClick={() => devTeleport("townPark")}>{L.devTeleportName("townPark")}</button>
+                  <button className="ferme-dev-btn" onClick={() => devTeleport("townPlaceEast")}>{L.devTeleportName("townPlaceEast")}</button>
+                </div>
+                <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                  {[null, "skate", "roller", "scooter", "bmx"].map(k => (
+                    <button key={"devmount-" + (k || "none")} className={"ferme-dev-btn" + (PARK_DEV.monture === k ? " on" : "")} onClick={() => { PARK_DEV.monture = k; setParkDevUi(n => n + 1); }}>{L.devParkMount(k)}</button>
+                  ))}
+                </div>
+                {(() => {
+                  const c = PARK_DEV.chantier, mn = parkDevMinute(), live = c && mn < CH.CHANTIER.DUR_MIN;
+                  return (
+                    <>
+                      <div className="ferme-dev-hint" style={{ marginTop: 6 }}>{L.devChantierNow(live ? L.devChantierClock(mn) : null, c && c.type, PARK_DEV.v)}</div>
+                      <div className="ferme-dev-grid">
+                        {["montage", "demontage"].map(ty => (
+                          <button key={"devch-" + ty} className={"ferme-dev-btn" + (live && c.type === ty ? " on" : "")} onClick={() => { parkDevChantier(live && c.type === ty ? mn : 0, null, ty); setParkDevUi(n => n + 1); }}>{L.devChantierType(ty)}</button>
+                        ))}
+                        <button className="ferme-dev-btn" disabled={!c} onClick={() => { parkDevChantier(null); setParkDevUi(n => n + 1); }}>{L.devChantierStop}</button>
+                      </div>
+                      <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                        {[0, 5, 15, 30, 38, 60, 100, 150, 163, 175].map(v => (
+                          <button key={"devchm-" + v} className="ferme-dev-btn" onClick={() => { parkDevChantier(v, null, null); setParkDevUi(n => n + 1); }}>{L.devChantierClock(v)}</button>
+                        ))}
+                      </div>
+                      <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
+                        {[0, 1, 10, 30, 60].map(v => (
+                          <button key={"devchv-" + v} className={"ferme-dev-btn" + (PARK_DEV.v === v ? " on" : "")} onClick={() => { if (live) parkDevChantier(mn, v, null); else PARK_DEV.v = v; setParkDevUi(n => n + 1); }}>{L.devChantierSpeed(v)}</button>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
               {/* ╔══════════════════════════════════════════════════════════════
                   ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE.

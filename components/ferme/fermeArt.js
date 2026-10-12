@@ -3738,7 +3738,8 @@ export function townSnowEnv(tw, S, waterAt) {
     /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver, au pixel (`townDuckPixel`, la lecture du dessin). */
     duckAt: tw.duck ? (x, y, lx, ly) => townDuckPixel(tw, x, y, lx, ly) : null,
     /* 2026-10-05 (nuit) — la glace de la patinoire, au pixel (`rinkSD`, la figure de la collision) : pas de neige dessus. */
-    rinkAt: tw.rink ? (wx, wy) => rinkSD(wx + 0.5, wy + 0.5) <= 0 : null,
+    // 2026-10-12 : pas au chantier de la place — la glace y fond, et l'eau de la fonte (`pluie.js`) mouille le dallage dessous
+    rinkAt: tw.rink && !tw.chantier ? (wx, wy) => rinkSD(wx + 0.5, wy + 0.5) <= 0 : null,
     /* Le giron d'une marche : plus clair que la moyenne de son atlas. */
     stairTread: (x, y, lx, ly) => {
       const vert = townStairVertical(tw, x, y), At = vert ? stairV : stairH;
@@ -5235,6 +5236,8 @@ const POSE_ARM_LX = 3, POSE_ARM_RX = 10;
    459 sont nées avec, aux trois endroits, et c'est la planche du banc qui l'a
    montré — pas la relecture. On écrit donc les deux bords une fois pour toutes. */
 const POSE_BODY_L = 3, POSE_BODY_R = 13;
+/* 2026-10-11 — les mêmes mesures, LUES (jamais recopiées) par les poses des riders du skatepark (`montureArt.js`). */
+export const POSE_SLICES = { HEAD_H: POSE_HEAD_H, TORSO_Y: POSE_TORSO_Y, LEG_Y: POSE_LEG_Y, ARM_Y: POSE_ARM_Y, ARM_H: POSE_ARM_H, ARM_W: POSE_ARM_W, ARM_LX: POSE_ARM_LX, ARM_RX: POSE_ARM_RX, BODY_L: POSE_BODY_L, BODY_R: POSE_BODY_R };
 
 /* ── LA GLISSADE. « lean back and slide. »
    ⚠️ LE CORPS EST PLUS COURT DE QUATRE PIXELS (20 au lieu de 24) ET LES PIEDS NE
@@ -5703,6 +5706,7 @@ export function drawSnowKick(ctx, fx, fy, ux, uy, u) {
    jambe) : une poussée part de sous le corps, s'écarte en arrière en se
    soulevant, revient — c'est le sinus d'un demi-tour, jamais un saut d'image. */
 const SKATE_BLADE = ["#ffffff", "#c6ccd4", "#6e7680"];
+const ROLLER_RGB = { frame: "#5c6470", frameHi: "#aeb6c2", wheel: "#2a2c33", hub: "#e8d36a" };   // 2026-10-11 : les rollers du skatepark
 /* ╔════════════════════════════════════════════════════════════════════════════
    ║ 2026-10-05 (nuit, fin quater) — LE MATÉRIEL SE VOIT : la couleur des bottines, les LONGUES LAMES, la combinaison, et
    ║ les FIGURES (le saut, la vrille, l'axel, le cygne, la marche arrière).
@@ -5776,7 +5780,7 @@ export function drawSkateKitPreview(ctx, kit) {
    léger fléchi du coude (le bras ne se tend jamais comme une règle). Le bras qui PEND de ce côté est retiré du buste (`upper`),
    sinon le personnage en aurait trois. Le bras de l'autre côté ne bouge pas. ⚠️ Aucun `rotate` (le faux canevas des bancs n'en
    veut pas) : des `drawImage` d'un pixel posés le long du segment. */
-function drawReachArm(ctx, sheet, sy, px, side, reachLR, R, hand) {
+export function drawReachArm(ctx, sheet, sy, px, side, reachLR, R, hand) {   // 2026-10-11 : exportée — les riders du skatepark tiennent leur guidon avec
   const sx0 = side ? 7 : reachLR ? POSE_ARM_RX : POSE_ARM_LX, aw = side ? 2 : POSE_ARM_W;
   const shX = px + (side ? 8 : reachLR ? 11 : 4) + R.dx, shY = R.top + 1;
   let ddx = hand.x - shX, ddy = hand.y - shY;
@@ -5812,9 +5816,21 @@ function drawSkateBody(ctx, sheet, row, px, py, pose, phase, skirt, view, R) {
   /* La bottine d'une moitié de jambe dessinée en (lx, ly) : la feuille la peint en
      x 5..7 (moitié gauche) ou 8..10 (moitié droite, donc 0..2 de sa moitié), sur ses
      trois dernières rangées. */
+  const foot = (view && view.foot) || "blade";
   const boot = (lx, ly, right) => {
     const bx = lx + (right ? 0 : 5), by = ly + LH - 3;
     P1(bx, by, 3, 3, SKATE_BOOT[1]); P1(bx, by, 1, 3, SKATE_BOOT[0]); P1(bx, by + 2, 3, 1, SKATE_BOOT[2]);
+    /* 2026-10-11 — LES ROLLERS DU SKATEPARK (`view.foot`) : le même corps que le patineur (la même foulée, la même lignée), une
+       PLATINE et quatre ROUES sous la bottine au lieu d'une lame ; le SKATE : une chaussure à semelle blanche, posée sur la planche
+       (la planche est dessinée à part, `montureArt.js`). */
+    if (foot === "wheels") {
+      if (side) {
+        P1(bx - 2, by + 3, 8, 1, ROLLER_RGB.frame); P1(bx - 2, by + 3, 2, 1, ROLLER_RGB.frameHi);
+        for (let k = 0; k < 4; k++) { P1(bx - 2 + k * 2, by + 4, 2, 1, ROLLER_RGB.wheel); P1(bx - 2 + k * 2, by + 4, 1, 1, ROLLER_RGB.hub); }
+      } else { P1(bx, by + 3, 3, 1, ROLLER_RGB.frame); P1(bx + 1, by + 4, 1, 1, ROLLER_RGB.wheel); }
+      return;
+    }
+    if (foot === "shoe") { P1(bx, by + 2, 3, 1, "#e9e6df"); P1(bx, by + 2, 1, 1, "#ffffff"); return; }
     if (side && longBlade) {                                             // de profil, longues lames : onze pixels, la pointe relevée, deux fixations
       P1(bx - 3, by + 3, 11, 1, SKATE_BLADE[1]); P1(bx - 3, by + 3, 3, 1, SKATE_BLADE[0]); P1(bx + 7, by + 2, 1, 1, SKATE_BLADE[1]);
       P1(bx, by + 3, 1, 1, SKATE_BLADE[2]); P1(bx + 4, by + 3, 1, 1, SKATE_BLADE[2]);
@@ -18783,6 +18799,20 @@ export function buildSprites() {
   // mais tout nouveau personnage passe désormais par ce paramètre unique :
   // la signature ne s'allonge plus d'un cran par tenue. Valeurs actuelles :
   // "carla" (béret rouge, manteau jaune, top noir) et "leo" (son assistant).
+  /* 2026-10-11 — L'ÉQUIPE DES OUVRIERS (voir le calque dans `drawCharFrame`). Huit tenues : gilet, casque, pantalon, manches. */
+  const WORKER_VESTS = { yellow: { main: "#dfe62a", hi: "#f4fa86", lo: "#a8ae16" }, orange: { main: "#ff8a1c", hi: "#ffc07a", lo: "#c25e08" } };
+  const WORKER_HATS = { yellow: { main: "#f2c21b", hi: "#ffe27a", lo: "#b88a0a" }, white: { main: "#eceae4", hi: "#ffffff", lo: "#aeaaa0" },
+    orange: { main: "#ff7a1a", hi: "#ffb27a", lo: "#b8520a" }, blue: { main: "#2f6fd0", hi: "#7fa8f0", lo: "#1d4892" } };
+  const WORKER_CREW = [
+    { vest: "yellow", hat: "yellow", pants: "#2b3550", sleeves: "#33405a" }, { vest: "yellow", hat: "white", pants: "#4a4d55", sleeves: "#5a4a3a" },
+    { vest: "orange", hat: "yellow", pants: "#2b3550", sleeves: "#2e3a2e" }, { vest: "yellow", hat: "orange", pants: "#6e6250", sleeves: "#33405a" },
+    { vest: "yellow", hat: "blue", pants: "#2b3550", sleeves: "#6a2c2c" }, { vest: "orange", hat: "white", pants: "#4a4d55", sleeves: "#33405a" },
+    { vest: "yellow", hat: "yellow", pants: "#6e6250", sleeves: "#2e3a2e" }, { vest: "orange", hat: "orange", pants: "#2b3550", sleeves: "#5a4a3a" },
+  ];
+  function workerLookOf(look) {
+    const mm = typeof look === "string" ? /^(ouvrier|chef|soudeur|conducteur):(\d+)$/.exec(look) : null;
+    return mm ? { role: mm[1], v: +mm[2] } : null;
+  }
   function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = sugarWorker ? MARTIAL_HAIR : HAIR_COLORS[outfit % HAIR_COLORS.length];
@@ -19223,6 +19253,61 @@ export function buildSprites() {
        constantes : c'est ce qui permet de RETIRER un chapeau sans inventer un
        article « pas de chapeau » dans la vitrine.
        ══════════════════════════════════════════════════════════════════════ */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-10-11 — LES OUVRIERS DE VALLEY TOWN (Guillaume : « ouvriers en yellow vests […] ces ouvriers serviront ailleurs dans
+       ║ VT, alors soigne-les bien »). `look` = "ouvrier:N", "chef:N", "soudeur:N", "conducteur:N" — N choisit une tenue de l'équipe
+       ║ (`WORKER_CREW` : la couleur du gilet, du casque, du pantalon, des manches), le rôle change ce qui se porte.
+       ╚══════════════════════════════════════════════════════════════════════
+       Ce qui fait lire « ouvrier » à 16 px, du plus fort au plus fin : le CASQUE (un dôme plus large que la tête, sa visière qui
+       déborde — la silhouette), le GILET fluo et ses DEUX BANDES réfléchissantes (le gris clair qui casse le jaune), le pantalon de
+       travail à GENOUILLÈRES, les chaussures de sécurité à bout clair. Le soudeur : veste sombre, TABLIER de cuir jusqu'aux genoux,
+       gros GANTS, et le MASQUE relevé sur le casque (il le baisse en soudant : c'est la pose qui le dessine, pas la feuille). Le chef :
+       casque blanc, gilet orange. ⚠️ Les ouvrières portent le même pantalon : l'évasement de la jupe de base est EFFACÉ (pixels
+       transparents), pas recouvert — un pantalon sur une jupe dessinait une jupe à pantalon. Mêmes coordonnées que les blocs de
+       base, `step`/`bob` compris : la démarche reste celle du personnage. */
+    const wk = workerLookOf(look);
+    if (wk && !beeSuit) {
+      const crew = WORKER_CREW[wk.v % WORKER_CREW.length];
+      const welder = wk.role === "soudeur", chief = wk.role === "chef";
+      const VE = chief ? WORKER_VESTS.orange : WORKER_VESTS[crew.vest];
+      const HAT = chief ? WORKER_HATS.white : WORKER_HATS[crew.hat];
+      const TR = welder ? "#3a3632" : crew.pants, TR_D = shade(TR);
+      const SLV = welder ? "#2c2e36" : crew.sleeves;
+      const BOOT = "#2a231d", TOE = "#8a7a62";
+      // 1. LE PANTALON DE TRAVAIL (et, chez une ouvrière, la jupe de base effacée hors des jambes)
+      if (gender === "f") {
+        g.clearRect(x + 3, 14 + bob, 10, 7); g.clearRect(x + 3, 21 + bob, 10, 3 - bob);
+        P(g, x + 4, 14 + bob, 8, 1, TR);
+      }
+      P(g, x + 5, 15 + bob, 3, 6, TR); P(g, x + 8, 15 + bob, 3, 6, TR_D);
+      P(g, x + 5, 15 + bob, 1, 6, tint(TR));
+      if (dir === 0) { P(g, x + 5, 18 + bob, 3, 1, shade(TR_D)); P(g, x + 8, 18 + bob, 3, 1, shade(TR_D)); }   // les genouillères
+      P(g, x + 5 + step, 21 + bob, 3, 3 - bob, BOOT); P(g, x + 8 - step, 21 + bob, 3, 3 - bob, BOOT);
+      if (dir !== 1 && bob === 0) { P(g, x + 5 + step, 23, 3, 1, TOE); P(g, x + 8 - step, 23, 3, 1, TOE); }   // le bout renforcé
+      // 2. LES MANCHES (longues : on ne travaille pas bras nus sur un chantier), les mains (des gants chez le soudeur)
+      const HAND = welder ? "#8a6a42" : skin;
+      if (dir === 2) { P(g, x + 7 + step, 11 + bob, 2, 4, SLV); P(g, x + 7 + step, 15 + bob, 2, 1, HAND); if (welder) P(g, x + 7 + step, 14 + bob, 2, 1, HAND); }
+      else { P(g, x + 3, 11 + bob, 2, 4, SLV); P(g, x + 11, 11 + bob, 2, 4, shade(SLV)); P(g, x + 3, 15 + bob, 2, 1, HAND); P(g, x + 11, 15 + bob, 2, 1, HAND); if (welder) { P(g, x + 3, 14 + bob, 2, 1, HAND); P(g, x + 11, 14 + bob, 2, 1, HAND); } }
+      // 3. LE GILET (ou la veste et le tablier du soudeur)
+      if (welder) {
+        P(g, x + 4, 10 + bob, 8, 6, SLV); P(g, x + 4, 10 + bob, 8, 1, tint(SLV));
+        if (dir !== 1) { P(g, x + 5, 11 + bob, 6, 9, "#6b4a2e"); P(g, x + 5, 11 + bob, 6, 1, "#8a6440"); P(g, x + 5, 19 + bob, 6, 1, "#4a3220"); P(g, x + 5, 11 + bob, 1, 9, "#7c5636"); }
+        else { P(g, x + 6, 10 + bob, 1, 6, "#6b4a2e"); P(g, x + 9, 10 + bob, 1, 6, "#6b4a2e"); }   // de dos : les lanières croisées
+      } else {
+        P(g, x + 4, 10 + bob, 8, 6, VE.main); P(g, x + 4, 10 + bob, 8, 1, VE.hi);
+        P(g, x + 4, 12 + bob, 8, 1, "#dfe4ea"); P(g, x + 4, 14 + bob, 8, 1, "#dfe4ea");   // les deux bandes réfléchissantes
+        P(g, x + 4, 13 + bob, 8, 1, VE.main); P(g, x + 4, 15 + bob, 8, 1, VE.lo);
+        if (dir === 0) { P(g, x + 7, 10 + bob, 2, 2, SLV); P(g, x + 7, 12 + bob, 1, 4, VE.lo); }   // l'encolure, la fermeture
+        if (dir === 1 && chief) P(g, x + 6, 11 + bob, 4, 1, VE.lo);
+        if (dir === 2) P(g, x + 4, 10 + bob, 1, 6, VE.lo);
+      }
+      // 4. LE CASQUE : un dôme plus large que la tête, sa visière qui déborde (vers nous de face, vers l'avant de profil)
+      P(g, x + 4, 0 + bob, 8, 1, HAT.hi); P(g, x + 3, 1 + bob, 10, 2, HAT.main); P(g, x + 7, 0 + bob, 2, 3, HAT.hi);
+      P(g, x + 2, 3 + bob, 12, 1, HAT.lo);
+      if (dir === 0) P(g, x + 4, 4 + bob, 8, 1, shade(HAT.lo));   // l'ombre de la visière sur le front
+      if (dir === 2) P(g, x + 12, 3 + bob, 2, 1, HAT.lo);
+      if (welder) { P(g, x + 4, 0 + bob, 8, 2, "#2a2c33"); P(g, x + 5, 0 + bob, 6, 1, "#454a55"); }   // le masque relevé
+    }
     const wd = parseWardrobeLook(look);
     if (wd) {
       const CT = wd.tint ? C.WARDROBE_TINTS[wd.tint - 1] : null;

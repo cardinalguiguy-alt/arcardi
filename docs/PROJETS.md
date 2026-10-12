@@ -110,16 +110,18 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
   charrette de fleurs de retour au printemps et l'été, le coin du feu et les ampoules gardés pour l'hiver, des étals de saison.
 - **Les autres usages de l'ancienne place** — DÉCIDÉS le 2026-10-06 (Guillaume : « la place est le plus fun en hiver ; si on ne fait que du décor
   les autres saisons, ça ne va pas — il faut des activités fun », avec des MÉCANIQUES NOUVELLES, sans sortir de l'univers de VT, comme la patinoire
-  ou les bonhommes de neige). Rien n'est dessiné ni codé. Trois lots, à découper et à lui faire valider chacun (questions de forme d'abord) :
-  1. **Le skatepark (printemps/été, « super idée, géniale »).** Le dallage devient un skatepark : **rollers, vélo ET skate** (trois montures).
-     Rampes, bancs, rails ; des **figures** neuves — slides, sauts, vrilles… — **sans obligation de réutiliser le moteur du patin** (`patin.js`) : il
-     peut avoir ses propres règles. **Une équipe de nettoyage passe automatiquement à heure fixe** (comme la surfaceuse de la glace, mais horaire
-     fixe, pas à la demande). Pistes non décidées : matériel prêté par le chalet ? chrono/slalom ? classement ?
-  2. **Le miroir d'eau (été).** Une nappe d'eau peu profonde sur la place, avec des **geysers illuminés la nuit**. Idée gardée ; à questionner :
+  ou les bonhommes de neige). Seul le skatepark est commencé (2026-10-11). Trois lots, à découper et à lui faire valider chacun (questions de forme d'abord) :
+  1. **Le skatepark — EN COURS depuis le 2026-10-11** (relief, quatre montures, cabane de location codés ; `components/ferme/README.md`, journal du 2026-10-11). Décidé avec Guillaume ce
+     jour-là : **printemps seul** (l'été a les jeux d'eau, l'automne le festival d'Halloween) ; skate, rollers, trottinette, BMX ; bois clair sur acier ; piétons admis ; location sur place, on
+     ne sort pas du park en roulant ; figures libres sans score (un mode chronométré à combos viendra plus tard, comme la course de la patinoire). **Le CHANTIER de 3 h est codé (2026-10-12**,
+     journal du README de la ferme ; montage le lundi du printemps 14 h–17 h heure de Paris, démontage à l'envers au début de l'été). **Reste à faire, dans l'ordre** :
+     (a) que Guillaume juge park et chantier en jeu (`docs/A-JUGER.md`) ; (b) l'équipe de nettoyage à heure fixe (décision du 2026-10-06) ; (c) les commandes tactiles (iPad) ;
+     (d) ouvrir au public (`SPK.PARK_OPEN`) ; (e) faire resservir l'équipe (`CH.CREW`, les gestes de `chantierArt.js`) : le chantier de l'hiver (la patinoire montée), la voirie, les façades.
+  2. **Le miroir d'eau — les jeux d'eau de l'été (confirmé le 2026-10-11).** Une nappe d'eau peu profonde sur la place, avec des **geysers illuminés la nuit**. Idée gardée ; à questionner :
      on y marche ? jeux (se poursuivre, esquiver les jets) ? reflets (`eau.js` existe) ? cycle des jets ?
-  3. **Les jeux de l'automne : Halloween et le spooky.** Chasse aux citrouilles, **bonhommes de citrouilles** (le pendant du bonhomme de neige,
+  3. **Les jeux de l'automne : le festival d'Halloween (confirmé le 2026-10-11).** Chasse aux citrouilles, **bonhommes de citrouilles** (le pendant du bonhomme de neige,
      `bonhomme.js`), tas de feuilles, **lien avec la maison hantée** de la ville, décor et ambiance spooky la nuit. Mécaniques nouvelles, pas des
-     décors. Printemps : des jeux du même esprit restent à trouver (cerf-volant, chasse aux œufs… simples pistes, non décidées).
+     décors.
   Principe : chaque saison a SON activité jouable, au niveau de finition de la patinoire (« AAA », §0 du noyau).
 
 ---

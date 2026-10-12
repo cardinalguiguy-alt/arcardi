@@ -42,8 +42,11 @@ export const DUST_KINDS = {
   earth: { cloud: ["#f2e4c6", "#e8d5b0", "#dcc49a"], grit: "#7d5f3c", nCloud: 4, nGrit: 2, a: 0.78 },
   sand:  { cloud: ["#fbf5e3", "#f3e8c8"], grit: "#b89d66", gritHi: "#fffaf0", nCloud: 2, nGrit: 5, a: 0.8 },
   soil:  { cloud: ["#cdb393", "#bda27f"], grit: "#5e432b", nCloud: 2, nGrit: 2, a: 0.6 },
+  /* 2026-10-11 — LE SKATEPARK : la poussière grise du pavé de la place, la fine sciure du contreplaqué (une réception, un frein). */
+  stone: { cloud: ["#efece6", "#dedad2"], grit: "#7d7a72", gritHi: "#ffffff", nCloud: 2, nGrit: 3, a: 0.62 },
+  wood:  { cloud: ["#f6ead2", "#ead9b6"], grit: "#a87a48", nCloud: 1, nGrit: 3, a: 0.55 },
 };
-const KIND_K = { boot: 1, child: 0.6, hoof: 1.9 };
+const KIND_K = { boot: 1, child: 0.6, hoof: 1.9, land: 2.4, skid: 1.2 };
 const MAX_PUFFS = 220;
 
 export function makeDust() {
@@ -106,6 +109,8 @@ export function makeDust() {
       }
     },
     /* Retire ce qui est fini ; oublie les marcheurs disparus. */
+    /* 2026-10-11 — UNE BOUFFÉE PONCTUELLE (la réception d'une monture, son frein) : pas de foulée, un point, un sens. */
+    burst(gx, gy, lvl, ux, uy, kind, g, now) { emit(gx, gy, lvl, ux, uy, 0, kind, g, now); },
     prune(now) {
       for (let i = puffs.length - 1; i >= 0; i--) {
         const p = puffs[i];

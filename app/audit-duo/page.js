@@ -13,7 +13,9 @@ export default function AuditDuo() {
   const a = useRef(null), b = useRef(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    setCfg({ room: q.get("room") || "duo-" + Math.floor(Date.now() / 1000), W: +(q.get("w") || 640), H: +(q.get("h") || 400) });
+    // 2026-10-11 : les autres paramètres (`skatepark`, `monture`…) passent aux deux clients.
+    const xs = [...q.entries()].filter(([k]) => !["room", "w", "h"].includes(k)).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join("");
+    setCfg({ room: q.get("room") || "duo-" + Math.floor(Date.now() / 1000), W: +(q.get("w") || 640), H: +(q.get("h") || 400), xs });
   }, []);
   useEffect(() => {
     if (!cfg) return undefined;
@@ -24,12 +26,12 @@ export default function AuditDuo() {
   }, [cfg]);
   useEffect(() => { if (go2) window.B = b.current; }, [go2]);
   if (!cfg) return null;
-  const { room, W, H } = cfg;
+  const { room, W, H, xs } = cfg;
   const st = { border: 0, width: W, height: H, background: "#000" };
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", background: "#222", minHeight: "100vh" }}>
-      <iframe ref={a} title="hote" style={st} src={`/audit-tmp?p=1&room=${room}`} />
-      {go2 && <iframe ref={b} title="invite" style={st} src={`/audit-tmp?p=2&room=${room}`} />}
+      <iframe ref={a} title="hote" style={st} src={`/audit-tmp?p=1&room=${room}${xs}`} />
+      {go2 && <iframe ref={b} title="invite" style={st} src={`/audit-tmp?p=2&room=${room}${xs}`} />}
     </div>
   );
 }

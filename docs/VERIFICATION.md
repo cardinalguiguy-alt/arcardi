@@ -289,6 +289,12 @@ délais réels ni faire tourner l'économie à la main. Testé en session à 1 c
 (`fake-supabase.mjs`) : l'or s'incrémente bien côté hôte, le bouton renvoie « aucune construction
 en cours » sans rien casser quand il n'y a rien à finir.
 
+⚠️⚠️ **2026-10-11 — VOLET DU NAVIGATEUR MASQUÉ : `setTimeout` EST BRIDÉ À UNE MINUTE, ET UN SCRIPT QUI ATTEND PAR LUI « GÈLE ».** Les appels de l'outil échouent alors à 45 s
+alors que le jeu tourne (le harnais fait battre `requestAnimationFrame` par un worker, qui n'est pas bridé). Attendre par la file d'images du harnais :
+`window.__ws = (ms) => new Promise(r => { const t0 = performance.now(); const tick = () => performance.now() - t0 >= ms ? r() : requestAnimationFrame(tick); requestAnimationFrame(tick); });`
+(un worker recréé à chaque attente, ou un `setTimeout` dans un worker, ne suffit pas non plus). Les captures (`__cap`) marchent volet masqué ; `screenshot` non. ⚠️ Le skatepark : `?skatepark=1`
+et `?monture=…` dans l'adresse ; `app/audit-duo` les transmet aux deux clients. ⚠️ Entre deux cadres (`window.A.contentWindow`), `instanceof Map` est FAUX (deux royaumes) : tester `.get`.
+
 ⚠️⚠️ **AUTOMATISATION DU NAVIGATEUR — LA RECETTE COMPLÈTE, ET ELLE MARCHE DEPUIS LE 446.**
 `window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les touches
 (les frappes envoyées par l'outil, non). Le menu dev ouvert BLOQUE les déplacements (`if

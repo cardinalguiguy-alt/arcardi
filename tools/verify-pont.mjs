@@ -218,7 +218,10 @@ title("4. garde-fou de source : la flèche n'est pas une altitude");
      met un bloc `{ const sk = …; drawCharacter(…); }` DANS la fonction de dessin du
      passant, et l'appel cessait d'être compté (5 au lieu de 6) alors que le décalage y
      était toujours passé. Un `pushE` tient sur une ligne : on lit donc la LIGNE. */
-  const lifts = (src.match(/pushE\([^\n]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*(,\s*Math\.floor\([^)]*\))?\s*\)/g) || []).length;
+  /* ⚠️ 2026-10-12 (skatepark) : la colonne de reflet du passant n'est plus toujours un `Math.floor(…)` — elle devient `null` quand il roule
+     en l'air dans le park (une condition sur la ligne), et le motif cessait de compter deux passants (4 au lieu de 6). Le 5e argument
+     est désormais quelconque : seul compte que le décalage soit le 4e. */
+  const lifts = (src.match(/pushE\([^\n]*,\s*(archPxTown|playerArchPxTown|pLift|myLift|pl|tl)\s*(,[^\n]*)?\)/g) || []).length;
   ok(lifts >= 6, "…et elle est bien passée en décalage d'image à tout ce qui marche dessus",
     lifts + " appel(s) avec un décalage");
 }

@@ -6,6 +6,25 @@
 
 ---
 
+### À juger — le chantier de la place (2026-10-12) : rien n'a encore été vu par Guillaume
+
+Pour le voir : menu dev (Cmd/Ctrl+Maj+X), section « Skatepark et chantier » : Montage ou Démontage, une heure (14 h 00 → 16 h 55), une vitesse (×30 : la demi-heure en
+une minute), puis l'arrêt « l'allée de l'est (le chantier) » — la place est fermée, on regarde de là. Les mêmes boutons posent le park chez soi et donnent une monture d'essai.
+- **La fonte** (minutes 4-50) : la glace qui part par plaques, le bord d'abord ; l'eau, les flaques, les raclettes ; puis la pierre qui sèche.
+- **Le camion-grue** (24-48 le chalet, 50-142 le matériel, 148-174 le conteneur) : la marche arrière dans l'allée, les béquilles, la flèche qui se déplie, la charge qui pend aux élingues.
+- **L'équipe** : la barrière posée panneau par panneau depuis la palette ; les soudeurs à genoux ; les feuilles portées à deux ; le chariot ; le retour à la camionnette. Lisible ? trop lent ?
+- **Le son** (jamais entendu pendant le développement) : diesel, bip du recul, vérins, soudure, visseuses, clang des panneaux. Trop présent ? pas assez ?
+- **Le démontage** (début de l'été) : le même film à l'envers (on dévisse, on rapporte les feuilles, on démonte les cadres) — lisible ? Les raclettes y « balaient » une place sèche.
+
+### À juger — le skatepark (2026-10-11) : rien n'a encore été vu par Guillaume
+
+Pour le voir : menu dev, section « Skatepark et chantier » — « Park chez moi », une monture d'essai (F pour monter, dans le park), l'arrêt « le skatepark » ; sinon la cabane, à l'est du park.
+- **La profondeur et la matière du bois** (sa demande : « pas de la 2D », « des textures satisfaisantes ») : courbes éclairées en paliers, feuilles, vis, fil, gomme, flancs à cadre d'acier.
+- **La sensation** : la poussée, le pompage (Maj au creux des courbes), la hauteur des airs, l'aide du vert (on retombe dans la courbe), la dureté des réceptions, le fakie du skate, le demi-tour
+  obligatoire du BMX et de la trottinette. **Les nombres sont réglés au banc, pas à la main** : g 9,8 cases/s², poussée 6,8 à 7,6 cases/s, ollie ~60 cm, air au quarter ~70 cm à pleine vitesse.
+- **Les figures et les glisses** (V, G ; 50-50 et boardslide), leurs noms au-dessus de la tête, les étincelles. **Les sons** (jamais entendus pendant le développement).
+- **Le plan** (boucle à sens unique, deux voies street, galerie) — et la cabane de location (dessin PROVISOIRE, un prompt Gemini peut la remplacer).
+
 ### Jugé le 2026-10-06 (soir) — verdicts de Guillaume sur le lot du patin et du marché (seul à jouer : RIEN n'est vu à deux clients)
 
 **OK, plus rien à juger** : la gerbe (visible de jour), l'aide « ? » (fonctionne), les guirlandes (« ok pour l'instant »), l'usure de la glace, la location à 15 min (« très bon »), la chute

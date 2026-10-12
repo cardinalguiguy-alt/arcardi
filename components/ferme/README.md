@@ -1,5 +1,73 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-12 — LE CHANTIER DE LA PLACE : TROIS HEURES POUR PASSER DE LA PATINOIRE AU SKATEPARK
+
+Demande de Guillaume : « installation pendant 3 h réelles (démontage patinoire, montage skatepark avec ouvriers en yellow vests, manutention soignée avec
+soudeurs, machines). Tout ça doit être soigné. Ces ouvriers serviront ailleurs dans VT ». Tranché avec lui : le lundi du changement de saison, **14 h–17 h
+heure de Paris** ; un **camion-grue**, un **chariot télescopique**, une **camionnette d'équipe** ; la glace **fond sur place** ; la place est **fermée**, on
+regarde depuis l'allée. Le démontage (début de l'été) est le même film à l'envers. **Supabase : rien** — tout est une pure fonction de l'heure, chacun la
+calcule seul, pas un message ne part. **Pas au public** tant que `SPK.PARK_OPEN` est faux (aucun chantier n'a lieu).
+- **L'horloge et le script** (`chantier.js`, pur) : `placeStateAt` (patinoire / chantier à sa minute / park / place vide ; l'heure de Paris calculée, sans
+  `Intl`) ; les phases (`PHASE`) ; un SCRIPT par ouvrier, déduit du plan du park (un module déplacé déplace ses ouvriers), lu par recherche dichotomique
+  (`workerAt`) ; les chemins contournent les modules ET la barrière (deux portes : au nord pour l'équipe, à l'est pour le chariot) ; les engins
+  (`machinesAt`) ; la palette des panneaux (`palletAt`) ; les primitives assez bâties pour faire de l'ombre (`primsBuiltAt`).
+- **La chorégraphie** : la camionnette arrive par le boulevard, l'équipe descend ; quatre porteurs posent la barrière autour du dallage, un aller-retour à
+  la palette par panneau (le tas baisse) ; le froid coupé, la glace fond, ils raclent l'eau ; la bande se démonte du nord au sud, les mâts et braseros
+  partent ; le camion-grue entre EN MARCHE ARRIÈRE dans l'allée pavée de l'est, sort ses béquilles, déplie sa flèche télescopique et lève le chalet des
+  patins sur son plateau ; les soudeurs, à genoux, masque baissé, soudent les cadres module par module ; le chariot (qui attendait dans l'allée, son
+  conducteur à côté) entre par la porte de l'est et fait la navette du plateau au dépôt ; deux paires de porteurs posent les feuilles, vissent ; l'acier
+  (copings, rails) ; le camion revient avec le conteneur de location et le dépose à la grue ; la barrière retirée, panneau par panneau jusqu'à la palette ;
+  tout le monde remonte, la camionnette repart à 16 h 57.
+- **Le dessin** (`chantierArt.js`) : les engins (camion-grue de 120 px, flèche en trois éléments emboîtés, vérin, moufle rayée ; chariot ; camionnette),
+  la barrière (de face ; par la tranche sur toute sa longueur), la palette, les gestes des ouvriers taillés dans la feuille, la glace qui fond AU PIXEL
+  (`rinkMeltCanvas` : un seuil par pixel, le bord d'abord, des langues et des îles, la glace amincie grise, la croûte au bord). Dessous, l'eau de la fonte
+  est celle de la pluie (`pluie.js`, une couche à elle avec un petit atlas : `env.atlas`). Le park monte au pixel (`parkBuildAt` : charpente, puis feuille
+  par feuille) et ses ombres ne viennent que des modules qui ont pris corps.
+- **Le son** (`sonChantier.js`, synthétisé) : le diesel au ralenti et son régime, le bip du recul, les vérins, la soudure, la visseuse, le clang d'un
+  panneau posé ; atténués par la distance au personnage.
+- **Vu en jeu** (captures à chaque phase, montage et démontage, `?chantier=<min>&chantierv=0`) : la fonte, les flaques, la barrière, la palette, le chalet
+  levé et posé, le conteneur déposé, les cadres et les feuilles, l'équipe à la camionnette ; 62 images/s pendant la fonte ; aucune erreur. **Pas vu** : le
+  son (le volet du navigateur est muet), le chantier en temps réel du début à la fin, à deux clients, sur iPad, la nuit (le chantier est de jour).
+- **Corrigé en le regardant** (premiers jets) : la glace effacée par cases (un carré intact au milieu) ; la barrière posée au milieu de l'allée de l'est, à
+  travers le chalet ; le camion garé en travers ; le chariot garé SUR la glace dès la troisième minute ; une flèche en fil de trois pixels, puis peinte
+  sous sa charge (« un chalet sur un bâton ») et visant droit au nord (dans la vue 3/4, le nord et le haut tombent sur le même axe : elle se peignait en
+  mât — le camion se gare maintenant l'avant à l'est) ; la charge qui sautait au crochet (deux hauteurs écrites à part) ; l'eau de la fonte invisible (la
+  neige marque la patinoire « sans sol » : `rinkAt` ne vaut plus au chantier) ; un chef qui traversait la barrière ; le reflet du patineur sur la glace fondue.
+- **Pas fait** : l'équipe de nettoyage, le chantier de l'hiver (la patinoire montée), les autres chantiers où l'équipe resservira (voirie, façades), le
+  chef qui guide aussi le conteneur ; au démontage, les raclettes balaient une place sèche (lu comme un coup de balai).
+
+## 2026-10-11 — LE SKATEPARK DE LA PLACE (PRINTEMPS) : LE RELIEF, LA PHYSIQUE DES QUATRE MONTURES, LA CABANE DE LOCATION
+
+Demande de Guillaume : « la physique du skatepark doit être ULTRA soignée, autant bluffé que pour la patinoire » ; skate, rollers (« comparable aux patins mais pas la même »), trottinette,
+BMX ; « une idée de profondeur comparable à la patinoire, pas de la 2D » ; « anticiper la fluidité de la circulation » ; « des textures satisfaisantes ». Décidé avec lui (2026-10-11) : le park
+occupe le dallage de la place **au printemps seul** (été : jeux d'eau ; automne : festival d'Halloween ; hiver : patinoire) ; modules en bois clair sur acier (modulaires, montés en 3 h par une
+équipe) ; piétons admis ; montures louées sur place, on ne sort pas du park en roulant ; figures libres, sans score (un mode chronométré viendra, comme la course de la patinoire). **Supabase : rien.**
+**Pas encore au public** : `SPK.PARK_OPEN = false` (le printemps garde la place vide) ; `?skatepark=1` pose le park chez soi, `?monture=skate|roller|scooter|bmx` donne une monture sans louer.
+- **Le relief** (`skatepark.js`, pur) : une surface analytique continue (courbes circulaires, coin creux, tremplins à pied arrondi, boîtes, escaliers), `parkSurf` rend hauteur, pente, matière,
+  abscisse curviligne. Le plan (validé sur maquette) : une BOUCLE à sens unique autour de la funbox — mini-rampe (1,2 m) au nord-ouest, galerie piétonne et drop-in au nord (escalier depuis le
+  boulevard), quarter en L avec virage (1,6 m) au nord-est, funbox (0,6 m, arête d'acier, rail descendant), plan incliné à l'ouest, et deux voies street parallèles au sud (caisse de glisse ;
+  rail plat dans sa propre voie). Garde-corps, barrière basse, porte à l'est vers la cabane. Lignes de glisse (`PARK_GRINDS`) DÉRIVÉES des modules (rails, arêtes, copings, virage compris).
+- **Le dessin** (`skateparkArt.js`) : le relief projeté en 3/4 par un balayage « voxel » (colonne par colonne, du sud au nord : l'occultation sort seule), éclairé par la lumière peinte du projet
+  (nord-ouest, BASSE — à 50° les deux parois de la mini-rampe sortaient du même ton), douze paliers, reflet de vernis. Matière : feuilles de contreplaqué aux joints décalés, rangées de vis, fil du
+  bois et nœuds, traînées de gomme dans le sens où l'on roule, cire sous le coping, creux des courbes ; flancs à cadre d'acier ; cernes. Découpé en 97 tranches d'un quart de case de sol d'origine,
+  triées comme la bande de la patinoire. Ombre du soleil cuite sur le bois (recuite quand il a tourné), projetée sur le dallage dans LE tampon commun ; contact sombre au pied des modules.
+- **La physique** (`monture.js`, pur) : une monture va où elle POINTE (cap + vitesse le long du cap, roue qui ne glisse pas de côté) ; gravité le long de la pente ; POMPAGE au creux des courbes (le
+  travail des jambes contre le poids ressenti, plafonné à 1,4 g : un équilibre s'installe au-dessus du coping) ; le DÉCOLLAGE se décide sur les VITESSES (à 240 pas/s, un seuil en position ne voyait
+  pas la lèvre) ; aide du vert au coping (on retombe dans la courbe ; vers la plateforme si on la vise) ; réception jugée (angle, choc) ; skate et rollers retombent en fakie, trottinette et BMX doivent
+  faire leur demi-tour en l'air. Grinds (50-50, boardslide, soul, pegs) sur rails, arêtes et copings ; figures V/G (kickflip, shove-it, varial, 360 flip ; barspin, tailwhip ; grabs) — une figure pas
+  finie à la réception, c'est la chute. Poussées propres : coups de pied (skate, trottinette), foulées (rollers), pédalage (BMX).
+- **Le rider** (`montureArt.js`) : véhicules en 3D couchés sur la surface (la planche s'incline dans une courbe), kickflip/shove-it/barspin/tailwhip dessinés ; corps taillé dans la feuille (skateur
+  de travers, garde large, genoux, bras en balancier, poussée du pied arrière ; mains au guidon par `drawReachArm` ; rollers = `drawSkate` à roues). Noms de figures qui montent au-dessus de la tête
+  (`TRICK_LABEL`, un nom propre : pas dans les traductions), étincelles des grinds, poussière des réceptions et des freins (`poussiere.js`, sols `stone`/`wood`), caméra qui suit à moitié la hauteur.
+- **Les sons** (`sonPark.js`, WebAudio) : roulement (grain du bois creux ou du pavé, suit la vitesse), joints de feuille, coup de pied, pop, réception, grind, chute. **Jamais entendus** (le harnais coupe l'audio).
+- **La cabane** (`parkShedSprite`, conteneur reconverti, PROVISOIRE comme le chalet) : E au comptoir, panneau (aperçu dessiné par le jeu, quatre montures, six couleurs), `rentRide` arbitré par
+  l'hôte (`E.resolveRentRide`, bail `inv.rideUntil`/`inv.rideKit`, 15 min, 40 à 80 or), F dans le park pour monter et descendre, fin de location à la première réception.
+- **Réseau** : `rd = [monture, cap, mode, (en l'air) z, vz, rotation, figure, âge | (en glisse) z]` + `rdc` (couleur) dans le paquet de position qui part déjà ; le récepteur reconstruit la parabole et
+  la figure sur son horloge. Clé d'envoi : présence, mode, sens de rotation, figure, cap au seizième de tour.
+**Vu en jeu** (un client, puis deux clients au harnais `app/audit-duo`) : le park de jour et du soir, la marche sur les plateformes et l'escalier, la poussée, un air au quarter et le retour en fakie,
+un 50-50 de 6,9 m avec ses étincelles et son nom, la location d'un BMX bleu et la montée par F, l'autre joueur qui voit un skateur au sol et en l'air. **Pas vu** : les sons, un iPad (aucune commande
+tactile), la nuit sous les lampadaires, les rollers et la trottinette en mouvement, un tailwhip dessiné, les autres joueurs en glisse. Bancs : `verify-monture` 24/24, `render-skatepark` 7/7.
+
 ## 2026-10-07 — LE REFLET DU PATINEUR EST LE CORPS ENTIER, COMME SUR L'ÉTANG GELÉ
 
 Demande de Guillaume : « le même type de réflexion que sur l'étang gelé : le corps complet ». **Supabase : rien.** Le reflet de la patinoire (FermeGame.js, branche `p.skate` de `drawCharacter`, canevas de travail `SK_REFL_CV`)
