@@ -30,9 +30,9 @@
    ========================================================================== */
 import * as C from "./fermeConstants.mjs";
 
-/* ⚠️ LE PARK N'OUVRE AU PUBLIC QUE QUAND ON PEUT Y ROULER : tant que c'est faux, le printemps garde la place vide, et
-   `?skatepark=1` le pose chez soi pour le chantier (FermeGame.js, `townSeasonKindNow`). */
-export const PARK_OPEN = false;
+/* 2026-10-12 — OUVERT (Guillaume : « patinoire en hiver, qui transitionne vers le skatepark avec les manutentions, donc au printemps il
+   faut le skatepark »). Faux : le printemps garde la place vide, et `?skatepark=1` le pose chez soi (FermeGame.js, `townSeasonKindNow`). */
+export const PARK_OPEN = true;
 
 /* L'EMPRISE : le dallage de la place, le MÊME que celui de la patinoire (`TOWN_RINK` en dérive aussi) — 21 × 22 cases de
    pierre, x 40-60 / y 76-97. ⚠️ Dérivé de `TOWN_MARKET`, jamais recopié : si la place bouge, le park la suit. */

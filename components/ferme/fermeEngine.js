@@ -8815,6 +8815,13 @@ export function townSeasonWorld(tw, kind) {
   const props = [];
   for (const p of tw.props) {
     if (inFair(p) && FAIR_PACKED.has(p.kind)) { solid[p.y * W + p.x] = 0; continue; }
+    /* 2026-10-12 — LE CHALET DU LAC NE SURVIT PAS À L'HIVER (Guillaume : « c'est nul ») : il ne sert qu'à louer des patins, donc
+       hors hiver (et hors chantier, où la grue emporte celui de la patinoire) il n'existe pas — ni volets clos, ni emprise bloquée. */
+    if (p.kind === "skateChalet" && !winter && !chantier) {
+      const cx = p.x - (C.TOWN_SKATE_CHALET_W >> 1), cy = p.y - C.TOWN_SKATE_CHALET_H + 1;
+      for (let dy = 0; dy < C.TOWN_SKATE_CHALET_H; dy++) for (let dx = 0; dx < C.TOWN_SKATE_CHALET_W; dx++) solid[(cy + dy) * W + cx + dx] = 0;
+      continue;
+    }
     props.push(p);
   }
   const AX = C.TOWN_WINTER_MARKET_AX, AXIS = C.TOWN_WINTER_MARKET_AXIS, NT = C.TOWN_STALL_TRADES.length;

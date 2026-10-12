@@ -1544,7 +1544,10 @@ section("Valley Town — le marché de trois saisons (hors hiver)");
   }
   ok("aucune case solide neuve sans son décor (pas de mur invisible)", ghost.length === 0, ghost.slice(0, 6).join(" ") || "0");
   const packedN = tw.props.filter((p) => inR(p, MK) && PACKED.includes(p.kind)).length;
-  ok("les cases rendues à l'ancienne place sont celles des décors remballés", freed === packedN, `${freed} cases, ${packedN} décors`);
+  // 2026-10-12 : le chalet du lac ne survit pas à l'hiver — son emprise entière (4×2) est rendue avec les décors remballés
+  const lakeChalets = tw.props.filter((p) => p.kind === "skateChalet" && !p.rink).length;
+  ok("…le chalet du lac a disparu hors hiver (ni décor, ni emprise)", lakeChalets === 0 || !mw.props.some((p) => p.kind === "skateChalet" && !p.rink));
+  ok("les cases rendues à l'ancienne place sont celles des décors remballés (et du chalet du lac)", freed === packedN + lakeChalets * C.TOWN_SKATE_CHALET_W * C.TOWN_SKATE_CHALET_H, `${freed} cases, ${packedN} décors, ${lakeChalets} chalet`);
   // le parcours, depuis la descente du train
   const seenM = new Uint8Array(W * H);
   const walkM = (x, y) => {
