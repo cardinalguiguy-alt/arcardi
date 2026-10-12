@@ -116,7 +116,7 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
      ne sort pas du park en roulant ; figures libres sans score (un mode chronométré à combos viendra plus tard, comme la course de la patinoire). **Le CHANTIER de 3 h est codé (2026-10-12**,
      journal du README de la ferme ; montage le lundi du printemps 14 h–17 h heure de Paris, démontage à l'envers au début de l'été). **Reste à faire, dans l'ordre** :
      (a) que Guillaume juge park et chantier en jeu (`docs/A-JUGER.md`) ; (b) l'équipe de nettoyage à heure fixe (décision du 2026-10-06) ; (c) les commandes tactiles (iPad) ;
-     (d) ouvrir au public (`SPK.PARK_OPEN`) ; (e) faire resservir l'équipe (`CH.CREW`, les gestes de `chantierArt.js`) : le chantier de l'hiver (la patinoire montée), la voirie, les façades.
+     (d) faire resservir l'équipe (`CH.CREW`, les gestes de `chantierArt.js`) : le chantier de l'hiver (la patinoire montée), la voirie, les façades. (Le park est ouvert depuis le 2026-10-12 : `SPK.PARK_OPEN = true`.)
   2. **Le miroir d'eau — les jeux d'eau de l'été (confirmé le 2026-10-11).** Une nappe d'eau peu profonde sur la place, avec des **geysers illuminés la nuit**. Idée gardée ; à questionner :
      on y marche ? jeux (se poursuivre, esquiver les jets) ? reflets (`eau.js` existe) ? cycle des jets ?
   3. **Les jeux de l'automne : le festival d'Halloween (confirmé le 2026-10-11).** Chasse aux citrouilles, **bonhommes de citrouilles** (le pendant du bonhomme de neige,

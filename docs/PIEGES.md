@@ -214,6 +214,18 @@ dépôt.
   avance l'horloge) et chacun attend que l'autre parle d'abord : l'invitée jouait seule, sans plus jamais recevoir un `apply`,
   jusqu'au rechargement. Une garde qui coupe l'émission doit laisser passer CE QUI REMPLIT la condition de la garde : ici, un
   ping d'inconnu déclenche l'annonce de sa position, un `pos` d'inconnu reçoit une réponse (trois messages, mesuré au relais).
+- ⚠️⚠️ **UN FORÇAGE DU MENU DEV EST UNE DETTE : IL A SON RAPPEL À L'ÉCRAN, SON RETOUR D'UN CLIC, ET IL NE FAIT JAMAIS TOMBER CELUI QUI LE RENDRA**
+  (2026-10-12, « revenir à la rotation normale »). Quatre défauts d'un même geste de test, tous vus en jouant. (1) La saison et son avancée
+  forcées sont PARTAGÉES et PERSISTÉES comme la terre (`currentSnapshot`), mais seule la terre avait son bandeau (392) : une saison oubliée
+  restait forcée pour toute la ferme sans une ligne pour l'expliquer — *le bandeau est le prix de la persistance*, il vaut pour tout forçage
+  qui survit au rechargement. (2) Revenir à la normale demandait de retrouver une douzaine de boutons dans quatre sections : un menu de
+  forçages porte son « tout remettre » (`devBackToNormal`, requête `devReset` : un état, une persistance) et une liste de ce qui est forcé
+  qui relit les MÊMES états que les boutons « on ». (3) ⚠️ **Rendre la place à sa saison la rend AUSSI sous les pieds du testeur** : debout dans
+  le park, « Park chez moi » décoché fait revenir la patinoire (celle d'AUJOURD'HUI : le printemps la garde jusqu'au chantier de 14 h), et il
+  tombe sans patins deux secondes plus tard — 30 s à 2 min de repos forcé, jeté sur la berge. Un outil qui change le sol d'un monde où un sol
+  peut blesser déplace le testeur AVANT la chute (`parkDevArm` → `parkDevSettleTick`) — dev seulement : reloger les joueurs quand la VRAIE
+  horloge change la place est une règle de jeu, à trancher avec Guillaume. (4) Un message d'état d'un outil relit l'état qu'il décrit : « Aucun
+  chantier d'essai : la place suit sa saison » mentait quand un essai FINI tenait encore la place. *Aucun banc ne joue un menu : vu en jouant.*
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN

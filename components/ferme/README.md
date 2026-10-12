@@ -1,5 +1,30 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-12 (soir) — LE MENU DEV : TESTER LE PARK, LE CHANTIER ET LA QUALITÉ, ET REVENIR À LA ROTATION NORMALE
+
+Demande de Guillaume : « assure-toi que le menu dev est bon pour tester les derniers ajouts et revenir à la rotation normale ». **Supabase : rien** (aucune migration : `forcedWorld`,
+`forcedWeather`, `forcedSeason` et `forcedSeasonP` existaient déjà dans l'état persisté ; `devReset` est un type de requête de plus, arbitré par l'hôte comme `devSky`). Quatre défauts, tous
+**vus en jeu** avant d'être corrigés :
+- **« Park chez moi » décoché, debout dans le park, faisait TOMBER le testeur** : le printemps garde la patinoire jusqu'au chantier de 14 h (`placeStateAt`), donc la place « normale » d'AUJOURD'HUI
+  est la patinoire — de la glace sous ses pieds, sans patins : chute deux secondes plus tard, 30 s à 2 min de repos forcé, jeté sur la berge. Même chute en arrêtant le chantier, en lançant un
+  chantier (la glace tient jusqu'au bout), en rendant la saison réelle ; et l'arrêt « le skatepark » arrivait sur la glace quand le park n'était pas posé.
+  → `PARK_DEV.settle` (4 s de veille, armé par chaque geste du menu qui peut changer la place) + `parkDevSettleTick` (boucle de la ville) : sur la glace et sans patins, le testeur est posé dans
+  l'allée de l'est (`parkEastLaneSpot`, le même point que le téléport) avec un message ; l'arrêt « skatepark » pose le park s'il n'y est pas. ⚠️ DEV SEULEMENT : le jeu ne reloge personne quand la vraie
+  horloge change la place (voir « Pas fait »).
+- **Aucun retour d'un clic** : une douzaine de boutons forcent quelque chose, dans quatre sections. → section **« Rotation normale » en tête** : la liste de ce qui est forcé (relit les états des boutons « on »)
+  et **« Tout remettre en rotation normale »** (`devBackToNormal` : neige, étang, lac, park, monture, chantier d'essai, palier de qualité chez soi ; `devReset` pour la terre, la saison, son avancée et la météo,
+  un état, une persistance, une ligne de chat). Désactivé quand rien n'est forcé. Ne touche ni au dallage civique ni aux petits personnages (des essais d'apparence, pas le cours du monde).
+- **La saison et son avancée forcées étaient persistées pour tous, sans rappel** (seule la terre avait son bandeau, 392) : le bandeau du bas les nomme aussi.
+- **Un chantier d'essai fini disait « la place suit sa saison »** alors qu'il tenait encore la place (park ou place vide) : l'aide a quatre états (en cours, fini mais gardé, park chez moi, saison). La section dit aussi ce
+  que la rotation donne MAINTENANT (`placeNaturalNow`) : un « Printemps » forcé ne pose pas le park avant 14 h, le jour du changement de saison — c'est « Park chez moi » qui le pose.
+- **Neuf** : la section **« Qualité adaptative »** (`perfDevSet` : un palier figé 0, 1 ou 2 pour voir ce que verrait la machine de l'amie, « Mesure » rend la main, le compteur de `?perf=1`).
+**Vu en jeu** (un client, puis deux clients au harnais `app/audit-duo`) : chaque défaut reproduit puis corrigé (chute à ~2 s sans la veille, aucune blessure avec) ; BMX d'essai monté après le téléport ; l'invité qui force la saison,
+l'avance et la terre puis demande « tout remettre » : le bandeau et la liste suivent chez les deux, une ligne de chat ; les paliers de qualité appliqués et rendus ; le chalet du lac visible en hiver, absent en été depuis l'arrêt
+« le fleuve et le ponton » ; le menu EN À L'ÉCRAN (page jetable passant `lang="en"`, supprimée) : liste, aides, bandeau, retour. Bancs : `verify-strings` 1333 clés, `verify-syntax`, `verify-scope`, `verify-duo` 23/23, `verify-jalons` 135/135, `verify-vallee` 359/359, `verify-chantier` 23/23, `verify-monture` 24/24, `verify-pluie` 34/34,
+`verify-ombres` 27/27, `verify-collision`, `verify-pont`, `verify-noms` 13/13, `render-skatepark` 7/7. **Pas vu** : un iPad, la vraie bascule de 14 h, le son (volet muet).
+**Pas fait** : au VRAI chantier (14 h, pas un outil), personne n'est évacué de la glace — un patineur reste sur la patinoire fermée, un joueur sans patins qui s'y trouve tombe (décision de jeu à prendre avec Guillaume, pas un
+réglage de menu) ; pas d'arrêt dédié « chalet du lac » (il est à 7 cases à l'ouest de « le fleuve et le ponton »).
+
 ## 2026-10-12 — LE CHANTIER DE LA PLACE : TROIS HEURES POUR PASSER DE LA PATINOIRE AU SKATEPARK
 
 Demande de Guillaume : « installation pendant 3 h réelles (démontage patinoire, montage skatepark avec ouvriers en yellow vests, manutention soignée avec

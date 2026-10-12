@@ -138,8 +138,15 @@ const ZOOM_LEVELS = [1, 2, 3, 4, 5];
      l'économie d'énergie ne rame pas : l'alléger serait perdre du dessin pour rien).
    · Il faut DEUX fenêtres lentes de suite pour monter d'un palier.
    · Retour d'un palier après 90 s de bonne tenue ; s'il re-dégrade dans les 15 s, tout est figé jusqu'au rechargement.
-   · `?perf=1` dans l'URL affiche fps / ms / palier en haut à gauche ; `window.__arcardiPerf` les donne à la console. */
-const PERF = { tier: 0, ms: 0, fps: 0, worst: 0, lock: false, show: false, _t0: 0, _n: 0, _sum: 0, _worst: 0, _chg: 0, _before: 0, _probe: false, _slowN: 0 };
+   · `?perf=1` dans l'URL affiche fps / ms / palier en haut à gauche ; `window.__arcardiPerf` les donne à la console.
+   · 2026-10-12 : le MENU DEV force un palier (`perfDevSet`, `forced`) pour voir ce que verrait une machine qui rame sur une qui ne rame
+     pas — figé (`lock`), la mesure ne le touche plus ; « auto » (`null`) rend la main à la mesure. */
+const PERF = { tier: 0, ms: 0, fps: 0, worst: 0, lock: false, show: false, forced: false, _t0: 0, _n: 0, _sum: 0, _worst: 0, _chg: 0, _before: 0, _probe: false, _slowN: 0 };
+function perfDevSet(t) {
+  const P = PERF;
+  if (t == null) { P.forced = false; P.lock = false; P.tier = 0; P._chg = 0; P._before = 0; P._probe = false; P._slowN = 0; return; }
+  P.forced = true; P.lock = true; P.tier = t;
+}
 const PERF_SLOW_MS = 26, PERF_FAST_MS = 18, PERF_WARMUP_MS = 5000, PERF_WINDOW_MS = 3000, PERF_RETRY_MS = 90000, PERF_PROBE_MS = 15000, PERF_MAX_TIER = 2;
 function perfTick(rawMs, now) {
   const P = PERF;
@@ -711,7 +718,7 @@ const TOWN_SEASON_MEMO = { at: -1e12, kind: "market" };
    ⚠️ 2026-10-12 : réglables aussi au MENU DEV (Guillaume : « pour tester tu peux juste ajouter des boutons menu dev ») — d'où un
    objet qu'on modifie, et non plus trois constantes lues dans l'adresse une fois pour toutes. */
 const PARK_DEV = (() => {
-  const o = { forced: false, monture: null, chantier: null, v: 1 };
+  const o = { forced: false, monture: null, chantier: null, v: 1, settle: 0 };
   if (typeof window === "undefined") return o;
   const q = window.location.search || "";
   o.forced = /[?&]skatepark=1\b/.test(q);
@@ -727,13 +734,28 @@ const PARK_DEV = (() => {
   window.__chantier = (m, v = 0, type) => parkDevChantier(m, v, type);
   return o;
 })();
+/* ⚠️ 2026-10-12 (soir) — LA PLACE CHANGE SOUS LES PIEDS DU TESTEUR, ET ELLE LE BLESSE. Quatre secondes de veille (`PARK_DEV.settle`, lue par
+   `parkDevSettleTick`, dans la boucle de la ville) à chaque geste du menu dev qui peut changer ce que la place porte : « Park chez moi »
+   décoché, le chantier arrêté ou lancé, la saison rendue ou forcée, « tout remettre ». Vu en jeu : debout dans le park, « Park chez moi »
+   décoché rend la patinoire (la place d'AUJOURD'HUI, jusqu'au chantier de 14 h) sous ses pieds — il tombe sans patins deux secondes plus tard,
+   blessé de 30 s à 2 min et jeté sur la berge. La veille dure assez pour la saison forcée, que l'hôte applique après l'aller-retour réseau. */
+function parkDevArm() { PARK_DEV.settle = Date.now() + 4000; TOWN_SEASON_MEMO.at = -1e12; }
+/* « Park chez moi » : posé ou rendu à la saison. */
+function parkDevForce(on) { PARK_DEV.forced = !!on; parkDevArm(); }
+/* Rend la place à sa rotation : plus de park chez soi, de monture d'essai ni de chantier d'essai (et sa vitesse revient à ×1). */
+function parkDevReset() { PARK_DEV.forced = false; PARK_DEV.monture = null; PARK_DEV.chantier = null; PARK_DEV.v = 1; parkDevArm(); }
+/* Ce que la place porterait SANS aucun essai ni saison forcée — l'horloge réelle seule, ce que « tout remettre » lui rend. */
+function placeNaturalNow() { return CH.placeStateAt(Date.now(), SPK.PARK_OPEN, null); }
+/* L'allée de l'est, d'où l'on regarde le chantier : un point qui n'est sur la glace ni sur le dallage dans AUCUN des états de la place. Le
+   téléport « l'allée de l'est » et le repli du testeur s'y posent — une seule description (dérivée du plan du park, jamais recopiée). */
+function parkEastLaneSpot() { return { x: SPK.PARK.x0 + SPK.PARK.w + 2.2 - C.BODY_CX, y: SPK.PARK.y0 + 5.2 - C.BODY_FY }; }
 /* Règle le chantier d'essai : `m` null l'arrête ; sinon il repart de la minute `m`, à la vitesse `v`, du type `type` (par défaut celui
    d'avant). La place se relit tout de suite (la mémoire de 200 ms est vidée). */
 function parkDevChantier(m, v, type) {
   const c = PARK_DEV.chantier;
   if (v != null) PARK_DEV.v = v;
   PARK_DEV.chantier = m == null ? null : { m0: m, v: PARK_DEV.v, type: type || (c && c.type) || "montage", t0: Date.now() };
-  TOWN_SEASON_MEMO.at = -1e12;
+  parkDevArm();
   return PARK_DEV.chantier;
 }
 /* La minute du chantier d'essai en cours (ou null). */
@@ -4453,6 +4475,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if ("weather" in req) broadcastChat("🛠️", L.devWeatherChat(f.name, s.forcedWeather ? s.forcedWeather.kind : null));
       if ("season" in req) broadcastChat("🛠️", L.devSeasonChat(f.name, s.forcedSeason));
       if ("seasonP" in req) broadcastChat("🛠️", L.devSeasonPChat(f.name, s.forcedSeasonP));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ═══ 2026-10-12 (soir) — « TOUT REMETTRE EN ROTATION NORMALE » : LA TERRE, LA SAISON, SON AVANCÉE ET LA MÉTÉO EN UN SEUL ÉTAT. ═══════
+       `devWorld` et `devSky` ci-dessus, fondus : une persistance, une diffusion (`p.state`), une ligne de chat — et jamais d'état à moitié
+       rétabli entre deux messages. Rien à rétablir : rien n'est écrit, rien n'est dit, et RIEN NE PART (§3 : un `send()` de plus pour rien ;
+       le bouton est désactivé dans ce cas, mais un invité peut l'envoyer quand même). Une terre forcée par la QUÊTE
+       (`starForcedByQuestRef`) que ceci efface est reposée par la boucle au tick suivant : elle ne dépend pas de ce menu. */
+    if (req.kind === "devReset") {
+      if (!(s.forcedWorld || s.forcedWeather || s.forcedSeason || s.forcedSeasonP != null)) return;
+      applyForcedWorld(null);
+      applyForcedSky(null, null, null);
+      dirtyRef.current = true;
+      persistFnRef.current && persistFnRef.current();
+      out.state = shareState();
+      broadcastChat("🛠️", L.devResetChat(f.name));
       hostFlushOut(out, f, null);
       return;
     }
@@ -15900,6 +15938,52 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setDevMenuOpen(false);
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-12 (soir) — LE TESTEUR SORT DE LA PLACE AVANT QU'ELLE NE LE FASSE TOMBER.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Appelée par la boucle de la ville tant que `PARK_DEV.settle` court (voir `parkDevArm`) : si l'état NEUF de la place porte de la glace
+     (la patinoire, ou le chantier, qui la porte jusqu'au bout) sous les pieds d'un testeur sans patins, il est posé dans l'allée de l'est
+     — au lieu de la chute sans patins (30 s à 2 min de repos forcé, jeté sur la berge), que le menu dev ne doit jamais provoquer en
+     « rendant la place à sa saison » ni en téléportant « au skatepark » quand le park n'est pas posé.
+     ⚠️ DEV SEULEMENT : le jeu ne reloge personne quand la vraie horloge change la place (le chantier de 14 h, la bascule de saison) —
+     c'est une règle de jeu à décider, pas un outil. ⚠️ AU NIVEAU DU COMPOSANT (la boucle l'appelle ; `townIceAt`, `E.townBoxFree` n'y sont
+     pas en closure) ; chaussé, on reste (la glace est faite pour lui). */
+  function parkDevSettleTick(tw, m) {
+    if (PARK_DEV.settle < Date.now()) { PARK_DEV.settle = 0; return; }
+    if (!tw || !tw.rink || !m || (m.zone || "farm") !== "town" || isInjured()) return;
+    if (!C.rinkInside(C.footX(m.x), C.footY(m.y)) || E.skatesActive(invRef.current, Date.now())) return;
+    const sp = parkEastLaneSpot();
+    for (const [dx, dy] of [[0, 0], [0, -1], [0, 1], [1, 0], [0, -2], [0, 2], [1, -1], [1, 1]]) {
+      if (!E.townBoxFree(tw, sp.x + dx, sp.y + dy)) continue;
+      keysRef.current = {}; skateRef.current = null;
+      m.x = sp.x + dx; m.y = sp.y + dy; m.dir = 2; m.moving = false; m.vx = 0; m.vy = 0;
+      sendPos();
+      PARK_DEV.settle = 0;
+      pushToast(L.devParkSettleToast);
+      return;
+    }
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-12 (soir) — « TOUT REMETTRE EN ROTATION NORMALE » (menu dev, tout en haut).
+     ╚══════════════════════════════════════════════════════════════════════════
+     Une douzaine de boutons forcent quelque chose (la terre, la saison et son avancée, la météo, la neige, l'étang, le lac, le park, la
+     monture, le chantier, la qualité) ; revenir à la normale demandait de les retrouver un à un dans quatre sections, et un oubli se
+     paie longtemps : la terre, la saison et son avancée sont PARTAGÉES et PERSISTÉES (la ferme sauvegardée les garde, pour tous les
+     joueurs, jusqu'à ce que quelqu'un les rende). Ce qui est local se remet ici ; ce qui est partagé passe par UNE requête arbitrée
+     par l'hôte (`devReset` : une persistance, une diffusion, une ligne de chat — un état rétabli à moitié ne se verrait qu'à deux).
+     ⚠️ La veille du testeur (`parkDevReset` → `parkDevArm`) est armée AVANT l'envoi : la saison revenue peut rendre la patinoire sous
+     ses pieds, et l'hôte la pose après l'aller-retour. ⚠️ Ne touche NI au dallage civique NI aux petits personnages : des essais
+     d'apparence à bascule propre, pas des forçages du cours du monde. */
+  function devBackToNormal() {
+    snowDevRef.current = { depth: null, trees: null, ice: null, lake: null };
+    setSnowDevUi({ depth: null, trees: null, ice: null, lake: null });
+    parkDevReset();
+    perfDevSet(null);
+    PERF.show = /[?&]perf=1/.test(window.location.search || "");   // le compteur revient à ce que l'adresse demande (`?perf=1`), pas à « toujours éteint »
+    setParkDevUi(n => n + 1);
+    sendReq({ kind: "devReset" });
+    pushToast(L.devResetToast);
+  }
   /* 2026-09-26 (phase 5) — LA FAUNE AU MENU DEV : se poser à côté d'un des
      trois chats, là où sa routine le met en ce moment (ils se promènent : un
      arrêt fixe tomberait à côté). Ne donne rien. (Le forçage de la saison de
@@ -17175,7 +17259,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* 2026-10-12 — le skatepark (son entrée est, sur le dallage) et l'allée de l'est d'où l'on regarde le chantier (au nord du
              chalet des patins). Dérivés du plan du park (`SPK.PARK`), jamais recopiés. */
           else if (dk === "townPark") { m.x = SPK.PARK.x0 + SPK.PARK.w - 1.2 - C.BODY_CX; m.y = SPK.PARK.y0 + SPK.EAST_GATE.v0 + 1.5 - C.BODY_FY; }
-          else if (dk === "townPlaceEast") { m.x = SPK.PARK.x0 + SPK.PARK.w + 2.2 - C.BODY_CX; m.y = SPK.PARK.y0 + 5.2 - C.BODY_FY; }
+          else if (dk === "townPlaceEast") { const sp = parkEastLaneSpot(); m.x = sp.x; m.y = sp.y; }   // 2026-10-12 (soir) : le même point que le repli du testeur (`parkDevSettleTick`)
           else if (dk === "townMarket") {   // zip 426 ; 2026-10-05 : l'allée du marché de la prairie (le centre du rectangle y tombe sur un étal) ; 2026-10-06 : en toute saison
             m.x = C.TOWN_WINTER_MARKET_AX; m.y = C.TOWN_WINTER_MARKET_AXIS;
           }
@@ -21902,6 +21986,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
       brazierHeatTick(tw, m, dt);
+      if (PARK_DEV.settle) parkDevSettleTick(tw, m);   // 2026-10-12 (soir) : le menu dev vient de changer la place — voir `parkDevArm`
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 432 — EN COURSE, LE PASSAGER EST LE VÉHICULE.
          ╚══════════════════════════════════════════════════════════════════════
@@ -43082,6 +43167,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>{L.devMenuTitle}</h2>
               <div className="ferme-dev-hint">{L.devMenuHint}</div>
 
+              {/* ═══ 2026-10-12 (soir) — LA ROTATION NORMALE, EN TÊTE : ce qui est forcé en ce moment (d'un coup d'œil, sans retrouver chaque
+                  section) et le bouton qui rend tout à sa rotation (`devBackToNormal`). La liste n'invente rien : chaque ligne relit l'état
+                  qui allume le bouton « on » de sa propre section. Toujours là, désactivé quand il n'y a rien à rendre (comme « Me soigner »). ═══ */}
+              {(() => {
+                const sk = forcedSkyUi, sd = snowDevUi, off = [];
+                const wspec = forced ? C.PASSAGE_WORLDS.find(w => w.key === forced) : null;
+                if (forced) off.push(L.devBanner(wspec ? (lang === "en" ? wspec.nameEn : wspec.name) : forced));
+                if (sk.season) off.push(L.devSeasonBtn(sk.season));
+                if (sk.seasonP != null) off.push(L.devSeasonP(sk.seasonP));
+                if (sk.weather && sk.weather.day === today) off.push(L.devWeatherBtn(sk.weather.kind));
+                if (sd.depth != null || sd.trees != null || sd.ice != null || sd.lake != null) off.push(L.devOffSnow);
+                if (PARK_DEV.forced) off.push(L.devParkForce);
+                if (PARK_DEV.chantier) off.push(L.devChantierType(PARK_DEV.chantier.type));
+                if (PARK_DEV.monture) off.push(L.devParkMount(PARK_DEV.monture));
+                if (PERF.forced) off.push(L.devOffPerf);
+                return (
+                  <div className="ferme-dev-cat">
+                    <div className="ferme-dev-cat-title">{L.devResetSection}</div>
+                    <div className="ferme-dev-hint">{off.length ? L.devResetOff(off.join(" · ")) : L.devResetOk}</div>
+                    <div className="ferme-dev-grid">
+                      <button className="ferme-dev-btn" disabled={!off.length} onClick={devBackToNormal}>{L.devResetBtn}</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ═══ MONDE : quelle terre le passage donne, et le rappel de la
                   rotation naturelle qu'il remplace. ═══ */}
               <div className="ferme-dev-cat">
@@ -43172,7 +43283,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
                   {[null, "spring", "summer", "autumn", "winter"].map(k => (
-                    <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => sendReq({ kind: "devSky", season: k })}>{L.devSeasonBtn(k)}</button>
+                    <button key={"devseason-" + (k || "auto")} className={"ferme-dev-btn" + ((forcedSkyUi.season || null) === k ? " on" : "")} onClick={() => { parkDevArm(); sendReq({ kind: "devSky", season: k }); }}>{L.devSeasonBtn(k)}</button>
                   ))}
                 </div>
                 {/* 2026-10-05 — L'AVANCÉE DE LA SAISON, POUR TOUT LE MONDE (elle était locale, « feuilles ») :
@@ -43240,9 +43351,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     chantier joué à la minute et à la vitesse voulues. Rien ne circule, rien ne s'achète. */}
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devParkSection}</div>
                 <div className="ferme-dev-hint">{L.devParkHint}</div>
+                {/* 2026-10-12 (soir) — CE QUE LA ROTATION DONNE : la place d'aujourd'hui, à l'horloge réelle (le printemps garde la patinoire
+                    jusqu'au chantier de 14 h : « Printemps » forcé ne pose donc PAS le park, c'est « Park chez moi » qui le pose). */}
+                {(() => {
+                  const nat = placeNaturalNow();
+                  return <div className="ferme-dev-hint">{L.devPlaceNatural(nat.kind, nat.kind === "chantier" ? L.devChantierClock(nat.t) : null, nat.type)}</div>;
+                })()}
                 <div className="ferme-dev-grid">
-                  <button className={"ferme-dev-btn" + (PARK_DEV.forced ? " on" : "")} onClick={() => { PARK_DEV.forced = !PARK_DEV.forced; TOWN_SEASON_MEMO.at = -1e12; setParkDevUi(n => n + 1); }}>{L.devParkForce}</button>
-                  <button className="ferme-dev-btn" onClick={() => devTeleport("townPark")}>{L.devTeleportName("townPark")}</button>
+                  <button className={"ferme-dev-btn" + (PARK_DEV.forced ? " on" : "")} onClick={() => { parkDevForce(!PARK_DEV.forced); setParkDevUi(n => n + 1); }}>{L.devParkForce}</button>
+                  {/* L'arrêt « skatepark » POSE le park s'il n'y est pas : arrivé sur la patinoire du jour, on tomberait sans patins deux secondes
+                      plus tard. Pendant un chantier la place est fermée : on n'y force rien, la veille du testeur le pose dans l'allée de l'est. */}
+                  <button className="ferme-dev-btn" onClick={() => { const k = placeStateNow(E).kind; if (k !== "park" && k !== "chantier") parkDevForce(true); else parkDevArm(); setParkDevUi(n => n + 1); devTeleport("townPark"); }}>{L.devTeleportName("townPark")}</button>
                   <button className="ferme-dev-btn" onClick={() => devTeleport("townPlaceEast")}>{L.devTeleportName("townPlaceEast")}</button>
                 </div>
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
@@ -43254,7 +43373,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const c = PARK_DEV.chantier, mn = parkDevMinute(), live = c && mn < CH.CHANTIER.DUR_MIN;
                   return (
                     <>
-                      <div className="ferme-dev-hint" style={{ marginTop: 6 }}>{L.devChantierNow(live ? L.devChantierClock(mn) : null, c && c.type, PARK_DEV.v)}</div>
+                      {/* « live » : en cours ; « done » : fini mais GARDÉ (la place montre le résultat — le park, ou la place vide — jusqu'à « Arrêter ») ;
+                          « park » : park chez soi ; « season » : la place suit sa saison. Un chantier d'essai fini disait « la place suit sa saison »
+                          alors qu'il la tenait encore. */}
+                      <div className="ferme-dev-hint" style={{ marginTop: 6 }}>{L.devChantierNow(live ? "live" : c ? "done" : PARK_DEV.forced ? "park" : "season", live ? L.devChantierClock(mn) : null, c && c.type, PARK_DEV.v)}</div>
                       <div className="ferme-dev-grid">
                         {["montage", "demontage"].map(ty => (
                           <button key={"devch-" + ty} className={"ferme-dev-btn" + (live && c.type === ty ? " on" : "")} onClick={() => { parkDevChantier(live && c.type === ty ? mn : 0, null, ty); setParkDevUi(n => n + 1); }}>{L.devChantierType(ty)}</button>
@@ -43274,6 +43396,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     </>
                   );
                 })()}
+                {/* 2026-10-12 (soir) — LA QUALITÉ ADAPTATIVE, LOCALE (`PERF`, `perfDevSet`) : un palier forcé pour voir ce que verrait une machine
+                    qui rame (l'amie au vieux MacBook) sur la machine de développement, qui ne rame jamais — jusqu'ici seul `?perf=1` ou la console
+                    donnaient un palier. « Mesure » rend la main à la mesure ; le compteur est celui de `?perf=1`. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devPerfSection}</div>
+                <div className="ferme-dev-hint">{L.devPerfHint}</div>
+                <div className="ferme-dev-grid">
+                  {[null, 0, 1, 2].map(t => (
+                    <button key={"devperf-" + (t == null ? "auto" : t)} className={"ferme-dev-btn" + ((PERF.forced ? PERF.tier : null) === t ? " on" : "")} onClick={() => { perfDevSet(t); setParkDevUi(n => n + 1); }}>{L.devPerfBtn(t)}</button>
+                  ))}
+                  <button className={"ferme-dev-btn" + (PERF.show ? " on" : "")} onClick={() => { PERF.show = !PERF.show; setParkDevUi(n => n + 1); }}>{L.devPerfShow}</button>
+                </div>
               </div>
               {/* ╔══════════════════════════════════════════════════════════════
                   ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE.
@@ -43493,12 +43626,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ressemblerait alors à un bug de rotation. Ce bandeau est le prix à
           payer de la persistance. Visible par TOUT LE MONDE, pas seulement par
           l'hôte : c'est l'invité qui, sinon, n'aurait aucune explication. */}
-      {phase === "playing" && forcedWorldUi && (() => {
-        const spec = C.PASSAGE_WORLDS.find(w => w.key === forcedWorldUi);
-        if (!spec) return null;
+      {/* 2026-10-12 (soir) — LE MÊME RAPPEL POUR LA SAISON ET SON AVANCÉE : elles sont partagées ET persistées comme la terre (la ferme
+          sauvegardée les garde pour tous les joueurs), et rien ne les signalait — une saison oubliée au menu dev restait forcée, sans
+          une ligne pour l'expliquer. La météo commandée, elle, nomme son jour et s'éteint seule : pas de rappel. */}
+      {phase === "playing" && (forcedWorldUi || forcedSkyUi.season || forcedSkyUi.seasonP != null) && (() => {
+        const spec = forcedWorldUi ? C.PASSAGE_WORLDS.find(w => w.key === forcedWorldUi) : null;
+        const bits = [];
+        if (spec) bits.push(L.devBanner(lang === "en" ? spec.nameEn : spec.name));
+        if (forcedSkyUi.season) bits.push(L.devBannerSeason(L.devSeasonBtn(forcedSkyUi.season)));
+        if (forcedSkyUi.seasonP != null) bits.push(L.devSeasonP(forcedSkyUi.seasonP));
+        if (!bits.length) return null;
         return (
           <div className="ferme-dev-banner" title={L.devBannerTitle}>
-            🛠️ {L.devBanner(lang === "en" ? spec.nameEn : spec.name)}
+            🛠️ {bits.join(" · ")}
           </div>
         );
       })()}

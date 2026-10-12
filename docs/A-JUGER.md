@@ -10,6 +10,8 @@
 
 Pour le voir : menu dev (Cmd/Ctrl+Maj+X), section « Skatepark et chantier » : Montage ou Démontage, une heure (14 h 00 → 16 h 55), une vitesse (×30 : la demi-heure en
 une minute), puis l'arrêt « l'allée de l'est (le chantier) » — la place est fermée, on regarde de là. Les mêmes boutons posent le park chez soi et donnent une monture d'essai.
+**Pour revenir à la rotation normale** : « Tout remettre en rotation normale », tout en haut du même menu (la liste au-dessus dit ce qui est forcé) — ⚠️ le lundi 2026-10-12 le VRAI chantier passe de 14 h à 17 h
+(heure de Paris) sans bouton : avant 14 h la place porte la patinoire, jamais le park. **À trancher** : au vrai chantier personne n'est évacué de la glace (un joueur sans patins qui s'y trouve tombe ; un patineur reste sur la place fermée).
 - **La fonte** (minutes 4-50) : la glace qui part par plaques, le bord d'abord ; l'eau, les flaques, les raclettes ; puis la pierre qui sèche.
 - **Le camion-grue** (24-48 le chalet, 50-142 le matériel, 148-174 le conteneur) : la marche arrière dans l'allée, les béquilles, la flèche qui se déplie, la charge qui pend aux élingues.
 - **L'équipe** : la barrière posée panneau par panneau depuis la palette ; les soudeurs à genoux ; les feuilles portées à deux ; le chariot ; le retour à la camionnette. Lisible ? trop lent ?

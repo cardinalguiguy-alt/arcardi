@@ -11,24 +11,25 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-12 — LE SKATEPARK DE LA PLACE ET SON CHANTIER DE 3 H — DANS L'ARBRE, NON COMMITÉ, PAS AU PUBLIC
+### 2026-10-12 (soir) — LE MENU DEV TESTE LE PARK, LE CHANTIER ET LA QUALITÉ, ET REND LA ROTATION NORMALE — DANS L'ARBRE, NON COMMITÉ (le park et le chantier le sont : 0505478, 7407059)
 
-**Le park** (2026-10-11 ; récit : journal du README de la ferme) : relief (`skatepark.js`) et dessin 3/4 (`skateparkArt.js`), quatre montures (`monture.js`, `montureArt.js`, `sonPark.js`),
-cabane de location (`rentRide`), réseau (`rd` dans le paquet de position). **Le chantier** (2026-10-12) : la patinoire démontée, le park monté, le lundi du printemps de 14 h à 17 h heure de
-Paris (`chantier.js` : pure fonction de l'heure, aucun message ; `chantierArt.js` : engins, barrière, gestes, glace qui fond au pixel ; `sonChantier.js`) ; l'eau de la fonte est celle de la
-pluie (`pluie.js`, `env.atlas`). **`SPK.PARK_OPEN = true`** (ouvert le 2026-10-12 sur ordre de Guillaume : patinoire l'hiver → chantier → park au printemps) ; faux = ni park ni chantier. Voir : **menu dev, section « Skatepark et chantier »** (park chez soi,
-monture d'essai, chantier à l'heure et à la vitesse voulues, arrêts « skatepark » et « allée de l'est ») — local, rien ne circule (`PARK_DEV`) ; ou `?skatepark=1`, `?monture=…`, `?chantier=…`. Bancs : `verify-chantier` 23/23, `verify-monture` 24/24, `render-skatepark` 7/7, `verify-vallee` 358/358, `verify-pluie` 34/34,
-`verify-ombres` 27/27, `verify-pont`, `verify-collision`, `verify-strings`, `verify-docs` verts. **Vu en jeu** : chaque phase du chantier (montage et démontage), 62 i/s pendant la fonte, aucune
-erreur ; un air de quarter, un 50-50, la location d'un BMX, deux clients qui se voient rider. **Pas vu** : aucun son (volet muet), le chantier en temps réel d'un bout à l'autre, à deux, iPad.
-**Supabase : rien.** Aussi dans l'arbre, non commité : la qualité adaptative (`PERF`, `?perf=1`), jamais vue sur un Mac lent.
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs`. ⚠️ Volet du navigateur masqué : attendre par
-la file `requestAnimationFrame` du harnais (`__ws`, `docs/VERIFICATION.md` §10), jamais `setTimeout` ; `__setHour` décale `Date.now` (un chantier en vitesse > 0 saute alors de minute).
-⚠️ Recharger la page après toute édition de `FermeGame.js`. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas ; `TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
+**Le park** (2026-10-11 ; récit : journal du README de la ferme) : relief (`skatepark.js`), dessin 3/4 (`skateparkArt.js`), quatre montures (`monture.js`, `montureArt.js`, `sonPark.js`), cabane de location (`rentRide`), réseau (`rd` dans
+le paquet de position). **Le chantier** (2026-10-12) : patinoire démontée, park monté, **le lundi du changement de saison, 14 h–17 h heure de Paris** (`chantier.js` : pure fonction de l'heure, aucun message ; `chantierArt.js` ; `sonChantier.js` ;
+l'eau de la fonte est celle de la pluie, `pluie.js`). **`SPK.PARK_OPEN = true`** (ordre de Guillaume : patinoire l'hiver → chantier → park au printemps ; faux = ni park ni chantier). ⚠️ **Le lundi 2026-10-12 EST ce lundi** (le printemps a commencé
+à 2 h, heure de Paris) : la patinoire tient jusqu'à 14 h, puis le vrai chantier tourne SANS bouton sur toute copie qui porte ce code. **Le menu dev** (⌘⇧X) : **« Rotation normale » en tête** (ce qui est forcé + « Tout remettre en rotation
+normale » : terre, saison, avancée, météo, neige, park, monture, chantier d'essai, qualité — `devBackToNormal`, requête `devReset`) ; **« Skatepark et chantier »** (park chez soi, monture d'essai, Montage/Démontage à l'heure et à la vitesse voulues,
+arrêts « skatepark » et « allée de l'est » — local, `PARK_DEV`) ; **« Qualité adaptative »** (un palier figé, `perfDevSet`) ; le bandeau du bas rappelle aussi la saison forcée ; et le menu sort le testeur de la glace avant qu'il tombe (`parkDevSettleTick`,
+DEV seulement). Aussi `?skatepark=1`, `?monture=…`, `?chantier=…`. Bancs relancés : `verify-strings` 1333 clés, `verify-syntax`, `verify-scope`, `verify-duo` 23/23, `verify-jalons` 135/135, `verify-vallee` 359/359, `verify-chantier` 23/23,
+`verify-monture` 24/24, `verify-pluie` 34/34, `verify-ombres` 27/27, `verify-collision`, `verify-pont`, `verify-noms` 13/13, `render-skatepark` 7/7, `verify-docs`. **Vu en jeu** : chaque phase du chantier, un air de quarter, un 50-50, la location d'un BMX,
+deux clients qui se voient rider ; le menu : chaque retour à la normale (un et deux clients, FR et EN). **Pas vu** : aucun son (volet muet), la vraie bascule de 14 h, un iPad, la qualité adaptative sur un vrai Mac lent. **Supabase : rien.**
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs`. ⚠️ Volet du navigateur masqué : attendre par la file `requestAnimationFrame` du harnais (`__ws`,
+`docs/VERIFICATION.md` §10), jamais `setTimeout` ; `__setHour` décale `Date.now` (un chantier en vitesse > 0 saute alors de minute). ⚠️ Recharger la page après toute édition de `FermeGame.js`. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas ;
+`TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER PARK ET CHANTIER PAR GUILLAUME EN JEU, AVEC LE SON
 
-(1) Les deux blocs en tête de `docs/A-JUGER.md` (le park, puis le chantier à `?chantier=0&chantierv=30`, depuis l'allée de l'est). (2) Ensuite (`docs/PROJETS.md` §4.1) : l'équipe de
-nettoyage, le tactile, l'ouverture (`PARK_OPEN`), l'équipe resservie (chantier d'hiver, voirie, façades). (3) Toujours en attente : l'amie au Mac lent (`?perf=1`), vingt minutes sur un iPad.
+(1) Les deux blocs en tête de `docs/A-JUGER.md` (le park ; le chantier : menu dev, Montage, ×30, depuis l'allée de l'est). **À trancher avec lui** : au vrai chantier personne n'est évacué de la glace (un patineur reste sur la place fermée, un joueur sans
+patins qui s'y trouve tombe). (2) Ensuite (`docs/PROJETS.md` §4.1) : l'équipe de nettoyage, le tactile, l'équipe resservie (chantier d'hiver, voirie, façades). (3) Toujours en attente : l'amie au Mac lent (menu dev, « Qualité adaptative »), vingt minutes sur un iPad.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -266,6 +267,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE GRANDEUR INTÉGRÉE SUR UNE FENÊTRE QUI REPART DE ZÉRO MONTE EN DENT DE SCIE : SEUILLÉE, ELLE BASCULE CHAQUE JOUR
 - UN CHAMP `id` DANS UNE `req` EST ÉCRASÉ PAR L'EXPÉDITEUR
 - UNE GARDE D'AUDIENCE À L'ÉMISSION ET UNE INSCRIPTION QUI NE SE FAIT QU'À LA RÉCEPTION FONT UN SILENCE MUTUEL QUI NE SE ROMPT JAMAIS
+- UN FORÇAGE DU MENU DEV EST UNE DETTE : IL A SON RAPPEL À L'ÉCRAN, SON RETOUR D'UN CLIC, ET IL NE FAIT JAMAIS TOMBER CELUI QUI LE RENDRA
 
 **JavaScript / three.js / canevas**
 

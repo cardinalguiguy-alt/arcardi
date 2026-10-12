@@ -5088,7 +5088,8 @@ export const FERME_STR = {
     devWorldRotationToast: "🛠️ Rotation rétablie : le passage suit de nouveau le jour de jeu.",
     devTeleportToast: (name) => `🛠️ Téléportation : ${name}.`,
     devBanner: (name) => `Terre forcée : ${name}`,
-    devBannerTitle: "Le passage est forcé par le menu développeur. N'importe quel joueur peut rétablir la rotation avec Cmd/Ctrl+Shift+X.",
+    devBannerTitle: "Le menu développeur force le monde (passage, saison). N'importe quel joueur peut rétablir la rotation normale avec Cmd/Ctrl+Shift+X.",
+    devBannerSeason: (s) => `Saison forcée : ${s}`,   // 2026-10-12 (soir) : la saison forcée a son rappel, comme la terre
     passageLootToast: (gold) => `✨ +${gold} or !`,
     passagePetToast: (name) => `🐾 Vous avez apprivoisé un(e) ${name} !`,
     mazePrizeToast: (gold) => `🏆 Prix du labyrinthe : +${gold} or !`,
@@ -5181,7 +5182,26 @@ export const FERME_STR = {
     devChantierStop: "⏹ Arrêter le chantier",
     devChantierClock: (m) => `${14 + Math.floor(m / 60)} h ${String(Math.floor(m % 60)).padStart(2, "0")}`,
     devChantierSpeed: (v) => (v ? `×${v}` : "⏸ Figé"),
-    devChantierNow: (clock, type, v) => (clock ? `En cours : ${clock}, ${type === "demontage" ? "démontage" : "montage"}, ${v ? "×" + v : "figé"}.` : "Aucun chantier d'essai : la place suit sa saison."),
+    // 2026-10-12 (soir) : quatre états — « live » en cours, « done » fini mais gardé (le résultat reste à la place), « park » park chez soi, « season » rien d'essayé.
+    devChantierNow: (kind, clock, type, v) => kind === "live" ? `En cours : ${clock}, ${type === "demontage" ? "démontage" : "montage"}, ${v ? "×" + v : "figé"}.`
+      : kind === "done" ? `Chantier d'essai terminé : la place garde son résultat (${type === "demontage" ? "la place vide" : "le park"}). « Arrêter le chantier » la rend à sa saison.`
+      : kind === "park" ? "Park chez moi : la place montre le park, quelle que soit la saison."
+      : "Aucun essai : la place suit sa saison.",
+    devPlaceNatural: (kind, clock, type) => `Sans essai ni saison forcée (heure réelle), la place porte maintenant : ${({ winter: "la patinoire", park: "le skatepark", market: "la place vide" })[kind] || `le chantier de ${type === "demontage" ? "démontage" : "montage"}, ${clock}`}.`,
+    devParkSettleToast: "🛠️ La place a changé sous tes pieds : te voilà dans l'allée de l'est.",
+    // 2026-10-12 (soir) — la rotation normale, en tête du menu : ce qui est forcé, et le bouton qui rend tout.
+    devResetSection: "Rotation normale",
+    devResetOk: "Rien n'est forcé : la terre du passage, la saison, la météo, la neige, la place du skatepark et la qualité suivent leur rotation.",
+    devResetOff: (list) => `Hors rotation : ${list}. Le bouton rend tout à sa rotation — la terre, la saison et la météo pour tout le monde (arbitré par l'hôte) ; la neige, la place, la monture et la qualité sur cet écran.`,
+    devResetBtn: "↩️ Tout remettre en rotation normale",
+    devResetChat: (who) => `${who} a tout remis en rotation normale (terre, saison, météo).`,   // sans « 🛠️ » : `broadcastChat` pose déjà l'icône
+    devResetToast: "🛠️ Tout est revenu à la rotation normale.",
+    devOffSnow: "❄️ Neige imposée",
+    devOffPerf: "⚙️ Qualité figée",
+    devPerfSection: "Qualité adaptative (sur cet écran)",
+    devPerfHint: "Le jeu s'allège seul sur une machine qui rame : palier 1, plus d'ombres portées du soleil ; palier 2, plus de reflets dans l'eau. Ici on force un palier pour voir ce que verrait une machine lente ; « Mesure » rend la main à la mesure. Le compteur (images par seconde, ms, palier) s'affiche en haut à gauche.",
+    devPerfBtn: (t) => (t == null ? "🔄 Mesure (auto)" : ["⚙️ Palier 0 : plein", "⚙️ Palier 1 : sans ombres du soleil", "⚙️ Palier 2 : sans ombres ni reflets"][t]),
+    devPerfShow: "📈 Compteur i/s",
     devFaunaSection: "Faune de Valley Town",
     devFaunaHint: "Se poser à côté d'un des trois chats. La saison de la faune se force plus haut (« Météo et saison »). Les lucioles sortent la nuit, de 21h15 à 1h30.",
     devSkySection: "Météo et saison",
@@ -7094,7 +7114,8 @@ export const FERME_STR = {
     devWorldRotationToast: "🛠️ Rotation restored: the passage follows the game day again.",
     devTeleportToast: (name) => `🛠️ Teleported: ${name}.`,
     devBanner: (name) => `Forced land: ${name}`,
-    devBannerTitle: "The passage is forced from the developer menu. Any player can restore the rotation with Cmd/Ctrl+Shift+X.",
+    devBannerTitle: "The developer menu is forcing the world (passage, season). Any player can restore the normal rotation with Cmd/Ctrl+Shift+X.",
+    devBannerSeason: (s) => `Forced season: ${s}`,   // 2026-10-12 (evening): the forced season gets its reminder, like the land
     passageLootToast: (gold) => `✨ +${gold} gold!`,
     passagePetToast: (name) => `🐾 You tamed a ${name}!`,
     mazePrizeToast: (gold) => `🏆 Maze prize: +${gold} gold!`,
@@ -7184,7 +7205,26 @@ export const FERME_STR = {
     devChantierStop: "⏹ Stop the works",
     devChantierClock: (m) => `${2 + Math.floor(m / 60)}:${String(Math.floor(m % 60)).padStart(2, "0")} pm`,
     devChantierSpeed: (v) => (v ? `×${v}` : "⏸ Frozen"),
-    devChantierNow: (clock, type, v) => (clock ? `Running: ${clock}, ${type === "demontage" ? "dismantling" : "assembly"}, ${v ? "×" + v : "frozen"}.` : "No test works: the square follows its season."),
+    // 2026-10-12 (evening): four states — "live" running, "done" finished but kept (the result stays on the square), "park" park on my screen, "season" nothing tried.
+    devChantierNow: (kind, clock, type, v) => kind === "live" ? `Running: ${clock}, ${type === "demontage" ? "dismantling" : "assembly"}, ${v ? "×" + v : "frozen"}.`
+      : kind === "done" ? `Test works finished: the square keeps the result (${type === "demontage" ? "the empty square" : "the park"}). "Stop the works" gives it back to its season.`
+      : kind === "park" ? "Park on my screen: the square shows the park, whatever the season."
+      : "No test running: the square follows its season.",
+    devPlaceNatural: (kind, clock, type) => `With no test and no forced season (real time), the square now carries: ${({ winter: "the ice rink", park: "the skatepark", market: "the empty square" })[kind] || `the ${type === "demontage" ? "dismantling" : "assembly"} works, ${clock}`}.`,
+    devParkSettleToast: "🛠️ The square changed under your feet: you are now on the east lane.",
+    // 2026-10-12 (evening) — the normal rotation, at the top of the menu: what is forced, and the button that gives everything back.
+    devResetSection: "Normal rotation",
+    devResetOk: "Nothing is forced: the passage land, the season, the weather, the snow, the skatepark square and the quality follow their rotation.",
+    devResetOff: (list) => `Off rotation: ${list}. The button puts everything back on its rotation — land, season and weather for everyone (the host decides); snow, square, ride and quality on this screen.`,
+    devResetBtn: "↩️ Put everything back on the normal rotation",
+    devResetChat: (who) => `${who} put everything back on the normal rotation (land, season, weather).`,   // no "🛠️": `broadcastChat` already adds the icon
+    devResetToast: "🛠️ Everything is back on the normal rotation.",
+    devOffSnow: "❄️ Forced snow",
+    devOffPerf: "⚙️ Fixed quality",
+    devPerfSection: "Adaptive quality (on this screen)",
+    devPerfHint: "The game lightens itself on a machine that struggles: tier 1, no more sun shadows; tier 2, no more reflections in the water. Here a tier is forced to see what a slow machine would get; \"Measure\" gives control back to the measurement. The counter (frames per second, ms, tier) shows at the top left.",
+    devPerfBtn: (t) => (t == null ? "🔄 Measure (auto)" : ["⚙️ Tier 0: full", "⚙️ Tier 1: no sun shadows", "⚙️ Tier 2: no shadows or reflections"][t]),
+    devPerfShow: "📈 FPS counter",
     devFaunaSection: "Valley Town wildlife",
     devFaunaHint: "Stand next to one of the three cats. The wildlife season is forced above (\"Weather and season\"). Fireflies come out at night, 9:15 pm to 1:30 am.",
     devSkySection: "Weather and season",
