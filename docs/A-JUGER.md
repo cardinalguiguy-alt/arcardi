@@ -6,6 +6,13 @@
 
 ---
 
+### À juger — les riders et la collision du park (2026-10-13)
+
+Les poses, toutes à la fois : `app/audit-riders?k=skate` (puis `scooter`, `bmx` ; `&g=f` pour la robe ; `&z=3` le zoom). En jeu : le park (menu dev, « Skatepark et
+chantier »), une monture d'essai, et chercher la faille — longer les mains courantes, sauter contre les modules, descendre de sa monture contre une barrière, grinder
+jusqu'au bout des copings. **À trancher** : le garde-corps qui épouse le U au bout nord de la mini-rampe (nouveau, dessiné) ; les guidons abaissés à la taille des
+personnages ; un ollie dans l'axe d'un rail qui en touche le bout de quelques centimètres (le prix de l'accroche).
+
 ### À juger — le chantier de la place (2026-10-12) : rien n'a encore été vu par Guillaume
 
 Pour le voir : menu dev (Cmd/Ctrl+Maj+X), section « Skatepark et chantier » : Montage ou Démontage, une heure (14 h 00 → 16 h 55), une vitesse (×30 : la demi-heure en

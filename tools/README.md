@@ -1915,6 +1915,14 @@ passe la table), l'ollie, le choc contre un flanc (lent : arrêt ; vite : chute)
 défauts, pendant son écriture : un départ à l'arrêt (`!want` vaut vrai pour un ordre vers l'est), un décollage sous le coping (courbure échantillonnée trop loin), une lèvre jamais quittée (seuil en
 position sur un pas de 1/240 s), un pompage dix fois trop faible puis sans plafond. ⚠️ Ni dessin, ni réseau, ni son : ça se juge en jeu.
 
+## `verify-skatepark.mjs` — LA COLLISION DU SKATEPARK, JOUÉE AU HASARD (2026-10-13, 8 contrôles, ~40 s)
+
+Un banc de FUZZ, à graine fixe : 800 sessions de 20 s sur les quatre montures (ordres, poussée, sauts, figures au hasard, partout sur le dallage) et 120 à pied. Zéro toléré : sortir de l'aire de roulage,
+les pieds dans un module, un saut de position, un NaN, l'axe d'un garde-corps franchi sous sa lisse ; à pied, un tube au milieu de la semelle, une marche plus haute que le pas. Plafonné (≤ 3 pour 100
+sessions) : les contacts résiduels de quelques centimètres hors chute (le prix de `alignedRail`, qui laisse un ollie dans l'axe atteindre le bout d'un rail). ⚠️ La marche y est RECONSTRUITE (la règle
+du jeu vit dans la boucle de `FermeGame.js`) : `canStandTown` sur les cases du park + `parkStepOk` + la trappe de dégagement — toute retouche de l'une se reporte ici. ⚠️ Rouge à sa naissance, sur
+243 sorties du park / 3 000 sessions, 96 montées « téléportées » sur les flancs, des mains courantes enjambées.
+
 ## `verify-chantier.mjs` — LE CHANTIER DE LA PLACE SE TIENT-IL ? (2026-10-11/12, 23 contrôles)
 
 Il JOUE la journée sur la vraie horloge et le vrai script (`chantier.js`), sur le vrai plan du park : la fenêtre (le lundi du changement de saison,

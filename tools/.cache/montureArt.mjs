@@ -301,10 +301,11 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
       o.hands = sideView ? [gs.reduce((p, q) => (q[1] > p[1] ? q : p))] : gs;
     }
   }
-  if (r.kind === "skate" && (pose === "push" || pose === "glide")) {
-    // la poussée : le pied arrière (à l'opposé du cap) descend au sol à côté de la planche et balaie vers l'arrière
+  if ((r.kind === "skate" || r.kind === "scooter") && (pose === "push" || pose === "glide")) {
+    // la poussée : le pied arrière (à l'opposé du cap) descend au sol à côté du plateau et balaie vers l'arrière (la trottinette :
+    // le pied d'appui reste sur le plateau, l'autre pousse du même côté)
     const ph = ((r.ph || 0) % 1 + 1) % 1, sweep = Math.sin(ph * Math.PI);
-    const back = pr(-0.18 - 0.22 * ph, -0.17, 0);
+    const back = pr((r.kind === "scooter" ? -0.05 : -0.18) - 0.22 * ph, r.kind === "scooter" ? -0.13 : -0.17, 0);
     const q = mir([back[0], back[1]]);
     o.push = { x: q[0], y: q[1] + (sweep > 0.3 ? 0 : -1), side: q[0] > (feet[0][0] + feet[1][0]) / 2 };
     o.bend = Math.max(o.bend, 1);
@@ -356,8 +357,21 @@ function shiftFeet(o, dx) {
    planches de toutes les couleurs, un BMX accroché, des casques, des rollers ; un emblème (une planche dans un rond crème) ; un
    râtelier de trois planches debout à côté. Des masses cernées, éclairées du nord-ouest ; la rouille coule en filets à des places
    DÉDUITES du pas des ondes, jamais tirées. */
-const SHED_CACHE = { cv: null };
-export function parkShedSprite(mk) {
+const SHED_CACHE = { cv: null, closed: null };
+/* `closed` : le conteneur qu'on livre (le panneau rabattu, rien en vitrine) — celui qui pend au crochet de la grue. */
+export function parkShedSprite(mk, closed) {
+  if (closed) {
+    if (SHED_CACHE.closed) return SHED_CACHE.closed;
+    const open = parkShedSprite(mk), c2 = mk(open.width, open.height), g2 = c2.getContext("2d");
+    g2.drawImage(open, 0, 0);
+    const TL = ["#173b3d", "#21504f", "#2d6765", "#3d827d", "#55a198"];
+    g2.fillStyle = TL[2]; g2.fillRect(5, 32 + 1, 54, 26);
+    for (let x = 6; x < 58; x += 3) { g2.fillStyle = TL[3]; g2.fillRect(x, 33, 1, 26); g2.fillStyle = TL[1]; g2.fillRect(x + 1, 33, 1, 26); }
+    g2.fillStyle = "#0f1a1c"; g2.fillRect(7, 35, 50, 1); g2.fillRect(7, 57, 50, 1); g2.fillRect(7, 35, 1, 23); g2.fillRect(56, 35, 1, 23);   // le panneau rabattu, son joint
+    g2.fillStyle = "#8a909a"; g2.fillRect(30, 45, 4, 2);   // la serrure
+    SHED_CACHE.closed = c2;
+    return c2;
+  }
   if (SHED_CACHE.cv) return SHED_CACHE.cv;
   const W = 64, H = 68, c = mk(W, H), g = c.getContext("2d");
   const P = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
@@ -417,4 +431,23 @@ export function parkShedSprite(mk) {
   P(0, TOP, 1, FY + FH - TOP, INK); P(63, TOP, 1, FY + FH - TOP, INK); P(1, TOP - 1, 62, 1, INK); P(1, FY + FH, 3, 1, INK); P(14, FY + FH, 36, 1, INK); P(60, FY + FH, 3, 1, INK);
   SHED_CACHE.cv = c;
   return c;
+}
+
+/* L'APERÇU DU PANNEAU DE LOCATION : la monture choisie, de profil, dessinée par LES MÊMES fonctions que le jeu (sur un canevas de
+   48 × 24, le cap à l'est). Les rollers : une bottine de profil sur sa platine, ses quatre roues. */
+export function drawRideKitPreview(g, kit) {
+  const k = kit || { kind: "skate", color: 0 };
+  const R = { fx: 1.5, fy: 1.05, th: 0, air: 0, surf: null, color: k.color | 0 };
+  const F = frameOf(R);
+  if (k.kind === "skate") drawBoard(g, R, F);
+  else if (k.kind === "scooter") { drawScooterDeck(g, R, F); drawScooterBar(g, R, F); }
+  else if (k.kind === "bmx") drawBmx(g, R, F, "all");
+  else {
+    const col = BOARD_COLORS[(k.color | 0) % BOARD_COLORS.length];
+    for (const ox of [14, 26]) {
+      P1(g, ox, 6, 6, 8, "#f4f1ea"); P1(g, ox, 6, 1, 8, "#ffffff"); P1(g, ox + 5, 6, 1, 8, "#cfc9bd"); P1(g, ox, 9, 6, 1, col.deck);
+      P1(g, ox, 14, 9, 2, "#e8e4da"); P1(g, ox + 8, 14, 1, 2, "#cfc9bd"); P1(g, ox - 1, 16, 11, 1, "#5c6470");
+      for (let w = 0; w < 4; w++) { P1(g, ox - 1 + w * 3, 17, 2, 2, "#2a2c33"); P1(g, ox + w * 3, 17, 1, 1, "#e8d36a"); }
+    }
+  }
 }

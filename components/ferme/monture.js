@@ -113,6 +113,18 @@ const GRIND = { SNAP: 0.17, ALIGN: 0.74, CROSS: 0.5, MIN_V: 0.9, END_POP: 0.6 };
 export const TRICK_LABEL = { kickflip: "Kickflip", popShove: "Pop shove-it", varialFlip: "Varial flip", treFlip: "360 flip", mistyGrab: "Misty grab", muteGrab: "Mute grab", barspin: "Barspin", tailwhip: "Tailwhip", whipBar: "Tailwhip barspin", g5050: "50-50", gboard: "Boardslide", gsoul: "Soul grind", gpegs: "Pegs" };
 export const BAIL_T = 1.4;          // s au sol après une chute
 const VERT_SLOPE = 1.6;             // pente (≈ 58°) au-delà de laquelle un décollage est un « air de courbe »
+const RIDE_RX = SP.RIDE_TORSO_R;    // cases : la demi-largeur du corps d'un rider vu de face (contre un flanc à côté de lui)
+/* La demi-longueur du véhicule le long du cap (cases), contre les tubes : la planche (80 cm), la trottinette roue à roue, le BMX
+   d'un pneu à l'autre, les rollers une bottine. ⚠️ Ce sont les mesures du dessin (`montureArt.js` : `BL`, les roues à ± 0,27, celles
+   du BMX à ± 0,42 de rayon 0,21) : le jour où l'un change, l'autre suit. */
+export const RIDE_HALF = { skate: 0.35, roller: 0.12, scooter: 0.3, bmx: 0.62 };
+/* Sa hauteur, du bas des roues (cases) : le plateau de la planche, la bottine des rollers, le plateau de la trottinette, le haut des
+   roues de 20 pouces du BMX. */
+export const RIDE_TALL = { skate: 0.11, roller: 0.2, scooter: 0.11, bmx: 0.42 };
+const rideHalf = (st) => RIDE_HALF[st.kind] || 0.3;
+const rideTall = (st) => RIDE_TALL[st.kind] || 0.12;
+/* Le jeu du rider contre les tubes, à (x, y, z) et au cap `th` — `half` 0 : le torse seul (à terre, le véhicule a filé). */
+const clearAt = (st, x, y, z, th, half, gr, skip) => SP.rideClear(x, y, z, th, half, gr, skip, rideTall(st)).c;
 
 const S0 = {}, S1 = {};
 function surf(x, y, o) {
@@ -245,7 +257,7 @@ function groundStep(st, V, inp, dt, release) {
   }
   // la pente en travers fait tourner vers le bas (la planche couchée sur un mur s'y laisse tomber) — un carve
   if (speed > 0.3 && Math.abs(q) > 0.05) om += V.fallLean * (-G * q / Math.sqrt(1 + q * q)) / Math.max(1.2, speed) * (st.u >= 0 ? 1 : -1);
-  st.th = wrap(st.th + om * dt);
+  st.th = turnTo(st, wrap(st.th + om * dt));
   st.lean = Math.max(-1, Math.min(1, om * speed / (G * 0.8)));
   st.fakie = st.u < -0.2;
   // ── le déplacement (l'horizontale de la vitesse le long de la surface)
@@ -253,7 +265,10 @@ function groundStep(st, V, inp, dt, release) {
   const nx = st.x + st.u * c * k2 * dt, ny = st.y + st.u * sn * k2 * dt;
   const vz = st.u * p * k2;
   // une barrière, un rail, un garde-corps en travers du chemin, sous sa lisse : le choc
-  const fh = fenceHit(st.x, st.y, nx, ny, st.z);
+  // (à la hauteur du sol d'ARRIVÉE, et du départ : en montant une courbe vers un garde-corps posé plus haut, l'ancienne hauteur
+  // mentait sur l'écart — 2026-10-13)
+  const hArr = SP.heightAt(nx, ny);
+  const fh = fenceHit(st, nx, ny, Math.max(hArr, st.z + vz * dt), Math.min(st.z, hArr), rideHalf(st));
   if (fh) { if (fh.kind === "gate") { st.gateHit = true; st.u = -st.u * 0.15; return; } hitWall(st, V, speed, "fence"); return; }
   const h1 = SP.heightAt(nx, ny);
   const zBal = st.z + vz * dt - 0.5 * G * dt * dt;
@@ -269,10 +284,14 @@ function groundStep(st, V, inp, dt, release) {
      marge, et l'on roulait sur la plateforme au lieu de s'envoler — le coping comme le haut du tremplin. On compare donc ce
      que la surface d'ARRIVÉE ferait monter (sa pente, le long du cap) avec ce que la chute libre fait monter : si on monte plus
      vite qu'elle, elle s'est dérobée. Une marche vers le bas (le bord d'une caisse) reste un test de position. */
+  /* ⚠️ 2026-10-13 — ET LA SURFACE D'ARRIVÉE N'EST PAS AU-DESSUS DE NOUS (`h1 < zBal + 0,03`). Sans cette garde, aborder DE CÔTÉ
+     une courbe ou un tremplin (on longe le flanc et l'on y entre en biais) lisait la pente du module « le long du cap » — une
+     descente, vu dans ce sens — et décidait qu'il se dérobait : on « décollait », et la réception posait le rider sur le flanc,
+     jusqu'à 75 cm plus haut, d'une image à l'autre (la sonde : 96 cas sur 3 000 sessions). C'est une marche : le test d'après. */
   const s1 = surf(nx, ny, S1);
   const p1 = s1.gu * c + s1.gv * sn;
   const vzFollow = st.u * p1 / Math.sqrt(1 + p1 * p1);
-  if (vz - G * dt > vzFollow + 0.15 || h1 < zBal - 0.02) {
+  if (h1 < zBal + 0.03 && (vz - G * dt > vzFollow + 0.15 || h1 < zBal - 0.02)) {
     // la surface se dérobe plus vite que la chute : on décolle
     takeoff(st, st.u * c * k2, st.u * sn * k2, vz, s, true, inp);
     st.x = nx; st.y = ny; st.z = zBal;
@@ -283,8 +302,32 @@ function groundStep(st, V, inp, dt, release) {
     hitWall(st, V, speed, "step");
     return;
   }
+  /* Le CORPS à côté de soi (est, ouest) contre un flanc vertical, sur le plat : il n'y entre pas plus qu'avant. On frotte le long
+     (le pas perd sa part en travers, un rien de vitesse) ; si même le frottement y entre, c'est un coin : le choc. */
+  if (Math.hypot(s.gu, s.gv) < 0.2) {
+    const w0 = SP.sideWallDepth(st.x, st.y, st.z, RIDE_RX);
+    if (SP.sideWallDepth(nx, ny, st.z, RIDE_RX) > w0 + 1e-9) {
+      // on garde la part du pas qui longe le flanc (l'autre axe), si elle n'y entre pas — sinon, c'est un coin : le choc
+      const tries = Math.abs(nx - st.x) > Math.abs(ny - st.y) ? [[nx, st.y], [st.x, ny]] : [[st.x, ny], [nx, st.y]];
+      const ok = tries.find(([x2, y2]) => SP.sideWallDepth(x2, y2, st.z, RIDE_RX) <= w0 + 1e-9 && Math.hypot(x2 - st.x, y2 - st.y) > 1e-6 && SP.heightAt(x2, y2) <= st.z + Math.max(V.stepUp, Math.abs(vz * dt) * 2 + 0.02) && SP.heightAt(x2, y2) > st.z - 0.02 && !fenceHit(st, x2, y2, st.z, st.z, rideHalf(st)));
+      if (!ok || speed * Math.hypot(ok[0] - st.x, ok[1] - st.y) / Math.max(1e-6, Math.hypot(nx - st.x, ny - st.y)) < speed * 0.3) { hitWall(st, V, speed, "step"); return; }
+      st.u *= 1 - 1.5 * dt; st.bump = Math.max(st.bump, 0.08);
+      st.x = ok[0]; st.y = ok[1]; st.z = SP.heightAt(ok[0], ok[1]);
+      st.dist = (st.dist || 0) + Math.abs(st.u) * dt;
+      return;
+    }
+  }
   st.x = nx; st.y = ny; st.z = h1;
   st.dist = (st.dist || 0) + Math.abs(st.u) * dt;   // la distance roulée (les sons comptent les joints de feuille dessus)
+}
+/* ⚠️ 2026-10-13 — TOURNER, C'EST AUSSI BALAYER : la planche (le cadre du BMX, sa roue arrière) pivote autour des pieds, et son bout
+   entrait dans le tube d'à côté — le kick-turn contre une barrière, le spin en l'air près d'un rail. Le cap ne tourne pas s'il
+   ferait toucher, et plus qu'avant. */
+function turnTo(st, th1) {
+  if (th1 === st.th) return th1;
+  const half = rideHalf(st), gr = st.mode === "ground", c1 = clearAt(st, st.x, st.y, st.z, th1, half, gr);
+  if (c1 >= 0) return th1;
+  return c1 < clearAt(st, st.x, st.y, st.z, st.th, half, gr) - 1e-9 ? st.th : th1;
 }
 function normalOf(s) { const n = Math.hypot(s.gu, s.gv, 1); return [-s.gu / n, -s.gv / n, 1 / n]; }
 
@@ -301,7 +344,7 @@ function takeoff(st, vx, vy, vz, s, natural, inp) {
     const keep = toDeck ? VERT_DECK : VERT_BACK;
     if (along > 0) { vx -= gx * along * (1 - keep); vy -= gy * along * (1 - keep); }
   }
-  st.mode = "air"; st.vx = vx; st.vy = vy; st.vz = vz; st.spin = 0; st.airT = 0; st.lastAir = 0;
+  st.mode = "air"; st.vx = vx; st.vy = vy; st.vz = vz; st.spin = 0; st.airT = 0; st.lastAir = 0; st.airHitN = 0;
   st.popped = !natural;   // un saut voulu (le tail claque) ou un décollage du relief
   st.thAir0 = st.th;
 }
@@ -313,19 +356,73 @@ function airStep(st, V, inp, dt) {
   // la rotation : gauche/droite à l'écran font tourner (la vitesse de rotation de la monture), sinon on garde le cap
   let om = 0;
   if (inp.ix) om = (inp.ix > 0 ? 1 : -1) * V.spin;
-  st.th = wrap(st.th + om * dt); st.spin += om * dt; st.om = om;   // `om` : ce que le réseau envoie pour qu'on la voie tourner
+  const th1 = turnTo(st, wrap(st.th + om * dt));
+  if (th1 === st.th) om = 0;
+  st.th = th1; st.spin += om * dt; st.om = om;   // `om` : ce que le réseau envoie pour qu'on la voie tourner
   const ox = st.x, oy = st.y, oz = st.z;
-  const nx = st.x + st.vx * dt, ny = st.y + st.vy * dt, nz = st.z + st.vz * dt;
+  let nx = st.x + st.vx * dt, ny = st.y + st.vy * dt;
+  const nz = st.z + st.vz * dt;
   if (!(st.noGrindT > 0) && !st.trick) { const gc = grindCatch(st, oz, nx, ny, nz); if (gc) { enterGrind(st, gc); return; } }
-  if (fenceHit(ox, oy, nx, ny, nz)) { st.mode = "bail"; st.bailT = 0; st.bailed = { why: "fence" }; st.u = 0; st.vx *= -0.2; st.vy *= -0.2; return; }
+  /* Le corps contre un FLANC à côté de soi (est, ouest, nord), au-dessus du plat : on le longe — la vitesse qui y entre est ôtée,
+     comme au sol. Au-dessus d'une courbe, rien (ses côtés montent, ce ne sont pas des flancs). */
+  {
+    const q = SP.parkSurf(nx, ny, S0);
+    if (!q || Math.hypot(q.gu, q.gv) < 0.2) {
+      const w0 = SP.sideWallDepth(ox, oy, oz, RIDE_RX);
+      if (SP.sideWallDepth(nx, ny, nz, RIDE_RX) > w0 + 1e-9) {
+        if (SP.sideWallDepth(ox, ny, nz, RIDE_RX) <= w0 + 1e-9) { nx = ox; st.vx = 0; }
+        else if (SP.sideWallDepth(nx, oy, nz, RIDE_RX) <= w0 + 1e-9) { ny = oy; st.vy = 0; }
+        else { nx = ox; ny = oy; }
+      }
+      /* Encore dedans : c'est la DESCENTE qui y entre (on retombe au ras du bout de la caisse) — le corps glisse du bord, écarté du
+         flanc à chaque pas tant qu'il y est (une seule poussée ne suffisait pas : on se posait 13 cm dedans). */
+      const sw = SP.sideWall(nx, ny, nz, RIDE_RX);
+      if (sw.pen > 0) {
+        const k = Math.min(0.04, sw.pen), x2 = nx + sw.du * k, y2 = ny + sw.dv * k;
+        if (SP.heightAt(x2, y2) <= nz + 0.05) {
+          nx = x2; ny = y2;
+          const out = st.vx * sw.du + st.vy * sw.dv;
+          if (out < 0.6) { st.vx += sw.du * (0.6 - out); st.vy += sw.dv * (0.6 - out); }
+        }
+      }
+    }
+  }
+  const fh = fenceHit(st, nx, ny, nz, Math.min(oz, nz), rideHalf(st), alignedRail(st));
+  if (fh && fh.kind === "gate") {
+    // une ouverture (la porte de l'est, le haut de l'escalier du nord) : on y bute, la vitesse sortante rendue au dixième, sans chute
+    st.gateHit = true;
+    if (nx - SP.PARK.x0 > SP.PARK.w) st.vx = -Math.abs(st.vx) * 0.15; else st.vy = Math.abs(st.vy) * 0.15;
+    return;
+  }
+  if (fh) { airHit(st, "fence"); return; }
   const h = SP.heightAt(nx, ny);
   st.lastAir = Math.max(st.lastAir, nz - h);
-  if (nz > h) { st.x = nx; st.y = ny; st.z = nz; return; }
-  // on touche : un mur (le relief a monté d'un coup bien au-dessus de nous) ou une réception
+  if (nz > h) { st.x = nx; st.y = ny; st.z = nz; st.airHitN = 0; return; }
+  /* On touche : un FLANC (le relief a monté d'un coup, plus que sa pente ne l'explique) ou une réception.
+     ⚠️ 2026-10-13 — premier jet : `h − nz > 0,3 && hOld < oz − 0,05 && h − hOld > 0,3`. La clause du milieu (« on volait déjà
+     au-dessus de l'ancien sol ») est FAUSSE au premier pas d'un ollie : collé au pied du quarter (1,37 m), on sautait, le flanc
+     passait pour une réception, et l'on se retrouvait debout sur la plateforme. Et le seuil de 30 cm laissait « atterrir » sur la
+     caisse en la percutant à 20 cm du sol. La discontinuité se lit contre la PENTE : sur une courbe raide, deux points voisins
+     diffèrent de leur pente fois leur écart ; un flanc, de toute sa hauteur. */
   const hOld = SP.heightAt(ox, oy);
-  if (h - nz > 0.3 && hOld < oz - 0.05 && h - hOld > 0.3) { st.mode = "bail"; st.bailT = 0; st.bailed = { why: "wall" }; st.u = 0; st.vx *= -0.25; st.vy *= -0.25; return; }
+  const gOld = SP.parkSurf(ox, oy, S1), gNew = SP.parkSurf(nx, ny, S0);
+  const slopeMax = Math.max(gOld ? Math.hypot(gOld.gu, gOld.gv) : 0, gNew ? Math.hypot(gNew.gu, gNew.gv) : 0);
+  if (h - nz > 0.06 && h - hOld > slopeMax * Math.hypot(nx - ox, ny - oy) + 0.04) { airHit(st, "wall"); return; }
+  // posé, le véhicule se couche sur la pente : s'il y entre dans un tube (une réception sur la courbe au ras d'un garde-corps), c'est
+  // le choc, pas une réception
+  { const half = rideHalf(st), c1 = clearAt(st, nx, ny, h, st.th, half, true); if (c1 < 0 && c1 < clearAt(st, ox, oy, oz, st.th, half, false) - 1e-9) { airHit(st, "fence"); return; } }
   st.x = nx; st.y = ny; st.z = h;
   land(st, V);
+}
+
+/* Heurter un tube ou un flanc en l'air : lancé, c'est la chute ; à peine en mouvement (un saut sur place contre la barrière, un ollie
+   collé au pied d'un module), on y bute et l'on retombe à côté — la chute pour un geste qu'on n'a pas fait, c'est le jeu qui punit. */
+/* ⚠️ Un second heurt d'affilée, c'est qu'on DESCEND dedans (sur le rail, de travers) : la chute — sans quoi le rebond, qui ne bouge
+   pas, se rejouait à chaque pas et l'on restait suspendu au-dessus du tube (la sonde, 2026-10-13). */
+function airHit(st, why) {
+  st.airHitN = (st.airHitN || 0) + 1;
+  if (Math.hypot(st.vx, st.vy) > 2.5 || st.airHitN > 1) { st.mode = "bail"; st.bailT = 0; st.bailed = { why }; st.u = 0; st.vx *= -0.22; st.vy *= -0.22; st.airHitN = 0; return; }
+  st.vx *= -0.15; st.vy *= -0.15; st.vz = Math.min(st.vz, 0); st.bump = 0.25;
 }
 
 /* ── LA RÉCEPTION : l'angle et le choc ── */
@@ -369,48 +466,111 @@ function land(st, V) {
 function bailStep(st, dt) {
   const k = Math.exp(-5 * dt);
   st.vx *= k; st.vy *= k;
+  /* ⚠️ 2026-10-13 — TOMBÉ CONTRE UN RAIL (heurté en l'air, raté à l'accroche) : on glisse de son côté, on ne retombe pas À TRAVERS
+     lui. Premier jet : la chute gardait sa verticale, et le corps descendait au sol le tube au milieu des jambes. */
+  {
+    const n = SP.rideClear(st.x, st.y, st.z, st.th, 0);
+    if (n.f && n.c < 0.02) {
+      const ax = SP.tubeAxis(n.f, st.x, st.y);
+      if (ax.d < 0.45) { const out = st.vx * ax.nu + st.vy * ax.nv; if (out < 1.6) { st.vx += ax.nu * (1.6 - out); st.vy += ax.nv * (1.6 - out); } }
+    }
+  }
   if (st.vz) {
     st.vz -= G * dt;
     const nz = st.z + st.vz * dt, h = SP.heightAt(st.x, st.y);
     if (nz <= h) { st.z = h; st.vz = 0; } else st.z = nz;
   }
   const nx = st.x + st.vx * dt, ny = st.y + st.vy * dt;
-  if (!fenceHit(st.x, st.y, nx, ny, st.z) && SP.heightAt(nx, ny) <= st.z + 0.05) { st.x = nx; st.y = ny; if (!st.vz) st.z = SP.heightAt(nx, ny); }
+  if (!fenceHit(st, nx, ny, st.z, st.z, 0) && SP.heightAt(nx, ny) <= st.z + 0.05 && SP.sideWallDepth(nx, ny, st.z, RIDE_RX) <= SP.sideWallDepth(st.x, st.y, st.z, RIDE_RX) + 1e-9) { st.x = nx; st.y = ny; if (!st.vz) st.z = SP.heightAt(nx, ny); }
+  {
+    const sw = SP.sideWall(st.x, st.y, st.z, RIDE_RX);
+    const k = Math.min(0.02, sw.pen), x2 = st.x + sw.du * k, y2 = st.y + sw.dv * k;
+    if (sw.pen > 0 && SP.heightAt(x2, y2) <= st.z + 0.05 && !fenceHit(st, x2, y2, st.z, st.z, 0)) { st.x = x2; st.y = y2; }
+  }
   st.bailT = (st.bailT || 0) + dt;
-  if (st.bailT >= BAIL_T) { st.mode = "ground"; st.u = 0; st.bailT = 0; st.vx = st.vy = 0; st.z = SP.heightAt(st.x, st.y); }
+  if (st.bailT >= BAIL_T) {
+    st.mode = "ground"; st.u = 0; st.bailT = 0; st.vx = st.vy = 0; st.z = SP.heightAt(st.x, st.y);
+    /* On se relève et l'on repose la monture : dans son cap si elle y tient, sinon dans le sens où elle ne touche aucun tube (premier
+       jet : reposée telle quelle, le nez de la planche dans la barrière contre laquelle on avait glissé). */
+    const half = rideHalf(st);
+    if (clearAt(st, st.x, st.y, st.z, st.th, half, true) < 0) {
+      let best = st.th, bc = -1e9;
+      for (let k = 0; k < 16; k++) { const th = wrap(st.th + k * Math.PI / 8), c = clearAt(st, st.x, st.y, st.z, th, half, true); if (c > bc + 1e-9) { bc = c; best = th; } }
+      st.th = best;
+      // aucun sens ne tient (un angle d'enceinte) : on reste à terre un dixième de plus, en glissant à l'écart du tube — une seconde au plus
+      if (bc < 0 && (st.bailX = (st.bailX || 0) + 1) < 10) {
+        const n = SP.rideClear(st.x, st.y, st.z, best, half, true, null, rideTall(st)), ax = n.f ? SP.tubeAxis(n.f, st.x, st.y) : null;
+        if (ax) { st.mode = "bail"; st.bailT = BAIL_T - 0.1; st.vx = ax.nu * 0.8; st.vy = ax.nv * 0.8; return; }
+      }
+    }
+    st.bailX = 0;
+  }
 }
 function hitWall(st, V, speed, why) {
   if (speed > 3.6) { st.mode = "bail"; st.bailT = 0; st.bailed = { why }; st.vx = -Math.cos(st.th) * st.u * 0.2; st.vy = -Math.sin(st.th) * st.u * 0.2; st.u = 0; return; }
   st.u = -st.u * 0.18; st.bump = 0.25;
 }
 
-/* Le segment (x0, y0) → (x1, y1) (cases de la ville), à la hauteur de pieds `z`, traverse-t-il un garde-corps, une barrière ou
-   un rail sous sa lisse ? */
+/* Le segment (x0, y0) → (x1, y1) (cases de la ville), à la hauteur de pieds `z` (`zLo` : la plus basse du pas, en l'air), mène-t-il
+   dans un garde-corps, une barrière ou un rail sous sa lisse, ou hors de l'aire de roulage ?
+   ⚠️ 2026-10-13 — TROIS GARDES, ET CHACUNE A SON TROU SANS LES AUTRES :
+     · LA TRAVERSÉE de l'axe d'un tube (le pas qui le franchit d'un coup) — la seule du premier jet : on frôlait un tube à un
+       millimètre, la moitié du corps dessinée dedans ; et l'on passait 1 à 3 cm sous le rail plat en l'air (le test lisait la
+       hauteur d'ARRIVÉE du pas, pas la plus basse) ;
+     · LE CORPS ET LE VÉHICULE (`SP.rideClear` : le torse, la planche ou le cadre le long du cap) : ça touche ET plus qu'avant —
+       on ne s'y colle plus, on s'en éloigne toujours (une monture posée contre la lisse repart) ;
+     · L'AIRE DE ROULAGE (`SP.inRideArea`) : le filet sous tout le reste. Une ouverture (`rideOpeningAt`) est une porte, ailleurs
+       c'est l'enceinte — un vol très haut au-dessus d'un garde-corps de bord y finit aussi. */
+const GATE = { kind: "gate" }, EDGE = { kind: "edge" };
 function segX(ax, ay, bx, by, cx, cy, dx, dy) {
   const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
   if (Math.abs(d) < 1e-12) return -1;
   const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
   return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? u : -1;
 }
-function fenceHit(x0, y0, x1, y1, z) {
-  const P = SP.PARK;
+/* En l'air, le rail qu'on survole DANS SON AXE (l'angle d'un 50-50, à moins d'une demi-case de lui) : le nez de la planche ne bute pas
+   sur son bout pendant que l'ollie monte encore — on vient s'y poser, l'accroche en décide. ⚠️ 2026-10-13 : sans ceci, le corps et la
+   planche ayant enfin une emprise (`SP.rideClear`), plus aucun ollie aligné n'atteignait le rail plat (`verify-monture` §7). */
+function alignedRail(st) {
+  const P = SP.PARK, u = st.x - P.x0, v = st.y - P.y0, c = Math.cos(st.th), sn = Math.sin(st.th);
+  for (const r of SP.PARK_RAILS) for (let k = 0; k + 1 < r.pts.length; k++) {
+    const A = r.pts[k], B = r.pts[k + 1], du = B[0] - A[0], dv = B[1] - A[1], L = Math.hypot(du, dv);
+    if (Math.abs((c * du + sn * dv) / L) < GRIND.ALIGN) continue;
+    if (Math.abs(((u - A[0]) * dv - (v - A[1]) * du) / L) > GRIND.SNAP + 0.03) continue;
+    // ⚠️ seulement en MONTÉE, ou encore au-dessus de la fenêtre d'accroche : qui redescend sous le rail sans s'y être accroché (une
+    // figure en cours, trop vite) le heurte — premier jet sans cette garde : la planche le traversait.
+    // et seulement par le BOUT (les pieds pas encore au-dessus du rail, ou à peine) : à côté de lui, la planche y est vraiment
+    const tt = ((u - A[0]) * du + (v - A[1]) * dv) / (L * L);
+    if (tt > 0.03 && tt < 0.97) continue;
+    const t = tt < 0 ? 0 : tt > 1 ? 1 : tt;
+    if (st.vz > 0 || st.z >= A[2] + (B[2] - A[2]) * t - 0.03) return r.pts;
+  }
+  return null;
+}
+function fenceHit(st, x1, y1, z, zLo, half, skip) {
+  const P = SP.PARK, zl = zLo == null ? z : zLo, x0 = st.x, y0 = st.y;
   const ax = x0 - P.x0, ay = y0 - P.y0, bx = x1 - P.x0, by = y1 - P.y0;
+  // l'aire de roulage : on ne sort pas du park en roulant (la porte de l'est, le haut de l'escalier du nord ; ailleurs, l'enceinte)
+  if (!SP.inRideArea(x1, y1)) return SP.rideOpeningAt(bx, by) ? GATE : EDGE;
   for (const f of SP.PARK_FENCES) {
     const u = segX(ax, ay, bx, by, f.u0, f.v0, f.u1, f.v1);
     if (u < 0) continue;
     const base = f.b0 + (f.b1 - f.b0) * u;
-    if (z < base + f.top && z > base - 0.4) return f;
+    if (zl < base + f.top && z + SP.RIDER_H > base) return f;
   }
   for (const r of SP.PARK_RAILS) for (let k = 0; k + 1 < r.pts.length; k++) {
     const A = r.pts[k], B = r.pts[k + 1];
     const u = segX(ax, ay, bx, by, A[0], A[1], B[0], B[1]);
     if (u < 0) continue;
-    if (z < A[2] + (B[2] - A[2]) * u - 0.02) return r;
+    if (zl < A[2] + (B[2] - A[2]) * u - 0.02 - (r.pts === skip ? SP.RIDE_LEG_H : 0)) return r;
   }
-  // la porte de l'est : on ne sort pas du park en roulant
-  const gU = SP.PARK.w, gate = SP.EAST_GATE;
-  const ug = segX(ax, ay, bx, by, gU, gate.v0, gU, gate.v1);
-  if (ug >= 0) return { kind: "gate" };
+  // le corps et le véhicule contre un tube (`SP.rideClear`) : ça touche, et plus qu'avant — mesuré avant à la hauteur D'AVANT (qui
+  // redescend sur un rail en le chevauchant y entre par le haut : il n'y touchait pas, il y touche)
+  // (le pas balaie de `zl` à `z` : un saut sur place monte la planche DANS le rail qu'elle frôlait par-dessous)
+  const gr = st.mode === "ground";
+  let n1 = SP.rideClear(x1, y1, zl, st.th, half, gr, skip, rideTall(st)), c1 = n1.c, f1 = n1.f;
+  if (z !== zl) { n1 = SP.rideClear(x1, y1, z, st.th, half, gr, skip, rideTall(st)); if (n1.c < c1) { c1 = n1.c; f1 = n1.f; } }
+  if (c1 < 0 && c1 < clearAt(st, x0, y0, st.z, st.th, half, gr, skip) - 1e-9) return f1;
   return null;
 }
 
@@ -478,7 +638,15 @@ function grindStep(st, V, inp, dt, release) {
     const cands = [ang + off, ang + off + Math.PI];
     st.th = wrap(cands.reduce((a, b) => (Math.abs(wrap(a - st.th)) <= Math.abs(wrap(b - st.th)) ? a : b)));
   }
-  st.x = A[0] + (B[0] - A[0]) * g.t; st.y = A[1] + (B[1] - A[1]) * g.t; st.z = A[2] + (B[2] - A[2]) * g.t;
+  /* ⚠️ 2026-10-13 — LE NEZ DU VÉHICULE CONTRE UN TUBE AU BOUT DE LA LIGNE (le poteau qui termine un coping, sa main courante) : on
+     cale — la glisse s'arrête et l'on retombe du côté bas. Le coping raccourci (`GRIND_END`, skatepark.js) laisse passer le torse,
+     pas les 1,24 case d'un BMX : sans ceci, on sortait de la glisse le nez dans le garde-corps. */
+  {
+    const x2 = A[0] + (B[0] - A[0]) * g.t, y2 = A[1] + (B[1] - A[1]) * g.t, z2 = A[2] + (B[2] - A[2]) * g.t, half = rideHalf(st);
+    const c1 = clearAt(st, x2, y2, z2, st.th, half, false, L.pts);
+    if (c1 < 0 && c1 < clearAt(st, st.x, st.y, st.z, st.th, half, false, L.pts) - 1e-9) { grindExit(st, V, "stall"); return; }
+    st.x = x2; st.y = y2; st.z = z2;
+  }
   if (release) { grindExit(st, V, "pop"); return; }
   if (st.u < 0.3) { grindExit(st, V, "stall"); }
 }

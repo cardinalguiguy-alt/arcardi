@@ -1,5 +1,39 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-13 — LE SKATEPARK SANS TROU DE COLLISION, ET LES RIDERS SUR UN SQUELETTE
+
+Guillaume : « bien tester le skatepark de manière poussée — marche, skate, rollers, BMX — tout doit être assuré sans bug de collision, aucun ; un rendu ultra propre » ;
+puis « l'animation doit être ULTRA précise anatomiquement, pas avec des membres désarticulés — et les autres véhicules aussi ».
+
+**La méthode : jouer au hasard.** Une sonde de fuzz a fait rouler les quatre montures des milliers de sessions (ordres, poussée, sauts, figures tirés au hasard,
+partout sur le dallage) et marcher un piéton, avec des invariants stricts. Elle est devenue un banc (`tools/verify-skatepark.mjs`, graine fixe). Ce qu'elle a trouvé :
+- **on sortait du park** (243 / 3 000 sessions) : le bout nord de la mini-rampe n'avait aucun garde-corps (le U s'ouvrait sur l'allée de terre), et l'escalier de la
+  galerie se descendait en roulant. → un garde-corps qui ÉPOUSE le U (segments sur le profil, poteaux au pied des courbes et au milieu du plat), une main courante à
+  l'ouest de l'escalier de la mini, et l'AIRE DE ROULAGE (`inRideArea`) : le dallage ; on y bute à la porte de l'est et en haut de l'escalier du nord (`rideOpeningAt`) ;
+- **des montées « téléportées »** (96) : abordé de côté, un module « se dérobait » pour le test de décollage (sa pente lue le long du cap), et la réception posait le
+  rider sur le flanc, jusqu'à 75 cm plus haut ; pire, collé au pied du quarter (1,37 m), un ollie le posait SUR la plateforme (le test « mur ou réception ? » exigeait
+  qu'on vole déjà au-dessus de son ancien sol — faux au premier pas). → le décollage exige une surface d'arrivée qui n'est pas au-dessus de nous ; un flanc se lit
+  comme une DISCONTINUITÉ (la hauteur monte plus que la pente ne l'explique) ;
+- **des corps dans les tubes** : la monture ne testait que la traversée de l'axe d'un tube par les pieds ; le piéton, quatre coins d'une semelle plus large que le
+  tube. → une EMPRISE : le rider a un torse (cylindre, des chevilles aux épaules) et un véhicule orienté le long du cap, couché sur la pente comme le dessin le pose,
+  à sa hauteur (la planche 11 cm, le BMX ses roues) — `SP.rideClear` ; le piéton, sa semelle entière — `SP.fenceNear`, `walkFenceStep` (y compris dans la trappe de
+  dégagement : on s'éloigne d'un tube, on ne le traverse plus). Le jeu est CONTINU (le plus grand des écarts, à plat et en hauteur) : binaire, il sautait de +∞ à −8 cm
+  et la règle « pas plus près qu'avant » ne voyait pas le saut ;
+- et, une à une : la rotation (un pivot qui tournait la planche dans la barrière), les flancs à côté du corps (`sideWall` : on frotte le long du bout de la caisse,
+  on ne s'y enfonce plus), la chute qui retombait à travers un rail (on glisse de son côté), le rebond en l'air qui se rejouait sans fin au-dessus d'un tube
+  (un second heurt d'affilée est la chute), les copings qui couraient jusque dans le poteau qui les termine (`GRIND_END`), la sortie de glisse le nez dans la
+  main courante (on cale), la planche reposée dans la barrière à la fin d'une chute ; on ne monte que sur le dallage, on ne descend que là où l'on tient debout.
+- ⚠️ Le prix connu : un ollie DANS L'AXE d'un rail peut toucher son bout de quelques centimètres en montant (`alignedRail` : sinon plus aucun ollie aligné n'atteignait
+  le rail plat). Le banc le compte (3 en 800 sessions) sous un plafond.
+
+**Les riders.** La planche des poses (trois montures × huit caps × chaque pose, VRAI navigateur : `app/audit-riders`, jetable) montrait des membres déplacés en bloc —
+deux colonnes de jambes séparées jusqu'à la ceinture, la jambe qui pousse en « L », des manches flottant à un pixel du buste, un trou dans le buste du cycliste de profil,
+un BMX qui « pédalait » pieds immobiles, des guidons à hauteur d'épaule (les mains invisibles). `drawRiderBody` est réécrit en SQUELETTE : hanches et épaules fixes sur le
+corps, chaque membre la tranche de la feuille étirée rangée par rangée le long de son os (la chaussure garde ses rangées) ; accroupi, de profil le bassin recule et le
+genou avance, de face les genoux s'ouvrent ; le BMX pédale (manivelles en opposition), tient son guidon des deux mains de profil (le bras lointain derrière le buste),
+penché ; au saut, les pieds restent sur la planche et l'on ne lâche pas un guidon ; les guidons sont à la taille des personnages (trapus : tête de 10 px sur 24).
+**Pas fait** : les rollers (`drawSkate`, partagé avec la patinoire) ; les poses en jeu, en mouvement.
+
 ## 2026-10-12 (soir) — LE MENU DEV : TESTER LE PARK, LE CHANTIER ET LA QUALITÉ, ET REVENIR À LA ROTATION NORMALE
 
 Demande de Guillaume : « assure-toi que le menu dev est bon pour tester les derniers ajouts et revenir à la rotation normale ». **Supabase : rien** (aucune migration : `forcedWorld`,

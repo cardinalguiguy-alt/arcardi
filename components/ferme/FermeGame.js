@@ -21808,14 +21808,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       m.dir = Math.abs(c) > Math.abs(sn) ? (c < 0 ? 2 : 3) : (sn < 0 ? 1 : 0);
       return true;
     }
+    /* ⚠️ 2026-10-13 — LA TRAPPE DE DÉGAGEMENT NE TRAVERSE PAS UN TUBE DU PARK (`SPK.walkFenceStep`) : qui est mal placé s'en éloigne,
+       ne passe pas au travers (on descendait de sa monture contre la lisse, et l'on franchissait le garde-corps). */
     function townStepOk(tw, m, nx, ny, fromE) {
-      return (canStandTown(tw, nx, ny, fromE) && parkStepOk(tw, m, nx, ny)) || !canStandTown(tw, m.x, m.y);
+      return (canStandTown(tw, nx, ny, fromE) && parkStepOk(tw, m, nx, ny))
+        || (!canStandTown(tw, m.x, m.y) && (!tw.skatepark || SPK.walkFenceStep(C.footX(m.x), C.footY(m.y), C.footX(nx), C.footY(ny))));
     }
     /* 2026-10-11 — LE PAS SUR LE RELIEF DU SKATEPARK : chaque point de la semelle d'arrivée doit tenir dans une marche de la
        hauteur sous les pieds d'où l'on part (`SPK.walkStepOk`) — on monte l'escalier et les tremplins, pas une plateforme ;
        on saute de la caisse. Hors du park (ou monde sans park) : rien à dire. */
     function parkStepOk(tw, m, nx, ny) {
       if (!tw.skatepark) return true;
+      /* 2026-10-13 — LA SEMELLE ENTIÈRE CONTRE LES TUBES (`SPK.walkFenceStep`), avant tout : ses quatre coins seuls laissaient le corps
+         enjamber une main courante en arrivant par son bout — y compris depuis l'allée de terre, hors du park (l'escalier du nord). */
+      if (!SPK.walkFenceStep(C.footX(m.x), C.footY(m.y), C.footX(nx), C.footY(ny))) return false;
       const fx = C.footX(nx), fy = C.footY(ny);
       if (!SPK.inPark(fx, fy) && !SPK.inPark(C.footX(m.x), C.footY(m.y))) return true;
       const h0 = SPK.heightAt(C.footX(m.x), C.footY(m.y));
@@ -32023,12 +32029,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const cur = rideRef.current;
     if (cur) {
       if (cur.mode !== "ground") return true;
+      // 2026-10-13 — on ne descend que là où un piéton tient debout (ni sur la pente d'une courbe, ni collé à une lisse)
+      if (!SPK.walkStandOk(m.x, m.y)) { const now = performance.now(); if (now - (parkFxRef.current.dismountAt || 0) > 2500) { parkFxRef.current.dismountAt = now; pushToast(L.parkDismountNo); } return true; }
       rideRef.current = null; m.vx = 0; m.vy = 0; m.moving = false; sendPos(); parkSoundStop();
       return true;
     }
     const kitM = MO.rideKitNorm(invRef.current && invRef.current.rideKit);
-    if (!(PARK_DEV.monture || E.rideActive(invRef.current, Date.now())) || !SPK.inPark(fx, fy)) return false;
-    rideRef.current = MO.rideNew(PARK_DEV.monture || kitM.kind, fx, fy, [Math.PI / 2, -Math.PI / 2, Math.PI, 0][m.dir | 0]);
+    // 2026-10-13 — on monte sur le DALLAGE (`inRideArea`), pas dans l'escalier du nord : la monture n'en sort pas
+    if (!(PARK_DEV.monture || E.rideActive(invRef.current, Date.now())) || !SPK.inRideArea(fx, fy)) return false;
+    const kindM = PARK_DEV.monture || kitM.kind;
+    /* Le nez dans le sens où l'on regarde — sinon, le premier sens où le véhicule ne touche aucun tube (on se tient contre la barrière,
+       le BMX y aurait la roue avant). */
+    let thM = [Math.PI / 2, -Math.PI / 2, Math.PI, 0][m.dir | 0];
+    const clr = (th) => SPK.rideClear(fx, fy, SPK.heightAt(fx, fy), th, MO.RIDE_HALF[kindM], true, null, MO.RIDE_TALL[kindM]).c;
+    if (clr(thM) < 0) { for (const d of [Math.PI / 2, -Math.PI / 2, Math.PI]) if (clr(thM + d) >= 0) { thM += d; break; } }
+    rideRef.current = MO.rideNew(kindM, fx, fy, thM);
     rideRef.current.color = kitM.color;
     sendPos();
     if (!parkFxRef.current.hint) { parkFxRef.current.hint = true; pushToast(L.parkRideHint); }   // les commandes, une fois par session

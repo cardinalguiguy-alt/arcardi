@@ -227,6 +227,19 @@ dépôt.
   horloge change la place est une règle de jeu, à trancher avec Guillaume. (4) Un message d'état d'un outil relit l'état qu'il décrit : « Aucun
   chantier d'essai : la place suit sa saison » mentait quand un essai FINI tenait encore la place. *Aucun banc ne joue un menu : vu en jouant.*
 
+- ⚠️⚠️ **UNE SEMELLE TESTÉE À SES COINS ENJAMBE TOUT CE QUI EST PLUS FIN QU'ELLE** (2026-10-13, skatepark). La marche lisait les garde-corps
+  aux quatre points de `C.bodyPoints` (0,6 case de large) avec une marge de 0,14 : un tube de 0,28 passait ENTRE deux coins — en arrivant
+  par le bout d'une main courante, on la longeait le tube au milieu du corps (l'escalier du nord depuis l'allée de terre, la barrière de la
+  porte est). Et la physique des montures ne lisait que le point des PIEDS contre le relief : longer le bout de la caisse mettait la moitié
+  du corps dedans. Parade : un obstacle plus fin que le corps se mesure contre le corps ENTIER (le rectangle de la semelle, `SP.fenceNear` ;
+  pour un rider, un torse et un véhicule orienté, `SP.rideClear`), jamais contre des points. Le prouver par un banc qui JOUE au hasard
+  (`verify-skatepark`) : aucun banc scripté ne passait par le bout d'une main courante.
+- ⚠️⚠️ **UN JEU MESURÉ EN « DEDANS / DEHORS » CASSE LA RÈGLE « PAS PLUS PRÈS QU'AVANT » : LA DISTANCE DOIT ÊTRE CONTINUE** (2026-10-13). La
+  collision des montures autorise tout pas qui ne RAPPROCHE pas d'un tube (sans quoi qui y est déjà ne peut plus en sortir). Premier jet : un
+  tube « comptait » si les hauteurs se croisaient, sinon pas — sa distance sautait de +∞ à −8 cm quand les pieds montaient de 4 mm sur une
+  courbe, ou quand le cap tournait (la planche couchée sur la pente change de hauteur), et la comparaison avant/après ne voyait jamais le saut.
+  Parade : le jeu est le plus grand des écarts, à plat ET en hauteur (`rideClear`) — continu, il ne saute pas. Corollaire : l'avant et
+  l'après se mesurent dans le même repère (la hauteur d'arrivée au sol, la hauteur d'avant pour l'avant, le cap essayé pour un pivot).
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
@@ -440,3 +453,15 @@ dépôt.
   Parade : un drapeau levé le temps du rejeu (`sunCasting`) que `drawCharacter` lit pour ne PAS lever le sprite ; le corps monte, l'ombre reste au sol —
   la règle déjà tenue pour les lapins et les animaux de compagnie. Les REFLETS, eux, lèvent le corps (le miroir d'un corps en l'air est en l'air).
   À relire à chaque nouveau décalage de hauteur d'un personnage (saut, vol, monture) : se demander ce que le rejeu en fait.
+
+- ⚠️⚠️ **UN MEMBRE DÉPLACÉ EN BLOC SE DÉTACHE : ON L'ÉTIRE LE LONG DE SON OS, SES ATTACHES RESTENT AU CORPS** (2026-10-13, riders du park).
+  Les corps des riders étaient des tranches de la feuille posées en bloc : chaque moitié de jambe sur son pied (deux colonnes séparées
+  jusqu'à la ceinture), la jambe qui pousse en « L » à côté du corps, les manches « écartées » à un pixel du buste, un trou dans le buste
+  de profil (on y retirait le bras). Guillaume : « pas de membres désarticulés ». Parade (`drawRiderBody`, montureArt.js) : un squelette —
+  la hanche et l'épaule FIXES sur le corps, le membre copié rangée par rangée le long de l'os (hanche → genou → pied, épaule → main) ;
+  la chaussure garde ses rangées, ce sont la cuisse et le tibia qui s'étirent. Et une proportion avant une dimension : sur des
+  personnages trapus (tête de 10 px sur 24), un guidon à sa hauteur réelle arrive aux épaules — il se met à la taille DU PERSONNAGE.
+- ⚠️ **LE FAUX CANEVAS DES BANCS IGNORE `translate`, `scale` ET `rotate` : TOUT CE QUI SE DESSINE EN MIROIR Y DISPARAÎT** (2026-10-13).
+  `lib-canvas.mjs` les accepte sans rien faire : une planche de poses tirée hors navigateur montre les profils gauches (dessinés sous
+  `scale(-1, 1)`) VIDES, sans erreur — on croit à un défaut de dessin. Une planche de poses qui tourne se juge dans un vrai navigateur
+  (la page jetable `app/audit-riders`, 2026-10-13).

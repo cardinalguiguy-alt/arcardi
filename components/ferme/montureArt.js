@@ -122,13 +122,17 @@ function drawScooterDeck(ctx, r, F) {
     return Math.abs(a) > 0.2 ? "#b9c0c9" : "#3a3c42";
   }, 1);
 }
+/* ⚠️ 2026-10-13 — LE GUIDON À LA TAILLE DU PERSONNAGE, PAS À CELLE D'UN ADULTE : les personnages sont trapus (une tête de 10 px sur
+   24, les épaules à 13 px du sol) ; à 0,78 case (son vrai 90 cm), le guidon arrivait aux épaules — le bras restait caché devant le
+   buste, la main ne se lisait pas sur la poignée. À la taille (`SCOOT_BAR_H`), le bras se tend vers l'avant et vers le bas. */
+export const SCOOT_BAR_H = 0.62, BMX_BAR_H = 0.6;
 function drawScooterBar(ctx, r, F) {
-  const pr = projector(r, F), col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length].deck;
-  line3(ctx, pr, 0.25, 0, 0.08, 0.3, 0, 0.78, "#c9ced6");
-  line3(ctx, pr, 0.255, 0.01, 0.08, 0.305, 0.01, 0.78, "#6e747e");
+  const pr = projector(r, F), col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length].deck, H = SCOOT_BAR_H;
+  line3(ctx, pr, 0.25, 0, 0.08, 0.3, 0, H, "#c9ced6");
+  line3(ctx, pr, 0.255, 0.01, 0.08, 0.305, 0.01, H, "#6e747e");
   const pb = spun(pr, 0.3, r.bar || 0);   // le barspin : le guidon tourne sur le tube
-  line3(ctx, pb, 0.3, -0.2, 0.78, 0.3, 0.2, 0.78, "#d6dbe2");
-  for (const sb of [-1, 1]) line3(ctx, pb, 0.3, sb * 0.2, 0.78, 0.3, sb * 0.14, 0.78, col);   // les poignées
+  line3(ctx, pb, 0.3, -0.2, H, 0.3, 0.2, H, "#d6dbe2");
+  for (const sb of [-1, 1]) line3(ctx, pb, 0.3, sb * 0.2, H, 0.3, sb * 0.14, H, col);   // les poignées
 }
 
 /* ── LE BMX : deux roues de 20 pouces (vues comme des ellipses : elles sont dans le plan vertical du cap), le cadre, le guidon ── */
@@ -162,86 +166,154 @@ function drawBmx(ctx, r, F, part) {
   if (part !== "back") {
     drawBmxWheel(ctx, pr0, aF, R);
     line3(ctx, pr0, 0.3, 0, 0.52, aF, 0, R, "#c9ced6");                 // la fourche
-    line3(ctx, pr0, 0.3, 0, 0.52, 0.27, 0, 0.72, "#c9ced6");            // la potence
-    line3(ctx, pb, 0.27, -0.24, 0.72, 0.27, 0.24, 0.72, "#d6dbe2");     // le guidon
-    for (const sb of [-1, 1]) line3(ctx, pb, 0.27, sb * 0.24, 0.72, 0.27, sb * 0.17, 0.72, "#26262b");
+    line3(ctx, pr0, 0.3, 0, 0.52, 0.27, 0, BMX_BAR_H, "#c9ced6");            // la potence
+    line3(ctx, pb, 0.27, -0.24, BMX_BAR_H, 0.27, 0.24, BMX_BAR_H, "#d6dbe2");     // le guidon
+    for (const sb of [-1, 1]) line3(ctx, pb, 0.27, sb * 0.24, BMX_BAR_H, 0.27, sb * 0.17, BMX_BAR_H, "#26262b");
   }
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
-   ║ LE CORPS DU RIDER — taillé dans la feuille du personnage (la tête, le buste, les manches, les deux moitiés de jambe), comme
-   ║ les poses du patineur (`drawSkateBody`, fermeArt.js), avec les mêmes mesures (`POSE_SLICES`, lues, jamais recopiées).
+   ║ LE CORPS DU RIDER — UN SQUELETTE TAILLÉ DANS LA FEUILLE DU PERSONNAGE (2026-10-13).
    ╚════════════════════════════════════════════════════════════════════════════
-   Ce qui fait un skateur et pas un piéton posé sur une planche :
-     · les PIEDS sont là où la planche les porte (`feet` : deux points de l'écran, écartés le long de la planche) — une garde
-       large de face, un pied derrière l'autre de profil ;
-     · les GENOUX fléchis (`bend`) : le haut du corps descend, les jambes restent plantées (leur haut passe sous le buste) ;
+   Guillaume (2026-10-13) : « l'animation doit être ULTRA précise anatomiquement, pas avec des membres désarticulés — et les autres
+   véhicules aussi ». ⚠️ Premier jet (2026-10-11) : les membres étaient des MORCEAUX de la feuille déplacés EN BLOC — chaque moitié
+   de jambe posée sur son pied (deux colonnes séparées jusqu'à la ceinture : plus de bassin), la jambe qui pousse un rectangle posé
+   en « L » à côté du corps, les manches « écartées » flottant à un pixel du buste, un trou au milieu du buste de profil (on y
+   retirait le bras). Ici, un SQUELETTE : les ATTACHES restent sur le corps — les hanches sous le buste, les épaules en haut des
+   manches — et chaque membre est la tranche de la feuille ÉTIRÉE RANGÉE PAR RANGÉE le long de son os (hanche → genou → pied,
+   épaule → coude → main) : il garde ses couleurs, son ombre, sa chaussure, et ne se détache jamais.
+   La feuille (16 × 24 par image ; rangée 0 de face, 1 de dos, 2 de profil, tournée vers la droite) : la tête rangées 0..9, le buste
+   10..15, les bras x 3-4 et 11-12 (la manche à partir de la rangée 11 — 13 en robe, les cheveux couvrent les épaules —, la main à
+   la 15), le profil a sa main au milieu du buste (x 7-8) ; les jambes x 5..7 (la claire) et 8..10 (la sombre), rangées 16..23
+   dont la chaussure 21..23 (en robe : 21..23, la bottine 23).
+   Ce qui fait un rider et pas un piéton posé sur une planche :
+     · les PIEDS sont là où le véhicule les porte (`feet`) — une garde large de face, un pied devant l'autre en profondeur de profil ;
+     · les GENOUX fléchis (`bend`) : les hanches descendent, la jambe se raccourcit (de face : le genou vient vers nous), et de profil
+       le genou avance ;
      · le BUSTE penche dans le virage (`lean`, la tête plus que le buste) ;
-     · les BRAS s'écartent pour l'équilibre (de face et de dos : le buste est taillé sans ses manches, qu'on repose plus loin) ;
-     · la POUSSÉE : un pied quitte la planche et va chercher le sol derrière (`push` : sa position, déjà calculée par l'appelant). */
+     · les BRAS s'écartent pour l'équilibre (`arms`), ou tiennent le guidon (`hands`) ;
+     · la POUSSÉE : une jambe quitte la planche et va chercher le sol (`push` : le pied, déjà projeté par l'appelant). */
+const RB = { SHOE: 3, ARM_TOP: 11, ARM_TOP_SKIRT: 13, HAND_Y: 15 };
 function drawRiderBody(ctx, sheet, row, px, top, o) {
   const sy = row * 24, side = row === 2;
-  const LY = o.skirt ? 21 : PS.LEG_Y, LH = 24 - LY;
-  const bend = o.bend || 0, lean = o.lean || 0;
-  const halfLeg = (right, x, y, cut) => { const h = LH - (cut || 0); if (h > 0) ctx.drawImage(sheet, right ? 8 : 0, sy + LY, 8, h, Math.round(x), Math.round(y) + (cut || 0), 8, h); };
-  // les jambes : chaque moitié posée pour que son pied tombe sur son point (le pied de la moitié gauche est en x 5..7, celui de la
-  // droite en 8..10 de la case, donc 0..2 de sa moitié)
-  /* ⚠️ LES PIEDS SUIVENT LA PLANCHE, PAS AU PIXEL PRÈS : une jambe ne s'allonge pas. De face (et de dos), l'écart le long de la
-     planche s'ouvre en largeur (3 px au naturel, 8 au plus) et l'écart en hauteur est borné à un pixel — sans quoi une planche
-     en diagonale faisait une jambe de 4 px plus longue que l'autre. De PROFIL, les deux moitiés de jambe gardent leur place
-     naturelle (l'une devant l'autre), un pixel d'écart : la planche file sous elles vers le haut et le bas de l'écran — premier
-     jet, chaque moitié posée sur son pied : deux jambes empilées sur six pixels, une échasse. */
+  const LY = o.skirt ? 21 : PS.LEG_Y, SHOE = o.skirt ? 1 : RB.SHOE, ARM_TOP = o.skirt ? RB.ARM_TOP_SKIRT : RB.ARM_TOP, HY = RB.HAND_Y;
+  const legNat = 24 - LY, bend = Math.max(0, o.bend || 0), lean = o.lean || 0;
+  // ── les pieds (`x` : la colonne du milieu de la chaussure ; `y` : la rangée SOUS la semelle)
   const mx = (o.feet[0][0] + o.feet[1][0]) / 2, my = (o.feet[0][1] + o.feet[1][1]) / 2;
-  const sp = side ? 3 : Math.max(3, Math.min(8, Math.abs(o.feet[1][0] - o.feet[0][0])));
-  const dyF = Math.max(-1, Math.min(1, Math.round((o.feet[1][1] - o.feet[0][1]) / 2)));
-  const fL = [mx - sp / 2 - 1.5 + 1.5, my - dyF * 0.5], fR = [mx + sp / 2, my + dyF * 0.5];
-  fL[0] = Math.round(mx - sp / 2); fR[0] = Math.round(mx + sp / 2);
-  if (o.push) {
-    // la jambe qui pousse d'abord (elle est derrière le corps), puis celle qui porte
-    const pf = o.push;
-    if (pf.side) halfLeg(true, pf.x - 1, pf.y - LH + 1); else halfLeg(false, pf.x - 6, pf.y - LH + 1);
-    if (pf.side) halfLeg(false, fL[0] - 6, fL[1] - LH); else halfLeg(true, fR[0] - 1, fR[1] - LH);
+  let fL, fR;
+  if (side) {
+    /* De profil, la planche file vers le haut et le bas de l'écran : les pieds gardent leur place naturelle en x (la jambe claire,
+       x 5..7, la plus proche — c'est celle du pied le plus BAS à l'écran), chacun à SA hauteur d'écran (la profondeur). */
+    /* ⚠️ L'écart en profondeur borné à deux pixels : la garde (46 cm) en ferait six, et la jambe du fond, réduite à sa chaussure
+       sous la hanche, avait l'air coupée au genou. La planche, elle, file en entier sous les deux pieds. */
+    // (et les deux pieds SUR la planche, l'un derrière l'autre : ±½ px — à ±1,5, les jambes l'enjambaient de part et d'autre)
+    const d = Math.max(0, Math.min(2, Math.abs(o.feet[0][1] - o.feet[1][1])));
+    fL = [mx - 0.5, my + d / 2]; fR = [mx + 0.5, my - d / 2];
+    if (o.pedals) {
+      // au BMX, les pieds sont où sont les pédales (devant, derrière, en haut, en bas) : c'est ce qui fait voir le pédalage. La pédale
+      // proche est connue de l'appelant (son côté du cadre), jamais déduite de l'écran — sinon les jambes s'échangeraient à mi-tour.
+      const nr = o.pedals[0], fr = o.pedals[1], m = (nr[1] + fr[1]) / 2, dy = Math.max(-2.5, Math.min(2.5, nr[1] - fr[1]));
+      fL = [nr[0], m + dy / 2]; fR = [fr[0], m - dy / 2];
+    }
   } else {
-    halfLeg(false, fL[0] - 6, fL[1] - LH);
-    halfLeg(true, fR[0] - 1, fR[1] - LH);
+    // de face, de dos : l'écart le long de la planche s'ouvre en largeur (3 px au naturel, 8 au plus) ; en hauteur, un pixel au plus
+    const sp = Math.max(3, Math.min(8, Math.abs(o.feet[1][0] - o.feet[0][0])));
+    const dyF = Math.max(-1, Math.min(1, Math.round((o.feet[1][1] - o.feet[0][1]) / 2)));
+    fL = [mx - sp / 2, my - dyF * 0.5]; fR = [mx + sp / 2, my + dyF * 0.5];
   }
-  // le haut du corps : centré entre les pieds, descendu de `bend`, penché de `lean`
-  const cx = Math.round((fL[0] + fR[0]) / 2 - 8 + 0.5);
-  const footY = Math.max(fL[1], fR[1]);
-  const t0 = Math.round(footY - 24 + bend);
-  const hx = Math.round(lean), tx = Math.round(lean * 0.5);
-  if (o.hands && o.hands.length) {
-    /* LES MAINS SUR LE GUIDON (BMX, trottinette) : le bras de la feuille tendu de l'épaule à la poignée (`drawReachArm`, la manche
-       étirée rangée par rangée — celui des figures à deux du patin). Le buste est taillé SANS ses manches (de face : le cœur x 5..10 ;
-       de profil : sans les colonnes 7..8 du bras), sinon le personnage en aurait trois. */
-    const TY = PS.TORSO_Y, AY = PS.ARM_Y, AH = PS.ARM_H;
-    if (side) {
-      ctx.drawImage(sheet, 0, sy + TY, 16, AY - TY, cx + tx, t0 + TY, 16, AY - TY);
-      ctx.drawImage(sheet, 0, sy + AY, 7, AH, cx + tx, t0 + AY, 7, AH);
-      ctx.drawImage(sheet, 9, sy + AY, 7, AH, cx + tx + 9, t0 + AY, 7, AH);
-      if (LY > AY + AH) ctx.drawImage(sheet, 0, sy + AY + AH, 16, LY - AY - AH, cx + tx, t0 + AY + AH, 16, LY - AY - AH);
-    } else ctx.drawImage(sheet, 5, sy + TY, 6, LY - TY, cx + 5 + tx, t0 + TY, 6, LY - TY);
-    ctx.drawImage(sheet, 0, sy, 16, PS.HEAD_H, cx + hx, t0, 16, PS.HEAD_H);
-    const R = { top: t0 + TY, dx: tx };
-    if (side) drawReachArm(ctx, sheet, sy, cx, true, 1, R, { x: o.hands[0][0], y: o.hands[0][1] });
-    else for (const hd of o.hands) drawReachArm(ctx, sheet, sy, cx, false, hd[0] >= cx + 8 ? 1 : 0, R, { x: hd[0], y: hd[1] });
-    return;
+  // ── les hanches : au-dessus du milieu des pieds, descendues de `bend` ; le buste posé dessus
+  const hipY = Math.round((fL[1] + fR[1]) / 2) - legNat + bend;
+  /* Accroupi de profil, le BASSIN RECULE d'un pixel quand le genou avance : la ligne en « < » d'un vrai accroupi (premier jet, le
+     bassin à l'aplomb des pieds : un genou en marche d'escalier). On fait face à droite : reculer, c'est −x. */
+  const hipBack = side ? Math.min(1, Math.round(bend / 2)) : 0;
+  const t0 = hipY - LY, cx = Math.round(mx - 8 + 0.5) - hipBack;
+  const tx = Math.round(lean * 0.5), hx = Math.round(lean);
+  /* ── UN BRAS : de l'épaule (le haut de la manche, 2 px de large) à la main. Chaque pas reprend la rangée de manche qui lui
+     correspond, la main nue au bout ; un bras plutôt horizontal fléchit un rien au coude (vers le bas). */
+  const arm = (srcX, shX, shY, hdX, hdY) => {
+    let dx = hdX - shX, dy = hdY - shY;
+    const L0 = Math.hypot(dx, dy), LMAX = 8;
+    if (L0 > LMAX) { dx *= LMAX / L0; dy *= LMAX / L0; }
+    const n = Math.max(2, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)))), horiz = Math.abs(dx) > Math.abs(dy);
+    const sag = horiz ? Math.min(1, Math.hypot(dx, dy) * 0.12) : 0;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, X = Math.round(shX + dx * t), Y = Math.round(shY + dy * t + sag * Math.sin(Math.PI * t));
+      const r = i === n ? HY : ARM_TOP + Math.min(HY - 1 - ARM_TOP, Math.floor(t * (HY - ARM_TOP)));
+      if (horiz) { ctx.drawImage(sheet, srcX, sy + r, 1, 1, X, Y, 1, 1); ctx.drawImage(sheet, srcX + 1, sy + r, 1, 1, X, Y + 1, 1, 1); }
+      else ctx.drawImage(sheet, srcX, sy + r, 2, 1, X, Y, 2, 1);
+    }
+  };
+  const armBack = () => { const h = o.hands[0]; arm(7, cx + 7 + tx, t0 + ARM_TOP, h[0] - 0.5, h[1]); };
+  // LES MAINS SUR LE GUIDON (BMX, trottinette) : de profil, le bras de devant ; de face, chacun sa poignée
+  function drawHands() {
+    if (side) { const h = o.hands[o.hands.length - 1]; arm(7, cx + 7 + tx, t0 + ARM_TOP, h[0] - 0.5, h[1]); return; }
+    const hs = [...o.hands].sort((a, b) => a[0] - b[0]);
+    arm(3, cx + 3 + tx, t0 + ARM_TOP, hs[0][0] - 1, hs[0][1]);
+    arm(11, cx + 11 + tx, t0 + ARM_TOP, hs[hs.length - 1][0], hs[hs.length - 1][1]);
   }
-  if (side || !o.arms || o.arms === "down") {
-    ctx.drawImage(sheet, 0, sy + PS.TORSO_Y, 16, LY - PS.TORSO_Y, cx + tx, t0 + PS.TORSO_Y, 16, LY - PS.TORSO_Y);
-    ctx.drawImage(sheet, 0, sy, 16, PS.HEAD_H, cx + hx, t0, 16, PS.HEAD_H);
-    return;
+  // `o.part === "arms"` : on ne redessine QUE les bras au guidon (l'appelant a posé le guidon par-dessus le corps entre-temps)
+  if (o.part === "arms") { if (o.hands && o.hands.length) drawHands(); return; }
+  /* ── UNE JAMBE : la tranche x `srcX`..+2 de la feuille, de la hanche (fixe, sous le buste) au pied (`fx`, `fy`). Les rangées de
+     jambe s'étirent ou se tassent entre la hanche et la chaussure, qui garde ses rangées (elle reste plate sur le plateau) ; le
+     décalage suit l'os : la cuisse jusqu'au genou (à mi-hauteur, poussé de `knee` px), le tibia jusqu'au pied. */
+  const leg = (srcX, fx, fy, knee) => {
+    const n = Math.round(fy) - hipY;
+    if (n <= 0) return;
+    const baseX = cx + srcX, dxF = fx - (baseX + 1);
+    // la chaussure garde ses rangées tant que la jambe en garde trois ; accroupi plus bas, c'est la cheville qui se tasse (premier
+    // jet : deux rangées de pantalon sur trois de chaussure, des pieds de clown)
+    const shoe = Math.max(1, Math.min(SHOE, n - 3)), legRows = n - shoe, srcLeg = legNat - SHOE;
+    const kx = dxF * 0.5 + (knee || 0);
+    for (let j = 0; j < n; j++) {
+      let r, off;
+      if (j >= legRows) { r = 24 - (n - j); off = dxF; }
+      else {
+        r = LY + Math.min(srcLeg - 1, Math.floor((j * srcLeg) / legRows));
+        const t = (j + 0.5) / legRows;
+        off = t < 0.5 ? kx * (t / 0.5) : kx + (dxF - kx) * ((t - 0.5) / 0.5);
+      }
+      ctx.drawImage(sheet, srcX, sy + r, 3, 1, Math.round(baseX + off), hipY + j, 3, 1);
+    }
+  };
+  // le genou de profil avance (on fait face à droite : +x) ; de face, il vient vers nous — la jambe se raccourcit et les genoux
+  // s'ouvrent (l'accroupi vu de face : « ( ) », pas deux jambes tronquées)
+  const kneeFwd = side ? Math.min(2, Math.round(bend * 0.6)) : 0, kneeOut = side ? 0 : Math.min(1, Math.round(bend * 0.4));
+  const LEG_L = 5, LEG_R = 8;   // les tranches : la jambe claire, la sombre
+  if (o.push) {
+    // la jambe qui pousse, tendue vers le sol ; l'autre porte, genou fléchi
+    const pushL = o.push.x < mx;
+    // le pied qui pousse touche le sol à côté du plateau : un peu plus bas que le pied qui porte, jamais une jambe d'échassier
+    const supY = pushL ? fR[1] : fL[1];
+    const pf = [o.push.x, Math.max(supY - 1, Math.min(supY + 3, o.push.y))];
+    if (side) { leg(LEG_R, pushL ? fR[0] : pf[0], pushL ? fR[1] : pf[1], pushL ? kneeFwd : 0); leg(LEG_L, pushL ? pf[0] : fL[0], pushL ? pf[1] : fL[1], pushL ? 0 : kneeFwd); }
+    else { leg(LEG_L, pushL ? pf[0] : fL[0], pushL ? pf[1] : fL[1], pushL ? 0 : -kneeOut); leg(LEG_R, pushL ? fR[0] : pf[0], pushL ? fR[1] : pf[1], pushL ? kneeOut : 0); }
+  } else if (side) { leg(LEG_R, fR[0], fR[1], kneeFwd); leg(LEG_L, fL[0], fL[1], kneeFwd); }
+  else { leg(LEG_L, fL[0], fL[1], -kneeOut); leg(LEG_R, fR[0], fR[1], kneeOut); }
+  // ── le buste et la tête. Les bras qui quittent le corps (de face, de dos) en sont ôtés : les colonnes x 3 et 12, et les mains.
+  const TY = PS.TORSO_Y, armsOff = !side && ((o.hands && o.hands.length) || (o.arms && o.arms !== "down"));
+  if (armsOff) {
+    ctx.drawImage(sheet, 0, sy + TY, 16, ARM_TOP - TY, cx + tx, t0 + TY, 16, ARM_TOP - TY);
+    ctx.drawImage(sheet, 4, sy + ARM_TOP, 8, HY - ARM_TOP, cx + 4 + tx, t0 + ARM_TOP, 8, HY - ARM_TOP);
+    ctx.drawImage(sheet, 5, sy + HY, 6, 1, cx + 5 + tx, t0 + HY, 6, 1);
+    if (LY > HY + 1) ctx.drawImage(sheet, 0, sy + HY + 1, 16, LY - HY - 1, cx + tx, t0 + HY + 1, 16, LY - HY - 1);
+  } else {
+    // de profil, le bras lointain tient la poignée du fond : il passe DERRIÈRE le buste, seule sa main dépasse
+    if (side && o.hands && o.hands.length > 1) armBack();
+    ctx.drawImage(sheet, 0, sy + TY, 16, LY - TY, cx + tx, t0 + TY, 16, LY - TY);
+    // de profil, la main posée au guidon quitte le flanc : sa place reprend le tissu de la rangée (pas de trou dans le buste)
+    if (side && o.hands && o.hands.length) for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
   }
-  // de face, de dos : le buste sans ses manches, puis les manches reposées écartées (l'équilibre) ou levées
-  ctx.drawImage(sheet, 5, sy + PS.TORSO_Y, 6, LY - PS.TORSO_Y, cx + 5 + tx, t0 + PS.TORSO_Y, 6, LY - PS.TORSO_Y);
-  const armY = t0 + PS.ARM_Y + (o.arms === "up" ? -3 : -1);
-  const spread = o.arms === "wide" ? 3 : 1;
-  const armL = (x, y) => ctx.drawImage(sheet, PS.ARM_LX, sy + PS.ARM_Y, PS.ARM_W, PS.ARM_H, x, y, PS.ARM_W, PS.ARM_H);
-  const armR = (x, y) => ctx.drawImage(sheet, PS.ARM_RX, sy + PS.ARM_Y, PS.ARM_W, PS.ARM_H, x, y, PS.ARM_W, PS.ARM_H);
-  const tilt = o.armTilt || 0;   // un bras plus haut que l'autre : on se rattrape du côté où l'on penche
-  armL(cx + tx + PS.ARM_LX - spread, armY - (tilt > 0 ? 1 : 0));
-  armR(cx + tx + PS.ARM_RX + spread, armY - (tilt < 0 ? 1 : 0));
   ctx.drawImage(sheet, 0, sy, 16, PS.HEAD_H, cx + hx, t0, 16, PS.HEAD_H);
+  const shY = t0 + ARM_TOP;
+  if (o.hands && o.hands.length) { if (o.part !== "body") drawHands(); return; }
+  if (armsOff) {
+    // L'ÉQUILIBRE : les bras écartés du corps — un peu (« out » : les mains à hauteur de hanche, deux pixels dehors) ou franchement
+    // (« wide » : à hauteur de poitrine, le saut, la glisse) ; on se rattrape du côté où l'on penche (`armTilt` : cette main monte)
+    const tilt = o.armTilt || 0, wide = o.arms === "wide", up = o.arms === "up";
+    const hy = t0 + (up ? 7 : wide ? 13 : 16), ox = up ? 2 : wide ? 4 : 2;
+    arm(3, cx + 3 + tx, shY, cx + 3 + tx - ox, hy - (tilt > 0 ? 2 : 0));
+    arm(11, cx + 11 + tx, shY, cx + 11 + tx + ox, hy - (tilt < 0 ? 2 : 0));
+  }
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
@@ -285,20 +357,31 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
   const along = r.kind === "skate" ? 0.2 : r.kind === "scooter" ? 0.08 : 0.07;
   const lat = r.kind === "bmx" ? 0.11 : 0;
   let fA = pr(-along, -lat, deckH), fB = pr(along, lat, deckH);
-  if (r.kind === "bmx") { fA = pr(-0.04, -0.11, deckH); fB = pr(-0.04, 0.11, deckH); }
+  if (r.kind === "bmx") {
+    /* 2026-10-13 — LES PÉDALES TOURNENT : les deux pieds sur les manivelles (9 cm, de part et d'autre du boîtier, en opposition), à la
+       phase du pédalage — premier jet, deux points fixes : le BMX « pédalait » les pieds immobiles. À l'arrêt, manivelles à plat. */
+    const cr = 0.09, phc = r.pose === "glide" ? 2 * Math.PI * (r.ph || 0) : 0, BBa = -0.04, BBh = 0.17;
+    fA = pr(BBa + cr * Math.cos(phc), -0.11, BBh + cr * Math.sin(phc)); fB = pr(BBa - cr * Math.cos(phc), 0.11, BBh - cr * Math.sin(phc));
+  }
   const mir = (q) => (flipX ? [2 * px + 16 - q[0], q[1]] : q);
+  /* La pédale PROCHE (de profil) : celle du côté du cadre tourné vers nous — le travers du cap (`F.l`) pointe vers le bas de l'écran
+     quand cos(cap) > 0, et c'est alors la pédale de droite (`fB`). */
+  const pedals = r.kind === "bmx" ? (Math.cos(r.th) > 0 ? [mir(fB), mir(fA)] : [mir(fA), mir(fB)]) : null;
   let a = mir(fA), b = mir(fB);
   if (a[0] > b[0]) { const t = a; a = b; b = t; }
   const feet = [[a[0], a[1]], [b[0], b[1]]];   // ⚠️ la projection porte DÉJÀ la hauteur en l'air (`R.air`) : la retrancher encore levait le corps deux fois
-  const o = { feet, skirt, bend: r.bend || 0, lean: (flipX ? -1 : 1) * (r.lean || 0), arms: r.kind === "skate" ? "out" : "down", armTilt: r.lean || 0 };
+  /* Les genoux au repos : debout sur ses pédales, le rider de BMX les garde fléchis (deux pixels) ; sur la trottinette, souples (un). */
+  const bend0 = r.kind === "bmx" ? 2 : r.kind === "scooter" ? 1 : 0;
+  const o = { feet, skirt, bend: Math.max(bend0, r.bend || 0), lean: (flipX ? -1 : 1) * (r.lean || 0), arms: r.kind === "skate" ? "out" : "down", armTilt: r.lean || 0, pedals };
   if ((r.kind === "bmx" || r.kind === "scooter") && !r.grab) {
     // les poignées, projetées (le barspin les fait tourner : à mi-tour, on lâche le guidon — les mains restent en l'air)
-    const bA = r.kind === "bmx" ? 0.27 : 0.3, bH = r.kind === "bmx" ? 0.72 : 0.78, bB = r.kind === "bmx" ? 0.21 : 0.18;
+    const bA = r.kind === "bmx" ? 0.27 : 0.3, bH = r.kind === "bmx" ? BMX_BAR_H : SCOOT_BAR_H, bB = r.kind === "bmx" ? 0.21 : 0.18;
     const spinning = r.bar && Math.abs(Math.sin(r.bar / 2)) > 0.35;
     if (!spinning && row !== 1) {   // de dos, le guidon est caché par le corps : les bras restent le long (tendus, ils se levaient vers lui)
       const gs = [pr(bA, -bB, bH), pr(bA, bB, bH)].map(mir);
       const sideView = row === 2;
-      o.hands = sideView ? [gs.reduce((p, q) => (q[1] > p[1] ? q : p))] : gs;
+      // de profil, les deux poignées, la lointaine (plus haut à l'écran) d'abord : son bras passe DERRIÈRE le buste
+      o.hands = sideView ? [...gs].sort((p, q) => p[1] - q[1]) : gs;
     }
   }
   if ((r.kind === "skate" || r.kind === "scooter") && (pose === "push" || pose === "glide")) {
@@ -310,30 +393,34 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
     o.push = { x: q[0], y: q[1] + (sweep > 0.3 ? 0 : -1), side: q[0] > (feet[0][0] + feet[1][0]) / 2 };
     o.bend = Math.max(o.bend, 1);
   }
-  if (pose === "hop") { o.bend = Math.max(o.bend, 3); o.arms = "wide"; feet[0][1] -= 2; feet[1][1] -= 2; }
+  // le saut : genoux ramassés, bras ouverts — les pieds RESTENT sur le plateau (premier jet : levés de 2 px, ils flottaient au-dessus) ;
+  // au BMX et à la trottinette, on garde le guidon (premier jet : les bras s'ouvraient, de dos, le guidon lâché en plein saut)
+  if (pose === "hop") { o.bend = Math.max(o.bend, 3); if (r.kind === "skate") o.arms = "wide"; }
+  // le BMX se monte penché sur son guidon : de profil, la tête et le buste avancent (+x : le repère du corps regarde à droite)
+  if (r.kind === "bmx" && row === 2) o.lean += 1;
   if (r.grab) { o.bend += Math.round(2 * r.grab); o.arms = "down"; }   // la main va chercher la planche
   if (pose === "grind") { o.arms = r.kind === "skate" ? "wide" : o.arms; }
   if (pose === "brake") { o.lean = (flipX ? 1 : -1) * 2; o.bend = Math.max(o.bend, 2); }
-  const body = () => {
-    if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(o, -px)); ctx.restore(); }
-    else drawRiderBody(ctx, sheet, row, px, 0, o);
+  const body = (part) => {
+    const oo = part ? { ...o, part } : o;
+    if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(oo, -px)); ctx.restore(); }
+    else drawRiderBody(ctx, sheet, row, px, 0, oo);
   };
   if (r.kind === "skate") {
     // le pop shove-it : le plateau tourne sur lui-même SOUS les pieds (le corps garde son cap)
     if (r.yaw) { const Ry = { ...R, th: r.th + r.yaw }; drawBoard(ctx, Ry, frameOf(Ry)); } else drawBoard(ctx, R, F);
     body(); return;
   }
+  // le guidon devant le corps (le véhicule pointe vers nous) se pose ENTRE le corps et les mains : les mains le tiennent, par-dessus
   if (r.kind === "scooter") {
     drawScooterDeck(ctx, R, F);
     if (!frontIsNear) drawScooterBar(ctx, R, F);
-    body();
-    if (frontIsNear) drawScooterBar(ctx, R, F);
+    if (frontIsNear) { body("body"); drawScooterBar(ctx, R, F); body("arms"); } else body();
     return;
   }
   if (r.kind === "bmx") {
     drawBmx(ctx, R, F, frontIsNear ? "back" : "all");
-    body();
-    if (frontIsNear) drawBmx(ctx, R, F, "front");
+    if (frontIsNear) { body("body"); drawBmx(ctx, R, F, "front"); body("arms"); } else body();
   }
 }
 /* Sous le miroir (profil gauche), le corps est dessiné à x = 0 dans un repère retourné autour de px + 8 : ses pieds y sont à
@@ -342,6 +429,7 @@ function shiftFeet(o, dx) {
   const q = { ...o, feet: o.feet.map((f) => [f[0] + dx, f[1]]) };
   if (o.hands) q.hands = o.hands.map((h) => [h[0] + dx, h[1]]);
   if (o.push) q.push = { ...o.push, x: o.push.x + dx };
+  if (o.pedals) q.pedals = o.pedals.map((f) => [f[0] + dx, f[1]]);
   return q;
 }
 

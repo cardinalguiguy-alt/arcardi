@@ -11,25 +11,28 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-12 (soir) — LE MENU DEV TESTE LE PARK, LE CHANTIER ET LA QUALITÉ, ET REND LA ROTATION NORMALE — DANS L'ARBRE, NON COMMITÉ (le park et le chantier le sont : 0505478, 7407059)
+### 2026-10-13 — LE SKATEPARK SANS TROU DE COLLISION, LES RIDERS SUR UN SQUELETTE — DANS L'ARBRE, NON COMMITÉ (le menu dev l'est : 27ff2ec)
 
-**Le park** (2026-10-11 ; récit : journal du README de la ferme) : relief (`skatepark.js`), dessin 3/4 (`skateparkArt.js`), quatre montures (`monture.js`, `montureArt.js`, `sonPark.js`), cabane de location (`rentRide`), réseau (`rd` dans
-le paquet de position). **Le chantier** (2026-10-12) : patinoire démontée, park monté, **le lundi du changement de saison, 14 h–17 h heure de Paris** (`chantier.js` : pure fonction de l'heure, aucun message ; `chantierArt.js` ; `sonChantier.js` ;
-l'eau de la fonte est celle de la pluie, `pluie.js`). **`SPK.PARK_OPEN = true`** (ordre de Guillaume : patinoire l'hiver → chantier → park au printemps ; faux = ni park ni chantier). ⚠️ **Le lundi 2026-10-12 EST ce lundi** (le printemps a commencé
-à 2 h, heure de Paris) : la patinoire tient jusqu'à 14 h, puis le vrai chantier tourne SANS bouton sur toute copie qui porte ce code. **Le menu dev** (⌘⇧X) : **« Rotation normale » en tête** (ce qui est forcé + « Tout remettre en rotation
-normale » : terre, saison, avancée, météo, neige, park, monture, chantier d'essai, qualité — `devBackToNormal`, requête `devReset`) ; **« Skatepark et chantier »** (park chez soi, monture d'essai, Montage/Démontage à l'heure et à la vitesse voulues,
-arrêts « skatepark » et « allée de l'est » — local, `PARK_DEV`) ; **« Qualité adaptative »** (un palier figé, `perfDevSet`) ; le bandeau du bas rappelle aussi la saison forcée ; et le menu sort le testeur de la glace avant qu'il tombe (`parkDevSettleTick`,
-DEV seulement). Aussi `?skatepark=1`, `?monture=…`, `?chantier=…`. Bancs relancés : `verify-strings` 1333 clés, `verify-syntax`, `verify-scope`, `verify-duo` 23/23, `verify-jalons` 135/135, `verify-vallee` 359/359, `verify-chantier` 23/23,
-`verify-monture` 24/24, `verify-pluie` 34/34, `verify-ombres` 27/27, `verify-collision`, `verify-pont`, `verify-noms` 13/13, `render-skatepark` 7/7, `verify-docs`. **Vu en jeu** : chaque phase du chantier, un air de quarter, un 50-50, la location d'un BMX,
-deux clients qui se voient rider ; le menu : chaque retour à la normale (un et deux clients, FR et EN). **Pas vu** : aucun son (volet muet), la vraie bascule de 14 h, un iPad, la qualité adaptative sur un vrai Mac lent. **Supabase : rien.**
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Les bancs réécrivent `tools/.cache/*.mjs`. ⚠️ Volet du navigateur masqué : attendre par la file `requestAnimationFrame` du harnais (`__ws`,
-`docs/VERIFICATION.md` §10), jamais `setTimeout` ; `__setHour` décale `Date.now` (un chantier en vitesse > 0 saute alors de minute). ⚠️ Recharger la page après toute édition de `FermeGame.js`. Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` n'existe pas ;
-`TOWN_SPEED_MULT` est mort ; la bascule de saison est instantanée.
+**Collision** (récit : journal du README de la ferme, 2026-10-13). Une sonde de FUZZ (devenue `verify-skatepark`) a trouvé : 243 sorties du park sur 3 000 sessions
+(le bout nord de la mini-rampe, ouvert ; l'escalier de la galerie descendu en roulant), 96 montées « téléportées » jusqu'à 1,37 m sur le flanc des modules (décollage
+pris pour un flanc, puis l'inverse au premier pas d'un ollie), des mains courantes enjambées à pied (la semelle testée à ses coins). Corrigé : un garde-corps qui épouse
+le U au bout nord de la mini, une main courante à l'ouest de son escalier (`skatepark.js`) ; l'aire de roulage et ses deux portes (`inRideArea`) ; l'emprise d'un rider
+(torse + véhicule orienté, CONTINUE en hauteur : `rideClear`) et du piéton (la semelle entière : `fenceNear`, `walkFenceStep`) ; les flancs à côté d'un rider
+(`sideWall`) ; la rotation, les réceptions, la chute (`monture.js`) ; on ne monte que sur le dallage, on ne descend que debout (`walkStandOk`, `parkMountToggle`).
+**Anatomie** : `drawRiderBody` (montureArt.js) réécrit en squelette (hanches et épaules fixes, membres étirés le long de l'os) ; le BMX pédale (manivelles), deux mains
+au guidon de profil, guidons à la taille des personnages (`SCOOT_BAR_H`, `BMX_BAR_H`). Bancs relancés : `verify-skatepark` 8/8 (800 sessions de monture, 120 à pied ;
+3 contacts résiduels de quelques cm, plafond 24), `verify-monture` 24/24, `render-skatepark` 7/7, `verify-collision`, `verify-chantier` 23/23, `verify-vallee` 359/359,
+`verify-pluie` 34/34, `verify-ombres` 27/27, `verify-noms` 13/13, `verify-strings` 1334 clés, `verify-syntax`, `verify-scope`, `verify-docs`. **Vu** : la planche des poses
+des trois montures (vrai navigateur, `app/audit-riders?k=skate|scooter|bmx&g=m|f&z=3`) ; en jeu, la porte est qui arrête le skate. **Pas vu** : les nouvelles poses EN JEU,
+en mouvement ; les rollers (`drawSkate`, fermeArt.js : leurs manches « écartées » flottent encore au frein et au saut) ; un petit cran sombre aux hanches de profil, genoux
+très pliés. **Supabase : rien.** ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Le faux canevas
+des bancs ignore `scale(-1,1)` : une planche de poses se juge en navigateur (§4). Pas corrigés : `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER PARK ET CHANTIER PAR GUILLAUME EN JEU, AVEC LE SON
+### ⏭️ ACTION SUIVANTE — FINIR L'ANATOMIE, PUIS FAIRE JUGER PARK, RIDERS ET CHANTIER PAR GUILLAUME EN JEU
 
-(1) Les deux blocs en tête de `docs/A-JUGER.md` (le park ; le chantier : menu dev, Montage, ×30, depuis l'allée de l'est). **À trancher avec lui** : au vrai chantier personne n'est évacué de la glace (un patineur reste sur la place fermée, un joueur sans
-patins qui s'y trouve tombe). (2) Ensuite (`docs/PROJETS.md` §4.1) : l'équipe de nettoyage, le tactile, l'équipe resservie (chantier d'hiver, voirie, façades). (3) Toujours en attente : l'amie au Mac lent (menu dev, « Qualité adaptative »), vingt minutes sur un iPad.
+(1) Les rollers sur le même squelette (`drawSkate` est PARTAGÉ avec la patinoire : retoucher ses bras écartés pour les deux, en vérifiant `render-patin`) ; regarder les
+riders en jeu, en mouvement, aux quatre caps et en l'air (figures, chute). (2) Les blocs en tête de `docs/A-JUGER.md` (riders, park, chantier). (3) Ensuite
+(`docs/PROJETS.md` §4.1) : l'équipe de nettoyage, le tactile. Toujours en attente : l'amie au Mac lent, vingt minutes sur un iPad.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -84,7 +87,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
 | « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
-| **Skatepark** (relief, dessin, montures, figures, grinds, cabane, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; README ferme (journal 2026-10-11) | `verify-monture`, `render-skatepark` |
+| **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, cabane, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; README ferme (journal 2026-10-11) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
@@ -268,6 +271,8 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN CHAMP `id` DANS UNE `req` EST ÉCRASÉ PAR L'EXPÉDITEUR
 - UNE GARDE D'AUDIENCE À L'ÉMISSION ET UNE INSCRIPTION QUI NE SE FAIT QU'À LA RÉCEPTION FONT UN SILENCE MUTUEL QUI NE SE ROMPT JAMAIS
 - UN FORÇAGE DU MENU DEV EST UNE DETTE : IL A SON RAPPEL À L'ÉCRAN, SON RETOUR D'UN CLIC, ET IL NE FAIT JAMAIS TOMBER CELUI QUI LE RENDRA
+- UNE SEMELLE TESTÉE À SES COINS ENJAMBE TOUT CE QUI EST PLUS FIN QU'ELLE
+- UN JEU MESURÉ EN « DEDANS / DEHORS » CASSE LA RÈGLE « PAS PLUS PRÈS QU'AVANT » : LA DISTANCE DOIT ÊTRE CONTINUE
 
 **JavaScript / three.js / canevas**
 
@@ -293,6 +298,8 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT
 - UN EFFET QUI SE DESSINE AILLEURS QUE SON OBJET (un reflet, une ombre longue) N'EXISTE QUE SI LA FILE DE DESSIN CONNAÎT L'OBJET HORS CADRE
 - UN DESSIN REJOUÉ EN OMBRE REJOUE AUSSI SES DÉCALAGES DE HAUTEUR : LE CORPS MONTE, SON OMBRE DOIT RESTER AU SOL
+- UN MEMBRE DÉPLACÉ EN BLOC SE DÉTACHE : ON L'ÉTIRE LE LONG DE SON OS, SES ATTACHES RESTENT AU CORPS
+- LE FAUX CANEVAS DES BANCS IGNORE `translate`, `scale` ET `rotate` : TOUT CE QUI SE DESSINE EN MIROIR Y DISPARAÎT
 - UN ÉTAT QU'ON RETIRE QUAND SA TAILLE CHANGE SE RETIRE À CHAQUE IMAGE D'UN FONDU
 - `floor(t × cadence)` AVEC `t` ABSOLU ET UNE CADENCE QUI VARIE TIRE UNE IMAGE AU HASARD
 - UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.

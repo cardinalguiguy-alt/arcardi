@@ -298,8 +298,9 @@ function tubePixels(buf) {
     line([f.u0, f.v0, f.b0 + f.top], [f.u1, f.v1, f.b1 + f.top], S_HI, S_LO, true);
     if (f.kind === "rail") line([f.u0, f.v0, f.b0 + f.top * 0.5], [f.u1, f.v1, f.b1 + f.top * 0.5], S_MID, null, false);
     else line([f.u0, f.v0, f.b0 + 0.12], [f.u1, f.v1, f.b1 + 0.12], S_MID, null, false);
-    for (let k = 0; k <= nPost; k++) {
-      const t = k / nPost, u = f.u0 + (f.u1 - f.u0) * t, v = f.v0 + (f.v1 - f.v0) * t, b = f.b0 + (f.b1 - f.b0) * t;
+    // les poteaux : un tous les 1,1 case, ou là où le relief les veut (le garde-corps qui épouse le U de la mini-rampe, `f.posts`)
+    for (const t of f.posts || Array.from({ length: nPost + 1 }, (_, k) => k / nPost)) {
+      const u = f.u0 + (f.u1 - f.u0) * t, v = f.v0 + (f.v1 - f.v0) * t, b = f.b0 + (f.b1 - f.b0) * t;
       line([u, v, b], [u, v, b + f.top], S_MID, null, false);
     }
   }
