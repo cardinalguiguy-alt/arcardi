@@ -78,6 +78,7 @@ plafonne le total de canevas ; un dépassement ne lève aucune erreur, c'est un 
 | Zone | À regarder sur l'iPad |
 |---|---|
 | Entrée et déplacement | le pavé flottant et `touch-action: none` (README ferme, « LE PAVÉ EST FLOTTANT ») ; l'écran de choix du personnage ; le bouton d'action contextuel, 🏃, 🗺️, ✋ et le zoom 🔍± (`ferme-touch-btns`) |
+| Skatepark (printemps) | les boutons de monture (Sauter tenu pour charger, deux figures nommées, Pomper, Freiner, Descendre ; 2026-10-13 soir) : taille des cibles sous le pouce, le saut tenu pendant que l'autre pouce dirige, la ligne de figures atteignable en l'air ; « monter sur le skate » au bouton d'action ; le 360 au pavé (le tour des directions) |
 | Patinoire d'hiver | la location au chalet et le lissage demandé au comptoir (panneaux au doigt) ; **le saut a son bouton tactile (✋, `pressJumpOrAct`), mais la vrille V, l'axel, la marche arrière B et le freinage brut C n'en ont aucun** (« V/B/C au tactile : pas fait ») ; l'aide « ? » (`SkateHelp.js`) cite des TOUCHES de clavier ; le HUD de course (`CourseHud.js`) |
 | Marché du nord (toutes saisons) | vendre (« E : vendre au marché » au doigt), l'arche, le caillebotis ; la carte ouverte |
 | Rendu | l'ombre portée du soleil (coût par image mesuré sur Mac seulement), la neige, la pluie, la lumière de nuit, les reflets, l'usure de la glace et la surfaceuse : la fluidité à zoom 2 à 4 |
@@ -115,7 +116,8 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
      jour-là : **printemps seul** (l'été a les jeux d'eau, l'automne le festival d'Halloween) ; skate, rollers, trottinette, BMX ; bois clair sur acier ; piétons admis ; location sur place, on
      ne sort pas du park en roulant ; figures libres sans score (un mode chronométré à combos viendra plus tard, comme la course de la patinoire). **Le CHANTIER de 3 h est codé (2026-10-12**,
      journal du README de la ferme ; montage le lundi du printemps 14 h–17 h heure de Paris, démontage à l'envers au début de l'été). **Reste à faire, dans l'ordre** :
-     (a) que Guillaume juge park et chantier en jeu (`docs/A-JUGER.md`) ; (b) l'équipe de nettoyage à heure fixe (décision du 2026-10-06) ; (c) les commandes tactiles (iPad) ;
+     (a) que Guillaume juge park et chantier en jeu (`docs/A-JUGER.md`) ; (b) l'équipe de nettoyage à heure fixe (décision du 2026-10-06) ; (c) les commandes tactiles
+     (iPad) — CODÉES le 2026-10-13 soir (boutons libellés en monture), jamais vues sur un vrai iPad ;
      (d) faire resservir l'équipe (`CH.CREW`, les gestes de `chantierArt.js`) : le chantier de l'hiver (la patinoire montée), la voirie, les façades. (Le park est ouvert depuis le 2026-10-12 : `SPK.PARK_OPEN = true`.)
   2. **Le miroir d'eau — les jeux d'eau de l'été (confirmé le 2026-10-11).** Une nappe d'eau peu profonde sur la place, avec des **geysers illuminés la nuit**. Idée gardée ; à questionner :
      on y marche ? jeux (se poursuivre, esquiver les jets) ? reflets (`eau.js` existe) ? cycle des jets ?

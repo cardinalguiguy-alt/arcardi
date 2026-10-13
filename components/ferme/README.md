@@ -1,5 +1,42 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-13 (soir) — LE SKATEPARK : LES CHUTES RARES, LES COMMANDES DITES (CLAVIER ET DOIGT), LES ROLLERS SUR LE SQUELETTE
+
+Guillaume : « le rendu final devra être fluide, les échecs rares » (les CHUTES en jeu, précisé ensuite) ; « le but est une fluidité et un côté fun pour le
+joueur » ; les commandes tactiles « à toi de proposer, mais ce doit être indiqué — tout comme les commandes doivent être indiquées discrètement sur clavier ».
+Le test iPad est REPORTÉ (Xcode à mettre à jour sur son Mac). **Supabase : rien.**
+
+**Mesurer d'abord.** Une sonde de « joueur plausible » (il vise les modules et les lignes, pousse, saute, lance une figure dans un air sur deux) tombait
+**6 à 10 fois par minute**, sur les quatre montures. Trois causes (en-tête « LES CHUTES RARES » de `monture.js`) :
+- **la rotation en l'air sans le vouloir** (3-4/min) : gauche/droite FAISAIENT tourner — qui roulait vers l'est en tenant → et sautait tournait de ~270°.
+  → En l'air, la flèche VISE UN CAP (on tourne vers elle, on s'y arrête) ; la flèche tenue au décollage n'est pas un ordre ; sans ordre, la monture
+  **s'aligne sur sa réception** (`predictLanding`, une balistique au 1/60 s) — le demi-tour du BMX et de la trottinette au quarter se fait SEUL (décision de
+  Guillaume), étalé sur tout le vol ; un 180 voulu : l'opposé ; un 360 : le tour des flèches. Le compteur « 180 » ne compte que les rotations voulues ;
+- **la figure pas finie** (2-3,7/min) → elle se PRESSE pour tenir dans l'air restant (jusqu'à ×1,8), ne part pas s'il n'y a plus le temps, se rattrape
+  finie aux 4/5 ; un appui trop tôt (Espace puis V tout de suite) est GARDÉ 0,22 s au lieu d'être perdu ; une figure finie n'empêche plus l'accroche d'un rail ;
+- **les chocs** (3-4/min) → on LONGE un flanc ou une barrière (sa normale est SONDÉE : seize pas d'essai autour du rider, `wallNormal`) ; on ne tombe que de
+  face et à fond (5,6 c/s dans le mur au sol, 4,4 en l'air) ; le rail frôlé par-dessous se passe (une fois par saut), la caisse presque atteinte se monte.
+Et la réception de travers ou dure, jusqu'à 0,45 rad de plus, se RATTRAPE (le cap se remet dans la trajectoire, on perd de la vitesse, genoux pliés) ;
+l'angle ne se juge plus sous 1,2 c/s ; qui roulait déjà en arrière y retombe ; descendu d'une glisse calée, on pose le pied ; la chute dure 1,1 s (1,4).
+**Après : 0,2 (rollers) à 1,5 (BMX) chute/min**, presque toutes des chocs de face à fond que le bot voit trop tard. Le banc les compte (`verify-skatepark`).
+⚠️ Le fuzz a trouvé deux défauts au passage : l'aide « rail frôlé » réappliquée à chaque pas faisait PLANER un rider le long du tube (gardée à une fois par
+saut, en le traversant) ; `alignedRail` exemptait TOUT un rail coudé dès qu'on était au bout d'UN de ses segments (au coude de la funbox, une planche
+sautant sur place entrait de 8 cm dans le tube) — contacts résiduels 3 → 1.
+**La fluidité** : le cap DESSINÉ (`thV`) suit le cap tant qu'il tourne et rattrape en quelques images ce qui claque (l'accroche, la réception rattrapée, le
+mur longé) ; la cadence d'une figure pressée voyage avec elle (`rd[8]`), sinon l'autre joueur la verrait au ralenti. Mesuré sur Mac M4, un skate qui roule
+dans le park à zoom 3 : 3,7 ms par image (médiane), 4,5 au 99e centile.
+**Les commandes dites.** Au clavier, en monture, la ligne d'aide du bas (`.ferme-help`) donne SES touches, et les figures y portent le nom de celles de la
+monture louée ; une invite « F : monter sur le skate » dit qu'on peut monter (`parkMountReady`, un seul prédicat pour F et l'invite). Au doigt : SAUTER
+(grand, rond, tenir pour charger), deux FIGURES nommées (« Kickflip », « Barspin »…), POMPER, FREINER, DESCENDRE — chacun écrit, tenu dans `keysRef`
+comme le clavier (la poussée sur `ShiftRight` : `ShiftLeft` porte la course en bascule) ; le bouton d'action allumé « monter sur le skate » remonte.
+**Les rollers sur le squelette** (`drawRollers`, montureArt.js) : ils quittent le corps du patineur (`drawSkate`, ses jambes en moitiés déplacées en bloc) —
+pieds posés en 3D et projetés, foulée en V (la jambe qui pousse TENDUE, le bras opposé qui balance), chasse-neige au frein, pieds joints en l'air ; platines
+et roues à la convention de la feuille (projetées, elles faisaient des échasses de face). La patinoire n'a pas bougé (`render-patin` 4/4).
+**Vu** : en vrai navigateur, la planche des poses des rollers ; en jeu, une pellicule d'un skate (poussée, charge, kickflip, réception, son nom) et d'un BMX
+au quarter (le demi-tour seul) ; le parcours tactile complet en événements simulés (charger, sauter, kickflip, descendre, remonter par le bouton d'action).
+**Pas vu** : un vrai iPad ; les rollers et la trottinette en mouvement en jeu ; les sons. **Défaut repéré, pas corrigé** : sur la paroi du quarter, le bas
+du corps du rider passe SOUS les tranches de bois (pellicule du BMX, en montant et en redescendant). Bancs : `verify-monture` 29/29, `verify-skatepark` 14/14.
+
 ## 2026-10-13 — LE SKATEPARK SANS TROU DE COLLISION, ET LES RIDERS SUR UN SQUELETTE
 
 Guillaume : « bien tester le skatepark de manière poussée — marche, skate, rollers, BMX — tout doit être assuré sans bug de collision, aucun ; un rendu ultra propre » ;

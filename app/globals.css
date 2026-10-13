@@ -7895,12 +7895,46 @@ div.ferme-usage{ margin-bottom:10px; }
   box-shadow:0 4px 14px rgba(0,0,0,.4);
 }
 .ferme-touch-mini.on{ background:#2f6b34; border-color:#8fd8a0; }
+/* 2026-10-13 (soir) — LES COMMANDES DE LA MONTURE DU PARK (FermeGame.js, « LES COMMANDES DE LA MONTURE, AU DOIGT »).
+   Chaque bouton est ÉCRIT (son nom en gras, quand s'en servir en petit) : Guillaume, « ce doit être indiqué ». Le saut est le
+   bouton qu'on presse sans regarder (on regarde la planche) : rond, le plus grand, sous le pouce. Les figures, des pastilles
+   juste au-dessus ; Pomper / Freiner / Descendre, à gauche, plus discrets. `.on` : tenu (la classe est posée au doigt). */
+.ferme-ride-btns{
+  position:fixed; z-index:12; touch-action:none; user-select:none; -webkit-user-select:none;
+  right:calc(env(safe-area-inset-right, 0px) + 14px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);
+  display:flex; align-items:flex-end; gap:10px;
+}
+.ferme-ride-col{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+.ferme-ride-col.main{ align-items:flex-end; }
+.ferme-ride-btn, .ferme-ride-jump{
+  font-family:inherit; cursor:pointer; color:#f4e4c0; touch-action:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  background:rgba(28,20,14,.66); border:3px solid rgba(255,238,200,.22);
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+.ferme-ride-btn{ min-width:84px; height:56px; padding:4px 10px; border-radius:18px; }
+.ferme-ride-btn b, .ferme-ride-jump b{ font-size:14px; line-height:1.1; }
+.ferme-ride-btn small, .ferme-ride-jump small{ font-size:10px; line-height:1.1; opacity:.7; }
+.ferme-ride-btn.trick{ min-width:112px; border-color:rgba(255,206,120,.45); }
+.ferme-ride-btn.off{ color:rgba(244,228,192,.8); }
+.ferme-ride-jump{
+  width:108px; height:108px; border-radius:50%; color:#241a10;
+  background:radial-gradient(circle at 40% 32%, #ffe9a8, #d8a63a);
+  border-color:rgba(20,14,10,.55);
+}
+.ferme-ride-btn.on{ background:#2f6b34; border-color:#8fd8a0; }
+.ferme-ride-jump.on{ background:radial-gradient(circle at 40% 32%, #fff4cf, #f0b93e); transform:scale(.94); }
 /* Sur un écran étroit (iPhone), on resserre — mais on ne descend JAMAIS sous
    la taille de cible : on préfère chevaucher le décor que rater le bouton. */
 @media (max-width: 560px){
   .ferme-touch-pad{ width:124px; height:124px; bottom:calc(env(safe-area-inset-bottom, 0px) + 78px); }
   .ferme-touch-act{ width:88px; height:88px; }
   .ferme-touch-mini{ width:60px; height:60px; font-size:22px; }
+  .ferme-ride-btns{ bottom:calc(env(safe-area-inset-bottom, 0px) + 78px); gap:8px; }
+  .ferme-ride-btn{ min-width:72px; height:50px; }
+  .ferme-ride-btn.trick{ min-width:92px; }
+  .ferme-ride-jump{ width:92px; height:92px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

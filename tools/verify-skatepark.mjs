@@ -14,6 +14,7 @@
    ⚠️ Né d'une sonde de fuzz du 2026-10-13 qui trouvait, avant correction : 243 sorties du park sur 3 000 sessions (le bout nord de la
    mini-rampe, l'escalier de la galerie), 96 montées « téléportées » jusqu'à 1,37 m sur le flanc des modules, la semelle qui enjambait
    les mains courantes. Voir l'en-tête de `monture.js` (`fenceHit`) et de `skatepark.js` (`rideClear`, `walkFenceStep`).
+   ET (2026-10-13 soir) LES CHUTES D'UN JOUEUR PLAUSIBLE, par minute, sous un plafond (« les échecs rares » — voir la dernière section).
    Usage :  node tools/verify-skatepark.mjs [sessions de monture] [sessions à pied]
    ========================================================================== */
 import path from "path";
@@ -124,6 +125,76 @@ for (let r = 0; r < WALKS; r++) {
 }
 ok(W.through.length === 0, `à pied, jamais un tube au milieu du corps (${WALKS} sessions)`, W.through.length ? `${W.through.length} : ${show(W.through)}` : "0");
 ok(W.climb.length === 0, "à pied, jamais une marche plus haute que le pas", W.climb.length ? show(W.climb) : "0");
+
+/* ── 2026-10-13 (soir) — LES CHUTES D'UN JOUEUR PLAUSIBLE. Guillaume : « les échecs rares ». Le hasard pur ne dit rien de ce qu'un
+   joueur vit ; celui-ci VISE (le centre d'un module, un point d'une ligne de glisse, à huit directions comme le clavier et le pavé),
+   pousse, saute toutes les deux à quatre secondes, lance une figure dans un air sur deux à un instant tiré au hasard. Deux profils :
+   le NAÏF garde en l'air la flèche qu'il tenait et ne regarde pas devant lui ; l'APPLIQUÉ lâche les flèches en l'air et regarde à
+   0,4 s devant lui (son temps de réaction) — il saute ce qui se saute (caisse, rail), contourne le reste.
+   ⚠️ MESURÉ AVANT LES CORRECTIONS DU JOUR (`monture.js`, « LES CHUTES RARES ») : 6 à 10 chutes par minute, les deux profils. Après :
+   0,2 (rollers) à 1,5 (trottinette, BMX) — presque toutes des chocs DE FACE à fond de poussée, que ce bot voit trop tard. Les chutes
+   de commande (réception de travers, figure pas finie) sont tenues à presque rien : c'est ce que le jeu doit garantir. */
+{
+  const goals = [];
+  for (const p of SP.PARK_PRIMS) { const b = p.bb; goals.push([P.x0 + (b[0] + b[2]) / 2, P.y0 + (b[1] + b[3]) / 2]); }
+  for (const L of SP.PARK_GRINDS) for (const q of L.pts) goals.push([P.x0 + q[0], P.y0 + q[1]]);
+  const q8 = (dx, dy) => { const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4); return [Math.round(Math.cos(a) * 1e6) / 1e6, Math.round(Math.sin(a) * 1e6) / 1e6]; };
+  const play = (profile, runs) => {
+    const S = { min: 0, bails: 0, ctl: 0, kinds: {} };
+    for (let r = 0; r < runs; r++) {
+      const kind = MO.VEH_KINDS[r % 4], half = MO.RIDE_HALF[kind], tall = MO.RIDE_TALL[kind];
+      const K = S.kinds[kind] || (S.kinds[kind] = { min: 0, bails: 0 });
+      let x, y; const th0 = rnd() * 6.28;
+      for (;;) { x = P.x0 + 0.3 + rnd() * (P.w - 0.6); y = P.y0 + 0.3 + rnd() * (P.h - 0.6); const z = SP.heightAt(x, y); if (z < 0.01 && SP.inRideArea(x, y) && SP.rideClear(x, y, z, th0, half, true, null, tall).c >= 0 && SP.sideWallDepth(x, y, z, SP.RIDE_TORSO_R) === 0) break; }
+      const st = MO.rideNew(kind, x, y, th0);
+      let goal = goals[(rnd() * goals.length) | 0], goalT = 4 + rnd() * 4, push = false, pushT = 0, jumpT = 1.5 + rnd() * 2.5, hold = 0;
+      let avoidT = 0, avoidDir = null, trickAt = -1, trickKey = null, trickHold = 0, prevMode = st.mode, airDir = null;
+      for (let t = 0; t < 60; t += DT) {
+        if ((goalT -= DT) <= 0 || Math.hypot(goal[0] - st.x, goal[1] - st.y) < 0.8) { goal = goals[(rnd() * goals.length) | 0]; goalT = 4 + rnd() * 4; }
+        if ((pushT -= DT) <= 0) { pushT = 0.5 + rnd() * 2; push = rnd() < 0.5; }
+        let [ix, iy] = q8(goal[0] - st.x, goal[1] - st.y);
+        let jump = false, trick = false, trick2 = false;
+        if (st.mode === "ground") {
+          if ((jumpT -= DT) <= 0 && Math.abs(st.u) > 1.2) { hold = 0.1 + rnd() * 0.3; jumpT = 1.5 + rnd() * 3; }
+          if (profile === "applique" && avoidT <= 0 && Math.abs(st.u) > 2) {
+            const trav = st.th + (st.u < 0 ? Math.PI : 0), d = Math.abs(st.u) * 0.4;
+            let seen = false, low = true;
+            for (let k = 1; k <= 4 && !seen; k++) {
+              const ax = st.x + Math.cos(trav) * d * k / 4, ay = st.y + Math.sin(trav) * d * k / 4, q = SP.parkSurf(ax, ay, {}), h = q ? q.h : 0, sl = q ? Math.hypot(q.gu, q.gv) : 0;
+              const tube = SP.rideClear(ax, ay, Math.max(h, st.z), st.th, half, true, null, tall);
+              if (h > st.z + 0.06 + sl * d / 4) { seen = true; low = h - st.z < 0.45; }
+              else if (!SP.inRideArea(ax, ay)) { seen = true; low = false; }
+              else if (tube.c < 0) { seen = true; low = !!(tube.f && tube.f.pts); }   // un rail se saute ; un garde-corps, non
+            }
+            if (seen) { avoidT = 0.5; if (low && rnd() < 0.5 && Math.abs(st.u) > 3) { hold = 0.2; avoidDir = null; } else avoidDir = trav + (rnd() < 0.5 ? 1 : -1) * Math.PI / 2; }
+          }
+          if (avoidT > 0) { avoidT -= DT; if (avoidDir != null) [ix, iy] = q8(Math.cos(avoidDir), Math.sin(avoidDir)); }
+          if (hold > 0) { jump = true; hold -= DT; }
+        }
+        if (st.mode === "air") {
+          if (prevMode !== "air") { airDir = [ix, iy]; trickAt = rnd() < 0.45 ? 0.05 + rnd() * 0.3 : -1; trickKey = rnd() < 0.5 ? "v" : "g"; }
+          if (profile === "naif") [ix, iy] = airDir; else { ix = 0; iy = 0; }
+          if (trickAt >= 0 && st.airT >= trickAt) { trickHold = 0.08; trickAt = -1; }
+          if (trickHold > 0) { trickHold -= DT; if (trickKey === "v") trick = true; else trick2 = true; }
+        }
+        prevMode = st.mode;
+        MO.rideStep(st, { ix, iy, push, jump, stop: false, trick, trick2 }, DT);
+        if (st.bailed) { S.bails++; K.bails++; if (st.bailed.why === "angle" || st.bailed.why === "trick") S.ctl++; }
+      }
+      S.min++; K.min++;
+    }
+    return S;
+  };
+  const RP = Math.max(8, Math.round(RUNS / 40) * 4);   // 80 sessions d'une minute par profil (20 par monture) au réglage par défaut
+  for (const profile of ["naif", "applique"]) {
+    const S = play(profile, RP), per = (n, m) => (n / m).toFixed(2);
+    const line = Object.entries(S.kinds).map(([k, K]) => `${k} ${per(K.bails, K.min)}`).join(" · ");
+    const cap = profile === "naif" ? 1.7 : 1.4;
+    ok(S.bails / S.min <= cap, `le joueur ${profile === "naif" ? "naïf" : "appliqué"} tombe rarement (≤ ${cap} chute/min ; 6 à 10 avant le 2026-10-13 soir)`, `${per(S.bails, S.min)}/min sur ${S.min} min — ${line}`);
+    ok(Object.values(S.kinds).every((K) => K.bails / K.min <= 2.6), `  et aucune monture au-dessus de 2,6 chutes/min`, line);
+    ok(S.ctl / S.min <= 0.2, `  les chutes de COMMANDE (réception de travers, figure pas finie) restent exceptionnelles (≤ 0,2/min)`, `${per(S.ctl, S.min)}/min`);
+  }
+}
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${nOk}/${nOk + fail} contrôles\n`);
 process.exit(fail === 0 ? 0 : 1);

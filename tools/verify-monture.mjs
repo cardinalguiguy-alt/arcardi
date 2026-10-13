@@ -90,25 +90,34 @@ function miniRun(kind, pump, sec) {
 
 // ── 4. L'AIR AU QUARTER (contre le bord nord, face au sud) : on arrive du sud, droit dessus, à 6,8 c/s
 const Q = SP.QUARTER;
-function quarterRun(kind, spinHold) {
+// `hold` : la flèche tenue EN L'AIR (null : on lâche tout) ; `ground` : celle tenue en montant (null : aucune)
+function quarterRun(kind, hold, ground) {
   const st = MO.rideNew(kind, ...L(14, Q.toeV + 4), -Math.PI / 2);   // cap au nord
   st.u = 6.8;
-  let air = 0, landed = null, bailed = null, spin = 0;
-  run(st, 3, (s) => (s.mode === "air" && spinHold && Math.abs(s.spin) < Math.PI ? { ix: 1, iy: 0 } : {}), (s) => {
+  let air = 0, landed = null, bailed = null, spin = 0, deck = false;
+  run(st, 3, (s) => (s.mode === "air" ? (hold || {}) : (ground || {})), (s) => {
+    if (s.landed && s.landed.air > 0.1) deck = s.y - P.y0 < Q.v1 - Q.R - 0.05 && Math.abs(s.z - Q.Ht) < 0.08;
     if (s.mode === "air") { air = Math.max(air, s.z - Q.Ht); spin = s.spin; }
     if (s.landed && s.landed.air > 0.1) { landed = s.landed; return false; }
     if (s.bailed) { bailed = s.bailed; return false; }
   });
-  return { air, landed, bailed, spin };
+  return { air, landed, bailed, spin, deck };
 }
 {
   const sk = quarterRun("skate", false);
   ok(sk.air > 0.25, "le skate sort au-dessus du coping du quarter", `${sk.air.toFixed(2)} case (${(sk.air * 1.15).toFixed(2)} m)`);
   ok(sk.landed && sk.landed.fakie && !sk.bailed, "et retombe DANS la courbe, en fakie", sk.landed ? `réception ${sk.landed.hard.toFixed(2)} c/s` : String(sk.bailed && sk.bailed.why));
-  const bx = quarterRun("bmx", false);
-  ok(bx.bailed && bx.bailed.why === "angle", "le BMX sans demi-tour tombe à la réception", bx.bailed ? bx.bailed.why : "pas de chute");
-  const bx2 = quarterRun("bmx", true);
-  ok(bx2.landed && !bx2.bailed, "le BMX qui a fait son demi-tour en l'air retombe", bx2.landed ? `rotation ${(bx2.spin * 180 / Math.PI).toFixed(0)}°` : String(bx2.bailed && bx2.bailed.why));
+  /* 2026-10-13 (soir) — LE DEMI-TOUR DU BMX SE FAIT SEUL (décision de Guillaume : « les échecs rares ») : sans ordre, la monture
+     s'aligne sur sa réception. Premier jet : « le BMX sans demi-tour tombe » — et un joueur qui gardait la flèche du nord tombait
+     à chaque air. Le demi-tour automatique ne compte pas comme une figure (`spin` reste à zéro : pas de « 180 » affiché). */
+  const bx = quarterRun("bmx", null);
+  ok(bx.landed && !bx.bailed && Math.abs(bx.spin) < 0.1, "le BMX fait seul son demi-tour au quarter et retombe (sans « 180 » au compteur)", bx.landed ? `rotation voulue ${(bx.spin * 180 / Math.PI).toFixed(0)}°` : String(bx.bailed && bx.bailed.why));
+  const bk = quarterRun("bmx", { ix: 0, iy: -1 }, { ix: 0, iy: -1 });
+  ok(bk.landed && !bk.bailed && bk.deck, "la flèche du nord tenue en montant et en l'air : il se pose sur la plateforme (« air to deck »)", bk.landed ? (bk.deck ? "sur la plateforme" : "dans la courbe") : String(bk.bailed && bk.bailed.why));
+  const bx2 = quarterRun("bmx", { ix: 0, iy: 1 });
+  ok(bx2.landed && !bx2.bailed && Math.abs(bx2.spin) > 2.6, "la flèche du retour (vers le creux) : un demi-tour VOULU, compté", bx2.landed ? `rotation ${(bx2.spin * 180 / Math.PI).toFixed(0)}°` : String(bx2.bailed && bx2.bailed.why));
+  const bx3 = quarterRun("bmx", { ix: 1, iy: 0 });
+  ok(bx3.bailed && bx3.bailed.why === "angle", "mais la flèche de travers tenue jusqu'au bout : il retombe en travers, la chute", bx3.bailed ? bx3.bailed.why : "pas de chute");
 }
 
 // ── 5. LA FUNBOX : d'ouest en est, à 5,5 c/s — sans ollie, un petit saut qui retombe sur la table ; avec un ollie lâché à la
@@ -143,9 +152,17 @@ function quarterRun(kind, spinHold) {
   const slow = MO.rideNew("skate", ...L(9, F.v1 + 1.5), -Math.PI / 2); slow.u = 1.2;
   let bailS = null; run(slow, 2, () => ({}), (s) => { if (s.bailed) bailS = s.bailed; });
   ok(!bailS && slow.y > P.y0 + F.v1 - 0.05, "lentement contre le flanc de la funbox : on s'arrête, sans tomber", `v ${(slow.y - P.y0).toFixed(2)}`);
-  const fast = MO.rideNew("skate", ...L(9, F.v1 + 2.5), -Math.PI / 2); fast.u = 5;
+  /* 2026-10-13 (soir) — « les échecs rares » : on ne tombe plus que DE FACE et à fond (`HIT_FALL`, 5,6 c/s dans le mur) ; de biais,
+     on longe le flanc. Premier jet : la chute dès 3,6 c/s, quel que soit l'angle (ce contrôle lançait à 5). */
+  const fast = MO.rideNew("skate", ...L(9, F.v1 + 3), -Math.PI / 2); fast.u = 6.4;
   let bailF = null; run(fast, 2, () => ({}), (s) => { if (s.bailed && !bailF) bailF = s.bailed; });
-  ok(bailF && bailF.why === "step", "vite contre le flanc : la chute", bailF ? bailF.why : "pas de chute");
+  ok(bailF && bailF.why === "step", "à fond, de face contre le flanc : la chute", bailF ? bailF.why : "pas de chute");
+  const mid = MO.rideNew("skate", ...L(9, F.v1 + 2.5), -Math.PI / 2); mid.u = 5;
+  let bailM = null; run(mid, 2, () => ({}), (s) => { if (s.bailed && !bailM) bailM = s.bailed; });
+  ok(!bailM && mid.y > P.y0 + F.v1 - 0.05, "lancé (5 c/s) mais pas à fond, de face : on rebondit, sans tomber", bailM ? bailM.why : `v ${(mid.y - P.y0).toFixed(2)}`);
+  const sl = MO.rideNew("skate", ...L(8, F.v1 + 1.2), -Math.PI / 2 + 0.75); sl.u = 6.4;   // 43° de biais, vers le nord-est
+  let bailL = null, minV = 1e9; run(sl, 0.6, () => ({}), (s) => { if (s.bailed && !bailL) bailL = s.bailed; minV = Math.min(minV, s.y - P.y0); });
+  ok(!bailL && minV > F.v1 - 0.05 && sl.x - P.x0 > 9.5 && Math.abs(sl.u) > 3, "à fond mais de biais (43°) : on longe le flanc, sans tomber ni y entrer", bailL ? bailL.why : `u ${(sl.x - P.x0).toFixed(2)}, ${Math.abs(sl.u).toFixed(1)} c/s`);
   const fe = MO.rideNew("bmx", ...L(10, 20.5), Math.PI / 2); fe.u = 4;
   let bailE = null; run(fe, 2, () => ({}), (s) => { if (s.bailed && !bailE) bailE = s.bailed; });
   ok(fe.y < P.y0 + P.h, "la barrière sud arrête qui roule vers elle", `v ${(fe.y - P.y0).toFixed(2)} (${bailE ? "chute" : "arrêt"})`);
@@ -172,15 +189,18 @@ function quarterRun(kind, spinHold) {
     run(st, 0.36, () => ({ jump: true }));
     let landed = null, bail = null, pressed = false;
     run(st, 1.5, (s) => {
-      const want = !pressed && s.mode === "air" && (late ? s.vz < -1.2 : s.airT > 0.08);
+      const want = !pressed && s.mode === "air" && (late === "mid" ? s.vz < 0 : late ? s.vz < -1.2 : s.airT > 0.08);
       if (want) pressed = true;
       return { trick: want };
     }, (s) => { if (s.landed) { landed = s.landed; return false; } if (s.bailed) { bail = s.bailed; return false; } });
     return { landed, bail };
   };
-  const a = go(false), b = go(true);
+  /* 2026-10-13 (soir) — premier jet : « lancé trop tard, la chute ». Désormais la figure se PRESSE pour tenir dans l'air qui reste,
+     ou ne part pas : un appui tardif ne fait jamais tomber. */
+  const a = go(false), b = go(true), c = go("mid");
   ok(a.landed && a.landed.trick === "kickflip", "un kickflip lancé tôt retombe propre", a.landed ? a.landed.trick : a.bail ? a.bail.why : "—");
-  ok(b.bail && b.bail.why === "trick", "lancé trop tard, on retombe sur un plateau qui tourne encore : la chute", b.bail ? b.bail.why : "pas de chute");
+  ok(c.landed && c.landed.trick === "kickflip", "lancé au sommet, il se presse et retombe propre", c.landed ? c.landed.trick : c.bail ? c.bail.why : "—");
+  ok(b.landed && !b.bail && !b.landed.trick, "lancé trop tard, il ne part pas — et l'on retombe debout", b.landed ? `debout, figure : ${b.landed.trick || "aucune"}` : b.bail ? b.bail.why : "—");
 }
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC` : `\n${nOk}/${nOk} — tout passe`);
 process.exit(fail ? 1 : 0);

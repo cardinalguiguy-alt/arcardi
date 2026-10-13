@@ -1228,6 +1228,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [touchUi, setTouchUi] = useState(false);
   const touchUiRef = useRef(false);
   const [touchPrompt, setTouchPrompt] = useState(null);   // ce que le bouton d'action ferait, maintenant
+  /* 2026-10-13 (soir) — LA MONTURE DU PARK, VUE PAR L'INTERFACE : son type quand on roule, sinon null. Elle remplace les boutons tactiles
+     par ceux de la monture (sauter, figures, pomper, freiner, descendre) et la ligne d'aide du clavier par ses touches. Tenue à jour
+     par `setPromptKeyThrottled` (voir là), qui tourne à chaque image dans TOUTES les zones. */
+  const [rideUi, setRideUi] = useState(null);
+  const rideUiRef = useRef(null);
+  // les boutons de la monture disparus (on descend, la location finit, on change de zone) : ce qu'ils tenaient se relâche — sinon
+  // Espace resterait « tenu » pour la marche qui suit
+  useEffect(() => { if (!rideUi) { const k = keysRef.current; if (k) { k.Space = false; k.KeyV = false; k.KeyG = false; k.KeyC = false; k.ShiftRight = false; } } }, [rideUi]);
   const [running, setRunning] = useState(false);          // la course, en BASCULE (voir plus bas)
   const marketOpenRef = useRef(false);
   /* Zip 427 — Maison Garfield. `boutiqueOpen` porte l'onglet courant plutôt
@@ -10539,7 +10547,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (rdS.color) pub.rdc = rdS.color | 0;   // la couleur louée
       if (md === 1) {
         pub.rd.push(+rdS.z.toFixed(3), +rdS.vz.toFixed(2), +(rdS.om || 0).toFixed(1));
-        if (rdS.trick) pub.rd.push(rdS.trick.name, Math.round(rdS.trick.t * 1000));   // la figure en cours : son nom, son âge
+        // la figure en cours : son nom, son âge, et (2026-10-13 soir) sa CADENCE — pressée pour tenir dans l'air qui reste, elle tournerait
+        // au ralenti chez l'autre, qui l'avance sur son horloge
+        if (rdS.trick) pub.rd.push(rdS.trick.name, Math.round(rdS.trick.t * 1000), +(rdS.trick.rate || 1).toFixed(2));
       } else if (md === 3) pub.rd.push(+rdS.z.toFixed(3));   // en glisse : la hauteur de la ligne
     } }
     pub.st = +performance.now().toFixed(1);
@@ -27579,9 +27589,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          quarante à l'heure, et E ne fait rien — le « propose puis refuse » que le
          426 s'est juré de ne plus commettre, à chaque carrefour. */
       if (tw2 && (tw2.phase === "riding" || tw2.phase === "asking")) tpk = null;
+      else if (rideRef.current) tpk = null;   // 2026-10-13 (soir) — monté : les boutons de la monture disent tout ; E ne fait rien en roulant
       else if (tw2 && (tw2.phase === "waiting" || tw2.phase === "parked") && Math.hypot(m.x - tw2.x, m.y - tw2.y) <= C.TAXI_BOARD_R + 0.9) tpk = "taxiBoard";
       else if (m.sitOn) tpk = "townStand";
       else if (canTownJumpNow()) tpk = "townJump";
+      else if (parkMountReady(m)) tpk = "parkMount";   // 2026-10-13 (soir) — sans elle, rien ne disait qu'on peut monter (ni au doigt, ni au clavier)
       else if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
       else if (nearBuildingDoor(C.TOWN_CHURCH)) tpk = "townChurch";
       else if (nearBuildingDoor(C.TOWN_HALL)) tpk = "townHallEnter";
@@ -28817,9 +28829,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (V.push !== "kick" && Math.abs(st.u) > 0.4 && st.stride) { pose = "glide"; ph = st.stride; }
       // les genoux : on se ramasse en chargeant le saut, et l'on plie-déplie en pompant
       if (st.mode === "grind") pose = "grind";
-      const bend = st.mode === "ground" ? Math.max(Math.round(st.charge * 3), st.pumpK > 0.05 ? 2 : 0, Math.abs(st.lean) > 0.4 ? 1 : 0, Math.ceil((st.landT || 0) * 18)) : st.mode === "grind" ? 2 : 0;
+      const bend = st.mode === "ground" ? Math.max(Math.round(st.charge * 3), st.pumpK > 0.05 ? 2 : 0, Math.abs(st.lean) > 0.4 ? 1 : 0, Math.min(5, Math.ceil((st.landT || 0) * 18))) : st.mode === "grind" ? 2 : 0;
       const ang = MO.trickAngles(st.trick);
-      return { ride: { kind: st.kind, th: st.th, air: view.air, mode: st.mode, pose, ph, color: st.color | 0, bend, lean: Math.round(st.lean * 2), back: st.u < -0.3 && st.kind === "roller",
+      // le cap DESSINÉ (`thV`, monture.js) : il rattrape en quelques images ce qui claque d'un pas à l'autre
+      return { ride: { kind: st.kind, th: st.thV != null ? st.thV : st.th, air: view.air, mode: st.mode, pose, ph, color: st.color | 0, bend, lean: Math.round(st.lean * 2), back: st.u < -0.3 && st.kind === "roller",
         flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: view.air * T };
     }
     /* 2026-10-11 — LA MONTURE D'UN AUTRE, DÉDUITE (§3) : le cap reçu ; en l'air, la parabole et la vrille reconstruites depuis
@@ -28835,7 +28848,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         th += (rd[5] || 0) * Math.min(t, 1.5);
         pose = "hop";
         const def = rd[6] ? MO.trickByName(kind, rd[6]) : null;   // la figure : relue par la même fonction, sur MON horloge
-        if (def) ang = MO.trickAngles({ ...def, t: (rd[7] || 0) / 1000 + t });
+        if (def) ang = MO.trickAngles({ ...def, t: (rd[7] || 0) / 1000 + t * (+rd[8] || 1) });
       } else if (md === 3 && rd.length >= 4) { air = Math.max(0, rd[3] - SPK.heightAt(C.footX(p.x), C.footY(p.y))); pose = "grind"; }
       return { ride: { kind, th, air, mode: md === 1 ? "air" : md === 2 ? "bail" : md === 3 ? "grind" : "ground", pose, ph: t * 2, color: rp.rdc | 0, bend: md === 3 ? 2 : 0, lean: 0,
         flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: air * T };
@@ -31737,7 +31750,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // Throttle du prompt (évite un setState par frame)
   const promptRef = useRef(null);
-  function setPromptKeyThrottled(pk) { if (promptRef.current !== pk) { promptRef.current = pk; setPromptKey(pk); } }
+  function setPromptKeyThrottled(pk) {
+    if (promptRef.current !== pk) { promptRef.current = pk; setPromptKey(pk); }
+    /* ⚠️ 2026-10-13 (soir) — la monture vue par l'interface (`rideUi`) se met à jour ICI, et pas dans `rideStepMe` : cette fonction est
+       appelée à chaque image par les quatre zones (ferme, ville, tribunal, intérieurs). Posée dans la boucle de la ville seule, une
+       monture perdue en changeant de zone aurait laissé ses boutons à l'écran — trois zones, trois occasions d'oublier (zip 430). */
+    const rk = rideRef.current ? rideRef.current.kind : null;
+    if (rideUiRef.current !== rk) { rideUiRef.current = rk; setRideUi(rk); }
+  }
   const mountPromptRef = useRef(null);
   function setMountPromptThrottled(mp) { if (mountPromptRef.current !== mp) { mountPromptRef.current = mp; setMountPrompt(mp); } }
 
@@ -32022,6 +32042,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ferait sauter le fermier d'un rebord pendant qu'il frappe. */
   /* 2026-10-11 — MONTER SUR SA MONTURE, EN DESCENDRE (F), DANS LE SKATEPARK. On monte là où l'on se tient, le nez dans le sens où
      l'on regarde ; on ne descend que posé (ni en l'air, ni en pleine chute). Rend vrai si la touche a servi ici. */
+  /* 2026-10-13 (soir) — PEUT-ON MONTER, LÀ ? Le type de la monture, ou null. UN SEUL prédicat pour la touche F (`parkMountToggle`) et
+     pour l'invite « F : monter sur le skate » que lit le bouton d'action tactile (§4 : une condition recopiée a déjà divergé). */
+  function parkMountReady(m) {
+    const tw = townWorldRef.current;
+    if (!m || (m.zone || "farm") !== "town" || !tw || !tw.skatepark || rideRef.current) return null;
+    // on monte sur le DALLAGE (`inRideArea`), pas dans l'escalier du nord : la monture n'en sort pas (2026-10-13)
+    if (!(PARK_DEV.monture || E.rideActive(invRef.current, Date.now())) || !SPK.inRideArea(C.footX(m.x), C.footY(m.y))) return null;
+    return PARK_DEV.monture || MO.rideKitNorm(invRef.current && invRef.current.rideKit).kind;
+  }
   function parkMountToggle(m) {
     const tw = townWorldRef.current;
     if ((m.zone || "farm") !== "town" || !tw || !tw.skatepark) return false;
@@ -32035,9 +32064,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return true;
     }
     const kitM = MO.rideKitNorm(invRef.current && invRef.current.rideKit);
-    // 2026-10-13 — on monte sur le DALLAGE (`inRideArea`), pas dans l'escalier du nord : la monture n'en sort pas
-    if (!(PARK_DEV.monture || E.rideActive(invRef.current, Date.now())) || !SPK.inRideArea(fx, fy)) return false;
-    const kindM = PARK_DEV.monture || kitM.kind;
+    const kindM = parkMountReady(m);
+    if (!kindM) return false;
     /* Le nez dans le sens où l'on regarde — sinon, le premier sens où le véhicule ne touche aucun tube (on se tient contre la barrière,
        le BMX y aurait la roue avant). */
     let thM = [Math.PI / 2, -Math.PI / 2, Math.PI, 0][m.dir | 0];
@@ -32046,7 +32074,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     rideRef.current = MO.rideNew(kindM, fx, fy, thM);
     rideRef.current.color = kitM.color;
     sendPos();
-    if (!parkFxRef.current.hint) { parkFxRef.current.hint = true; pushToast(L.parkRideHint); }   // les commandes, une fois par session
+    if (!parkFxRef.current.hint) { parkFxRef.current.hint = true; pushToast(touchUiRef.current ? L.parkRideHintTouch : L.parkRideHint); }   // les commandes, une fois par session (celles qu'on a sous la main)
     return true;
   }
   function pressJumpOrAct() { if (rideRef.current) return; if (starWakePress()) return; if (evilStarRevivePress()) return; if (skateTrickPress("hop")) return; if (!townJumpNow()) doAction(); }
@@ -32075,6 +32103,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     if (skateTrickPress("hop")) return;   // 2026-10-05 (fin quater) : sur la glace, chaussé, le bouton d'action SAUTE (V et B : clavier seulement)
+    if (promptRef.current === "parkMount") { parkMountToggle(m); return; }   // 2026-10-13 (soir) : l'invite « monter sur le skate » est ce que le bouton fait
     if (m.zone === "town" && townJumpReady()) { townJumpNow(); return; }
     tryOpenNearby();
   }
@@ -38610,7 +38639,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -39655,7 +39684,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       <div className="ferme-toasts">{toasts.map(t2 => <div key={t2.id} className="ferme-toast">{t2.msg}</div>)}</div>
 
       {/* Aide */}
-      <div className="ferme-help">{L.help1}<br />{L.help2}</div>
+      {/* 2026-10-13 (soir) — en monture, la ligne d'aide dit SES touches (Guillaume : « les commandes doivent être indiquées
+          discrètement sur clavier ») ; les figures y portent le nom de celles de la monture louée. Au doigt, ce sont les boutons. */}
+      {rideUi && !touchUi
+        ? <div className="ferme-help">{L.parkHelp1}<br />{L.parkHelp2(MO.TRICK_LABEL[MO.TRICKS[rideUi].v.name], MO.TRICK_LABEL[MO.TRICKS[rideUi].g.name])}</div>
+        : <div className="ferme-help">{L.help1}<br />{L.help2}</div>}
 
       {/* Boutique */}
       {shopOpen && (
@@ -40746,7 +40779,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }}
         />
       )}
-      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
+      {/* ╔══════════════════════════════════════════════════════════════════════
+           ║ 2026-10-13 (soir) — LES COMMANDES DE LA MONTURE, AU DOIGT.
+           ╚══════════════════════════════════════════════════════════════════════
+           Guillaume : « à toi de proposer, mais ce doit être indiqué ». Chaque bouton porte son NOM (et, en petit, quand s'en servir) ;
+           les deux figures portent celui des figures de la monture louée (« Kickflip », « Barspin »…), comme au clavier la ligne d'aide.
+           ⚠️ CE SONT DES BOUTONS TENUS, ÉCRITS DANS `keysRef` COMME LE CLAVIER (la règle du zip 430 : la machine de la monture ne sait pas
+           d'où vient l'appui) : Espace (on charge en tenant, on saute en lâchant), V, G, C ; la poussée prend `ShiftRight`, PAS
+           `ShiftLeft` — celui-là porte la course en bascule (🏃) : relâcher « Pomper » l'aurait éteinte en silence.
+           ⚠️ `setPointerCapture` : un pouce qui glisse hors du bouton pendant qu'il charge le saut ne doit pas le lâcher ; et à la
+           disparition des boutons (on descend, la location finit), l'effet plus bas relâche ce qui était tenu.
+           Disposition : SAUTER, grand et rond, sous le pouce droit ; les deux figures juste au-dessus (on les presse en l'air, après
+           avoir lâché Sauter) ; à gauche, Pomper, Freiner, Descendre, plus petits. Le pavé (à gauche de l'écran) dirige. */}
+      {touchUi && rideUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (() => {
+        const hold = (code) => ({
+          onPointerDown: (e) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} keysRef.current[code] = true; e.currentTarget.classList.add("on"); },
+          onPointerUp: (e) => { keysRef.current[code] = false; e.currentTarget.classList.remove("on"); },
+          onPointerCancel: (e) => { keysRef.current[code] = false; e.currentTarget.classList.remove("on"); },
+          onLostPointerCapture: (e) => { keysRef.current[code] = false; e.currentTarget.classList.remove("on"); },
+          onContextMenu: (e) => e.preventDefault(),
+        });
+        const T2 = MO.TRICKS[rideUi];
+        return (
+          <div className="ferme-ride-btns">
+            <div className="ferme-ride-col">
+              <button className="ferme-ride-btn" {...hold("ShiftRight")}><b>{L.parkBtnPump}</b><small>{L.parkBtnPumpSub}</small></button>
+              <button className="ferme-ride-btn" {...hold("KeyC")}><b>{L.parkBtnBrake}</b></button>
+              <button className="ferme-ride-btn off" onPointerDown={e => { e.preventDefault(); const m = meRef.current; if (m) parkMountToggle(m); }}><b>{L.parkBtnOff}</b></button>
+            </div>
+            <div className="ferme-ride-col main">
+              <button className="ferme-ride-btn trick" {...hold("KeyV")}><b>{MO.TRICK_LABEL[T2.v.name]}</b><small>{L.parkBtnTrickSub}</small></button>
+              <button className="ferme-ride-btn trick" {...hold("KeyG")}><b>{MO.TRICK_LABEL[T2.g.name]}</b><small>{L.parkBtnTrickSub}</small></button>
+              <button className="ferme-ride-jump" {...hold("Space")}><b>{L.parkBtnJump}</b><small>{L.parkBtnJumpSub}</small></button>
+            </div>
+          </div>
+        );
+      })()}
+      {touchUi && !rideUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
         <div className="ferme-touch-btns">
           {/* ⚠️ LE BOUTON PORTE LE LIBELLÉ DE L'INVITE, et il n'a rien à
               calculer pour ça : `promptKey` est déjà mis à jour à chaque image

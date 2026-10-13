@@ -1906,7 +1906,7 @@ sillage seulement) ; le classement aux temps ; le fantôme (aller-retour au huit
 (un passage de ligne compte toujours) rougit 8 contrôles. ⚠️ Ce qu'il ne voit pas : le réseau, l'écran (`CourseHud.js`), le
 dessin — la course à deux se joue avec `app/audit-duo` (docs/VERIFICATION.md §10).
 
-## `verify-monture.mjs` — LES MONTURES DU SKATEPARK SE JOUENT-ELLES ? (2026-10-11, 24 contrôles)
+## `verify-monture.mjs` — LES MONTURES DU SKATEPARK SE JOUENT-ELLES ? (2026-10-11, 29 contrôles depuis le 2026-10-13 soir)
 
 Un banc qui JOUE (comme `verify-maire`) : la vraie physique (`monture.js`) sur le vrai relief (`skatepark.js`), pilotée par des ordres scriptés à 60 images/s. Poussée des quatre montures (le BMX
 arrache le premier), roue libre, pompage dans la mini-rampe (sans pomper on ne monte pas ; en pompant on sort au coping et l'on retombe en fakie ; le pompage plafonne), conservation de l'énergie
@@ -1914,14 +1914,24 @@ arrache le premier), roue libre, pompage dans la mini-rampe (sans pomper on ne m
 passe la table), l'ollie, le choc contre un flanc (lent : arrêt ; vite : chute), la barrière, le 50-50 sur le rail plat, le kickflip (tôt : propre ; tard : chute). ⚠️ Il a été rouge, sur de vrais
 défauts, pendant son écriture : un départ à l'arrêt (`!want` vaut vrai pour un ordre vers l'est), un décollage sous le coping (courbure échantillonnée trop loin), une lèvre jamais quittée (seuil en
 position sur un pas de 1/240 s), un pompage dix fois trop faible puis sans plafond. ⚠️ Ni dessin, ni réseau, ni son : ça se juge en jeu.
+**2026-10-13 (soir) — « les échecs rares »** : trois contrôles RÉÉCRITS selon la nouvelle règle (`monture.js`, « LES CHUTES RARES ») — le BMX fait SEUL son
+demi-tour au quarter (sans « 180 » compté), la flèche du retour en fait un voulu, la flèche de travers tenue jusqu'au bout fait tomber ; un kickflip lancé au
+sommet se presse et retombe propre, lancé trop tard il ne part pas ; contre le flanc, la chute à fond de face (6,4 c/s), le rebond lancé (5 c/s), le flanc
+longé à fond de biais (43°). Et la plateforme du quarter : la flèche du nord tenue en montant pose sur le deck.
 
-## `verify-skatepark.mjs` — LA COLLISION DU SKATEPARK, JOUÉE AU HASARD (2026-10-13, 8 contrôles, ~40 s)
+## `verify-skatepark.mjs` — LA COLLISION DU SKATEPARK, JOUÉE AU HASARD (2026-10-13, 14 contrôles, ~60 s)
 
 Un banc de FUZZ, à graine fixe : 800 sessions de 20 s sur les quatre montures (ordres, poussée, sauts, figures au hasard, partout sur le dallage) et 120 à pied. Zéro toléré : sortir de l'aire de roulage,
 les pieds dans un module, un saut de position, un NaN, l'axe d'un garde-corps franchi sous sa lisse ; à pied, un tube au milieu de la semelle, une marche plus haute que le pas. Plafonné (≤ 3 pour 100
 sessions) : les contacts résiduels de quelques centimètres hors chute (le prix de `alignedRail`, qui laisse un ollie dans l'axe atteindre le bout d'un rail). ⚠️ La marche y est RECONSTRUITE (la règle
 du jeu vit dans la boucle de `FermeGame.js`) : `canStandTown` sur les cases du park + `parkStepOk` + la trappe de dégagement — toute retouche de l'une se reporte ici. ⚠️ Rouge à sa naissance, sur
 243 sorties du park / 3 000 sessions, 96 montées « téléportées » sur les flancs, des mains courantes enjambées.
+**Depuis le 2026-10-13 (soir) — LES CHUTES D'UN JOUEUR PLAUSIBLE** (6 contrôles) : 80 sessions d'une minute par profil, un bot qui VISE (modules, lignes de
+glisse, huit directions), pousse, saute, lance une figure dans un air sur deux. Le NAÏF garde en l'air la flèche qu'il tenait et ne regarde rien ; l'APPLIQUÉ
+lâche les flèches en l'air et regarde à 0,4 s devant lui (il saute caisse et rail, contourne le reste). Plafonds : ≤ 1,7 et ≤ 1,4 chute/min, aucune monture
+au-dessus de 2,6, les chutes de COMMANDE (réception de travers, figure pas finie) ≤ 0,2/min. Mesuré avant les corrections : 6 à 10 chutes/min. Le reste
+(≈ 1/min) : des chocs de face à fond de poussée que ce bot voit trop tard — un vrai joueur les voit venir plus tôt (non mesuré). Contacts résiduels : 1
+(3 avant : `alignedRail` exemptait tout un rail coudé à son coude).
 
 ## `verify-chantier.mjs` — LE CHANTIER DE LA PLACE SE TIENT-IL ? (2026-10-11/12, 23 contrôles)
 

@@ -6,12 +6,20 @@
 
 ---
 
-### À juger — les riders et la collision du park (2026-10-13)
+### À juger — le park jouable : chutes rares, commandes dites, rollers (2026-10-13 soir) — et les riders, la collision (2026-10-13)
 
-Les poses, toutes à la fois : `app/audit-riders?k=skate` (puis `scooter`, `bmx` ; `&g=f` pour la robe ; `&z=3` le zoom). En jeu : le park (menu dev, « Skatepark et
-chantier »), une monture d'essai, et chercher la faille — longer les mains courantes, sauter contre les modules, descendre de sa monture contre une barrière, grinder
-jusqu'au bout des copings. **À trancher** : le garde-corps qui épouse le U au bout nord de la mini-rampe (nouveau, dessiné) ; les guidons abaissés à la taille des
-personnages ; un ollie dans l'axe d'un rail qui en touche le bout de quelques centimètres (le prix de l'accroche).
+En jeu : le park (menu dev, « Skatepark et chantier »), une monture d'essai, puis rouler cinq minutes SANS chercher à bien faire.
+- **Les chutes rares** (journal du README de la ferme, 2026-10-13 soir) : on ne tombe plus qu'en percutant DE FACE à fond (≈ 6 m/s) ou en se tournant
+  exprès de travers. **À trancher** : trop indulgent ? (le banc mesure ~1 chute/min pour un joueur qui fonce partout, 6 à 10 avant) — la caisse « presque
+  atteinte » qui se monte, le rail frôlé qui se passe, la réception de travers rattrapée (genoux pliés, vitesse perdue).
+- **En l'air, la flèche vise un cap** (on se tourne vers elle) ; sans rien toucher, la monture s'aligne sur sa réception — le BMX et la trottinette font SEULS
+  leur demi-tour au quarter. Un 180 : la flèche opposée ; un 360 : le tour des flèches. **À trancher** : le geste du 360 est-il trouvable ?
+- **Les figures pressées** : lancée tard, la figure tourne plus vite pour finir avant le sol (ou ne part pas). Visible ? gênant ?
+- **Les commandes dites** : au clavier, la ligne d'aide du bas en monture (et l'invite « F : monter sur le skate ») ; au doigt, Sauter / deux figures nommées /
+  Pomper / Freiner / Descendre — **disposition à juger sur un VRAI iPad** (test reporté : Xcode à mettre à jour).
+- **Les rollers sur le squelette** (foulée en V, chasse-neige, bras attachés) : planche des poses `app/audit-riders?k=roller&z=3`, puis en mouvement.
+- Toujours de la veille : le garde-corps qui épouse le U au bout nord de la mini-rampe ; les guidons à la taille des personnages ; les poses des trois autres
+  montures (`app/audit-riders?k=skate|scooter|bmx`, `&g=f` pour la robe).
 
 ### À juger — le chantier de la place (2026-10-12) : rien n'a encore été vu par Guillaume
 

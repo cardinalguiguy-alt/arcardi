@@ -1,8 +1,9 @@
 /* =============================================================================
    montureArt.js — LES MONTURES DU SKATEPARK, DESSINÉES (2026-10-11).
    -----------------------------------------------------------------------------
-   La planche, la trottinette, le BMX — et le corps de qui les monte. Les rollers n'ont pas de véhicule : c'est le corps du
-   patineur (`drawSkate`, fermeArt.js) avec des roues sous les bottines (`view.foot = "wheels"`) — la même foulée, la même lignée.
+   La planche, la trottinette, le BMX — et le corps de qui les monte. Les rollers n'ont pas de véhicule : des platines à roues sous
+   les chaussures, et le même squelette que les autres riders (`drawRollers`, 2026-10-13 soir ; avant, le corps du patineur de la
+   patinoire, `drawSkate`, qui ne sert plus ici qu'à la chute).
    ⚠️⚠️ LES VÉHICULES SONT EN 3D, PAS DES SPRITES TOURNÉS. Une planche couchée sur une courbe raide n'a pas la forme d'une planche
    à plat : son grand axe monte avec la pente. Chaque véhicule est décrit dans SON repère (le cap couché sur la surface, sa
    normale), projeté en 3/4 comme le relief (`x`, `y − z`), et peint au pixel : on remonte de chaque pixel de l'écran au point du
@@ -212,7 +213,8 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
     if (o.pedals) {
       // au BMX, les pieds sont où sont les pédales (devant, derrière, en haut, en bas) : c'est ce qui fait voir le pédalage. La pédale
       // proche est connue de l'appelant (son côté du cadre), jamais déduite de l'écran — sinon les jambes s'échangeraient à mi-tour.
-      const nr = o.pedals[0], fr = o.pedals[1], m = (nr[1] + fr[1]) / 2, dy = Math.max(-2.5, Math.min(2.5, nr[1] - fr[1]));
+      const dMax = o.depth || 2.5;   // l'écart de profondeur admis (les rollers : 1,5 — leur pied levé, plus loin, flottait)
+      const nr = o.pedals[0], fr = o.pedals[1], m = (nr[1] + fr[1]) / 2, dy = Math.max(-dMax, Math.min(dMax, nr[1] - fr[1]));
       fL = [nr[0], m + dy / 2]; fR = [fr[0], m - dy / 2];
     }
   } else {
@@ -279,6 +281,8 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
   // s'ouvrent (l'accroupi vu de face : « ( ) », pas deux jambes tronquées)
   const kneeFwd = side ? Math.min(2, Math.round(bend * 0.6)) : 0, kneeOut = side ? 0 : Math.min(1, Math.round(bend * 0.4));
   const LEG_L = 5, LEG_R = 8;   // les tranches : la jambe claire, la sombre
+  // 2026-10-13 (soir) — ce qui se pose SOUS les pieds (les platines des rollers), aux pieds que le squelette a retenus, le fond d'abord
+  if (o.under) o.under(side ? [fR, fL] : [fL, fR], side);
   if (o.push) {
     // la jambe qui pousse, tendue vers le sol ; l'autre porte, genou fléchi
     const pushL = o.push.x < mx;
@@ -287,8 +291,12 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
     const pf = [o.push.x, Math.max(supY - 1, Math.min(supY + 3, o.push.y))];
     if (side) { leg(LEG_R, pushL ? fR[0] : pf[0], pushL ? fR[1] : pf[1], pushL ? kneeFwd : 0); leg(LEG_L, pushL ? pf[0] : fL[0], pushL ? pf[1] : fL[1], pushL ? 0 : kneeFwd); }
     else { leg(LEG_L, pushL ? pf[0] : fL[0], pushL ? pf[1] : fL[1], pushL ? 0 : -kneeOut); leg(LEG_R, pushL ? fR[0] : pf[0], pushL ? fR[1] : pf[1], pushL ? kneeOut : 0); }
-  } else if (side) { leg(LEG_R, fR[0], fR[1], kneeFwd); leg(LEG_L, fL[0], fL[1], kneeFwd); }
-  else { leg(LEG_L, fL[0], fL[1], -kneeOut); leg(LEG_R, fR[0], fR[1], kneeOut); }
+  } else if (side) {
+    // `knee` [proche, lointain] : le genou de chaque jambe (la jambe qui pousse en arrière, aux rollers, est TENDUE : un genou en avant
+    // y faisait un zigzag — 2026-10-13 soir) ; sinon, les deux avancent de l'accroupi
+    leg(LEG_R, fR[0], fR[1], o.knee ? o.knee[1] : kneeFwd); leg(LEG_L, fL[0], fL[1], o.knee ? o.knee[0] : kneeFwd);
+  }
+  else { leg(LEG_L, fL[0], fL[1], o.kneeLR ? o.kneeLR[0] : -kneeOut); leg(LEG_R, fR[0], fR[1], o.kneeLR ? o.kneeLR[1] : kneeOut); }   // `kneeLR` : [gauche, droite] à l'écran
   // ── le buste et la tête. Les bras qui quittent le corps (de face, de dos) en sont ôtés : les colonnes x 3 et 12, et les mains.
   const TY = PS.TORSO_Y, armsOff = !side && ((o.hands && o.hands.length) || (o.arms && o.arms !== "down"));
   if (armsOff) {
@@ -306,6 +314,12 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
   ctx.drawImage(sheet, 0, sy, 16, PS.HEAD_H, cx + hx, t0, 16, PS.HEAD_H);
   const shY = t0 + ARM_TOP;
   if (o.hands && o.hands.length) { if (o.part !== "body") drawHands(); return; }
+  /* 2026-10-13 (soir) — de profil, LE BRAS PROCHE QUI BALANCE (`swing` : de combien de pixels la main avance, + vers l'avant) : la
+     foulée des rollers. Il part de l'épaule ; la main quitte le flanc, sa place reprend le tissu (comme la main posée au guidon). */
+  if (side && o.swing) {
+    for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
+    arm(7, cx + 7 + tx, shY, cx + 7 + tx + o.swing, t0 + HY);
+  }
   if (armsOff) {
     // L'ÉQUILIBRE : les bras écartés du corps — un peu (« out » : les mains à hauteur de hanche, deux pixels dehors) ou franchement
     // (« wide » : à hauteur de poitrine, le saut, la glisse) ; on se rattrape du côté où l'on penche (`armTilt` : cette main monte)
@@ -342,14 +356,7 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
     else drawSkate(ctx, sheet, row, px, by, "fall", r.ph || 0, skirt, { foot: "shoe" });
     return;
   }
-  if (r.kind === "roller") {
-    // les rollers : le corps du patineur, roues sous les bottines (la foulée, le saut, le frein)
-    const by = py - airPx;
-    const view = { foot: "wheels" };
-    if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSkate(ctx, sheet, row, 0, by, pose, r.ph || 0, skirt, view); ctx.restore(); }
-    else drawSkate(ctx, sheet, row, px, by, pose, r.ph || 0, skirt, view);
-    return;
-  }
+  if (r.kind === "roller") { drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt); return; }
   /* Les pieds sur le véhicule : deux points du plateau (le long de son axe), projetés. Le corps en miroir (profil gauche) les
      reçoit dans SON repère : x ↦ 2·px + 16 − x. */
   const pr = projector(R, F);
@@ -422,6 +429,79 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
     drawBmx(ctx, R, F, frontIsNear ? "back" : "all");
     if (frontIsNear) { body("body"); drawBmx(ctx, R, F, "front"); body("arms"); } else body();
   }
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-13 (soir) — LES ROLLERS SUR LE SQUELETTE (`drawRiderBody`), comme les trois autres montures.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️ Premier jet (2026-10-11) : le corps du patineur de la patinoire (`drawSkate`, fermeArt.js) avec des roues sous les bottines —
+   ses jambes y sont des MOITIÉS DE FEUILLE DÉPLACÉES EN BLOC (la foulée de face : deux colonnes détachées du bassin), ses bras de
+   frein des manches posées à un pixel du buste. On ne retouche PAS `drawSkate` (la patinoire est jugée bonne, et deux changements
+   visuels ne se livrent pas ensemble, §2) : les rollers le quittent. Les PIEDS sont posés en 3D (repère du cap couché sur la surface,
+   comme les pédales du BMX) et projetés ; le squelette y attache les jambes. Sous chaque chaussure, la platine et ses roues, à la
+   convention de la feuille (`o.under`, voir plus bas : projetées, elles se lisaient comme des échasses).
+   Les poses : debout (pieds à 18 cm, genoux souples) ; la FOULÉE en V (le pied qui pousse part en arrière et dehors, se soulève au
+   bout ; celui qui porte reste sous le corps ; le bras opposé balance) ; le CHASSE-NEIGE au frein (pieds larges, genoux pliés, bras
+   ouverts) ; en l'air, pieds joints, genoux ramassés, bras ouverts ; en glisse (soul), un pied devant l'autre. */
+const ROLLER = { frame: "#5c6470", frameHi: "#aeb6c2", wheel: "#2a2c33", hub: "#e8d36a", SOLE: 0.13 };
+function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
+  const pr = projector(R, F), side = row === 2;
+  const ph = r.ph || 0, legP = Math.floor(ph) & 1, u = ph - Math.floor(ph);
+  const sP = pose === "glide" ? Math.sin(u * Math.PI) : 0;
+  const fw = r.back ? -1 : 1;   // en arrière (le fakie des rollers), la foulée pousse vers l'avant du cap
+  // [a (le long du cap), b (en travers), h (levé)] — A du côté b > 0
+  let A = [0, 0.09, 0], B = [0, -0.09, 0];
+  if (pose === "glide") {
+    const s = legP ? 1 : -1;
+    const push = [fw * (-0.04 - 0.16 * sP), s * (0.09 + 0.08 * sP), sP > 0.75 ? 0.05 : 0], sup = [fw * 0.04, -s * 0.05, 0];
+    if (s > 0) { A = push; B = sup; } else { A = sup; B = push; }
+  } else if (pose === "brake") { A = [0.03, 0.15, 0]; B = [-0.03, -0.15, 0]; }
+  else if (pose === "hop") { A = [0.02, 0.06, 0]; B = [-0.02, -0.06, 0]; }
+  else if (pose === "grind") { A = [0.1, 0.07, 0]; B = [-0.1, -0.07, 0]; }
+  const ft = [A, B].map(([a, b, h]) => ({ a, b, h, push: pose === "glide" && sP > 0.2 && (b > 0) === !!legP, p: pr(a, b, ROLLER.SOLE + h) }));
+  // le corps : les pieds en haut de la platine ; de profil, la paire proche/lointain (comme les pédales du BMX), dans le repère du miroir
+  const mir = (q) => (flipX ? [2 * px + 16 - q[0], q[1]] : q);
+  let a = mir(ft[0].p), b = mir(ft[1].p);
+  if (a[0] > b[0]) { const t = a; a = b; b = t; }
+  const near = ft[0].p[1] >= ft[1].p[1] ? mir(ft[0].p) : mir(ft[1].p), far = ft[0].p[1] >= ft[1].p[1] ? mir(ft[1].p) : mir(ft[0].p);
+  const nearF = ft[0].p[1] >= ft[1].p[1] ? ft[0] : ft[1];
+  const bend0 = pose === "hop" ? 3 : pose === "brake" || pose === "grind" ? 2 : pose === "glide" ? 1 + Math.round(sP) : 1;
+  const o = { feet: [[a[0], a[1]], [b[0], b[1]]], skirt, bend: Math.max(bend0, r.bend || 0) + (r.grab ? Math.round(2 * r.grab) : 0), lean: (flipX ? -1 : 1) * (r.lean || 0),
+    arms: r.grab ? "down" : pose === "hop" || pose === "grind" ? "wide" : pose === "brake" ? "out" : pose === "glide" && sP > 0.35 ? "out" : "down",
+    armTilt: pose === "glide" ? (legP ? 1 : -1) : r.lean || 0 };
+  const pushF = ft.find((f) => f.push);
+  if (!side && pushF) {
+    // de face, la jambe qui pousse part tendue sur le côté (genou dans l'axe) ; l'autre s'ouvre comme à l'accroupi
+    const other = ft[0] === pushF ? ft[1] : ft[0], pushLeft = mir(pushF.p)[0] < mir(other.p)[0], kO = Math.min(1, Math.round(o.bend * 0.4));
+    o.kneeLR = pushLeft ? [0, kO] : [-kO, 0];
+  }
+  if (side) {
+    o.pedals = [near, far]; o.depth = 1.5;
+    // de profil, le bras proche balance à contresens de la jambe qui pousse (vers l'avant quand elle part en arrière) ; la jambe qui
+    // pousse est tendue (genou à l'aplomb), celle qui porte plie le genou en avant
+    if (pose === "glide") {
+      o.swing = Math.round(2.5 * sP) * (nearF.push ? 1 : -1);
+      const kS = Math.min(2, Math.round(o.bend * 0.6));
+      o.knee = [nearF.push ? 0 : kS, nearF.push ? kS : 0];
+    }
+  }
+  /* LA PLATINE ET SES ROUES, sous chaque pied retenu par le squelette (dans SON repère : le miroir compris). Convention de la feuille
+     (pas une projection : de face, une platine de 30 cm dans l'axe du regard se lisait comme une échasse) : de profil, huit pixels
+     dans le sens de la marche (deux derrière le talon, trois devant la pointe), quatre roues et leurs moyeux ; de face et de dos, la
+     tranche (trois pixels) et une roue. Le pied levé (la fin de la poussée) lève sa platine avec lui. */
+  o.under = (feet, sv) => {
+    for (const f of feet) {
+      const x = Math.round(f[0]), y = Math.round(f[1]);
+      if (sv) {
+        // dans le repère du corps on regarde vers +x (le miroir a retourné les profils gauches) ; les platines sont aux pieds : elles
+        // pointent où regarde le corps, même en roulant en arrière (`back` a déjà retourné le corps)
+        const x0 = x - 3;
+        P1(ctx, x0, y, 8, 1, ROLLER.frame); P1(ctx, x0 + 6, y, 2, 1, ROLLER.frameHi);
+        for (let k = 0; k < 4; k++) { P1(ctx, x0 + k * 2, y + 1, 2, 1, ROLLER.wheel); P1(ctx, x0 + k * 2 + 1, y + 1, 1, 1, ROLLER.hub); }
+      } else { P1(ctx, x - 1, y, 3, 1, ROLLER.frame); P1(ctx, x - 1, y, 1, 1, ROLLER.frameHi); P1(ctx, x, y + 1, 1, 1, ROLLER.wheel); }
+    }
+  };
+  if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(o, -px)); ctx.restore(); }
+  else drawRiderBody(ctx, sheet, row, px, 0, o);
 }
 /* Sous le miroir (profil gauche), le corps est dessiné à x = 0 dans un repère retourné autour de px + 8 : ses pieds y sont à
    x − px (les points ont déjà été mirroités par `mir`). */

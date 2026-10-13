@@ -240,6 +240,13 @@ dépôt.
   courbe, ou quand le cap tournait (la planche couchée sur la pente change de hauteur), et la comparaison avant/après ne voyait jamais le saut.
   Parade : le jeu est le plus grand des écarts, à plat ET en hauteur (`rideClear`) — continu, il ne saute pas. Corollaire : l'avant et
   l'après se mesurent dans le même repère (la hauteur d'arrivée au sol, la hauteur d'avant pour l'avant, le cap essayé pour un pivot).
+- ⚠️⚠️ **UN COUP DE POUCE DU JEU S'ACCORDE UNE FOIS PAR GESTE : REDONNÉ À CHAQUE PAS, IL DEVIENT UN ÉTAT** (2026-10-13 soir, « les chutes
+  rares » du park). L'aide « un saut qui frôle un rail par-dessous passe » soulevait le rider de quelques centimètres — testée à chaque pas
+  de 1/240 s, elle relevait aussi celui qui DESCENDAIT sur le rail de travers : il retombait, était relevé, retombait… et PLANAIT le long du
+  tube, trois centimètres sous son dessus. Aucun banc de physique ne l'a vu ; le fuzz l'a compté (contacts résiduels 3 → 10). Parade : une
+  aide se rattache au GESTE qui la justifie (une fois par saut, `railLifted`, en TRAVERSANT le rail, pas en tombant dessus). Même famille :
+  une exemption calculée sur un morceau et rendue pour le tout (`alignedRail` testait le bout de CHAQUE segment et exemptait tout le rail
+  coudé — au coude, une planche entrait de 8 cm dans le tube). Toute aide de jeu se relance au fuzz, pas seulement au banc qui la montre.
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
