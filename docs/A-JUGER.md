@@ -9,6 +9,9 @@
 ### À juger — le park jouable : chutes rares, commandes dites, rollers (2026-10-13 soir) — et les riders, la collision (2026-10-13)
 
 En jeu : le park (menu dev, « Skatepark et chantier »), une monture d'essai, puis rouler cinq minutes SANS chercher à bien faire.
+- **Le rider sur la paroi** (2026-10-13 nuit) : monter et redescendre le quarter, le virage, la mini-rampe — le corps et la monture restent entiers devant
+  le bois qui les porte, et passent derrière ce qui est devant eux (la funbox, la caisse, une lisse qu'on longe). Vu en pellicules ; jamais par Guillaume.
+  **Repéré** : en haut de la paroi, la potence de la trottinette pointe vers le bas de l'écran pendant que le corps reste droit — gênant ?
 - **Les chutes rares** (journal du README de la ferme, 2026-10-13 soir) : on ne tombe plus qu'en percutant DE FACE à fond (≈ 6 m/s) ou en se tournant
   exprès de travers. **À trancher** : trop indulgent ? (le banc mesure ~1 chute/min pour un joueur qui fonce partout, 6 à 10 avant) — la caisse « presque
   atteinte » qui se monte, le rail frôlé qui se passe, la réception de travers rattrapée (genoux pliés, vitesse perdue).

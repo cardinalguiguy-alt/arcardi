@@ -347,7 +347,7 @@ export function bakePark(makeCanvas) {
     if (!L.length) continue;
     let c0 = 1e9, c1 = -1, r0 = 1e9, r1 = -1;
     for (const p of L) { c0 = Math.min(c0, p.c); c1 = Math.max(c1, p.c); r0 = Math.min(r0, p.r); r1 = Math.max(r1, p.r); }
-    strips.push({ k, L, c0, r0, w: c1 - c0 + 1, h: r1 - r0 + 1, sy: atlasH, key: (P.y0 + B.v0 + (k + 1) * STRIP) * T - 0.5 });
+    strips.push({ k, L, c0, r0, w: c1 - c0 + 1, h: r1 - r0 + 1, sy: atlasH, key: (P.y0 + B.v0 + (k + 1) * STRIP) * T - 0.5, k0: (P.y0 + B.v0 + k * STRIP) * T });
     atlasH += r1 - r0 + 2; atlasW = Math.max(atlasW, c1 - c0 + 1);
   }
   const atlas = makeCanvas(atlasW, atlasH);
@@ -367,6 +367,7 @@ export function bakePark(makeCanvas) {
       px.push({ ai, x: (buf.X0 + p.c + 0.5) / T, y: p.i != null ? P.y0 + buf.v[p.i] : P.y0 + p.v, z: p.i != null ? buf.z[p.i] : 0, tube: p.i == null, rgb, bi: p.i });
     }
     st.dx = buf.X0 + st.c0; st.dy = buf.Y0 + st.r0; st.sx = 0;
+    st.depth = depth;   // 2026-10-13 (nuit) : la rangée de sol de chaque pixel, gardée pour couper la tranche aux pieds d'un rider (`parkDrawPieces`)
     delete st.L;
   }
   g.putImageData(img, 0, 0);
@@ -378,6 +379,56 @@ export function bakePark(makeCanvas) {
   for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) hg[j * gw + i] = SP.heightAt(gx0 + (i + 0.5) / HG, gy0 + (j + 0.5) / HG);
   BAKE.park = { strips, atlas, g, img, px, atlasW, atlasH, hgrid: { hg, gx0, gy0, gw, gh, HG }, sunKey: null, makeCanvas, buf };
   return BAKE.park;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-13 (nuit) — QUI SE TIENT SUR LE PARK COUPE LA TRANCHE À SES PIEDS.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Une tranche fait un quart de case de sol et se triait D'UN BLOC à sa fin de rangée : elle passait tout entière devant qui s'y
+   tenait, y compris le bois situé DERRIÈRE lui (plus au nord). Sur le plat, ce bois-là est sous les pieds et ne se voit pas ; sur une
+   paroi qui monte vers le nord (le quarter et son virage, l'escalier de l'ouest), un quart de case de sol fait jusqu'à un mètre de
+   paroi à l'écran — le bas du corps passait sous les lattes (pellicule d'un BMX au quarter, 2026-10-13 soir, en montant comme en
+   redescendant). Des tranches plus fines n'y suffisent pas : la paroi raide tient des pixels entiers dans une seule rangée de sol.
+   La parade, au pixel : chaque personnage posé sur le park est une COUPE `{ y, x }` — sa clé de tri (px du monde, la file de dessin)
+   et la colonne de ses pieds. Une tranche qui contient une coupe se dessine EN ENTIER juste avant le premier d'entre eux ; juste
+   après chacun, on redessine dans une fenêtre autour de lui (`CUT_HALF`) les seuls pixels dont la rangée de sol est DEVANT sa clé
+   (`depth`, gardée de la cuisson ; un tube compris). L'atlas n'est pas touché (le soleil et le chantier y écrivent : on relit
+   `img`, toujours à jour), et une tranche où personne ne se tient garde son tri d'avant, à la même clé.
+   Rend des morceaux `{ key, draw(ctx) }` à trier avec le reste du monde ; `wy0`/`wy1` (px) bornent la vue. */
+export const CUT_HALF = 24;   // px : la demi-largeur de la fenêtre redessinée (un BMX et son guidon tiennent dans ±14)
+export function parkDrawPieces(park, cuts, wy0, wy1) {
+  const out = [];
+  for (const st of park.strips) {
+    if (st.key < wy0 || st.dy > wy1) continue;
+    const full = (ctx) => ctx.drawImage(park.atlas, st.sx, st.sy, st.w, st.h, st.dx, st.dy, st.w, st.h);
+    let mine = null;
+    for (const c of cuts) if (c.y >= st.k0 && c.y < st.key) (mine || (mine = [])).push(c);
+    if (!mine) { out.push({ key: st.key, draw: full }); continue; }
+    mine.sort((a, b) => a.y - b.y);
+    out.push({ key: mine[0].y - 0.01, draw: full });
+    for (const c of mine) out.push({ key: c.y + 0.01, draw: (ctx) => drawStripFront(park, st, c, ctx) });
+  }
+  return out;
+}
+/* Les pixels de la tranche `st` DEVANT la coupe `c`, dans sa fenêtre, recopiés de l'atlas dans un canevas de travail. */
+function drawStripFront(park, st, c, ctx) {
+  const q0 = Math.max(0, Math.floor(c.x - CUT_HALF) - st.dx), q1 = Math.min(st.w, Math.ceil(c.x + CUT_HALF) - st.dx);
+  if (q1 <= q0) return;
+  const w = q1 - q0, h = st.h, vCut = c.y / T - SP.PARK.y0, src = park.img.data, AW = park.atlasW, dep = st.depth;
+  if (!park.cutCv || park.cutCv.width < w || park.cutCv.height < h) park.cutCv = park.makeCanvas(Math.max(w, 2 * CUT_HALF + 2), Math.max(h, 64));
+  const g = park.cutCv.getContext("2d"), im = g.createImageData(w, h), d = im.data;
+  let any = false;
+  for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) {
+    if (!(dep[r * st.w + q0 + q] > vCut)) continue;   // derrière la coupe, ou pas de pixel (-1e9)
+    const s = ((st.sy + r) * AW + st.sx + q0 + q) * 4;
+    if (!src[s + 3]) continue;                         // au chantier, une feuille pas encore posée
+    const o = (r * w + q) * 4;
+    d[o] = src[s]; d[o + 1] = src[s + 1]; d[o + 2] = src[s + 2]; d[o + 3] = src[s + 3];
+    any = true;
+  }
+  if (!any) return;
+  g.putImageData(im, 0, 0);
+  ctx.drawImage(park.cutCv, 0, 0, w, h, st.dx + q0, st.dy, w, h);
 }
 
 /* La clé d'un soleil pour la cuisson : le cisaillement au 1/25 près (≈ un pixel au bout de l'ombre la plus longue) — sans quoi

@@ -11,25 +11,22 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-13 (soir) — LE PARK : CHUTES RARES, COMMANDES DITES, ROLLERS SUR LE SQUELETTE — DANS L'ARBRE, NON COMMITÉ (le reste l'est : 5f18556)
+### 2026-10-13 (nuit) — LE PARK : PLUS PERSONNE NE PASSE SOUS LES LATTES — DANS L'ARBRE, NON COMMITÉ (le soir l'est : 3893cf0)
 
-Demande : « fluide, les échecs rares » (les CHUTES), « fun pour le joueur » ; commandes tactiles libellées et rappel clavier discret ; test iPad REPORTÉ
-(Xcode à mettre à jour). Récit : journal du README de la ferme (2026-10-13 soir). **Chutes** (`monture.js`, en-tête « LES CHUTES RARES ») : un bot de
-« joueur plausible » tombait 6 à 10 fois/min → 0,2 à 1,5 ; en l'air la flèche VISE un cap, sans ordre on s'aligne sur la réception (`predictLanding` ; le
-demi-tour du BMX au quarter se fait seul — décision de Guillaume) ; figures pressées pour tenir dans l'air ; réception de travers rattrapée ; on longe les
-obstacles (`wallNormal`), chute seulement de face à fond ; cap dessiné lissé (`thV`). **Commandes** : ligne d'aide du clavier en monture, invite
-« F : monter sur le skate » (`parkMountReady`), boutons tactiles Sauter/figures nommées/Pomper/Freiner/Descendre (FermeGame.js, CSS `.ferme-ride-*`).
-**Rollers** : `drawRollers` (montureArt.js) sur `drawRiderBody` ; `drawSkate` et la patinoire intacts. Bancs : `verify-skatepark` 14/14 (chutes du joueur
-plausible plafonnées, 1 contact résiduel), `verify-monture` 29/29, `render-skatepark` 7/7, `render-patin` 4/4, `verify-patin` 82/82, `verify-duo` 23/23,
-`verify-strings` 1345 clés, `verify-syntax`, `verify-scope`, `verify-docs`. **Vu** : poses des rollers (navigateur), pellicules en jeu d'un skate (kickflip) et
-d'un BMX au quarter, parcours tactile simulé. **Pas vu** : un vrai iPad, rollers et trottinette en mouvement, les sons. **Repéré, pas corrigé** : sur la paroi
-du quarter, le bas du corps du rider passe SOUS les tranches de bois. **Supabase : rien.** ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`,
-`app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
+Le défaut laissé le soir : sur la paroi du quarter, le bas du corps du rider passait SOUS les tranches de bois. Récit : journal du README de la ferme
+(2026-10-13 nuit). Cause : une tranche (un quart de case de sol) se triait d'un bloc et passait devant qui s'y tenait, bois de DERRIÈRE compris.
+Parade : `parkDrawPieces` (skateparkArt.js) — la tranche où se tient quelqu'un se dessine avant lui, puis ses seuls pixels DEVANT lui sont redessinés
+autour de lui (profondeur gardée de la cuisson) ; un rider se trie au bout sud de ce qui le porte (`rideReach`, montureArt.js, borné par la collision) ;
+les tranches se poussent en dernier (`parkStripQ`, `parkCutOf`, FermeGame.js). Bancs : `render-skatepark` 23/23 (16 neufs : le tri d'avant cachait 44 px
+de corps), `verify-monture` 29/29, `verify-skatepark` 14/14, `verify-syntax`, `verify-scope`, `verify-docs`. **Vu en jeu** : pellicules BMX (montée, vol, demi-tour,
+redescente de face), rollers, trottinette ; 3,9 ms/image en médiane. **Pas vu** : un vrai iPad, les sons. **Repéré, pas corrigé** : en haut de la paroi, la
+potence de la trottinette couchée pointe vers le bas de l'écran, le corps reste droit (les mains lâchent le guidon une image ou deux). **Supabase : rien.**
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) :
+`f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
-### ⏭️ ACTION SUIVANTE — LE RIDER CACHÉ PAR LA PAROI DU QUARTER, PUIS FAIRE JUGER LE PARK PAR GUILLAUME EN JEU
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE PARK PAR GUILLAUME EN JEU
 
-(1) L'ordre de dessin du rider contre les tranches du relief sur les courbes (pellicule : un BMX qui monte le quarter perd ses jambes) ; regarder rollers et
-trottinette en mouvement. (2) Les blocs en tête de `docs/A-JUGER.md` (park jouable, chantier). (3) Le test iPad dès Xcode à jour (`docs/PROJETS.md` §3, ligne
+Les blocs en tête de `docs/A-JUGER.md` (park jouable, rider sur la paroi, chantier) ; puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3, ligne
 « Skatepark »), puis l'équipe de nettoyage (§4.1). Toujours en attente : l'amie au Mac lent.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
@@ -272,6 +269,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE SEMELLE TESTÉE À SES COINS ENJAMBE TOUT CE QUI EST PLUS FIN QU'ELLE
 - UN JEU MESURÉ EN « DEDANS / DEHORS » CASSE LA RÈGLE « PAS PLUS PRÈS QU'AVANT » : LA DISTANCE DOIT ÊTRE CONTINUE
 - UN COUP DE POUCE DU JEU S'ACCORDE UNE FOIS PAR GESTE : REDONNÉ À CHAQUE PAS, IL DEVIENT UN ÉTAT
+- UNE TRANCHE DE TRI QUI PORTE UN RELIEF PASSE DEVANT CE QUI SE TIENT DEDANS, CE QUI EST DERRIÈRE COMPRIS
 
 **JavaScript / three.js / canevas**
 

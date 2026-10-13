@@ -17,6 +17,7 @@
    ========================================================================== */
 import * as C from "./fermeConstants.mjs";
 import * as SP from "./skatepark.mjs";
+import * as MO from "./monture.mjs";   // 2026-10-13 (nuit) : la demi-longueur de collision d'une monture (`rideReach`)
 import { drawSkate, drawReachArm, POSE_SLICES as PS } from "./fermeArt.mjs";
 
 const T = C.TILE;
@@ -34,6 +35,27 @@ function frameOf(r) {
   const n = [fn[1] * ln[2] - fn[2] * ln[1], fn[2] * ln[0] - fn[0] * ln[2], fn[0] * ln[1] - fn[1] * ln[0]];
   if (n[2] < 0) { n[0] = -n[0]; n[1] = -n[1]; n[2] = -n[2]; }
   return { f: fn, l: ln, n };
+}
+/* 2026-10-13 (nuit) — JUSQU'OÙ VA, VERS LE SUD, CE QUI PORTE LE RIDER (cases de sol, ≥ 0) : la roue arrière d'un BMX qui monte le
+   quarter, le tail de la planche. Le jeu trie le rider à cette profondeur au-delà de ses pieds (FermeGame.js, `parkCutOf`), et c'est
+   là qu'il coupe la tranche du park (`parkDrawPieces`, skateparkArt.js) : le bois sous la monture passe DESSOUS. ⚠️ Trié à ses
+   seuls pieds, le corps sortait bien de la paroi, mais la roue arrière — plus au sud, plus bas à l'écran — passait sous les lattes
+   qui la portent. La borne est celle de la COLLISION (`MO.RIDE_HALF` le long du cap, `SP.RIDE_DECK_R` en travers), jamais plus
+   large : la collision tient le véhicule à distance de tout tube, donc une lisse DEVANT lui (la barrière qu'on longe) reste devant.
+   Sur une paroi qui monte vers le nord, la normale du véhicule couché pointe vers le sud : ses roues (`h`, leur sommet) avancent
+   d'autant — le bois plus au sud y est plus bas et ne cache rien de ce qui est posé dessus. */
+const REACH_H = { skate: 0.1, scooter: 0.1, bmx: 0.42, roller: 0.1 };
+export function rideReach(r, fx, fy) {
+  const half = MO.RIDE_HALF[r.kind];
+  if (half == null) return 0;
+  if (r.mode === "bail") {
+    // la chute : le corps au sol (il ne s'étend pas vers le sud) ; la planche a filé de 0,6 case le long du cap (`drawRide`)
+    if (r.kind !== "skate") return 0;
+    const t = r.th + 0.6;
+    return Math.max(0, 0.6 * Math.sin(r.th) + half * Math.abs(Math.sin(t)) + SP.RIDE_DECK_R * Math.abs(Math.cos(t)));
+  }
+  const F = frameOf({ th: r.th, air: r.air || 0, surf: r.mode === "air" ? null : SP.parkSurf(fx, fy, {}) });
+  return half * Math.abs(F.f[1]) + SP.RIDE_DECK_R * Math.abs(F.l[1]) + REACH_H[r.kind] * Math.max(0, F.n[1]);
 }
 /* Un point du véhicule (repère local : `a` le long, `b` en travers, `h` au-dessus) → l'écran (px du monde, voir l'en-tête). */
 function projector(r, F) {

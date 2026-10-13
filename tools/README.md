@@ -1945,11 +1945,17 @@ porte est déjà à côté d'elle). ⚠️ Rouge sur de vrais défauts à l'écr
 l'emprise du futur quarter : aucun chemin n'en sortait), un porteur planté dans la mini-rampe qu'on soudait autour de lui. ⚠️ Ni dessin, ni son :
 ça se regarde en jeu (menu dev, « Skatepark et chantier » ; ou `?chantier=<minute>&chantierv=<vitesse>&chantiert=demontage`, `__chantier(m, v, type)`).
 
-## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11, 7 contrôles)
+## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11 ; 23 contrôles au 2026-10-13 nuit)
 
 Le vrai relief et son vrai dessin (`skateparkArt.js`) sur le dallage du monde de printemps, à 8 h 30, 13 h, 18 h 30 (le contact au sol, l'ombre du soleil sur le dallage passée comme dans le jeu, les
 tranches dans l'ordre de leur clé), et un gros plan de la mini-rampe et de la galerie. Contrôles : clés de tri croissantes, aucune tranche vide, atlas < 2 Mpx, pied du quarter au sol, coping à sa
 hauteur, angles de coping (70-82°). Planches : `tools/out/skatepark-8h5.png`, `skatepark-13h.png`, `skatepark-18h5.png`, `skatepark-zoom.png`. ⚠️ Ni riders, ni nuit, ni lumière dynamique.
+**2026-10-13 (nuit) — QUI SE TIENT SUR LE PARK N'EST CACHÉ QUE PAR LE BOIS DEVANT LUI** (16 contrôles de plus) : un personnage magenta en treize points
+critiques (paroi du quarter du pied au coping, virage, quarter est, parois de la mini-rampe, escalier de l'ouest, derrière la funbox et la caisse, galerie),
+composé avec les VRAIS morceaux du jeu (`SA.parkDrawPieces`) à sa clé ; la vérité est la profondeur du bois VU en chaque pixel. Zéro pixel caché ou montré à
+tort ; le tri d'avant (tranches entières) en cachait 44 — le contrôle « le défaut existait » garde le banc honnête. Un BMX qui monte puis redescend le quarter
+(un pavé au contact de la roue au sud des pieds, couchée sur la paroi) vérifie la portée `MA.rideReach` : 0 px caché à tort, 16 triée à ses seuls pieds.
+⚠️ La silhouette est un rectangle, pas le vrai dessin du rider (le faux canevas ignore `translate`) : la pose réelle se juge en jeu.
 
 ## `render-patinoire.mjs` — LA PATINOIRE DU CHAMP DE FOIRE (2026-10-05, 4 contrôles)
 

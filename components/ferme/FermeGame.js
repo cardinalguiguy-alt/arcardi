@@ -22838,6 +22838,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         },
         rb: rx == null ? null : wy, rx, re: ey,
       });
+      /* 2026-10-13 (nuit) — LES TRANCHES DU SKATEPARK SE POUSSENT EN DERNIER, juste avant le tri : celle où se tient quelqu'un se coupe à
+         ses pieds (`SPA.parkDrawPieces`), et l'on ne connaît les coupes (`parkCuts`, posées avec chaque personnage du park :
+         `parkCutOf`) qu'une fois tout le monde dans la file. */
+      let parkStripQ = null;
+      const parkCuts = [];
+      /* L'entrée que l'on vient de pousser (un personnage du park) : sa clé de tri seule recule de la portée de sa monture — sa ligne de
+         sol (`rb`, d'où partent son ombre au soleil et son reflet) reste à ses pieds. ⚠️ Ajoutée à `wy` (premier jet, relu avant
+         d'être vu), la portée aurait décollé de dix pixels l'ombre d'un BMX sur le dallage. */
+      const parkCutPush = (pc) => {
+        if (!pc) return;
+        const e = draws[draws.length - 1];
+        e.y += pc.reach;
+        parkCuts.push({ y: e.y, x: pc.x });
+      };
       /* ZIP 427 — LES BULLES DE LA VILLE, EN PASSE FINALE. Même raison qu'à la
          ferme (le tri se fait par ancrage AU SOL, pas par étendue visuelle) :
          une bulle dessinée dans son `draw` se fait recouvrir par le premier
@@ -25247,12 +25261,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         if (pr.kind === "skatepark") {
           if (reflecting) continue;
-          const pk = SPA.bakePark(parkCanvas);
-          const wy0 = (y0 - 3) * T, wy1 = (yBot + 4) * T;
-          for (const st of pk.strips) {
-            if (st.key < wy0 || st.dy > wy1) continue;
-            pushE(st.key, 0, () => ctx.drawImage(pk.atlas, st.sx, st.sy, st.w, st.h, st.dx, st.dy, st.w, st.h));
-          }
+          parkStripQ = { pk: SPA.bakePark(parkCanvas), wy0: (y0 - 3) * T, wy1: (yBot + 4) * T };   // poussées avant le tri, coupées aux pieds de chacun
           continue;
         }
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
@@ -26638,7 +26647,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-10-04 — sur la glace, la pose du patin, DÉDUITE (`skateDraw`) : la ville
            dessine ses camarades ici, pas par `drawRemote` (la ferme) — premier jet branché
            là-bas seulement, donc invisible en ville, là où la glace existe. */
-        else pushE((p.y + 1) * T, pe, () => { const sk = skateDraw(p, false); drawCharacter(sk.skate || sk.ride ? { ...p, ...sk } : p, false); }, pl, tw.skatepark && pl > 0.5 && SPK.inPark(C.footX(p.x), C.footY(p.y)) ? null : Math.floor(p.x + 0.5));
+        else {
+          // 2026-10-13 (nuit) : sur le park, trié au bout de ce qui le porte, et la tranche coupée à ses pieds (`parkCutOf`, `parkCutPush`)
+          const pcR = parkCutOf(tw, p, false);
+          pushE((p.y + 1) * T, pe, () => { const sk = skateDraw(p, false); drawCharacter(sk.skate || sk.ride ? { ...p, ...sk } : p, false); }, pl, tw.skatepark && pl > 0.5 && SPK.inPark(C.footX(p.x), C.footY(p.y)) ? null : Math.floor(p.x + 0.5));
+          parkCutPush(pcR);
+        }
       }
       /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ; la
          cloche, elle, est une hauteur d'IMAGE et part dans `myLift` — c'est la
@@ -26665,7 +26679,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          dallage, sous le bois (le tampon des ombres est posé avant le monde trié), loin des pieds — l'ellipse de contact,
          montée avec le corps, la remplace. */
       const myParkUp = tw.skatepark && myLift > 0.5 && SPK.inPark(C.footX(m.x), C.footY(m.y));
-      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, myParkUp ? null : Math.floor(m.x + 0.5));
+      if (!inCar) {
+        const pcM = parkCutOf(tw, m, true);   // 2026-10-13 (nuit) : voir plus haut, les autres joueurs
+        pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift, myParkUp ? null : Math.floor(m.x + 0.5));
+        parkCutPush(pcM);
+      }
       if (!inCar && !m.sleeping && !jpv.active && !m.sitOn) snowWalk("me", "boot", C.footX(m.x), C.footY(m.y), myE);
       /* 2026-10-11 — LES ÉTINCELLES DES GRINDS (`parkFxRef.sparks`) : un pixel blanc-jaune qui vire à l'orange, en balistique, trié à sa
          rangée et monté de sa hauteur (`liftPx`). */
@@ -27293,6 +27311,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (SUN_SHADOW.bitmaps.size > 400) SUN_SHADOW.bitmaps.delete(SUN_SHADOW.bitmaps.keys().next().value);
         };
       }
+      if (parkStripQ) for (const pc of SPA.parkDrawPieces(parkStripQ.pk, parkCuts, parkStripQ.wy0, parkStripQ.wy1)) pushE(pc.key, 0, () => pc.draw(ctx));
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -28963,10 +28982,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     }
+    /* 2026-10-11 — monté dans le skatepark : la monture que l'on dessine sous `p` (moi : ma machine ; un autre : déduite de son `rd`),
+       ou null. Un seul prédicat pour le dessin (`skateDraw`) et pour le tri (`parkCutOf`). */
+    function rideFieldsOf(p, isSelf) {
+      if (isSelf) return rideRef.current ? rideDrawOf(rideRef.current) : null;
+      const rpR = playersRef.current.get(p.id);
+      return rpR && rpR.rd && townWorldRef.current && townWorldRef.current.skatepark ? remoteRideDrawOf(p, rpR) : null;
+    }
+    /* 2026-10-13 (nuit) — QUI SE TIENT SUR LE PARK COUPE LA TRANCHE OÙ IL EST (`SPA.parkDrawPieces`) : rend le surplus de sa clé de tri
+       (px, vers le sud : le bout de ce qui le porte, `MA.rideReach` — la roue arrière d'un BMX qui monte le quarter) et la colonne de
+       ses pieds ; null hors du park. À pied, rien de plus que ses pieds. */
+    function parkCutOf(tw, p, isSelf) {
+      if (!tw.skatepark) return null;
+      const fx = C.footX(p.x), fy = C.footY(p.y);
+      if (!SPK.inPark(fx, fy)) return null;
+      const rdf = rideFieldsOf(p, isSelf);
+      return { reach: rdf ? MA.rideReach(rdf.ride, fx, fy) * T : 0, x: fx * T };
+    }
     function skateDraw(p, isSelf) {
       if (!p || (p.zone || "farm") !== "town") return {};
-      if (isSelf && rideRef.current) return rideDrawOf(rideRef.current);   // 2026-10-11 : monté dans le skatepark
-      if (!isSelf) { const rpR = playersRef.current.get(p.id); if (rpR && rpR.rd && townWorldRef.current && townWorldRef.current.skatepark) return remoteRideDrawOf(p, rpR); }
+      { const rdf = rideFieldsOf(p, isSelf); if (rdf) return rdf; }
       { const dqf = duoFieldsOf(p, isSelf); if (dqf) return dqf; }   // 2026-10-06 (soir) : en figure à deux, la pose du plan
       if (isSelf) {
         const st = skateRef.current; if (!st) return {};

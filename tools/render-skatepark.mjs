@@ -50,6 +50,90 @@ ok(park.atlasW * park.atlasH < 2e6, "l'atlas tient en mémoire", `${(park.atlasW
   ok(deg(tm.ang) > 70 && deg(tm.ang) < 82, "l'angle de coping de la mini-rampe (70-82°)", deg(tm.ang).toFixed(1) + "°");
 }
 
+/* ── 2026-10-13 (nuit) — QUI SE TIENT SUR LE PARK N'EST CACHÉ QUE PAR LE BOIS QUI EST DEVANT LUI (`SA.parkDrawPieces`). ──
+   Le défaut : une tranche (un quart de case de sol) se triait d'un bloc, et sur une paroi qui monte vers le nord le bois DERRIÈRE
+   le rider, dans sa tranche, lui passait devant — le bas du corps sous les lattes. Le contrôle compose, pour un personnage magenta
+   posé en des points critiques, les morceaux du jeu et le personnage à sa clé ; la vérité est la profondeur du bois VU en chaque
+   pixel (la plus grande rangée de sol des tranches qui le couvrent) : un pixel du personnage doit se voir si et seulement si ce
+   bois est derrière sa clé. On compte les deux erreurs (caché à tort, montré à tort) — aucune n'est admise. Le tri d'AVANT
+   (tranches entières, trié à ses pieds) est compté aussi : c'est la mesure du défaut. Un BMX (la roue arrière, un pavé à son
+   point de contact, couchée sur la paroi) vérifie la portée de la monture (`MA.rideReach`). */
+{
+  const MA = (await loadFerme(ROOT, ["montureArt"])).montureArt;
+  const P = SP.PARK, B = SP.PARK_BOUNDS, M = SP.MINI, Q = SP.QUARTER;
+  const OX2 = Math.min(...park.strips.map((s) => s.dx)) - 8, OY2 = Math.min(...park.strips.map((s) => s.dy)) - 8;
+  const W2 = Math.max(...park.strips.map((s) => s.dx + s.w)) - OX2 + 8, H2 = Math.max(...park.strips.map((s) => s.dy + s.h)) - OY2 + 8;
+  // la vérité : la profondeur (px du monde) du bois vu en chaque pixel
+  const ref = new Float32Array(W2 * H2).fill(-1e9);
+  for (const st of park.strips) for (let r = 0; r < st.h; r++) for (let q = 0; q < st.w; q++) {
+    const dv = st.depth[r * st.w + q];
+    if (dv < -1e8 || !park.img.data[((st.sy + r) * park.atlasW + st.sx + q) * 4 + 3]) continue;
+    const i = (st.dy + r - OY2) * W2 + (st.dx + q - OX2);
+    ref[i] = Math.max(ref[i], (P.y0 + dv) * T);
+  }
+  const shift = (c) => ({ drawImage: (im, sx, sy, sw, sh, dx, dy, dw, dh) => c.ctx.drawImage(im, sx, sy, sw, sh, dx - OX2, dy - OY2, dw, dh) });
+  /* le personnage : un corps de 6 × 24 px au-dessus des pieds ; `wheel` : [u, v, z] (cases) le point de contact d'une roue */
+  function person(c, fx, fy, wheel, only) {
+    const lift = SP.liftPx(fx, fy), px = Math.round(fx * T) - OX2, py = Math.round(fy * T - lift) - OY2;
+    c.ctx.fillStyle = "#ff00ff";
+    if (only !== "wheel") c.ctx.fillRect(px - 3, py - 24, 6, 24);
+    if (wheel && only !== "body") { const wx = Math.round(wheel[0] * T) - OX2, wy = Math.round((wheel[1] - wheel[2]) * T) - OY2; c.ctx.fillRect(wx - 2, wy - 4, 4, 4); }
+  }
+  function compose(fx, fy, key, wheel, cutIt) {
+    const c = makeCanvas(W2, H2), sc = shift(c);
+    const items = cutIt ? SA.parkDrawPieces(park, [{ y: key, x: fx * T }], -1e9, 1e9).map((pc) => ({ key: pc.key, fn: () => pc.draw(sc) }))
+      : park.strips.map((s) => ({ key: s.key, fn: () => c.ctx.drawImage(park.atlas, s.sx, s.sy, s.w, s.h, s.dx - OX2, s.dy - OY2, s.w, s.h) }));
+    items.push({ key, fn: () => person(c, fx, fy, wheel) });
+    items.sort((a, b) => a.key - b.key);
+    for (const it of items) it.fn();
+    return c;
+  }
+  /* La vérité de chaque pixel du personnage : le corps à la profondeur de ses pieds, la roue à celle de SON contact. */
+  function errors(fx, fy, key, wheel, cutIt) {
+    const body = makeCanvas(W2, H2), whl = makeCanvas(W2, H2);
+    person(body, fx, fy, wheel, "body"); person(whl, fx, fy, wheel, "wheel");
+    const kBody = fy * T + 1, kWheel = wheel ? wheel[1] * T + 1 : -1e9;
+    const c = compose(fx, fy, key, wheel, cutIt);
+    let hid = 0, shown = 0, n = 0;
+    for (let i = 0; i < W2 * H2; i++) {
+      const inB = body.px[i * 4 + 3] > 0, inW = whl.px[i * 4 + 3] > 0;
+      if (!inB && !inW) continue;
+      n++;
+      const vis = c.px[i * 4] === 255 && c.px[i * 4 + 1] === 0 && c.px[i * 4 + 2] === 255;
+      const want = !(ref[i] > Math.max(inB ? kBody : -1e9, inW ? kWheel : -1e9));
+      if (want && !vis) hid++; else if (!want && vis) shown++;
+    }
+    return { hid, shown, n };
+  }
+  const L = (u, v) => [P.x0 + u, P.y0 + v];
+  const spots = [
+    ["quarter, pied", ...L(14, Q.toeV - 0.15)], ["quarter, tiers", ...L(14, Q.toeV - 0.6)], ["quarter, mi-hauteur", ...L(14, Q.toeV - 1.0)],
+    ["quarter, haut", ...L(14, Q.toeV - Q.d + 0.25)], ["quarter, sous le coping", ...L(14, Q.toeV - Q.d + 0.08)],
+    ["virage", ...L(Q.toeU + 0.7, Q.toeV - 0.9)], ["quarter est", ...L(Q.toeU + 1.0, 7.5)],
+    ["mini, paroi ouest", ...L(M.uTW - 0.6, 3)], ["mini, paroi est", ...L(M.uTE + 0.6, 3)], ["escalier de l'ouest", ...L(0.5, 6.9)],
+    ["derrière la funbox", ...L(9.5, SP.FUNBOX.v0 - 0.3)], ["derrière la caisse", ...L(14, SP.BOX.v0 - 0.25)], ["galerie", ...L(8.9, 1.2)],
+  ];
+  let oldHid = 0;
+  for (const [name, fx, fy] of spots) {
+    const key = fy * T + 1;   // le jeu : (y + 1)·T, les pieds à y + 15/16
+    const e = errors(fx, fy, key, null, true), o = errors(fx, fy, key, null, false);
+    oldHid += o.hid;
+    ok(e.hid === 0 && e.shown === 0, `à pied, ${name} : caché seulement par le bois devant lui`, `${e.hid} caché(s) à tort, ${e.shown} montré(s) à tort sur ${e.n} px (avant : ${o.hid} caché(s) à tort)`);
+  }
+  ok(oldHid > 0, "le défaut existait bien dans le tri d'avant (sinon ce contrôle ne prouve rien)", `${oldHid} px cachés à tort`);
+  // le BMX sur la paroi du quarter, en montant (cap au nord) et en redescendant (au sud) : la roue arrière, puis l'avant, au contact
+  for (const [name, th] of [["monte", -Math.PI / 2], ["redescend", Math.PI / 2]]) {
+    const [fx, fy] = L(14, Q.toeV - 0.8), s = SP.parkSurf(fx, fy, {});
+    const c = Math.cos(th), sn = Math.sin(th), pz = s.gu * c + s.gv * sn, nf = Math.hypot(c, sn, pz);
+    const a = th < 0 ? -0.42 : 0.42;   // la roue au SUD des pieds : l'arrière en montant, l'avant en redescendant
+    const wheel = [fx + a * c / nf, fy + a * sn / nf, s.h + a * pz / nf];
+    const reach = MA.rideReach({ kind: "bmx", th, mode: "ground", air: 0 }, fx, fy) * T;
+    const key = fy * T + 1 + reach;
+    const e = errors(fx, fy, key, wheel, true), o = errors(fx, fy, fy * T + 1, wheel, true);
+    ok(e.hid === 0 && e.shown === 0, `BMX qui ${name} le quarter : la roue au sud des pieds sort du bois qui la porte`, `portée ${reach.toFixed(1)} px ; ${e.hid} caché(s), ${e.shown} montré(s) à tort sur ${e.n} px (trié à ses seuls pieds : ${o.hid} caché(s))`);
+  }
+}
+
 /* Le personnage-repère : une silhouette simple (16 × 24, comme les sprites), monté de la hauteur du relief sous ses pieds. */
 function marker(ctx, x, y, ox, oy) {
   const lift = SP.liftPx(x, y), px = Math.round(x * T) - ox, py = Math.round(y * T - lift) - oy;

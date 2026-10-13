@@ -1,5 +1,29 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-13 (nuit) — LE PARK : PLUS PERSONNE NE PASSE SOUS LES LATTES DE LA PAROI
+
+Le défaut laissé par la livraison du soir (« sur la paroi du quarter, le bas du corps du rider passe SOUS les tranches de bois »). **Supabase : rien.**
+**La cause** : le relief est dessiné en tranches d'un quart de case de sol, et chacune se triait D'UN BLOC à sa fin de rangée — elle passait tout entière devant
+qui s'y tenait, y compris le bois situé DERRIÈRE lui (plus au nord). Sur le plat, ce bois est sous les pieds ; sur une paroi qui monte vers le nord, un quart de
+case de sol fait jusqu'à un mètre de paroi à l'écran. Des tranches plus fines n'y suffisent pas : en haut d'une courbe, une seule rangée de sol porte des
+pixels de paroi sur toute sa hauteur.
+**La parade** (`parkDrawPieces`, skateparkArt.js) : chaque personnage posé sur le park est une COUPE (sa clé de tri, la colonne de ses pieds). Une tranche qui
+en contient une se dessine en entier juste AVANT lui ; juste après, on redessine, dans une fenêtre de ±24 px autour de lui, les seuls pixels dont la rangée de
+sol est DEVANT sa clé — la profondeur de chaque pixel est gardée de la cuisson. L'atlas n'est pas retouché (le soleil et le chantier y écrivent), et une
+tranche où personne ne se tient garde son tri d'avant. Les tranches se poussent désormais en dernier, juste avant le tri (FermeGame.js, `parkStripQ`) : on ne
+connaît les coupes qu'une fois tout le monde dans la file.
+**La monture** (`rideReach`, montureArt.js) : un rider se trie au bout SUD de ce qui le porte, et pas à ses pieds — trié à ses pieds, son corps sortait de la
+paroi mais la roue arrière du BMX (plus au sud, plus bas à l'écran) passait sous les lattes qui la portent. La borne est celle de la COLLISION
+(`MO.RIDE_HALF`, `SP.RIDE_DECK_R`), plus la hauteur des roues le long de la normale sur une paroi raide : la collision tient la monture loin de tout tube,
+donc une lisse qu'on longe reste devant. Un seul prédicat dit « monté » pour le dessin et le tri (`rideFieldsOf`).
+**Vu en jeu** (harnais `app/audit-tmp`, zoom 3, midi) : pellicules d'un BMX qui monte le quarter, décolle, fait son demi-tour seul et redescend de face ; d'un
+BMX qui recule faute d'élan ; des rollers (foulée, bras en balancier) jusqu'au coping ; d'une trottinette en vol et en redescente — corps, jambes, roues et
+platines entiers sur toutes les images. Temps d'image en roulant : 3,9 ms (médiane), 5,0 ms (99e centile) — 3,7 / 4,5 la veille, dans d'autres conditions.
+**Repéré, pas corrigé** : tout en haut de la paroi, la trottinette couchée sur le bois pointe sa potence VERS le bas de l'écran (sa normale regarde le sud) pendant
+que le corps reste droit — les mains quittent le guidon une image ou deux.
+Bancs : `render-skatepark` 23/23 (16 contrôles neufs : treize points critiques à pied, le BMX qui monte et qui redescend ; le tri d'avant cachait 44 px de
+corps, et 16 px de roue triée à ses seuls pieds), `verify-monture` 29/29, `verify-skatepark` 14/14, `verify-syntax`, `verify-scope`.
+
 ## 2026-10-13 (soir) — LE SKATEPARK : LES CHUTES RARES, LES COMMANDES DITES (CLAVIER ET DOIGT), LES ROLLERS SUR LE SQUELETTE
 
 Guillaume : « le rendu final devra être fluide, les échecs rares » (les CHUTES en jeu, précisé ensuite) ; « le but est une fluidité et un côté fun pour le
@@ -35,7 +59,7 @@ et roues à la convention de la feuille (projetées, elles faisaient des échass
 **Vu** : en vrai navigateur, la planche des poses des rollers ; en jeu, une pellicule d'un skate (poussée, charge, kickflip, réception, son nom) et d'un BMX
 au quarter (le demi-tour seul) ; le parcours tactile complet en événements simulés (charger, sauter, kickflip, descendre, remonter par le bouton d'action).
 **Pas vu** : un vrai iPad ; les rollers et la trottinette en mouvement en jeu ; les sons. **Défaut repéré, pas corrigé** : sur la paroi du quarter, le bas
-du corps du rider passe SOUS les tranches de bois (pellicule du BMX, en montant et en redescendant). Bancs : `verify-monture` 29/29, `verify-skatepark` 14/14.
+du corps du rider passe SOUS les tranches de bois (pellicule du BMX, en montant et en redescendant) — corrigé la nuit même (entrée au-dessus). Bancs : `verify-monture` 29/29, `verify-skatepark` 14/14.
 
 ## 2026-10-13 — LE SKATEPARK SANS TROU DE COLLISION, ET LES RIDERS SUR UN SQUELETTE
 

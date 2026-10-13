@@ -247,6 +247,16 @@ dépôt.
   aide se rattache au GESTE qui la justifie (une fois par saut, `railLifted`, en TRAVERSANT le rail, pas en tombant dessus). Même famille :
   une exemption calculée sur un morceau et rendue pour le tout (`alignedRail` testait le bout de CHAQUE segment et exemptait tout le rail
   coudé — au coude, une planche entrait de 8 cm dans le tube). Toute aide de jeu se relance au fuzz, pas seulement au banc qui la montre.
+- ⚠️⚠️ **UNE TRANCHE DE TRI QUI PORTE UN RELIEF PASSE DEVANT CE QUI SE TIENT DEDANS, CE QUI EST DERRIÈRE COMPRIS** (2026-10-13 nuit, le
+  rider du park qui perdait ses jambes sur la paroi du quarter). Le relief du skatepark est dessiné en tranches d'un quart de case de sol,
+  triées chacune à sa fin de rangée — la règle de toute la ville (on passe devant ce qui est au nord, derrière ce qui est au sud). Elle tient
+  pour un objet DEBOUT, dont toute l'image est à la même profondeur ; elle casse pour un relief, dont une seule rangée de sol porte, sur une
+  paroi raide, des pixels à toutes les hauteurs : le bois situé derrière le personnage, mais dans SA tranche, lui passait devant. Affiner
+  les tranches ne règle rien (en haut d'une courbe, une rangée d'un pixel porte encore toute la paroi), et les bancs de dessin ne le voyaient
+  pas (ils posaient leur repère au pied d'une tranche, par hasard). Parade : la profondeur se garde AU PIXEL à la cuisson, et ce qui se tient
+  sur le relief COUPE sa tranche (dessinée avant lui, ses pixels de devant redessinés après lui, `parkDrawPieces`) ; et ce qui est porté se trie
+  au bout de ce qui le porte, pas au point qui le représente (la roue arrière d'un BMX). Contrôle : la vérité d'occlusion pixel par pixel
+  (`render-skatepark`), avec la mesure du tri d'avant pour prouver que le contrôle voit le défaut.
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
