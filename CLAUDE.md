@@ -11,23 +11,22 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-13 (nuit) — LE PARK : PLUS PERSONNE NE PASSE SOUS LES LATTES — DANS L'ARBRE, NON COMMITÉ (le soir l'est : 3893cf0)
+### 2026-10-14 — LE PARK : LE « ? », L'ÉCHANGE À LA CABANE, L'ENTRÉE DU U, LES MONTURES REDESSINÉES — DANS L'ARBRE, NON COMMITÉ
 
-Le défaut laissé le soir : sur la paroi du quarter, le bas du corps du rider passait SOUS les tranches de bois. Récit : journal du README de la ferme
-(2026-10-13 nuit). Cause : une tranche (un quart de case de sol) se triait d'un bloc et passait devant qui s'y tenait, bois de DERRIÈRE compris.
-Parade : `parkDrawPieces` (skateparkArt.js) — la tranche où se tient quelqu'un se dessine avant lui, puis ses seuls pixels DEVANT lui sont redessinés
-autour de lui (profondeur gardée de la cuisson) ; un rider se trie au bout sud de ce qui le porte (`rideReach`, montureArt.js, borné par la collision) ;
-les tranches se poussent en dernier (`parkStripQ`, `parkCutOf`, FermeGame.js). Bancs : `render-skatepark` 23/23 (16 neufs : le tri d'avant cachait 44 px
-de corps), `verify-monture` 29/29, `verify-skatepark` 14/14, `verify-syntax`, `verify-scope`, `verify-docs`. **Vu en jeu** : pellicules BMX (montée, vol, demi-tour,
-redescente de face), rollers, trottinette ; 3,9 ms/image en médiane. **Pas vu** : un vrai iPad, les sons. **Repéré, pas corrigé** : en haut de la paroi, la
-potence de la trottinette couchée pointe vers le bas de l'écran, le corps reste droit (les mains lâchent le guidon une image ou deux). **Supabase : rien.**
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) :
-`f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
+Récit : journal du README de la ferme (2026-10-14). Le « ? » de la patinoire sert au park (`SkateHelp.js` : fiche de la monture montée ou louée, boutons
+nommés au doigt) et remplace la ligne d'aide du bas en monture ; la cabane ÉCHANGE pendant le bail (temps conservé, on paie ce qui dépasse `inv.ridePaid`,
+`E.rideSwapPrice`) ; le bout sud du U de la mini-rampe, une marche de 14 cm où skate, rollers et trottinette rebondissaient, devient une pente arrondie aux deux
+bouts ; planche (tranche colorée décidée AU PIXEL, trucks, roues), BMX (pneus épais, guidon à barre, pédalier, pegs), rollers agressifs (bottine `o.boot`).
+Bancs : `verify-monture` 29/29, `render-skatepark` 23/23, `verify-skatepark` 14/14, `render-patin` 4/4, `verify-patin` 82/82, `verify-syntax`, `verify-strings`,
+`verify-scope`, `verify-docs`. **Vu en jeu** : location puis échange skate → BMX, entrée du U, « ? » au clavier et au doigt simulé, les trois montures à la
+loupe. **Pas vu** : le « ? » de la patinoire (hiver non forçable), un vrai iPad, deux clients. **Supabase : rien** (champ JSON du sac).
+⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
+trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
 ### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE PARK PAR GUILLAUME EN JEU
 
-Les blocs en tête de `docs/A-JUGER.md` (park jouable, rider sur la paroi, chantier) ; puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3, ligne
-« Skatepark »), puis l'équipe de nettoyage (§4.1). Toujours en attente : l'amie au Mac lent.
+Les blocs en tête de `docs/A-JUGER.md` (le « ? », l'échange, l'entrée du U, les montures ; puis park jouable, chantier) ; puis le test iPad dès Xcode à jour
+(`docs/PROJETS.md` §3, ligne « Skatepark »), puis l'équipe de nettoyage (§4.1). Toujours en attente : l'amie au Mac lent.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -82,7 +81,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
 | « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
-| **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles, cabane, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; README ferme (journal 2026-10-11) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
+| **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11 et 2026-10-14) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->

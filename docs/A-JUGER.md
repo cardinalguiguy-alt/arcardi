@@ -6,6 +6,15 @@
 
 ---
 
+### À juger — le « ? » du park, l'échange à la cabane, l'entrée du U, les montures redessinées (2026-10-14)
+
+En jeu : louer un skate à la cabane (à l'est de la porte), le monter (F), puis :
+- **Le « ? »** en bas à droite (au doigt : au-dessus des boutons de la monture) — assez visible ? assez discret ? La fiche, lue en roulant : trop longue ?
+- **L'échange** : revenir au comptoir, choisir le BMX — « +30 or », le temps qui reste continue. Le prix de l'écart, juste ?
+- **L'entrée du U** : la pente de bois au sud de la mini-rampe — on y entre en roulant. Se voit-elle assez comme une entrée ?
+- **La planche** (grip noir, tranche dans la couleur louée, roues crème), **le BMX** (pneus épais, guidon à barre, pédalier), **les rollers** (bottines rigides
+  à manchette, quatre roues en ligne) : à l'échelle du jeu, puis de près (`app/audit-riders?k=skate|bmx|roller`, `&veh=1` pour les véhicules seuls).
+
 ### À juger — le park jouable : chutes rares, commandes dites, rollers (2026-10-13 soir) — et les riders, la collision (2026-10-13)
 
 En jeu : le park (menu dev, « Skatepark et chantier »), une monture d'essai, puis rouler cinq minutes SANS chercher à bien faire.
@@ -18,9 +27,10 @@ En jeu : le park (menu dev, « Skatepark et chantier »), une monture d'essai, p
 - **En l'air, la flèche vise un cap** (on se tourne vers elle) ; sans rien toucher, la monture s'aligne sur sa réception — le BMX et la trottinette font SEULS
   leur demi-tour au quarter. Un 180 : la flèche opposée ; un 360 : le tour des flèches. **À trancher** : le geste du 360 est-il trouvable ?
 - **Les figures pressées** : lancée tard, la figure tourne plus vite pour finir avant le sol (ou ne part pas). Visible ? gênant ?
-- **Les commandes dites** : au clavier, la ligne d'aide du bas en monture (et l'invite « F : monter sur le skate ») ; au doigt, Sauter / deux figures nommées /
-  Pomper / Freiner / Descendre — **disposition à juger sur un VRAI iPad** (test reporté : Xcode à mettre à jour).
-- **Les rollers sur le squelette** (foulée en V, chasse-neige, bras attachés) : planche des poses `app/audit-riders?k=roller&z=3`, puis en mouvement.
+- **Les commandes dites** : au clavier, le « ? » du park (2026-10-14 : il remplace la ligne d'aide du bas en monture) et l'invite « F : monter sur le skate » ;
+  au doigt, Sauter / deux figures nommées / Pomper / Freiner / Descendre — **disposition à juger sur un VRAI iPad** (test reporté : Xcode à mettre à jour).
+- **Les rollers sur le squelette** (foulée en V, chasse-neige, bras attachés ; bottines agressives depuis le 2026-10-14) : planche des poses
+  `app/audit-riders?k=roller&z=3`, puis en mouvement.
 - Toujours de la veille : le garde-corps qui épouse le U au bout nord de la mini-rampe ; les guidons à la taille des personnages ; les poses des trois autres
   montures (`app/audit-riders?k=skate|scooter|bmx`, `&g=f` pour la robe).
 

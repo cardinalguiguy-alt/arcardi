@@ -114,6 +114,13 @@ const GRIND = { SNAP: 0.17, ALIGN: 0.74, CROSS: 0.5, LOOSE: 0.6, MIN_V: 0.9, END
 /* Le NOM des figures et des glisses, tel qu'on le crie dans tous les skateparks du monde (en anglais, dans les deux langues du
    jeu : un nom propre, pas une traduction — `verify-strings` refuse à raison une section identique dans les deux tables). */
 export const TRICK_LABEL = { kickflip: "Kickflip", popShove: "Pop shove-it", varialFlip: "Varial flip", treFlip: "360 flip", mistyGrab: "Misty grab", muteGrab: "Mute grab", barspin: "Barspin", tailwhip: "Tailwhip", whipBar: "Tailwhip barspin", g5050: "50-50", gboard: "Boardslide", gsoul: "Soul grind", gpegs: "Pegs" };
+/* 2026-10-14 — LE NOM D'UNE GLISSE, selon la monture (le 50-50 d'un BMX se fait sur les PEGS) : UNE fonction pour le nom qui monte
+   au-dessus de la tête (FermeGame.js) et pour la fiche « ? » du park — deux recopies de la règle des pegs finiraient par diverger. */
+export function grindLabel(kind, style) { return TRICK_LABEL[kind === "bmx" && style === "5050" ? "gpegs" : "g" + style]; }
+/* Les glisses d'une monture, pour la fiche « ? » : leur nom et si elles se prennent EN TRAVERS (boardslide, soul) ou dans l'axe. */
+export function grindStyles(kind) {
+  return ((GRINDS_BY[kind] || {}).styles || []).map((s) => ({ name: grindLabel(kind, s), cross: s === "board" || s === "soul" }));
+}
 export const BAIL_T = 1.1;          // s au sol après une chute (1,4 au premier jet : 2026-10-13 soir, « les échecs rares » — et courts)
 const VERT_SLOPE = 1.6;             // pente (≈ 58°) au-delà de laquelle un décollage est un « air de courbe »
 const RIDE_RX = SP.RIDE_TORSO_R;    // cases : la demi-largeur du corps d'un rider vu de face (contre un flanc à côté de lui)

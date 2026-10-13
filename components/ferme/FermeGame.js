@@ -6012,7 +6012,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const nearR = E.parkShedDist(twR, C.footX(f.x || 0), C.footY(f.y || 0)) <= SPK.SHED.reach + 1;
       const r = E.resolveRentRide(f, s.money, !!(twR && twR.skatepark), nearR, Date.now(), req.kit);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
-      out.toast = { id: f.id, key: r.ok ? "rideRented" : "ride_" + r.reason, n: r.price || MO.rideKitPrice(req.kit, C.RIDE_RENT_PRICE) };
+      /* 2026-10-14 : pendant le bail, c'est un ÉCHANGE (`r.swap`) — le toast dit la nouvelle monture et l'écart payé (souvent rien). */
+      out.toast = r.ok && r.swap ? { id: f.id, key: "rideSwapped", n: { kind: r.kit.kind, g: r.price | 0 } }
+        : { id: f.id, key: r.ok ? "rideRented" : "ride_" + r.reason, n: r.price != null ? r.price : MO.rideKitPrice(req.kit, C.RIDE_RENT_PRICE) };
     } else if (req.kind === "duoAsk" || req.kind === "duoYes") {
       hostDuo(req, f, out);   // 2026-10-06 (soir) : les figures à deux — l'hôte arbitre l'offre et l'acceptation
     } else if (req.kind === "rinkSmooth") {
@@ -9681,6 +9683,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key && key.startsWith("duo") && typeof L.duoToast === "function") return L.duoToast(key);   // 2026-10-06 (soir)
     if (key && key.startsWith("rink") && typeof L.rinkToast === "function") return L.rinkToast(key, CO.COURSE.PRICE);   // 2026-10-05 (nuit) : la course de la patinoire
     if (key === "rideRented") return L.parkRentToast(n | 0, C.RIDE_RENT_MS / 60000);   // 2026-10-11 : la cabane du park
+    if (key === "rideSwapped") return L.parkSwapToast(L.parkKindName(MO.rideKitNorm({ kind: n && n.kind }).kind), (n && n.g) | 0);   // 2026-10-14 : l'échange
     if (key === "ride_have") return L.parkHaveToast;
     if (key === "ride_closed") return L.parkClosedToast;
     if (key === "ride_far") return L.parkFarToast;
@@ -12484,10 +12487,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   raceVMRef.current = raceVM;
   skateHelpVMRef.current = () => {
     const m = meRef.current, tw = townWorldRef.current;
-    if (!m || (m.zone || "farm") !== "town" || !tw || !tw.rink) return null;
+    if (!m || (m.zone || "farm") !== "town" || !tw) return null;
+    /* 2026-10-14 — LE « ? » DU PARK (Guillaume : « les commandes pour les figures doivent être accessibles, bouton interactif discret
+       mais visible, petit »). Le même rond que celui de la patinoire, à la même place (le park et la patinoire se succèdent sur la
+       place) ; sa fiche dit les commandes de la monture qu'on MONTE, sinon de celle qu'on a louée — les figures sous leur nom. Il
+       existe dans le park et autour (la cabane, trois pas à l'est), ou monté. Au doigt, monté, il monte au-dessus des boutons de la
+       monture (`up`) ; ses lignes y nomment les BOUTONS, pas les touches. */
+    if (tw.skatepark) {
+      const st = rideRef.current, fx = C.footX(m.x), fy = C.footY(m.y), M = 9, P = SPK.PARK;
+      const near = fx >= P.x0 - M && fx <= P.x0 + P.w + M && fy >= P.y0 - M && fy <= P.y0 + P.h + M;
+      if (!st && !near) return null;
+      const kind = st ? st.kind : PARK_DEV.monture || (E.rideActive(invRef.current, Date.now()) ? MO.rideKitNorm(invRef.current.rideKit).kind : null);
+      const T3 = kind ? MO.TRICKS[kind] : null, lab = (d) => (d ? MO.TRICK_LABEL[d.name] : null);
+      const touch = !!touchUiRef.current;
+      return { show: true, help: "park", kind, touch, up: touch && !!st,
+        t: T3 ? { v: lab(T3.v), g: lab(T3.g), vg: lab(T3.vg), gv: lab(T3.gv), grinds: MO.grindStyles(kind) } : null };
+    }
+    if (!tw.rink) return null;
     const R = C.TOWN_RINK, fx = C.footX(m.x), fy = C.footY(m.y), M = 9;
     const near = fx >= R.x0 - M && fx <= R.x1 + 1 + M && fy >= R.y0 - M && fy <= R.y1 + 1 + M;
-    return near || E.skatesActive(invRef.current, Date.now()) ? { show: true } : null;
+    return near || E.skatesActive(invRef.current, Date.now()) ? { show: true, help: "rink" } : null;
   };
   /* Les AUTRES coureurs (joueurs inscrits, en ville, et résidents), pour l'aspiration et le classement. */
   function rinkOthersPos() {
@@ -21799,7 +21818,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const fx = parkFxRef.current, now = performance.now(), T2 = MO.TRICK_LABEL;
         const pushFx = (text, kind) => { if (text) { fx.list.push({ text, kind, t0: now }); if (fx.list.length > 4) fx.list.shift(); } };
-        const gName = (style) => T2[st.kind === "bmx" && style === "5050" ? "gpegs" : "g" + style];
+        const gName = (style) => MO.grindLabel(st.kind, style);
         if (st.grinded) pushFx(gName(st.grinded.style), "grind");
         if (st.grindDone && st.grindDone.len > 0.6) pushFx(`${gName(st.grindDone.style)} · ${L.parkMeters((st.grindDone.len * 1.15).toFixed(1))}`, "grind");
         if (st.landed) {
@@ -39719,11 +39738,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       <div className="ferme-toasts">{toasts.map(t2 => <div key={t2.id} className="ferme-toast">{t2.msg}</div>)}</div>
 
       {/* Aide */}
-      {/* 2026-10-13 (soir) — en monture, la ligne d'aide dit SES touches (Guillaume : « les commandes doivent être indiquées
-          discrètement sur clavier ») ; les figures y portent le nom de celles de la monture louée. Au doigt, ce sont les boutons. */}
-      {rideUi && !touchUi
-        ? <div className="ferme-help">{L.parkHelp1}<br />{L.parkHelp2(MO.TRICK_LABEL[MO.TRICKS[rideUi].v.name], MO.TRICK_LABEL[MO.TRICKS[rideUi].g.name])}</div>
-        : <div className="ferme-help">{L.help1}<br />{L.help2}</div>}
+      {/* 2026-10-13 (soir) — en monture, la ligne d'aide disait SES touches (Guillaume : « les commandes doivent être indiquées
+          discrètement sur clavier »). 2026-10-14 : elle cède la place au « ? » du park (`SkateHelp`, en bas à droite, à l'endroit même
+          où était la ligne) — Guillaume : « bouton interactif discret mais visible, petit » ; la fiche qu'il ouvre dit tout (les
+          combinées, les glisses, l'entrée du U), ce que deux lignes de 11 px ne tenaient pas. En monture, la ligne de la ferme se tait. */}
+      {!rideUi && <div className="ferme-help">{L.help1}<br />{L.help2}</div>}
 
       {/* Boutique */}
       {shopOpen && (
@@ -40976,16 +40995,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         onGo={() => sendReq({ kind: "rinkGo" })} onCloseResults={() => { rinkLocalRef.current.resultsOpen = false; }} />
       {/* 2026-10-11 — LA CABANE DU SKATEPARK : choisir une monture et sa couleur, louer (une `req` arbitrée par l'hôte, `rentRide`).
           L'aperçu est dessiné par les MÊMES fonctions que le jeu (`MA.drawRideKitPreview`) ; le prix se relit du résolveur de l'hôte
-          (`MO.rideKitPrice`). Louée, la monture est figée jusqu'à la fin du temps. */}
+          (`MO.rideKitPrice`). 2026-10-14 — LOUÉE, ELLE S'ÉCHANGE (Guillaume : « louer autre chose après avoir loué un skate ») : le choix
+          reste ouvert, le temps restant continue, et chaque monture affiche ce que l'échange coûterait (`E.rideSwapPrice`, la même
+          fonction que le résolveur de l'hôte) — « incluse » quand le bail l'a déjà payée. */}
       {parkShopOpen && (() => {
         const nowP = Math.max(skateClock, 0) || Date.now();
         const leftMs = E.rideLeftMs(myInv, nowP), owned = leftMs > 0;
         const twP = townWorldNow(), open = !!(twP && twP.skatepark);
         const mm = Math.floor(leftMs / 60000), ss = Math.floor((leftMs % 60000) / 1000);
         const close = () => { setParkShopOpen(false); setParkKitDraft(null); };
-        const dk = MO.rideKitNorm(owned ? (myInv && myInv.rideKit) : (parkKitDraft || (myInv && myInv.rideKit)));
+        const cur = MO.rideKitNorm(myInv && myInv.rideKit);
+        const dk = MO.rideKitNorm(parkKitDraft || cur);
         const setK = (patch) => setParkKitDraft(MO.rideKitNorm({ ...dk, ...patch }));
-        const total = MO.rideKitPrice(dk, C.RIDE_RENT_PRICE);
+        const same = owned && dk.kind === cur.kind && dk.color === cur.color;
+        const priceOf = (k) => (owned ? E.rideSwapPrice(myInv, k) : MO.rideKitPrice(k, C.RIDE_RENT_PRICE));
+        const total = priceOf(dk);
         let prev = null;
         try {
           const pc = document.createElement("canvas"); pc.width = 48; pc.height = 24;
@@ -40999,28 +41023,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={close}>✕</button>
             <h2>🛹 {L.parkShopTitle}</h2>
-            <div className="ferme-hint">{open ? (owned ? L.parkRentedDesc : L.parkShopHint(C.RIDE_RENT_MS / 60000)) : L.parkShopClosed}</div>
+            <div className="ferme-hint">{open ? (owned ? L.parkRentedDesc(L.parkKindName(cur.kind)) : L.parkShopHint(C.RIDE_RENT_MS / 60000)) : L.parkShopClosed}</div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 6, flexWrap: "wrap" }}>
               {prev && <img src={prev} alt="" width={192} height={96} style={{ imageRendering: "pixelated", flex: "0 0 auto", background: "linear-gradient(#9ab0c4,#c9d6e0)", borderRadius: 6 }} />}
               <div style={{ flex: "1 1 280px", minWidth: 0 }}>
                 {MO.VEH_KINDS.map(k => (
-                  <button key={k} className="ferme-dev-btn" disabled={owned} aria-pressed={dk.kind === k} onClick={() => setK({ kind: k })}
+                  <button key={k} className="ferme-dev-btn" aria-pressed={dk.kind === k} onClick={() => setK({ kind: k })}
                     style={{ display: "block", width: "100%", boxSizing: "border-box", whiteSpace: "normal", textAlign: "left", marginBottom: 4, ...(dk.kind === k ? onStyle : null) }}>
-                    <b>{L.parkKindName(k)}</b>{` — ${MO.rideKitPrice({ kind: k }, C.RIDE_RENT_PRICE)}`}<br /><span style={{ fontSize: "0.85em", opacity: 0.85 }}>{L.parkKindDesc(k)}</span>
+                    <b>{L.parkKindName(k)}</b>{` — ${owned ? (k === cur.kind ? L.parkKindCurrent : L.parkSwapCost(priceOf({ kind: k }))) : priceOf({ kind: k })}`}<br /><span style={{ fontSize: "0.85em", opacity: 0.85 }}>{L.parkKindDesc(k)}</span>
                   </button>
                 ))}
                 <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
                   <span style={{ minWidth: 60 }}>{L.parkColor}</span>
                   {MA.BOARD_COLORS.map((c, i) => (
-                    <button key={i} disabled={owned} aria-pressed={dk.color === i} onClick={() => setK({ color: i })}
+                    <button key={i} aria-pressed={dk.color === i} onClick={() => setK({ color: i })}
                       style={{ width: 24, height: 24, borderRadius: 5, background: c.deck, border: "2px solid " + (dk.color === i ? "#ffeec8" : "#3a3226"), boxShadow: dk.color === i ? "0 0 0 2px #3a3226" : "none", cursor: "pointer", padding: 0 }} />
                   ))}
                 </div>
               </div>
             </div>
             <div className="ferme-shop-row" style={{ justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
-              {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.parkRentedLeft(mm, ss)}</span>
-                : <button disabled={!open || (hud.money | 0) < total} onClick={() => { sendReq({ kind: "rentRide", kit: dk }); close(); }}>{L.parkRent(total, C.RIDE_RENT_MS / 60000)}</button>}
+              {owned && <span className="ferme-hint" style={{ margin: 0 }}>{L.parkRentedLeft(mm, ss)}</span>}
+              {(!owned || !same) && <button disabled={!open || (hud.money | 0) < total} onClick={() => { sendReq({ kind: "rentRide", kit: dk }); close(); }}>
+                {owned ? L.parkSwap(total, L.parkKindName(dk.kind)) : L.parkRent(total, C.RIDE_RENT_MS / 60000)}</button>}
             </div>
           </div>
         </div>

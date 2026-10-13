@@ -1,5 +1,35 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-14 — LE PARK : LE « ? » DES COMMANDES, L'ÉCHANGE À LA CABANE, L'ENTRÉE DU U, ET LES MONTURES REDESSINÉES
+
+Guillaume : « les commandes pour les figures doivent être accessibles, bouton interactif discret mais visible, petit » ; « le skateboard plus beau, le BMX plus
+réaliste », « les rollers aussi » ; « louer autre chose après avoir loué un skate » ; « accès à la grande rampe impossible ». Décidé avec lui : le « ? » de la
+patinoire ; l'échange qui fait payer l'écart ; des rollers AGRESSIFS (inline) ; une pente pour entrer dans le U. **Supabase : rien** (un champ de plus dans le sac
+JSON, `inv.ridePaid`, déclaré dans `normalizeFarmer`).
+- **La grande rampe** (le U de la mini-rampe) : le bout sud de son plat était une MARCHE de 14 cm — sondé à la vraie physique, skate, rollers et trottinette y
+  rebondissaient, seul le BMX passait ; on n'entrait que d'un ollie ou par une plateforme. Une pente de 0,7 case (`addWedge`, skatepark.js), arrondie AUX DEUX
+  BOUTS (`top`) : sans arrondi en haut, sa cassure faisait décoller qui la montait à fond. Les quatre montures y entrent et pompent d'une courbe à l'autre.
+- **Le « ? » du park** (`SkateHelp.js`, le rond de la patinoire) : dans le park et autour, ou monté ; sa fiche dit les commandes de la monture MONTÉE, sinon
+  louée — figures sous leur nom, combinées (« V puis G »), glisses de la monture (`MO.grindStyles`, et `MO.grindLabel`, la règle des pegs écrite une fois), l'entrée
+  du U. Au doigt elle nomme les BOUTONS, et monté le rond passe au-dessus des boutons de la monture, la fiche en haut au milieu. Les deux lignes d'aide du bas,
+  en monture, disparaissent (le rond est à leur place).
+- **L'échange** (`E.resolveRentRide`, `E.rideSwapPrice`) : pendant le bail, la cabane change de monture ou de couleur ; le temps restant continue ; on ne paie
+  que ce qui dépasse ce que le bail a déjà coûté (`ridePaid`) — BMX → trottinette → BMX ne repaie pas la montée. Le panneau affiche le coût par monture
+  (« incluse », « +30 or »), le toast dit l'échange.
+- **La planche** (`drawBoard`) : deux plans — le grip, et au ras du sol les trucks d'acier et les roues crème aux essieux (le vide entre eux) ; la tranche dans la
+  couleur louée et l'arête claire décidées AU PIXEL (le voisin du dessous ou de droite hors de la planche) — à la bande de 3,5 cm du premier jet, la rangée
+  colorée tombait hors de la planche selon l'alignement ; nose et tail relevés ; à l'envers, le dessous peint, ses trucks et ses roues.
+- **Le BMX** (`drawBmx`) : pneus épais à crampons (un tore : deux pixels de face), jante et moyeu (le jour des rayons entre eux — peints, la roue devenait un
+  disque), cadre en tubes ombrés, selle basse, fourche qui encadre le pneu, guidon à deux montants et barre transversale, pegs, plateau, chaîne et manivelles
+  qui tournent avec les pieds (`R.crank`).
+- **Les rollers** (`drawRollers`) : bottine rigide dans la couleur louée, manchette noire et boucle, peinte juste après SA jambe (`o.boot`, le squelette) ; soul
+  plate et H-block ; deux grandes roues claires, deux petites sombres au milieu (l'anti-rocker). L'aperçu du panneau suit.
+**Vu en jeu** (un client, `app/audit-tmp`) : la location d'un skate puis l'échange pour un BMX bleu (−30 or, temps conservé, toast) ; le BMX qui entre dans le U
+par la pente ; le « ? » ouvert en roulant (clavier) et au doigt (événement simulé : rond au-dessus des boutons, fiche en haut) ; la planche, le BMX et les rollers
+à la loupe. **Pas vu** : le « ? » de la patinoire (même chemin, l'hiver n'est pas forçable au menu dev) ; un vrai iPad ; deux clients (l'échange ne touche pas
+au paquet de position). Bancs : `verify-monture` 29/29, `render-skatepark` 23/23, `verify-skatepark` 14/14, `render-patin` 4/4, `verify-patin` 82/82,
+`verify-syntax`, `verify-strings`, `verify-scope`, `verify-docs`.
+
 ## 2026-10-13 (nuit) — LE PARK : PLUS PERSONNE NE PASSE SOUS LES LATTES DE LA PAROI
 
 Le défaut laissé par la livraison du soir (« sur la paroi du quarter, le bas du corps du rider passe SOUS les tranches de bois »). **Supabase : rien.**

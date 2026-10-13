@@ -28,6 +28,22 @@ export default function AuditRiders() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const kind = q.get("k") || "skate", gender = q.get("g") || "m", z = +(q.get("z") || 4);
+    // ?veh=1 (2026-10-14) : les véhicules seuls (`MA.drawRideKitPreview`), huit caps × quelques réglages (couleur, flip, guidon, pédalier)
+    if (q.get("veh")) {
+      const VR = { skate: [{ color: 0 }, { color: 1 }, { color: 4 }, { color: 2, flip: Math.PI }, { color: 3, flip: 1.4 }],
+        bmx: [{ color: 0 }, { color: 1 }, { color: 4, crank: 1.2 }, { color: 2, bar: Math.PI / 2 }, { color: 3, whip: 1.2 }],
+        scooter: [{ color: 0 }, { color: 1 }], roller: [{ color: 0 }, { color: 1 }, { color: 4 }] }[kind] || [{}];
+      const W = 30, Hh = 28, sm = document.createElement("canvas"); sm.width = HEADS.length * W; sm.height = VR.length * Hh;
+      const gg = sm.getContext("2d"); gg.imageSmoothingEnabled = false;
+      VR.forEach((ro, ri) => HEADS.forEach((th, ci) => {
+        gg.fillStyle = (ri + ci) % 2 ? "rgb(170,166,160)" : "rgb(160,156,150)"; gg.fillRect(ci * W, ri * Hh, W, Hh);
+        MA.drawRideKitPreview(gg, { kind, color: ro.color || 0 }, { ...ro, fx: (ci * W + W / 2) / T, fy: (ri * Hh + Hh * 0.72) / T, th });
+      }));
+      const c = ref.current; c.width = sm.width * z; c.height = sm.height * z;
+      const g = c.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(sm, 0, 0, c.width, c.height);
+      window.__ridersReady = true;
+      return;
+    }
     const S = A.buildSprites();
     const sheet = S.getChar(gender, 0, false, false, false, false, false, false, null);
     window.__A = A; window.__MA = MA; window.__sheet = sheet; window.__S = S;

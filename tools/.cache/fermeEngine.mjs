@@ -1194,6 +1194,10 @@ export function normalizeFarmer(f) {
      dernier choix (monture, couleur), gardé après la location et diffusé avec le sac. */
   if (typeof f.inv.rideUntil !== "number") f.inv.rideUntil = 0;
   f.inv.rideKit = MO.rideKitNorm(f.inv.rideKit);
+  /* 2026-10-14 — ce que le bail en cours a déjà coûté (or) : un échange au comptoir ne fait payer que ce qui DÉPASSE ce montant
+     (`resolveRentRide`). Sans lui, BMX → trottinette → BMX aurait fait payer deux fois la montée. 0 sur un sac ancien : le résolveur
+     retombe alors sur le prix de la monture louée. */
+  if (typeof f.inv.ridePaid !== "number" || !(f.inv.ridePaid >= 0)) f.inv.ridePaid = 0;
   if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
   for (const k of Object.keys(f.inv.catMilk)) {
     const e = f.inv.catMilk[k];
@@ -1533,19 +1537,43 @@ export function resolveRentSkates(f, money, season, near, now, kit) {
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-10-11 — LA LOCATION D'UNE MONTURE À LA CABANE DU SKATEPARK. Même contrat que `resolveRentSkates` : l'hôte tient la portée
    ║ (`near`), l'ouverture (`open` : le monde de la ville porte le park), le prix (`rideKitPrice`, sur le choix NORMALISÉ ici, jamais
-   ║ cru tel quel). On ne loue pas deux fois de suite ; un autre choix pendant le bail attend la fin.
+   ║ cru tel quel).
+   ║ ⚠️ 2026-10-14 — PENDANT LE BAIL, UN AUTRE CHOIX EST UN ÉCHANGE (Guillaume : « ajouter l'option de louer autre chose après avoir
+   ║ loué un skate » ; le prix, décidé avec lui : on paie l'écart). La monture ou la couleur change, le TEMPS RESTANT CONTINUE (le bail
+   ║ ne repart pas), et l'on ne paie que ce que la nouvelle coûte AU-DELÀ de ce que le bail a déjà coûté (`ridePaid`) — jamais de
+   ║ remboursement. Premier jet envisagé, l'écart avec la monture du moment : BMX → trottinette → BMX faisait repayer la montée.
+   ║ Le même choix qu'on tient déjà : refusé (`have`), rien ne change.
    ╚══════════════════════════════════════════════════════════════════════════ */
 export function rideActive(inv, now) { return !!inv && +inv.rideUntil > 0 && inv.rideUntil > now; }
 export function rideLeftMs(inv, now) { return rideActive(inv, now) ? inv.rideUntil - now : 0; }
+/* Ce qu'un échange coûterait, bail en cours (or, ≥ 0) — le panneau l'affiche, le résolveur l'applique : UNE fonction pour les deux. */
+export function rideSwapPrice(inv, kit) {
+  const cur = MO.rideKitNorm(inv && inv.rideKit);
+  const paid = Math.max(+(inv && inv.ridePaid) || 0, MO.rideKitPrice(cur, C.RIDE_RENT_PRICE));
+  return Math.max(0, MO.rideKitPrice(kit, C.RIDE_RENT_PRICE) - paid);
+}
 export function resolveRentRide(f, money, open, near, now, kit) {
   normalizeFarmer(f);
-  if (rideActive(f.inv, now)) return { ok: false, reason: "have", moneyDelta: 0 };
+  const k = MO.rideKitNorm(kit || f.inv.rideKit);
+  const swap = rideActive(f.inv, now);
+  if (swap) {
+    const cur = f.inv.rideKit;
+    if (cur.kind === k.kind && cur.color === k.color) return { ok: false, reason: "have", moneyDelta: 0 };
+  }
   if (!open) return { ok: false, reason: "closed", moneyDelta: 0 };
   if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
-  const k = MO.rideKitNorm(kit || f.inv.rideKit), price = MO.rideKitPrice(k, C.RIDE_RENT_PRICE);
+  if (swap) {
+    const price = rideSwapPrice(f.inv, k);
+    if ((money | 0) < price) return { ok: false, reason: "noGold", moneyDelta: 0, price };
+    f.inv.ridePaid = Math.max(f.inv.ridePaid, MO.rideKitPrice(f.inv.rideKit, C.RIDE_RENT_PRICE)) + price;
+    f.inv.rideKit = k;
+    return { ok: true, swap: true, moneyDelta: -price, until: f.inv.rideUntil, price, kit: k };
+  }
+  const price = MO.rideKitPrice(k, C.RIDE_RENT_PRICE);
   if ((money | 0) < price) return { ok: false, reason: "noGold", moneyDelta: 0, price };
   f.inv.rideUntil = now + C.RIDE_RENT_MS;
   f.inv.rideKit = k;
+  f.inv.ridePaid = price;
   return { ok: true, moneyDelta: -price, until: f.inv.rideUntil, price, kit: k };
 }
 /* La distance (cases) d'un point au comptoir de la cabane du park : 0 dedans, Infinity sans park. */

@@ -9144,12 +9144,19 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
 .ferme-skhelp .ferme-close-x{ top:4px; right:6px; }
 .ferme-skhelp-rows{ display:flex; flex-direction:column; gap:5px; }
 .ferme-skhelp-rows .row{ display:grid; grid-template-columns:136px 1fr; gap:8px; align-items:center; }
-.ferme-skhelp-rows .keys{ display:flex; flex-wrap:nowrap; gap:2px; align-items:center; white-space:nowrap; }
+.ferme-skhelp-rows .keys{ display:flex; flex-wrap:wrap; gap:2px; align-items:center; white-space:nowrap; }
 .ferme-skhelp-rows .keys i{ font-style:normal; opacity:.55; margin:0 3px 0 1px; font-size:11px; }
 .ferme-skhelp kbd{ display:inline-block; min-width:18px; padding:0 5px 1px; text-align:center; font:inherit; font-size:11.5px; font-weight:900; border:2px solid var(--f-wood); border-bottom-width:3px;
   border-radius:5px; background:var(--f-paper-d); color:var(--f-ink); }
 .ferme-skhelp-note{ margin-top:8px; padding-top:6px; border-top:2px dashed var(--f-paper-d); font-size:11.5px; opacity:.8; }
 @media (max-width:620px){ .ferme-skhelp-btn{ bottom:118px; } .ferme-skhelp{ bottom:152px; } .ferme-skhelp-rows .row{ grid-template-columns:120px 1fr; } }
+/* 2026-10-14 — LE « ? » DU PARK, MONTÉ, AU DOIGT (`.up`) : les boutons de la monture tiennent le coin bas-droit (`.ferme-ride-btns`,
+   ~240 px de haut au-dessus de 92 px) — le rond monte AU-DESSUS de leur colonne, et la fiche s'ouvre en haut, au milieu : elle ne
+   couvre ni le pavé (bas-gauche) ni les boutons, on la lit en roulant. ⚠️ Deux classes : elles l'emportent sur la règle étroite
+   ci-dessus (une seule classe), écran étroit compris. */
+.ferme-skhelp-btn.up{ right:calc(env(safe-area-inset-right, 0px) + 18px); bottom:calc(env(safe-area-inset-bottom, 0px) + 344px); width:30px; height:30px; }
+.ferme-skhelp.up{ left:50%; right:auto; transform:translateX(-50%); top:10px; bottom:auto; max-height:calc(100vh - 140px); }
+@media (max-width:560px){ .ferme-skhelp-btn.up{ bottom:calc(env(safe-area-inset-bottom, 0px) + 300px); } }
 .ferme-race-lobby{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:30; padding:8px 16px 10px; text-align:center; width:min(560px, 94vw); }
 .ferme-race-lobby-title{ font-weight:900; font-size:16px; }
 .ferme-race-lobby-row{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:7px; }

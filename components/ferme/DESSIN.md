@@ -207,6 +207,12 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   monte et un objet qui recule se confondent. Ce qui doit se lire en trois dimensions (une flèche, un câble, un
   saut) se place pour avoir une composante EST-OUEST — on choisit où se gare l'engin, pas comment on le dessine.
   Corollaire, même jour : ce qui pend SOUS un bras venu du sud se peint AVANT le bras (il passe devant).
+- ⚠️⚠️ **UN BORD D'UN PIXEL SE DÉCIDE AU PIXEL, PAS PAR UNE BANDE LE LONG DU CONTOUR** (la planche du park, 2026-10-14).
+  Une forme de trois pixels de large peinte en remontant chaque pixel à la forme (`paintPlate`, montureArt.js) :
+  « la tranche, c'est la bande de 3,5 cm au bord » tombait, selon l'alignement au demi-pixel, HORS de la forme —
+  la planche louée rouge sortait noire en jeu, et la planche du banc, alignée autrement, était juste. Le bord est
+  le pixel dont le VOISIN (dessous, droite : l'ombre ; dessus, gauche : la lumière) sort de la forme : il existe
+  à tous les caps et à toutes les positions.
 
 ---
 

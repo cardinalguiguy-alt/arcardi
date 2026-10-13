@@ -126,14 +126,16 @@ function addCorner(mod, cu, cv, u1, v0, base, R, Ht) {
   const t = transition(R, Ht);
   PRIMS.push({ kind: "corner", mod, cu, cv, base, R, Ht, d: t.d, ang: t.ang, bb: [cu, v0, u1, cv] });
 }
-function addWedge(mod, dir, s0, a, b, H, L, D) {
-  const Lt = L + D;
+/* `top` (facultatif, cases) : l'arrondi du HAUT de la pente — 0, une lèvre vive (on décolle des tremplins de la funbox) ; une entrée
+   (2026-10-14, le U de la mini-rampe) s'arrondit des deux bouts, sans quoi la cassure du haut fait décoller qui la monte à fond. */
+function addWedge(mod, dir, s0, a, b, H, L, D, top) {
+  const Lt = L + D, tp = top || 0;
   let bb;
   if (dir === "e") bb = [s0 - Lt, a, s0, b];
   else if (dir === "w") bb = [s0, a, s0 + Lt, b];
   else if (dir === "s") bb = [a, s0 - Lt, b, s0];
   else bb = [a, s0, b, s0 + Lt];
-  PRIMS.push({ kind: "wedge", mod, dir, s0, a, b, H, L, D, m: H / (L - TOE / 2), bb });
+  PRIMS.push({ kind: "wedge", mod, dir, s0, a, b, H, L, D, top: tp, m: H / (L - TOE / 2 - tp / 2), bb });
 }
 function addBox(mod, u0, v0, u1, v1, h, mat, edges) {
   PRIMS.push({ kind: "box", mod, h, mat: mat || "deck", edges: edges || null, bb: [u0, v0, u1, v1] });
@@ -147,6 +149,12 @@ function addStairs(mod, u0, v0, u1, v1, dir, n, H0, H1) {
 addRamp("mini", "e", MINI.uTW, MINI.v0, MINI.v1, MINI.base, MINI.R, MINI.Ht, MINI.D);   // regarde l'est : sa plateforme est à l'ouest
 addRamp("mini", "w", MINI.uTE, MINI.v0, MINI.v1, MINI.base, MINI.R, MINI.Ht, MINI.D);   // regarde l'ouest
 addBox("mini", MINI.uTW, MINI.v0, MINI.uTE, MINI.v1, MINI.base, "flat");
+/* ⚠️ 2026-10-14 — L'ENTRÉE DU U PAR LE SUD : une courte pente de bois (14 cm sur `MINI_LIP` case), du dallage au plat. Guillaume :
+   « accès à la grande rampe impossible ». Le bout sud du plat était une MARCHE de 14 cm : sondé à la vraie physique, le skate, les
+   rollers et la trottinette y rebondissaient (seul le BMX la passait), et l'on n'entrait dans le U que d'un ollie ou par la descente
+   depuis une plateforme — ce que personne ne devine. Elle regarde le SUD : vue en 3/4, une pente qui monte vers le nord se voit. */
+const MINI_LIP = 0.7;
+addWedge("mini", "s", MINI.v1 + MINI_LIP, MINI.uTW, MINI.uTE, MINI.base, MINI_LIP, 0, 0.25);
 // La galerie, ses deux marches vers le quarter, et l'escalier qui y monte depuis le boulevard.
 addBox("gallery", GALLERY.u0, GALLERY.v0, GALLERY.u1, GALLERY.v1, GALLERY.h, "deck");
 addBox("gallery", GSTEP_U[0], 0, GSTEP_U[1], 1.0, GALLERY.h + (QUARTER.Ht - GALLERY.h) / 3, "step");
@@ -209,7 +217,8 @@ function evalPrim(p, u, v, o) {
     if (s < 0) return false;
     let h, dh;
     if (s < TOE) { h = p.m * s * s / (2 * TOE); dh = p.m * s / TOE; }
-    else if (s < p.L) { h = p.m * (s - TOE / 2); dh = p.m; }
+    else if (s < p.L - p.top) { h = p.m * (s - TOE / 2); dh = p.m; }
+    else if (s < p.L) { const w = p.L - s; h = p.H - p.m * w * w / (2 * p.top); dh = p.m * w / p.top; }
     else { h = p.H; dh = 0; }
     o.h = h; o.gu = dh * su; o.gv = dh * sv; o.sig = s < p.L ? s * Math.hypot(1, p.m) : p.L * Math.hypot(1, p.m) + (s - p.L);
     o.lat = lat; o.mat = s < p.L ? "wood" : (s - p.L < EDGE_W ? "coping" : "deck"); o.s = s; o.d = p.L;

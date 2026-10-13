@@ -74,10 +74,13 @@ function paintPlate(ctx, r, F, hPlate, half, shape, flipK) {
   const det = ax * by - ay * bx;
   if (Math.abs(det) < 0.5) return;   // la plaque vue par la tranche
   const ext = Math.abs(ax) * half[0] + Math.abs(bx) * half[1] + 1, eyt = Math.abs(ay) * half[0] + Math.abs(by) * half[1] + 1;
+  // `at(sx, sy)` : le point de la plaque que montre un AUTRE pixel — la forme y regarde ses voisins (le bord d'une planche se décide
+  // au pixel : celui du dessous est-il encore dedans ? — 2026-10-14)
+  const at = (sx, sy) => { const dx = sx + 0.5 - O[0], dy = sy + 0.5 - O[1]; return [(dx * by - dy * bx) / det, (ax * dy - ay * dx) / det]; };
   for (let sy = Math.floor(O[1] - eyt); sy <= Math.ceil(O[1] + eyt); sy++) for (let sx = Math.floor(O[0] - ext); sx <= Math.ceil(O[0] + ext); sx++) {
     const dx = sx + 0.5 - O[0], dy = sy + 0.5 - O[1];
     const a = (dx * by - dy * bx) / det, b = (ax * dy - ay * dx) / det;
-    const col = shape(a, b, sx, sy);
+    const col = shape(a, b, sx, sy, at);
     if (col) P1(ctx, sx, sy, 1, 1, col);
   }
 }
@@ -87,33 +90,63 @@ function line3(ctx, pr, a0, b0, h0, a1, b1, h1, col) {
   for (let k = 0; k <= n; k++) { const t = k / n; P1(ctx, Math.floor(A[0] + (B[0] - A[0]) * t), Math.floor(A[1] + (B[1] - A[1]) * t), 1, 1, col); }
 }
 
-/* ── LA PLANCHE (80 × 20 cm, le grip noir, les quatre roues qui dépassent aux coins, la tranche du plateau en couleur) ── */
+/* ── LA PLANCHE (80 × 20 cm) ──
+   ⚠️ 2026-10-14 — Guillaume : « le skateboard lui-même doit être plus beau ». Premier jet (2026-10-11) : une plaque de grip gris foncé et
+   quatre points crème posés aux coins — vue en jeu, une ardoise à quatre clous, la couleur louée réduite à un liseré sombre. Ce qui fait
+   lire une planche à 11 × 3 pixels :
+     · DEUX PLANS, comme en vrai : le grip (le dessus, à 7,5 cm) et, au ras du sol, les TRUCKS d'acier et les ROUES crème aux deux
+       essieux. Les essieux sont peints d'abord, le grip par-dessus : ce qui en reste visible est ce que la hauteur décale — sur le plat,
+       les roues qui dépassent sous les bouts, rien sur une paroi qui nous fait face. ENTRE les essieux, rien : on y voit le sol (premier
+       jet, le dessous peint en entier : une bande rouge sous toute la planche, une semelle, pas une planche) ;
+     · le BORD du grip éclairé du côté de la lumière (nord-ouest), coloré du côté de l'ombre (la tranche vue de biais) — décidé AU
+       PIXEL : un pixel dont le voisin du dessous (ou de droite) sort de la planche est la tranche, celui dont le voisin du dessus (ou de
+       gauche) en sort, l'arête claire. Premier jet, une bande de 3,5 cm le long du contour : à 3 pixels de large, selon l'alignement,
+       la rangée colorée tombait hors de la planche — vue en jeu, une latte noire sans couleur ;
+     · le NOSE et le TAIL RELEVÉS : leurs bouts repeints un rien plus haut (un pixel sur le plat), le grip usé plus clair ;
+     · en l'air, à l'envers (kickflip), on voit le dessous : la peinture, un logo clair, les trucks et les roues — peints APRÈS le grip,
+       puisqu'ils sont alors de notre côté.
+   Les roues débordent d'un rien du plateau (12,5 cm du milieu, le plateau 10) : une planche qui file vers le haut de l'écran garde ses
+   quatre roues lisibles ; en vrai elles affleurent, mais une planche sans roues à l'écran est une latte. */
 export const BOARD_COLORS = [
-  { deck: "#c4512f", deckLo: "#8a321c" }, { deck: "#3f7fc9", deckLo: "#244f86" }, { deck: "#e3b23a", deckLo: "#a17818" },
-  { deck: "#3aa067", deckLo: "#22663f" }, { deck: "#2c2c32", deckLo: "#151518" }, { deck: "#d96aa0", deckLo: "#99406c" },
+  { deck: "#c4512f", deckLo: "#8a321c", deckHi: "#e07a52" }, { deck: "#3f7fc9", deckLo: "#244f86", deckHi: "#7fa8f0" },
+  { deck: "#e3b23a", deckLo: "#a17818", deckHi: "#f6d27a" }, { deck: "#3aa067", deckLo: "#22663f", deckHi: "#6cc98f" },
+  { deck: "#2c2c32", deckLo: "#151518", deckHi: "#55555e" }, { deck: "#d96aa0", deckLo: "#99406c", deckHi: "#f09cc4" },
 ];
 const BL = 0.7, BW = 0.2;
+const BOARD = { H: 0.075, KICK: 0.085, KICK_H: 0.06, AXLE: [0.235, 0.305], WHEEL_B: 0.125, TRUCK_B: 0.055 };
+const GRIP = "#25252a", GRIP_TAIL = "#34343b", GRIP_HI = "#56565f", WHEEL = "#efe6cf", WHEEL_LO = "#bfb394", TRUCK = "#b8bec7", TRUCK_LO = "#7d838d";
+/* Le contour (un « stade ») : la distance au bord, négative dedans. */
+function boardDist(a, b) {
+  const a0 = Math.max(0, Math.abs(a) - (BL / 2 - BW / 2));
+  return Math.hypot(a0, b) - BW / 2;
+}
 function drawBoard(ctx, r, F) {
   const col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length];
   const flip = r.flip || 0;   // le kickflip : la planche tourne sur son grand axe
   const cf = Math.cos(flip), sf = Math.sin(flip);
   const G = { f: F.f, l: [F.l[0] * cf + F.n[0] * sf, F.l[1] * cf + F.n[1] * sf, F.l[2] * cf + F.n[2] * sf], n: [F.n[0] * cf - F.l[0] * sf, F.n[1] * cf - F.l[1] * sf, F.n[2] * cf - F.l[2] * sf] };
   const top = G.n[1] * 0.707 + G.n[2] * 0.707 > 0;   // voit-on le grip (le dessus) ou le dessous peint ?
-  const pr = projector(r, G);
-  // les roues d'abord (sous le plateau) : quatre pavés crème, ombrés côté sol
-  for (const sa of [-1, 1]) for (const sb of [-1, 1]) {
-    const W = pr(sa * 0.27, sb * 0.115, 0.035);
-    P1(ctx, Math.floor(W[0]), Math.floor(W[1]), 1, 1, "#efe6cf");
-    P1(ctx, Math.floor(W[0]), Math.floor(W[1]) + 1, 1, 1, "#a99f86");
-  }
-  const half = [BL / 2 + 0.05, BW / 2 + 0.05];
-  paintPlate(ctx, r, G, 0.075, half, (a, b) => {
-    const a0 = Math.max(0, Math.abs(a) - (BL / 2 - BW / 2)), d = Math.hypot(a0, b);
-    if (d > BW / 2) return null;
-    if (!top) return d > BW / 2 - 0.05 ? col.deckLo : (Math.abs(a) < 0.1 ? "#f1ead8" : col.deck);   // le dessous : la peinture, un logo clair
-    if (d > BW / 2 - 0.04) return b > 0 ? col.deckLo : "#4a4a53";   // la tranche : sombre côté ombre, une arête claire côté lumière
-    return Math.abs(a) > BL / 2 - BW / 2 + 0.02 ? "#34343a" : "#26262b";   // le grip, les tails un peu plus clairs (usés)
+  const half = [BL / 2 + 0.06, BOARD.WHEEL_B + 0.04];
+  const underside = () => paintPlate(ctx, r, G, 0, half, (a, b) => {
+    const aa = Math.abs(a), ab = Math.abs(b);
+    if (aa > BOARD.AXLE[0] && aa < BOARD.AXLE[1] && ab <= BOARD.WHEEL_B) {
+      if (ab > BOARD.TRUCK_B + 0.02) return aa > (BOARD.AXLE[0] + BOARD.AXLE[1]) / 2 ? WHEEL_LO : WHEEL;   // la roue, sa moitié extérieure à l'ombre
+      return ab > BOARD.TRUCK_B ? TRUCK_LO : TRUCK;                                                        // le truck, son axe
+    }
+    const d = boardDist(a, b);
+    if (d > 0 || top) return null;                                                           // à l'endroit, entre les essieux : le vide
+    if (d > -0.03) return col.deckLo;                                                        // à l'envers : le bord du dessous
+    return aa < 0.07 ? "#f1ead8" : aa < 0.1 ? col.deckHi : col.deck;                         // la peinture, un logo clair au milieu
   }, 1);
+  const grip = (h, kick) => paintPlate(ctx, r, G, h, half, (a, b, sx, sy, at) => {
+    const inB = (q) => boardDist(q[0], q[1]) <= 0 && !(kick && Math.abs(q[0]) < BL / 2 - BOARD.KICK * 0.5);
+    if (!inB([a, b])) return null;
+    if (!inB(at(sx, sy + 1)) || !inB(at(sx + 1, sy))) return col.deck;   // la tranche, côté ombre
+    if (!inB(at(sx, sy - 1)) || !inB(at(sx - 1, sy))) return GRIP_HI;    // l'arête, côté lumière
+    return Math.abs(a) > BL / 2 - BOARD.KICK ? GRIP_TAIL : GRIP;
+  }, 1);
+  if (top) { underside(); grip(BOARD.H, false); grip(BOARD.H + BOARD.KICK_H, true); }
+  else { grip(BOARD.H + BOARD.KICK_H, true); grip(BOARD.H, false); underside(); }
 }
 
 /* Une rotation autour d'un axe VERTICAL passant par le point local (a0, 0) — le tube de direction : le tailwhip fait tourner le
@@ -158,39 +191,90 @@ function drawScooterBar(ctx, r, F) {
   for (const sb of [-1, 1]) line3(ctx, pb, 0.3, sb * 0.2, H, 0.3, sb * 0.14, H, col);   // les poignées
 }
 
-/* ── LE BMX : deux roues de 20 pouces (vues comme des ellipses : elles sont dans le plan vertical du cap), le cadre, le guidon ── */
-function drawBmxWheel(ctx, pr, a, R) {
-  const n = 40;
-  for (let k = 0; k < n; k++) {
+/* ── LE BMX : deux roues de 20 pouces (vues comme des ellipses : elles sont dans le plan vertical du cap), le cadre, le guidon ──
+   ⚠️ 2026-10-14 — Guillaume : « le BMX plus réaliste ». Premier jet (2026-10-11) : un fil d'un pixel — des roues en cercle mince (un
+   vélo de ville), un cadre qu'on ne voyait pas, et vu de face un BÂTON (une roue de profil n'a pas d'épaisseur). Ce qui fait un BMX :
+     · des PNEUS ÉPAIS À CRAMPONS (2,3 pouces) : le pneu est un tore — deux anneaux de part et d'autre du plan de la roue, crampons
+       un pixel sur deux ; vu de face, il garde deux pixels de large ;
+     · la JANTE d'acier, le moyeu, le jour des rayons entre eux ; les PEGS (les tubes de grind) qui dépassent des deux moyeux ;
+     · le CADRE en tubes épais (deux pixels, le dessus dans la couleur louée, le dessous à l'ombre), le triangle arrière court, la selle
+       basse, la fourche à deux fourreaux ;
+     · le PÉDALIER : le plateau du côté de la transmission (à droite du cap), la chaîne jusqu'au pignon arrière, les manivelles qui
+       tournent avec le pédalage (`R.crank`, la même phase que les pieds — `drawRide`) ;
+     · le GUIDON haut à deux montants et sa barre transversale, les poignées noires.
+   Ce qui est du côté LOIN (à gauche du cap si la droite regarde le sud, et l'inverse) se peint avant la roue et le cadre, le côté PROCHE
+   après : c'est le sens du travers à l'écran (`F.l`) qui le dit. */
+const BMX = { R: 0.21, aR: -0.42, aF: 0.42, BB: [-0.04, 0.17], SEAT: [-0.18, 0.5], HEAD: [0.3, 0.52], CRANK: 0.09, RING: 0.065, PEG: [0.05, 0.12], TIRE_B: 0.028 };
+const TIRE = ["#1b1c20", "#3a3c43"], RIM = ["#737a85", "#cdd2d9"], STEEL_HI = "#e3e7ec", STEEL = "#b3b9c2", STEEL_LO = "#6e747e";
+function drawBmxWheel(ctx, pr, a, R, nearB) {
+  const n = 56;
+  // le pneu : deux anneaux (le côté loin d'abord), crampons un pixel sur deux le long de la bande de roulement
+  for (const sb of [-nearB, nearB]) for (let k = 0; k < n; k++) {
     const ph = (k / n) * Math.PI * 2;
-    const P = pr(a + R * Math.cos(ph), 0, R + R * Math.sin(ph));
-    P1(ctx, Math.floor(P[0]), Math.floor(P[1]), 1, 1, "#1d1e22");
+    const P = pr(a + R * Math.cos(ph), sb * BMX.TIRE_B, R + R * Math.sin(ph));
+    P1(ctx, Math.floor(P[0]), Math.floor(P[1]), 1, 1, TIRE[(Math.floor((ph / (2 * Math.PI)) * 22) & 1) && sb === nearB ? 1 : 0]);
+  }
+  // la jante, fine (un éclat en haut à gauche de l'écran), et le moyeu : entre les deux, le jour des rayons — premier jet, des rayons
+  // peints en plus : à 3 pixels de rayon, la roue devenait un disque gris plein (une roue de brouette)
+  for (let k = 0; k < 28; k++) {
+    const ph = (k / 28) * Math.PI * 2, P = pr(a + R * 0.74 * Math.cos(ph), 0, R + R * 0.74 * Math.sin(ph));
+    P1(ctx, Math.floor(P[0]), Math.floor(P[1]), 1, 1, Math.sin(ph) > 0.5 && Math.cos(ph) < 0.2 ? RIM[1] : RIM[0]);
   }
   const H = pr(a, 0, R);
-  P1(ctx, Math.floor(H[0]), Math.floor(H[1]), 1, 1, "#d8dde4");
-  for (const ph of [0.4, 1.97, 3.54, 5.11]) { const P = pr(a + R * 0.55 * Math.cos(ph), 0, R + R * 0.55 * Math.sin(ph)); P1(ctx, Math.floor(P[0]), Math.floor(P[1]), 1, 1, "#9aa0a8"); }
+  P1(ctx, Math.floor(H[0]), Math.floor(H[1]), 1, 1, STEEL_HI);
+}
+/* Un tube épais : deux traits, le haut dans sa couleur, le dessous (un rien plus bas) à l'ombre. */
+function tube(ctx, pr, a0, h0, a1, h1, c, cLo, b) {
+  line3(ctx, pr, a0, b || 0, h0 - 0.04, a1, b || 0, h1 - 0.04, cLo);
+  line3(ctx, pr, a0, b || 0, h0, a1, b || 0, h1, c);
 }
 function drawBmx(ctx, r, F, part) {
   const pr0 = projector(r, F), col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length];
-  const R = 0.21, aR = -0.42, aF = 0.42;
+  const R = BMX.R, aR = BMX.aR, aF = BMX.aF, BB = BMX.BB, SEAT = BMX.SEAT, HEAD = BMX.HEAD;
   const pr = spun(pr0, 0.3, r.whip || 0);      // le tailwhip : le cadre et la roue arrière tournent autour de la douille
   const pb = spun(pr0, 0.27, r.bar || 0);      // le barspin : le guidon (et la fourche, solidaire) tourne sur la potence
+  // le côté PROCHE du cadre : celui dont le travers descend à l'écran (vers le sud = vers nous)
+  const nearB = F.l[1] >= 0 ? 1 : -1, cr = r.crank || 0;
+  const peg = (p, a) => line3(ctx, p, a, nearB * BMX.PEG[0], R, a, nearB * BMX.PEG[1], R, STEEL);
+  const pegFar = (p, a) => line3(ctx, p, a, -nearB * BMX.PEG[0], R, a, -nearB * BMX.PEG[1], R, STEEL_LO);
+  // une manivelle et sa pédale, du côté `sb` (+1 : la droite du cap, celle du plateau) ; les deux en opposition
+  const crank = (sb) => {
+    const k = sb > 0 ? -1 : 1, pa = BB[0] + k * BMX.CRANK * Math.cos(cr), ph = BB[1] + k * BMX.CRANK * Math.sin(cr);   // comme les pieds (`drawRide`)
+    line3(ctx, pr, BB[0], sb * 0.06, BB[1], pa, sb * 0.08, ph, sb === nearB ? STEEL_LO : "#4a4d55");
+    line3(ctx, pr, pa - 0.03, sb * 0.11, ph, pa + 0.03, sb * 0.11, ph, "#1d1e22");
+  };
   if (part !== "front") {
-    drawBmxWheel(ctx, pr, aR, R);
-    // le cadre : la base, le hauban, le tube de selle, le tube supérieur, le tube diagonal, la fourche
-    const BB = [-0.04, 0.17], SEAT = [-0.18, 0.5], HEAD = [0.3, 0.52];
+    pegFar(pr, aR); crank(-nearB);
+    drawBmxWheel(ctx, pr, aR, R, nearB);
+    // le triangle arrière (bases et haubans, à l'ombre), le tube de selle, le tube supérieur, le diagonal — épais, la couleur louée
     line3(ctx, pr, aR, 0, R, BB[0], 0, BB[1], col.deckLo);
     line3(ctx, pr, aR, 0, R, SEAT[0], 0, SEAT[1] - 0.04, col.deckLo);
-    line3(ctx, pr, BB[0], 0, BB[1], SEAT[0], 0, SEAT[1], col.deck);
-    line3(ctx, pr, SEAT[0], 0, SEAT[1] - 0.04, HEAD[0], 0, HEAD[1], col.deck);
-    line3(ctx, pr, BB[0], 0, BB[1], HEAD[0], 0, HEAD[1] - 0.06, col.deck);
-    line3(ctx, pr, SEAT[0] - 0.08, 0, SEAT[1] + 0.03, SEAT[0] + 0.06, 0, SEAT[1] + 0.03, "#26262b");   // la selle
+    tube(ctx, pr, BB[0], BB[1], SEAT[0], SEAT[1], col.deck, col.deckLo);
+    tube(ctx, pr, SEAT[0], SEAT[1] - 0.02, HEAD[0], HEAD[1], col.deckHi, col.deck);
+    tube(ctx, pr, BB[0], BB[1] + 0.03, HEAD[0], HEAD[1] - 0.06, col.deck, col.deckLo);
+    line3(ctx, pr, HEAD[0], 0, HEAD[1] - 0.08, HEAD[0] + 0.01, 0, HEAD[1] + 0.03, STEEL_LO);       // la douille
+    // la selle basse, son nez relevé
+    line3(ctx, pr, SEAT[0], 0, SEAT[1], SEAT[0] - 0.02, 0, SEAT[1] + 0.04, STEEL_LO);
+    line3(ctx, pr, SEAT[0] - 0.11, 0, SEAT[1] + 0.04, SEAT[0] + 0.07, 0, SEAT[1] + 0.07, "#26262b");
+    // la transmission, côté droit du cap : le plateau au boîtier, la chaîne jusqu'au pignon
+    const sbD = 1;
+    for (let k = 0; k < 16; k++) { const ph = (k / 16) * Math.PI * 2, P = pr(BB[0] + BMX.RING * Math.cos(ph), sbD * 0.05, BB[1] + BMX.RING * Math.sin(ph)); P1(ctx, Math.floor(P[0]), Math.floor(P[1]), 1, 1, sbD === nearB ? STEEL : STEEL_LO); }
+    line3(ctx, pr, BB[0], sbD * 0.05, BB[1] + BMX.RING, aR, sbD * 0.05, R + 0.03, "#4a4d55");
+    line3(ctx, pr, BB[0], sbD * 0.05, BB[1] - BMX.RING, aR, sbD * 0.05, R - 0.03, "#3a3c42");
+    crank(nearB); peg(pr, aR);
   }
   if (part !== "back") {
-    drawBmxWheel(ctx, pr0, aF, R);
-    line3(ctx, pr0, 0.3, 0, 0.52, aF, 0, R, "#c9ced6");                 // la fourche
-    line3(ctx, pr0, 0.3, 0, 0.52, 0.27, 0, BMX_BAR_H, "#c9ced6");            // la potence
-    line3(ctx, pb, 0.27, -0.24, BMX_BAR_H, 0.27, 0.24, BMX_BAR_H, "#d6dbe2");     // le guidon
+    pegFar(pr0, aF);
+    drawBmxWheel(ctx, pr0, aF, R, nearB);
+    // la fourche : deux fourreaux de part et d'autre de la roue, de la douille au moyeu
+    // (écartés de 6,5 cm, un rien plus qu'en vrai : vu de face, ils doivent ENCADRER le pneu, pas le couvrir)
+    for (const sb of [-nearB, nearB]) line3(ctx, pb, HEAD[0], sb * 0.065, HEAD[1] - 0.06, aF, sb * 0.065, R, sb === nearB ? STEEL : STEEL_LO);
+    peg(pr0, aF);
+    // la potence, le guidon haut : deux montants qui s'écartent, la barre transversale, les poignées
+    line3(ctx, pb, HEAD[0] + 0.01, 0, HEAD[1] + 0.03, 0.27, 0, HEAD[1] + 0.05, STEEL_LO);
+    for (const sb of [-1, 1]) line3(ctx, pb, 0.28, sb * 0.05, HEAD[1] + 0.03, 0.27, sb * 0.17, BMX_BAR_H, STEEL);
+    line3(ctx, pb, 0.275, -0.1, BMX_BAR_H - 0.035, 0.275, 0.1, BMX_BAR_H - 0.035, STEEL_LO);
+    line3(ctx, pb, 0.27, -0.17, BMX_BAR_H, 0.27, 0.17, BMX_BAR_H, STEEL_HI);
     for (const sb of [-1, 1]) line3(ctx, pb, 0.27, sb * 0.24, BMX_BAR_H, 0.27, sb * 0.17, BMX_BAR_H, "#26262b");
   }
 }
@@ -298,6 +382,8 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
       }
       ctx.drawImage(sheet, srcX, sy + r, 3, 1, Math.round(baseX + off), hipY + j, 3, 1);
     }
+    // 2026-10-14 — ce qui CHAUSSE le pied (la bottine des rollers), peint juste après SA jambe : la proche recouvre la lointaine
+    if (o.boot) o.boot(fx, fy, n, side);
   };
   // le genou de profil avance (on fait face à droite : +x) ; de face, il vient vers nous — la jambe se raccourcit et les genoux
   // s'ouvrent (l'accroupi vu de face : « ( ) », pas deux jambes tronquées)
@@ -360,7 +446,8 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
   const r = p.ride;
   const fx = C.footX(p.x), fy = C.footY(p.y);
   const surf = r.mode === "air" ? null : SP.parkSurf(fx, fy, {});
-  const R = { fx, fy, th: r.th, air: r.air || 0, surf, color: r.color, flip: r.flip, bar: r.bar || 0, whip: r.whip || 0 };
+  const R = { fx, fy, th: r.th, air: r.air || 0, surf, color: r.color, flip: r.flip, bar: r.bar || 0, whip: r.whip || 0,
+    crank: r.kind === "bmx" && r.pose === "glide" ? 2 * Math.PI * (r.ph || 0) : 0 };   // 2026-10-14 : les manivelles dessinées tournent avec les pieds
   const F = frameOf(R);
   const airPx = Math.round((r.air || 0) * T);
   // le sens du corps : le skateur de travers (la poitrine à droite du cap — un regular), les autres face au cap
@@ -464,7 +551,16 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
    Les poses : debout (pieds à 18 cm, genoux souples) ; la FOULÉE en V (le pied qui pousse part en arrière et dehors, se soulève au
    bout ; celui qui porte reste sous le corps ; le bras opposé balance) ; le CHASSE-NEIGE au frein (pieds larges, genoux pliés, bras
    ouverts) ; en l'air, pieds joints, genoux ramassés, bras ouverts ; en glisse (soul), un pied devant l'autre. */
-const ROLLER = { frame: "#5c6470", frameHi: "#aeb6c2", wheel: "#2a2c33", hub: "#e8d36a", SOLE: 0.13 };
+/* ⚠️ 2026-10-14 — DES ROLLERS AGRESSIFS, PAS DES CHAUSSURES À ROULETTES (Guillaume : « les rollers aussi plus réalistes » ; le type,
+   décidé avec lui : les inline de skatepark, ceux que nomment le soul grind et le misty). Premier jet : la chaussure ordinaire de la
+   feuille, et sous elle une rangée de pastilles jaunes et noires — un damier, des patins de jouet. Ce qui fait lire un roller agressif :
+     · la BOTTINE rigide qui monte à mi-mollet, dans la couleur louée (coque claire en haut, ombrée devant), sa MANCHETTE noire et la
+       BOUCLE claire en haut, la sangle du cou-de-pied — peinte PAR-DESSUS la jambe, juste après elle (`o.boot`) ;
+     · la PLATINE de grind (la « soul plate », noire) et le H-BLOCK d'acier entre les roues du milieu ;
+     · QUATRE ROUES EN LIGNE, les deux du bout claires, les deux du milieu PETITES ET SOMBRES (l'« anti-rocker » qui laisse glisser le
+       H-block sur un rail) : c'est la silhouette qu'on reconnaît.
+   Au pixel, à la convention de la feuille (de profil, la bottine dépasse d'un pixel au talon et à la pointe ; de face, trois de large). */
+const ROLLER = { plate: "#202126", block: "#8f96a0", wheel: "#ece7da", wheelLo: "#bdb6a6", anti: "#3a3c42", cuff: "#24242a", buckle: "#a8aeb6", SOLE: 0.13 };
 function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
   const pr = projector(R, F), side = row === 2;
   const ph = r.ph || 0, legP = Math.floor(ph) & 1, u = ph - Math.floor(ph);
@@ -507,19 +603,41 @@ function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
     }
   }
   /* LA PLATINE ET SES ROUES, sous chaque pied retenu par le squelette (dans SON repère : le miroir compris). Convention de la feuille
-     (pas une projection : de face, une platine de 30 cm dans l'axe du regard se lisait comme une échasse) : de profil, huit pixels
-     dans le sens de la marche (deux derrière le talon, trois devant la pointe), quatre roues et leurs moyeux ; de face et de dos, la
-     tranche (trois pixels) et une roue. Le pied levé (la fin de la poussée) lève sa platine avec lui. */
+     (pas une projection : de face, une platine de 30 cm dans l'axe du regard se lisait comme une échasse) : de profil, six pixels dans
+     le sens de la marche (un derrière le talon, deux devant la pointe) — la platine et son H-block, les roues dessous ; de face et de
+     dos, trois pixels, la roue de devant entre les deux flancs du châssis. Le pied levé (la fin de la poussée) lève sa platine avec lui.
+     `x0` : la première colonne de la chaussure, comme la pose la jambe (`Math.round(pied − 1)`). */
+  const col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length];
   o.under = (feet, sv) => {
     for (const f of feet) {
-      const x = Math.round(f[0]), y = Math.round(f[1]);
+      const x0 = Math.round(f[0] - 1), y = Math.round(f[1]);
       if (sv) {
-        // dans le repère du corps on regarde vers +x (le miroir a retourné les profils gauches) ; les platines sont aux pieds : elles
-        // pointent où regarde le corps, même en roulant en arrière (`back` a déjà retourné le corps)
-        const x0 = x - 3;
-        P1(ctx, x0, y, 8, 1, ROLLER.frame); P1(ctx, x0 + 6, y, 2, 1, ROLLER.frameHi);
-        for (let k = 0; k < 4; k++) { P1(ctx, x0 + k * 2, y + 1, 2, 1, ROLLER.wheel); P1(ctx, x0 + k * 2 + 1, y + 1, 1, 1, ROLLER.hub); }
-      } else { P1(ctx, x - 1, y, 3, 1, ROLLER.frame); P1(ctx, x - 1, y, 1, 1, ROLLER.frameHi); P1(ctx, x, y + 1, 1, 1, ROLLER.wheel); }
+        // on regarde vers +x (le miroir a retourné les profils gauches) : les platines pointent où regarde le corps
+        P1(ctx, x0 - 1, y, 6, 1, ROLLER.plate); P1(ctx, x0 + 1, y, 2, 1, ROLLER.block);
+        P1(ctx, x0 - 1, y + 1, 1, 1, ROLLER.wheelLo); P1(ctx, x0, y + 1, 1, 1, ROLLER.wheel);
+        P1(ctx, x0 + 1, y + 1, 2, 1, ROLLER.anti);
+        P1(ctx, x0 + 3, y + 1, 1, 1, ROLLER.wheel); P1(ctx, x0 + 4, y + 1, 1, 1, ROLLER.wheelLo);
+      } else {
+        P1(ctx, x0, y, 3, 1, ROLLER.plate); P1(ctx, x0 + 1, y, 1, 1, ROLLER.block);
+        P1(ctx, x0, y + 1, 1, 1, ROLLER.anti); P1(ctx, x0 + 1, y + 1, 1, 1, ROLLER.wheel); P1(ctx, x0 + 2, y + 1, 1, 1, ROLLER.anti);
+      }
+    }
+  };
+  /* LA BOTTINE, par-dessus la chaussure de la feuille et le bas de la jambe (jamais plus haut que la jambe n'a de rangées : en robe, ou
+     accroupi, elle se tasse) : deux rangées de pied, la cheville, deux de manchette. */
+  o.boot = (fx, fy, n, sv) => {
+    const x0 = Math.round(fx - 1), yb = Math.round(fy), H = Math.min(5, n);
+    const row = (k, x, w, c) => { if (k <= H) P1(ctx, x, yb - k, w, 1, c); };
+    if (sv) {
+      row(1, x0 - 1, 5, col.deck); P1(ctx, x0 + 3, yb - 1, 1, 1, col.deckLo);              // le pied, sa pointe à l'ombre
+      row(2, x0 - 1, 5, col.deck); row(2, x0 - 1, 2, col.deckHi);                            // le cou-de-pied, la coque éclairée au talon
+      row(2, x0 + 2, 1, col.deckLo);                                                          // la sangle (sombre : claire, elle faisait un point de plus)
+      row(3, x0 - 1, 4, col.deck); row(3, x0 - 1, 1, col.deckHi);                            // la cheville
+      row(4, x0, 3, ROLLER.cuff); row(5, x0, 3, ROLLER.cuff); row(5, x0 + 2, 1, ROLLER.buckle);   // la manchette, sa boucle
+    } else {
+      row(1, x0, 3, col.deck); row(2, x0, 3, col.deck); row(2, x0 + 1, 1, col.deckLo);
+      row(3, x0, 3, col.deck); row(3, x0, 1, col.deckHi);
+      row(4, x0, 3, ROLLER.cuff); row(5, x0, 3, ROLLER.cuff); row(5, x0 + 1, 1, ROLLER.buckle);
     }
   };
   if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(o, -px)); ctx.restore(); }
@@ -625,19 +743,28 @@ export function parkShedSprite(mk, closed) {
 
 /* L'APERÇU DU PANNEAU DE LOCATION : la monture choisie, de profil, dessinée par LES MÊMES fonctions que le jeu (sur un canevas de
    48 × 24, le cap à l'est). Les rollers : une bottine de profil sur sa platine, ses quatre roues. */
-export function drawRideKitPreview(g, kit) {
+/* `o` (facultatif) : { fx, fy, th, flip, bar, whip, crank } — le même aperçu sous un autre cap, à une autre place (la planche des
+   véhicules de `app/audit-riders`, 2026-10-14). */
+export function drawRideKitPreview(g, kit, o) {
   const k = kit || { kind: "skate", color: 0 };
-  const R = { fx: 1.5, fy: 1.05, th: 0, air: 0, surf: null, color: k.color | 0 };
+  const R = { fx: 1.5, fy: 1.05, th: 0, air: 0, surf: null, color: k.color | 0, ...(o || {}) };
   const F = frameOf(R);
   if (k.kind === "skate") drawBoard(g, R, F);
   else if (k.kind === "scooter") { drawScooterDeck(g, R, F); drawScooterBar(g, R, F); }
   else if (k.kind === "bmx") drawBmx(g, R, F, "all");
   else {
-    const col = BOARD_COLORS[(k.color | 0) % BOARD_COLORS.length];
-    for (const ox of [14, 26]) {
-      P1(g, ox, 6, 6, 8, "#f4f1ea"); P1(g, ox, 6, 1, 8, "#ffffff"); P1(g, ox + 5, 6, 1, 8, "#cfc9bd"); P1(g, ox, 9, 6, 1, col.deck);
-      P1(g, ox, 14, 9, 2, "#e8e4da"); P1(g, ox + 8, 14, 1, 2, "#cfc9bd"); P1(g, ox - 1, 16, 11, 1, "#5c6470");
-      for (let w = 0; w < 4; w++) { P1(g, ox - 1 + w * 3, 17, 2, 2, "#2a2c33"); P1(g, ox + w * 3, 17, 1, 1, "#e8d36a"); }
+    /* 2026-10-14 — le roller agressif de profil, en grand (le même que sur le corps, `drawRollers`) : la coque dans la couleur louée,
+       la manchette noire et sa boucle, la sangle, la platine et son H-block, les deux grandes roues claires et les deux petites
+       sombres du milieu. Deux, l'un derrière l'autre. */
+    const col = BOARD_COLORS[(k.color | 0) % BOARD_COLORS.length], Rr = ROLLER;
+    for (const ox of [12, 25]) {
+      P1(g, ox + 1, 3, 6, 5, Rr.cuff); P1(g, ox + 1, 3, 6, 1, "#3a3a42"); P1(g, ox + 5, 4, 2, 2, Rr.buckle);          // la manchette, sa boucle
+      P1(g, ox, 8, 8, 4, col.deck); P1(g, ox, 8, 2, 4, col.deckHi);                                                  // la cheville, éclairée au talon
+      P1(g, ox, 12, 12, 3, col.deck); P1(g, ox, 12, 2, 3, col.deckHi); P1(g, ox + 10, 13, 2, 2, col.deckLo);         // le pied, sa pointe
+      P1(g, ox + 7, 9, 3, 1, Rr.buckle); P1(g, ox + 8, 11, 3, 1, Rr.buckle);                                         // les sangles
+      P1(g, ox - 1, 15, 14, 2, Rr.plate); P1(g, ox + 4, 15, 4, 2, Rr.block);                                         // la platine, le H-block
+      for (const wx of [ox - 1, ox + 9]) { P1(g, wx, 17, 4, 4, Rr.wheel); P1(g, wx + 3, 17, 1, 4, Rr.wheelLo); P1(g, wx + 1, 18, 2, 2, Rr.wheelLo); }
+      P1(g, ox + 3, 17, 3, 3, Rr.anti); P1(g, ox + 6, 17, 3, 3, Rr.anti); P1(g, ox + 4, 18, 1, 1, "#6e747e"); P1(g, ox + 7, 18, 1, 1, "#6e747e");
     }
   }
 }
