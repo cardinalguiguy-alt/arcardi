@@ -1,5 +1,73 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-15 (suite) — LE PARK : LE SAUT CHARGÉ, LES FIGURES AVANCÉES, LES SPINS ET LE HANDPLANT DES ROLLERS
+
+Guillaume : « ajouter des figures au skateboard / BMX, plus on maintient longtemps plus le saut est haut, et ajouter possibilité de figures plus avancées et
+impressionnantes. Aussi à rollers, rendre possible les handstand sur les bords des rampes, et les spins comme au patinage. Ajouter des options en gros. »
+Les questions de forme lui ont été posées ; sans réponse (« tu peux poursuivre si tu veux »), les options recommandées ont été prises — **à confirmer en jeu** :
+la flèche choisit la variante, le même appui prolonge ; le handplant au coping, G tenu ; les spins au sol et en l'air. **Supabase : rien** (le paquet de
+position porte déjà le nom et l'âge d'une figure ; la pirouette et le handplant s'y ajoutent en quelques nombres, sans un message de plus, §3).
+- **Le saut chargé** (`monture.js`, « LE SAUT CHARGÉ », `ollieV`) : la charge se remplit en 0,8 à 1 s (0,26 à 0,36 avant) et monte jusqu'à ~1 m (le BMX
+  1,13 m, mesuré) ; la courbe est douce au départ — 0,3 s de charge donnent l'ollie d'avant (61 cm) : le geste appris ne rapetisse pas. Les genoux plient
+  jusqu'à quatre pixels. La sortie de glisse d'un saut garde sa hauteur d'avant (`grindPop`).
+- **Les variantes et les prolongations** (`TRICK_SETS`, « LES FIGURES, PAR MONTURE ») : V ou G seuls gardent les figures d'avant ; ←/→ ou ↑/↓ enfoncée EN
+  L'AIR juste avant la touche choisit la variante — skate : heelflip, hardflip, 360 shove-it, bigspin (le corps fait un 180) ; BMX : no-hander, X-up, 360,
+  360 tailwhip ; trottinette : heelwhip, X-up, 360, 360 tailwhip ; rollers : le spin, du côté de la flèche. Le même appui pendant la figure la prolonge
+  (double et triple kickflip, double heelflip, 540 shove-it, double barspin, double tailwhip, un demi-tour de plus au spin) s'il reste l'air de la finir —
+  sinon rien, jamais une chute. ⚠️ La flèche qu'on tenait au décollage pour pousser n'est PAS une variante, et une flèche fraîche n'est un ordre de rotation
+  qu'après 0,12 s (`ORDER_DELAY`) : sans ces deux règles, chaque kickflip devenait un heelflip et la flèche-variante faisait tourner le rider.
+- **Les rotations du corps** (`body`, `bodyPlan`, `spinTotal`) : c'est le CAP qui tourne (la physique, la réception et le réseau le voient), et un
+  spin VISE SA RÉCEPTION — le 360 du BMX lancé au quarter fait 540 (il redescend la courbe dans son sens), les rollers et le skate retombent par le bout le
+  plus proche. Fini aux 4/5 à la réception, il se finit au contact (comme le plateau). ⚠️ Premier jet : un 360 de BMX en 0,85 s, son 540 au quarter en
+  1,27 s pour 0,7 s d'air — il ne partait jamais ; maintenant 0,62 s (10 rad/s), les rollers 0,5 s (2 tours/s, comme sur la glace).
+- **La pirouette des rollers** (au sol, V) : la vrille de la patinoire sur des roues — la même courbe (`PT.skateTrickAt`), les mêmes quatre niveaux, chaque V
+  l'emballe, elle finit de face (un tour entier) ; le cap ne tourne pas (seul le dessin : `piroAngle`), ni virage, ni poussée, ni saut pendant qu'elle
+  dure. Son nom s'affiche au bout (« Pirouette, 5 tours »).
+- **Le handplant des rollers** (G tenu au coping, après un air de courbe : `HAND`, `handCatch`, `handExit`) : une main sur le tube, le corps renversé, tenu
+  tant que G l'est (3 s au plus), puis on redescend dans la courbe à reculons en posant les roues — jamais une chute. Le dessin (`drawRollerHandplant`) :
+  le même squelette posé debout, bras tendus au-delà de la tête (`armMax`), puis retourné autour du coping ; le nom monte au-dessus des bottines.
+- **Le dessin des figures neuves** (`montureArt.js`) : le X-up garde les mains aux poignées pendant que le guidon tourne à ~160° (les bras se croisent) ; le
+  no-hander lâche le guidon, bras grands ouverts (de profil, le bras proche part en arrière) ; la pirouette serre les pieds et lève les bras. Planche des poses :
+  `app/audit-riders?k=roller|bmx|scooter|skate`.
+- **L'aide « ? »** (`parkHelpRows`, FR/EN) dit les variantes, les prolongations, la pirouette et le handplant de la monture.
+- **Mesuré** : `verify-monture` 50/50 (§6 le saut chargé, §9 les figures neuves, jouées) ; `verify-skatepark` 14/14 — les chutes du joueur plausible :
+  naïf 1,00 → 1,10/min, appliqué 0,94 → 0,89/min (même banc relancé sur la physique d'avant) ; ⚠️ la trottinette du joueur NAÏF passe de 1,10 à 1,75
+  chute/min (sous le plafond de 2,6) : ses sauts, plus hauts pour la même tenue, vont chercher les garde-corps (20 heurts « fence » contre 8). **Vu en jeu**
+  (navigateur, rAF par worker) : le saut chargé à fond (0,98 m), un kickflip prolongé en double kickflip, posé ; la pirouette emballée (niveaux 0 → 2,
+  « Pirouette, 5 tours ») ; le handplant au quarter nord, tenu 1,1 s puis lâché, redescendu sur les roues ; les poses à la loupe. **Pas vu** : un vrai iPad
+  (les boutons du doigt et le pavé pour les variantes), deux clients (la pirouette et le handplant d'un AUTRE, relus du paquet), le son de la main posée.
+- **Pas fait** : les backflips (un corps renversé qui TOURNE ne se dessine pas proprement au pixel avec cette feuille : retourné d'un bloc, oui ; en rotation
+  continue, non sans une feuille de plus) ; des grabs de skate (indy, melon : sans un dessin distinct de la main sur la planche, un nom de plus serait une
+  option que personne ne voit) ; le handplant sur les arêtes des caisses.
+
+## 2026-10-15 — VALLEY TOWN FLUIDE EN ZOOM LARGE : LE SOL CUIT PAR BLOCS
+
+Guillaume : « mon jeu est saccadé en zoom large quand j'arrive sur VT ». **Mesuré** (Mac, rAF chronométré, `app/audit-tmp?raf=real` puis l'horloge par
+worker quand le volet est masqué, `__ft`) : au cran 1 la ville coûtait **15 ms de calcul par image contre 6 au cran 3** (1024 × 768), dont **11 ms dans la
+seule boucle du sol** — chaque case repeinte à chaque image, ≈ 16 000 `fillRect` et 7 500 `drawImage`. Le coût suit la SURFACE vue : 15,7 ms en
+1600 × 1000, et la qualité adaptative (`PERF`) aurait fini par couper ombres et reflets sur une machine plus lente. Rien d'autre ne pesait autant
+(la file des décors ≈ 2 ms, les dessins triés ≈ 3,5 ms).
+- **Le sol cuit par blocs** (`TOWN_GROUND` en tête de FermeGame.js, `townGroundFrame` / `townGroundBake` / `townGroundBlit` dans la boucle de rendu) : le
+  décor FIXE d'une case (sol, revêtements dont le dallage HD, massifs, berge, eau cuite, falaises et leur habillage, voie, quai, caillebotis) se peint une
+  fois dans des blocs d'environ 256 px d'écran au cran courant, recopiés ensuite. Le dessin d'une case est sorti de la boucle dans `paintTownGroundTile`,
+  au caractère près (une seule porte ajoutée : la patinoire ne se cuit pas). La clé : le cran, la saison (les massifs), la neige au sol et le sol mouillé,
+  les atlas HD du cran, l'identité du monde de saison, des sprites et de la cuisson de l'eau. Un bloc manque : le chemin LENT pour l'image entière, et la
+  cuisson avance de 5 ms ; la couronne autour de la vue se cuit d'avance (un bloc par image) ; au-delà, les blocs se jettent.
+- **Ce qui reste peint à chaque image** : la neige et le sol mouillé de chaque case, et les cases LENTES (`townGroundSlow`) — la patinoire, une falaise sous
+  la neige (la neige du chaperon est peinte AU MILIEU du dessin fixe), une marche à altitude fractionnaire sous la pluie ou la neige.
+- **L'ordre** (le piège du jour, `docs/PIEGES.md`) : une case haute qui recouvre une case basse déjà mouillée est RE-COPIÉE du bloc à son tour
+  (`townGroundReblit`, colonne par colonne : `gDyn`) ; sans pluie ni neige, rien ne se recopie.
+- **Mesuré après** (cran 1) : 1600 × 1000 à la gare, **15,7 → 4,9 ms/image** (90e centile 5,3) ; au belvédère sous la pluie 11,8 → 6,6 ; sur la place
+  d'hiver sous la neige, patinoire comprise, 15,3 → 8,7 ; 12 s de marche à travers la ville : **0 image lente**, pire image 15,5 ms ; **14 Mo** de blocs
+  (56 blocs). L'arrivée : la 1re image de la ville reste longue (≈ 370 ms, caches froids, SOUS LE NOIR — déjà noté au journal de la neige), puis une
+  dizaine d'images à ~25 ms le temps de cuire la vue, pendant le fondu d'entrée.
+- **Comparé au pixel** (temps figé, `Math.random` rejoué, une image rapide puis une lente, `window.__arcardiGround.off = true` ; falsifié par une tache
+  dans un bloc : 1 517 pixels vus) : **0 pixel différent sur le sol**, au clair (gare, place, lac, passe, étang, belvédère, église, tribunal), sous la
+  pluie, sous 12 cm de neige avec la patinoire, crans 1 à 5. Restent, au clair, des points isolés en diagonale au bord des OMBRES DU SOLEIL (20 à 25 px,
+  et ±1 sur des voiles translucides de murs) : 0 sans les ombres (palier 1), indiscernables à la loupe ×8 — la rastérisation des ombres en biais, pas le sol.
+- **Pas vu** : l'écran de Guillaume, un iPad (mémoire : 14 Mo de plus de canevas), deux clients, la nuit. **Pas fait** : cuire les blocs pendant le fondu de
+  sortie (comme `prewarmTownSnow`) ; raccourcir la 1re image de la ville. **Supabase : rien.**
+
 ## 2026-10-14 — LE PARK : LE « ? » DES COMMANDES, L'ÉCHANGE À LA CABANE, L'ENTRÉE DU U, ET LES MONTURES REDESSINÉES
 
 Guillaume : « les commandes pour les figures doivent être accessibles, bouton interactif discret mais visible, petit » ; « le skateboard plus beau, le BMX plus

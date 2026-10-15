@@ -5536,6 +5536,7 @@ export const FERME_STR = {
     parkSpinLabel: (deg) => `${deg}`,
     parkFakie: "fakie",
     parkBail: "Aïe !",
+    parkPiro: (n) => `Pirouette, ${n} tour${n > 1 ? "s" : ""}`,
     parkMeters: (m) => `${m} m`,
     parkGateNo: "🛹 On ne sort pas du park en roulant : F pour descendre de sa monture.",
     parkDismountNo: "🛹 Pas ici : on descend de sa monture sur un sol où l'on tient debout, à l'écart des barrières.",
@@ -5574,17 +5575,32 @@ export const FERME_STR = {
     parkHelpTitle: (name) => (name ? `🛹 ${name} : les commandes` : "🛹 Le skatepark : les commandes"),
     parkHelpRows: (t, touch) => {
       const K = touch
-        ? { dir: ["Pavé"], push: ["Pomper"], jump: ["Sauter"], v: [(t && t.v) || "Figure"], g: [(t && t.g) || "Figure"], stop: ["Freiner"], off: ["Descendre"] }
-        : { dir: ["Flèches", "ZQSD"], push: ["Maj"], jump: ["Espace"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"] };
+        ? { dir: ["Pavé"], push: ["Pomper"], jump: ["Sauter"], v: [(t && t.v) || "Figure"], g: [(t && t.g) || "Figure"], stop: ["Freiner"], off: ["Descendre"], ax: "Pavé ↔", ay: "Pavé ↕", any: "Pavé" }
+        : { dir: ["Flèches", "ZQSD"], push: ["Maj"], jump: ["Espace"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"], ax: "←→", ay: "↑↓", any: "Flèche" };
       const r = [
         [K.dir, "Rouler : devant pousser, derrière freiner, côtés tourner."],
         [K.push, "Pousser fort ; au creux d'une courbe, pomper pour monter plus haut."],
-        [K.jump, "Tenir : charger. Lâcher : sauter."],
+        [K.jump, "Tenir : charger — plus on tient, plus on saute haut (une seconde pour le plus haut). Lâcher : sauter."],
       ];
       if (t && t.v) {
         r.push([K.v, touch ? "En l'air." : `En l'air : ${t.v}.`], [K.g, touch ? "En l'air." : `En l'air : ${t.g}.`]);   // au doigt, le bouton porte déjà son nom
+        /* 2026-10-15 — les variantes : la flèche enfoncée EN L'AIR, juste avant la touche (celle qu'on tenait pour pousser ne compte pas) */
+        const S = t.spin || {};
+        if (t.roller) r.push([[K.any, "+" + K.v[0]], "En l'air : un spin, du côté de la flèche — chaque V de plus, un demi-tour de plus (360, 540, 720…)."]);
+        else {
+          const nm = (slot) => (S[slot] ? (slot === "gy" && t.gy ? `un 360 ${t.gy.toLowerCase()}` : "un 360 (lancé au quarter, il redescend : un 540)") : t[slot]);
+          for (const [slot, key, ax] of [["vx", "v", "ax"], ["vy", "v", "ay"], ["gx", "g", "ax"], ["gy", "g", "ay"]]) {
+            const n = nm(slot);
+            if (n) r.push([[K[ax], "+" + K[key][0]], `En l'air : ${n}.`]);
+          }
+        }
+        if (t.more && t.more.length) r.push([[], `Le même appui pendant la figure la prolonge, s'il reste de l'air : ${t.more.map(([a, b]) => `${a} → ${b}`).join(", ")}.`]);
         if (t.vg) r.push([[K.v[0], "›" + K.g[0]], `${t.vg}.`]);
         if (t.gv) r.push([[K.g[0], "›" + K.v[0]], `${t.gv}.`]);
+        if (t.roller) {
+          r.push([K.v, "Au sol, lent : la pirouette — chaque V de plus l'emballe."]);
+          r.push([K.g, "(tenue) En haut d'une courbe, au coping : le handplant, une main sur le tube. Lâcher : redescendre."]);
+        }
       } else r.push([[K.v[0], K.g[0]], "En l'air : les figures de la monture louée."]);
       r.push([K.dir.slice(0, 1), "En l'air : se tourner vers elle (à l'opposé : un 180). Sans rien, on s'aligne seul."]);
       const gl = t && t.grinds && t.grinds.length ? t.grinds.map((x) => `${x.name} ${x.cross ? "en travers" : "dans l'axe"}`).join(", ") : "";
@@ -7570,6 +7586,7 @@ export const FERME_STR = {
     parkSpinLabel: (deg) => `${deg}`,
     parkFakie: "fakie",
     parkBail: "Ouch!",
+    parkPiro: (n) => `${n}-turn pirouette`,
     parkMeters: (m) => `${m} m`,
     parkGateNo: "🛹 No riding out of the park: press F to get off.",
     parkDismountNo: "🛹 Not here: get off on ground you can stand on, clear of the railings.",
@@ -7603,17 +7620,31 @@ export const FERME_STR = {
     parkHelpTitle: (name) => (name ? `🛹 ${name}: controls` : "🛹 The skatepark: controls"),
     parkHelpRows: (t, touch) => {
       const K = touch
-        ? { dir: ["Pad"], push: ["Pump"], jump: ["Jump"], v: [(t && t.v) || "Trick"], g: [(t && t.g) || "Trick"], stop: ["Brake"], off: ["Get off"] }
-        : { dir: ["Arrows", "WASD"], push: ["Shift"], jump: ["Space"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"] };
+        ? { dir: ["Pad"], push: ["Pump"], jump: ["Jump"], v: [(t && t.v) || "Trick"], g: [(t && t.g) || "Trick"], stop: ["Brake"], off: ["Get off"], ax: "Pad ↔", ay: "Pad ↕", any: "Pad" }
+        : { dir: ["Arrows", "WASD"], push: ["Shift"], jump: ["Space"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"], ax: "←→", ay: "↑↓", any: "Arrow" };
       const r = [
         [K.dir, "Ride: ahead to push, back to brake, sideways to turn."],
         [K.push, "Push hard; in the dip of a curve, pump to go higher."],
-        [K.jump, "Hold: charge. Release: jump."],
+        [K.jump, "Hold: charge — the longer you hold, the higher you go (a second for the highest). Release: jump."],
       ];
       if (t && t.v) {
         r.push([K.v, touch ? "In the air." : `In the air: ${t.v}.`], [K.g, touch ? "In the air." : `In the air: ${t.g}.`]);
+        const S = t.spin || {};
+        if (t.roller) r.push([[K.any, "+" + K.v[0]], "In the air: a spin, toward the arrow — each extra V adds half a turn (360, 540, 720…)."]);
+        else {
+          const nm = (slot) => (S[slot] ? (slot === "gy" && t.gy ? `a 360 ${t.gy.toLowerCase()}` : "a 360 (thrown on the quarter, it comes back down: a 540)") : t[slot]);
+          for (const [slot, key, ax] of [["vx", "v", "ax"], ["vy", "v", "ay"], ["gx", "g", "ax"], ["gy", "g", "ay"]]) {
+            const n = nm(slot);
+            if (n) r.push([[K[ax], "+" + K[key][0]], `In the air: ${n}.`]);
+          }
+        }
+        if (t.more && t.more.length) r.push([[], `Press the same key again during the trick to extend it, if there's air left: ${t.more.map(([a, b]) => `${a} → ${b}`).join(", ")}.`]);
         if (t.vg) r.push([[K.v[0], "›" + K.g[0]], `${t.vg}.`]);
         if (t.gv) r.push([[K.g[0], "›" + K.v[0]], `${t.gv}.`]);
+        if (t.roller) {
+          r.push([K.v, "On the ground, slow: the pirouette — each extra V spins it faster."]);
+          r.push([K.g, "(hold) At the top of a curve, on the coping: the handplant, one hand on the pipe. Release: drop back in."]);
+        }
       } else r.push([[K.v[0], K.g[0]], "In the air: your rented ride's tricks."]);
       r.push([K.dir.slice(0, 1), "In the air: turn toward it (the opposite way: a 180). Hands off, you line up on your own."]);
       const gl = t && t.grinds && t.grinds.length ? t.grinds.map((x) => `${x.name} ${x.cross ? "sideways" : "lined up"}`).join(", ") : "";

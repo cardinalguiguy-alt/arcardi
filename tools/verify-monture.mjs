@@ -143,11 +143,22 @@ function quarterRun(kind, hold, ground) {
 
 // ── 6. L'OLLIE, LE CHOC, LA BARRIÈRE
 {
-  const st = MO.rideNew("skate", ...L(15, 9), 0); st.u = 3;
-  let top = 0, t0 = 0;
-  run(st, 0.4, () => ({ jump: true }));
-  run(st, 1.2, () => ({}), (s, t) => { top = Math.max(top, s.z); if (s.landed) return false; });
-  ok(top > 0.38 && top < 0.62, "un ollie chargé monte d'un demi-mètre environ", `${(top * 1.15).toFixed(2)} m`);
+  /* 2026-10-15 — LE SAUT CHARGÉ (« plus on maintient longtemps, plus le saut est haut ») : une tape, l'ollie d'avant (0,3 s : ~60 cm, le
+     geste appris ne rapetisse pas), la charge pleine (~1 m) ; et chaque monture va plus haut en chargeant plus longtemps. */
+  const ollieTop = (kind, hold) => {
+    const st = MO.rideNew(kind, ...L(4, 9), 0); st.u = 2.5;   // la rangée v 9 est plate de u 2,5 à 18,5 : le saut part et retombe à plat
+    let top = 0;
+    run(st, hold, () => ({ jump: true }));
+    const z0 = st.z;
+    run(st, 1.6, () => ({}), (s) => { top = Math.max(top, s.z - z0); if (s.landed) return false; });
+    return top * 1.15;
+  };
+  const tap = ollieTop("skate", 0.05), mid03 = ollieTop("skate", 0.3), full = ollieTop("skate", 1.0);
+  ok(tap > 0.2 && tap < 0.36, "une tape sur le saut : un petit ollie (~25 cm)", `${tap.toFixed(2)} m`);
+  ok(mid03 > 0.5 && mid03 < 0.7, "0,3 s de charge : l'ollie d'avant (~60 cm)", `${mid03.toFixed(2)} m`);
+  ok(full > 0.88 && full < 1.12, "la charge pleine : environ un mètre", `${full.toFixed(2)} m`);
+  const grow = MO.VEH_KINDS.map((k) => [k, ollieTop(k, 0.15), ollieTop(k, 0.5), ollieTop(k, 1.1)]);
+  ok(grow.every(([, a2, b2, c2]) => a2 < b2 - 0.08 && b2 < c2 - 0.05), "chaque monture saute plus haut à mesure qu'on charge", grow.map(([k, a2, b2, c2]) => `${k} ${a2.toFixed(2)}→${b2.toFixed(2)}→${c2.toFixed(2)} m`).join(" · "));
   const F = SP.FUNBOX;
   const slow = MO.rideNew("skate", ...L(9, F.v1 + 1.5), -Math.PI / 2); slow.u = 1.2;
   let bailS = null; run(slow, 2, () => ({}), (s) => { if (s.bailed) bailS = s.bailed; });
@@ -202,5 +213,80 @@ function quarterRun(kind, hold, ground) {
   ok(c.landed && c.landed.trick === "kickflip", "lancé au sommet, il se presse et retombe propre", c.landed ? c.landed.trick : c.bail ? c.bail.why : "—");
   ok(b.landed && !b.bail && !b.landed.trick, "lancé trop tard, il ne part pas — et l'on retombe debout", b.landed ? `debout, figure : ${b.landed.trick || "aucune"}` : b.bail ? b.bail.why : "—");
 }
+// ── 9. LES FIGURES NEUVES (2026-10-15) : la flèche choisit la variante (pas celle du décollage), le même appui prolonge, le corps
+//    tourne (spins, bigspin) et vise la réception, la pirouette des rollers au sol, le handplant au coping. Chacune JOUÉE.
+{
+  const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  /* Un saut à pleine charge sur le plat (vers l'est), puis un script d'appuis en l'air : `ev` = [{ at, key, ix, iy }] (la flèche est
+     tenue dès `at`, la touche appuyée 50 ms plus tard, deux images) ; `push` : la flèche de l'est tenue de bout en bout (on poussait). */
+  const air = (kind, ev, o = {}) => {
+    const st = MO.rideNew(kind, ...L(4, 9), 0); st.u = o.u != null ? o.u : 2.5;   // à plat de bout en bout (voir `ollieTop`)
+    run(st, o.hold != null ? o.hold : 1.0, () => ({ jump: true, ix: o.push ? 1 : 0 }));
+    let landed = null, bail = null, names = [];
+    run(st, 2, (s) => {
+      const c = { ix: o.push ? 1 : 0, iy: 0 };
+      if (s.mode !== "air") return c;
+      for (const e of ev) {
+        if (s.airT >= e.at) { if (e.ix != null || e.iy != null) { c.ix = e.ix || 0; c.iy = e.iy || 0; } }
+        if (s.airT >= e.at + 0.05 && s.airT < e.at + 0.05 + 2 * DT) c[e.key] = true;
+      }
+      return c;
+    }, (s) => { if (s.flipped && !names.includes(s.flipped)) names.push(s.flipped); if (s.landed) { landed = s.landed; return false; } if (s.bailed) { bail = s.bailed; return false; } });
+    return { st, landed, bail, names, th: st.th };
+  };
+  const tag = (r) => (r.bail ? "chute : " + r.bail.why : r.landed ? `${[...(r.landed.tricks || []), r.landed.trick].filter(Boolean).join(" › ") || "—"}, ${Math.round(Math.abs(r.landed.spin || 0) * 180 / Math.PI)}°${r.landed.fakie ? ", fakie" : ""}` : "pas de réception");
+  const k0 = air("skate", [{ at: 0.03, key: "trick" }], { push: true });
+  ok(k0.landed && k0.landed.trick === "kickflip", "la flèche tenue au décollage (on poussait) n'est pas une variante : V reste un kickflip", tag(k0));
+  const h1 = air("skate", [{ at: 0.1, key: "trick", ix: -1 }]);
+  ok(h1.landed && h1.landed.trick === "heelflip" && Math.abs(wrapA(h1.th)) < 0.3, "une flèche fraîche (←) avec V : le heelflip — et la flèche, prise pour variante, ne fait pas tourner", tag(h1) + `, cap ${(h1.th * 180 / Math.PI).toFixed(0)}°`);
+  const h2 = air("skate", [{ at: 0.1, key: "trick", iy: 1 }]);
+  ok(h2.landed && h2.landed.trick === "hardflip", "une flèche ↓ avec V : le hardflip", tag(h2));
+  const d2 = air("skate", [{ at: 0.06, key: "trick" }, { at: 0.2, key: "trick" }]);
+  ok(d2.landed && d2.landed.trick === "doubleFlip", "V, puis V pendant qu'il tourne : le double kickflip, posé", tag(d2));
+  const d3 = air("skate", [{ at: 0.06, key: "trick" }, { at: 0.2, key: "trick" }, { at: 0.36, key: "trick" }]);
+  ok(d3.landed && !d3.bail && /Flip$/.test(d3.landed.trick || ""), "un troisième V : le triple s'il reste de l'air, sinon le double — jamais une chute", tag(d3));
+  const bg = air("skate", [{ at: 0.1, key: "trick2", iy: -1 }]);
+  ok(bg.landed && bg.landed.trick === "bigspin" && bg.landed.fakie, "une flèche ↑ avec G : le bigspin (le corps fait un 180), posé en fakie", tag(bg));
+  const r1 = air("roller", [{ at: 0.1, key: "trick", ix: 1, iy: 0.3 }]);
+  ok(r1.landed && !r1.bail && Math.abs(Math.abs(r1.landed.spin) - 2 * Math.PI) < 0.2, "rollers, une flèche avec V : un spin 360, posé", tag(r1));
+  const r2 = air("roller", [{ at: 0.1, key: "trick", ix: 1, iy: 0.3 }, { at: 0.3, key: "trick" }]);
+  ok(r2.landed && !r2.bail && Math.abs(Math.abs(r2.landed.spin) - 3 * Math.PI) < 0.25, "un V de plus pendant le spin : un demi-tour de plus (540), posé en fakie", tag(r2));
+  const r3 = air("roller", [{ at: 0.08, key: "trick", ix: 1, iy: 0.3 }, { at: 0.22, key: "trick" }, { at: 0.36, key: "trick" }, { at: 0.5, key: "trick" }]);
+  ok(r3.landed && !r3.bail && Math.abs(r3.landed.spin) > 3.4 * Math.PI, "le spin s'emballe autant que l'air le permet (720 et plus), sans chute", tag(r3));
+  const bs = air("bmx", [{ at: 0.08, key: "trick2", ix: 1, iy: -0.3 }]);
+  ok(bs.landed && !bs.bail && Math.abs(Math.abs(bs.landed.spin) - 2 * Math.PI) < 0.25, "BMX, une flèche avec G : le 360 sur le plat, retombé dans son sens", tag(bs));
+  // au quarter : le 360 lancé vise la réception — il redescend la courbe, donc il fait 540
+  const q = MO.rideNew("bmx", ...L(14, SP.QUARTER.toeV + 4), -Math.PI / 2); q.u = 6.8;
+  let qL = null, qB = null;
+  run(q, 3, (s) => (s.mode === "air" && s.airT > 0.05 && s.airT < 0.05 + 2 * DT ? { trick2: true, ix: 1, iy: 0 } : s.mode === "air" && s.airT < 0.3 ? { ix: 1, iy: 0 } : {}),
+    (s) => { if (s.landed && s.landed.air > 0.1) { qL = s.landed; return false; } if (s.bailed) { qB = s.bailed; return false; } });
+  ok(qL && !qB && Math.abs(Math.abs(qL.spin) - 3 * Math.PI) < 0.3, "au quarter, le 360 du BMX vise la réception : un 540, et il redescend la courbe dans son sens", qB ? "chute : " + qB.why : qL ? `${Math.round(Math.abs(qL.spin) * 180 / Math.PI)}°` : "—");
+  // la pirouette des rollers, à l'arrêt : V, puis deux V de plus (elle s'emballe) ; elle finit de face, le cap n'a pas bougé
+  const pr = MO.rideNew("roller", ...L(15, 9), 0.4);
+  let pEnd = null, lvMax = 0;
+  run(pr, 3, (s, t) => ({ trick: (t > 0.1 && t < 0.1 + 2 * DT) || (t > 0.45 && t < 0.45 + 2 * DT) || (t > 0.75 && t < 0.75 + 2 * DT) }),
+    (s) => { if (s.piro) lvMax = Math.max(lvMax, s.piro.lv); if (s.piroEnd) { pEnd = s.piroEnd; return false; } });
+  ok(pEnd && lvMax === 2 && Math.abs(pEnd.turns - Math.round(pEnd.turns)) < 1e-6 && pEnd.turns >= 3, "rollers au sol : V lance la pirouette, chaque V l'emballe, elle finit sur un tour entier", pEnd ? `${pEnd.turns} tours, niveau ${lvMax}` : "pas finie");
+  ok(Math.abs(wrapA(pr.th - 0.4)) < 1e-9 && pr.mode === "ground", "et le cap n'a pas tourné (seul le dessin tourne)", `cap ${pr.th.toFixed(3)}`);
+  ok(MO.piroAngle({ lv: 0, t: 0, a0: 0, dir: 1 }) === 0 && Math.abs(MO.piroAngle({ lv: 0, t: 9, a0: 0, dir: -1 }) + 2 * Math.PI) < 1e-9, "l'angle dessiné (celui que relit l'autre joueur) : 0 au départ, un tour entier à la fin", "");
+  // le handplant au quarter : G tenu en montant, la main sur le coping une seconde, G lâché — on redescend sans tomber
+  const hand = (u0, holdT) => {
+    const st = MO.rideNew("roller", ...L(14, SP.QUARTER.toeV + 4), -Math.PI / 2); st.u = u0;
+    let inHand = 0, maxT = 0, landed = null, bail = null, t0 = null;
+    run(st, 5, (s, t) => {
+      if (s.mode === "hand" && t0 == null) t0 = t;
+      return { trick2: t0 == null ? true : t - t0 < holdT };
+    }, (s) => { if (s.mode === "hand") { inHand++; maxT = Math.max(maxT, s.hand.T); } if (s.landed && t0 != null) { landed = s.landed; return false; } if (s.bailed) { bail = s.bailed; return false; } });
+    return { inHand, maxT, landed, bail, z: st.z };
+  };
+  const hp = hand(6.8, 1.0);
+  ok(hp.inHand > 0 && hp.maxT > 0.9, "rollers, G tenu en montant le quarter : la main sur le coping (handplant), tenue tant que G l'est", hp.inHand ? `${hp.maxT.toFixed(2)} s` : hp.bail ? "chute : " + hp.bail.why : "pas d'accroche");
+  ok(hp.landed && !hp.bail && (hp.landed.tricks || []).includes("handplant"), "G lâché : on redescend dans la courbe et l'on retombe sur ses roues", hp.landed ? tag({ landed: hp.landed }) : hp.bail ? "chute : " + hp.bail.why : "—");
+  const hp2 = hand(6.8, 9);
+  ok(hp2.inHand && hp2.maxT <= 3.01 && hp2.landed && !hp2.bail, "tenu trop longtemps : on redescend tout seul au bout de 3 s", `${hp2.maxT.toFixed(2)} s, ${hp2.bail ? "chute" : "debout"}`);
+  const hs = quarterRun("skate", { trick2: true });
+  ok(!hs.bailed, "le skate, G tenu au quarter : pas de handplant (c'est aux rollers), sa figure ordinaire", hs.landed ? tag({ landed: hs.landed }) : String(hs.bailed && hs.bailed.why));
+}
+
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC` : `\n${nOk}/${nOk} — tout passe`);
 process.exit(fail ? 1 : 0);

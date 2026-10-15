@@ -32,6 +32,7 @@
    tombe sans demi-tour et retombe avec), saut de la funbox, ollie, choc contre un flanc, conservation de l'énergie.
    ========================================================================== */
 import * as SP from "./skatepark";
+import * as PT from "./patin";   // 2026-10-15 : la pirouette des rollers est la vrille de la patinoire (`skateTrickAt`, ses quatre niveaux)
 
 /* ⚠️ 2026-10-11 — 9,8 cases/s² (≈ 11 m/s², à peine plus que la vraie) : à 11 (premier jet), il fallait 6,5 cases/s au pied du
    quarter pour en sortir, plus que n'en donne une bonne poussée — on ne voyait jamais d'air en jeu sans pomper longtemps. */
@@ -53,31 +54,39 @@ const PUMP_NMAX = 1.4;        // × g : ce que les jambes poussent au plus
           skate, le guidon de la trottinette ; lowV : sous cette vitesse, on pivote au lieu de tourner.
    spin : la rotation en l'air (rad/s). landTol : l'écart cap/trajectoire admis à la réception (rad) ; fakie : retomber en arrière
           est-il une réception ? impact : le choc normal admis (cases/s) ; stepUp : la marche qu'on avale en roulant (cases).
-   ollie : la vitesse verticale d'un saut [non chargé, chargé] (cases/s) ; chargeT : le temps pour charger.
+   ollie : la vitesse verticale d'un saut [non chargé, chargé] (cases/s) ; chargeT : le temps pour charger ; grindPop : celle du saut
+          qui quitte une glisse (cases/s).
+   ⚠️⚠️ 2026-10-15 — LE SAUT CHARGÉ (Guillaume : « plus on maintient longtemps, plus le saut est haut »). Il existait, mais plafonnait
+   vite : plein en 0,26 à 0,36 s, de 27 à 60 cm. Plein maintenant en 0,8 à 1 s, jusqu'à ~1 m (le BMX 1,1 m : le bunny hop d'un bon
+   rider). La courbe (`ollieV`) est DOUCE au départ — `1 − (1 − c)²` : 0,3 s de charge donnent encore l'ollie d'avant (~60 cm), le
+   geste appris ne rapetisse pas ; c'est tenir plus longtemps qui va plus haut. `grindPop` garde la sortie de glisse d'avant (85 % de
+   l'ancien ollie plein) : un rail quitté d'un saut n'envoie pas à un mètre.
    pump : le rendement du pompage. */
 export const VEH = {
   skate: {
     push: "kick", kickT: 0.6, kickDv: 1.35, vPush: 6.8, crr: 0.016, drag: 0.007, brake: 3.4,
     rMin: 1.0, pivot: 6.5, lowV: 0.9, spin: 9.5, landTol: 0.55, fakie: true, impact: 6.2, stepUp: 0.04,
-    ollie: [2.15, 3.2], chargeT: 0.32, pump: 0.52, fallLean: 0.55,
+    ollie: [2.15, 4.1], chargeT: 0.9, grindPop: 2.72, pump: 0.52, fallLean: 0.55,
   },
   roller: {
     push: "stride", acc: 3.5, vPush: 6.9, crr: 0.026, drag: 0.007, brake: 2.7,
     rMin: 0.55, pivot: 8, lowV: 0.7, spin: 12.5, landTol: 0.68, fakie: true, impact: 5.7, stepUp: 0.05,
-    ollie: [2.2, 3.1], chargeT: 0.26, pump: 0.57, fallLean: 0.35,
+    ollie: [2.2, 3.95], chargeT: 0.8, grindPop: 2.64, pump: 0.57, fallLean: 0.35,
   },
   scooter: {
     push: "kick", kickT: 0.5, kickDv: 1.5, vPush: 7.0, crr: 0.03, drag: 0.007, brake: 5.6,
     rMin: 0.7, pivot: 5, lowV: 0.8, spin: 10.5, landTol: 0.5, fakie: false, impact: 6.2, stepUp: 0.04,
-    ollie: [2.0, 2.95], chargeT: 0.3, pump: 0.47, fallLean: 0.45,
+    ollie: [2.0, 3.9], chargeT: 0.85, grindPop: 2.5, pump: 0.47, fallLean: 0.45,
   },
   bmx: {
     push: "pedal", acc: 6.4, vPush: 7.6, crr: 0.014, drag: 0.008, brake: 7.2,
     rMin: 1.25, pivot: 3, lowV: 0.7, spin: 7.2, landTol: 0.46, fakie: false, impact: 7.6, stepUp: 0.13,
-    ollie: [2.3, 3.4], chargeT: 0.36, pump: 0.5, fallLean: 0.65,
+    ollie: [2.3, 4.4], chargeT: 1.0, grindPop: 2.89, pump: 0.5, fallLean: 0.65,
   },
 };
 export const VEH_KINDS = ["skate", "roller", "scooter", "bmx"];
+/* La vitesse verticale du saut à la charge `c` (0..1) — voir « LE SAUT CHARGÉ » ci-dessus. */
+export function ollieV(V, c) { const k = Math.max(0, Math.min(1, c)); return V.ollie[0] + (V.ollie[1] - V.ollie[0]) * (1 - (1 - k) * (1 - k)); }
 /* ── LA LOCATION (la cabane du park) : ce qui s'ajoute au prix de base (`RIDE_RENT_PRICE`), et le choix normalisé — la monture et sa
    couleur (l'indice voyage, pas le nom ; `RIDE_COLOR_N` couleurs, celles de `BOARD_COLORS`, montureArt.js). ⚠️ Un sac ancien ou un
    paquet tronqué retombe sur un skate de la première couleur : jamais un objet à moitié valide. */
@@ -101,19 +110,113 @@ const GRINDS_BY = {
   scooter: { grindK: 1.3, styles: ["5050"] },
   bmx: { grindK: 1.0, styles: ["5050"] },
 };
-export const TRICKS = {
-  skate: { v: { name: "kickflip", dur: 0.42, roll: 1, yaw: 0 }, g: { name: "popShove", dur: 0.36, roll: 0, yaw: 0.5 }, vg: { name: "varialFlip", dur: 0.5, roll: 1, yaw: 0.5 }, gv: { name: "treFlip", dur: 0.62, roll: 1, yaw: 1 } },
-  roller: { v: { name: "mistyGrab", dur: 0.5, grab: 1 }, g: { name: "muteGrab", dur: 0.45, grab: 1 } },
-  scooter: { v: { name: "barspin", dur: 0.4, bar: 1 }, g: { name: "tailwhip", dur: 0.5, whip: 1 }, vg: { name: "whipBar", dur: 0.62, bar: 1, whip: 1 } },
-  bmx: { v: { name: "barspin", dur: 0.45, bar: 1 }, g: { name: "tailwhip", dur: 0.6, whip: 1 }, vg: { name: "whipBar", dur: 0.75, bar: 1, whip: 1 } },
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-15 — LES FIGURES, PAR MONTURE (Guillaume : « des figures plus avancées et impressionnantes » ; aux rollers, « les spins comme
+   ║ au patinage » et le handstand sur le bord des rampes — « des options en gros »).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Les COMMANDES ne changent pas de nature : V et G (les deux boutons au doigt). Ce qui s'ajoute :
+     · LA FLÈCHE au moment de l'appui choisit la VARIANTE — ←/→ (`vx`, `gx`) ou ↑/↓ (`vy`, `gy`). ⚠️ Seule une flèche ENFONCÉE EN L'AIR
+       compte (`airMod`) : celle qu'on tenait au décollage pour pousser n'est pas un choix, sinon tout kickflip deviendrait un heelflip ;
+       et une flèche fraîche n'est un ORDRE de rotation qu'après `ORDER_DELAY` (on a le temps d'appuyer sur la figure : elle la prend) ;
+     · LE MÊME APPUI pendant la figure la PROLONGE (`more`) : double kickflip, triple, double tailwhip, 540 shove-it — s'il reste de
+       l'air pour la finir (`trickRate`), sinon l'appui ne fait rien (jamais une chute pour un appui de trop) ;
+     · L'AUTRE TOUCHE juste après (moins d'un dixième de seconde) donne la COMBINÉE de la figure lancée (`thenG`, `thenV`).
+   Une figure fait tourner : le plateau sur son grand axe (`roll`, en tours, négatif : de l'autre sens — le heelflip), sur lui-même (`yaw`),
+   le guidon (`bar`), le cadre (`whip`, négatif : le heelwhip) ; elle tient un grab (`grab`), lâche le guidon (`nohand`), le croise (`xup`).
+   ⚠️ `body` : le CORPS tourne avec la monture, en tours — c'est le CAP lui-même qui tourne (la physique, le réseau, la réception le
+   voient), pas un dessin. `spin` : une rotation sans autre nom que ses degrés (« 540 », compté dans `st.spin`), qui VISE LA RÉCEPTION —
+   la trottinette et le BMX, qui ne retombent pas en arrière, finissent dans le sens de la trajectoire (un 360 lancé au quarter devient
+   un 540 : le demi-tour du retour en plus, `spinTotal`) ; le skate et les rollers par le bout le plus proche.
+   Le réseau ne voit que le NOM et l'âge (`trickByName` relit la même table, §3). */
+const TRICK_SETS = {
+  skate: {
+    slots: { v: "kickflip", vx: "heelflip", vy: "hardflip", g: "popShove", gx: "shove360", gy: "bigspin", vg: "varialFlip", gv: "treFlip" },
+    defs: {
+      kickflip: { dur: 0.42, roll: 1, more: "doubleFlip", thenG: "varialFlip" },
+      doubleFlip: { dur: 0.64, roll: 2, more: "tripleFlip" },
+      tripleFlip: { dur: 0.86, roll: 3 },
+      heelflip: { dur: 0.42, roll: -1, more: "doubleHeel", thenG: "varialHeel" },
+      doubleHeel: { dur: 0.64, roll: -2 },
+      hardflip: { dur: 0.5, roll: 1, yaw: -0.5 },
+      popShove: { dur: 0.36, yaw: 0.5, more: "shove360", thenV: "treFlip" },
+      shove360: { dur: 0.5, yaw: 1, more: "shove540", thenV: "treFlip" },
+      shove540: { dur: 0.66, yaw: 1.5 },
+      // le bigspin : un 360 shove-it sous les pieds, et le corps fait un 180 dans le même sens — on retombe en fakie
+      bigspin: { dur: 0.62, yaw: 1, body: 0.5 },
+      varialFlip: { dur: 0.5, roll: 1, yaw: 0.5 },
+      varialHeel: { dur: 0.5, roll: -1, yaw: -0.5 },
+      treFlip: { dur: 0.62, roll: 1, yaw: 1 },
+    },
+  },
+  roller: {
+    // les spins : la flèche dit de quel côté on tourne (`spinDir`), chaque V de plus ajoute un demi-tour (360 → 540 → 720 → 900)
+    slots: { v: "mistyGrab", vx: "spin", vy: "spin", g: "muteGrab" },
+    defs: {
+      mistyGrab: { dur: 0.5, grab: 1 },
+      muteGrab: { dur: 0.45, grab: 1 },
+      spin: { dur: 0.5, body: 1, spin: true, more: "spin" },   // 2 tours/s : les rollers tournent vite, comme sur la glace
+    },
+  },
+  scooter: {
+    slots: { v: "barspin", vx: "heelwhip", vy: "xUp", g: "tailwhip", gx: "spin", gy: "whip360", vg: "whipBar" },
+    defs: {
+      barspin: { dur: 0.4, bar: 1, more: "doubleBar" },
+      doubleBar: { dur: 0.66, bar: 2 },
+      heelwhip: { dur: 0.55, whip: -1 },
+      xUp: { dur: 0.56, xup: 1 },
+      tailwhip: { dur: 0.5, whip: 1, more: "doubleWhip" },
+      doubleWhip: { dur: 0.82, whip: 2 },
+      spin: { dur: 0.58, body: 1, spin: true, more: "spin" },
+      whip360: { dur: 0.7, body: 1, whip: 1, spin: true },
+      whipBar: { dur: 0.62, bar: 1, whip: 1 },
+    },
+  },
+  bmx: {
+    slots: { v: "barspin", vx: "noHander", vy: "xUp", g: "tailwhip", gx: "spin", gy: "whip360", vg: "whipBar" },
+    defs: {
+      barspin: { dur: 0.45, bar: 1, more: "doubleBar" },
+      doubleBar: { dur: 0.72, bar: 2 },
+      noHander: { dur: 0.62, nohand: 1 },
+      xUp: { dur: 0.6, xup: 1 },
+      tailwhip: { dur: 0.6, whip: 1, more: "doubleWhip" },
+      doubleWhip: { dur: 0.95, whip: 2 },
+      /* ⚠️ un 360 en 0,62 s (10 rad/s) : à 0,85 (premier jet), le 540 qu'un 360 devient au quarter demandait 1,27 s pour un air de 0,7 —
+         il ne partait jamais (vu au banc, `verify-monture` §9) */
+      spin: { dur: 0.62, body: 1, spin: true, more: "spin" },
+      whip360: { dur: 0.75, body: 1, whip: 1, spin: true },
+      whipBar: { dur: 0.75, bar: 1, whip: 1 },
+    },
+  },
 };
+for (const k of Object.keys(TRICK_SETS)) for (const n of Object.keys(TRICK_SETS[k].defs)) TRICK_SETS[k].defs[n].name = n;
+/* Les figures d'une monture par CASE (v, g, vx, vy, gx, gy, vg, gv) — ce que lisent l'aide « ? » et les boutons du doigt. */
+export const TRICKS = Object.fromEntries(Object.entries(TRICK_SETS).map(([k, S]) => [k, Object.fromEntries(Object.entries(S.slots).map(([slot, n]) => [slot, S.defs[n]]))]));
+/* Pour l'aide « ? » : les cases qui sont des SPINS (des degrés, pas un nom), et les figures qui se PROLONGENT (le même appui) — `[nom,
+   nom prolongé]`, en noms de `TRICK_LABEL`. */
+export function TRICK_SPIN_SLOTS(kind) {
+  const S = TRICK_SETS[kind], out = {};
+  if (S) for (const [slot, n] of Object.entries(S.slots)) if (S.defs[n].spin) out[slot] = true;
+  return out;
+}
+export function trickMoreLabels(kind) {
+  const S = TRICK_SETS[kind];
+  if (!S) return [];
+  const seen = new Set(Object.values(S.slots)), out = [];
+  for (const n of seen) { const d = S.defs[n]; if (d.more && d.more !== n && TRICK_LABEL[n] && TRICK_LABEL[d.more]) out.push([TRICK_LABEL[n], TRICK_LABEL[d.more]]); }
+  return out;
+}
 /* ⚠️ 2026-10-13 (soir) — `LOOSE` : l'accroche d'une ligne prise entre l'axe et le travers. Premier jet : entre 42° (`ALIGN`) et 60°
    (`CROSS`), aucun style ne prenait — on retombait SUR le rail, et c'était la chute. Le skate et les rollers (deux styles) prennent le
    plus proche ; la trottinette et le BMX (le 50-50 seul) s'accrochent jusqu'à 53°. */
 const GRIND = { SNAP: 0.17, ALIGN: 0.74, CROSS: 0.5, LOOSE: 0.6, MIN_V: 0.9, END_POP: 0.6 };
 /* Le NOM des figures et des glisses, tel qu'on le crie dans tous les skateparks du monde (en anglais, dans les deux langues du
    jeu : un nom propre, pas une traduction — `verify-strings` refuse à raison une section identique dans les deux tables). */
-export const TRICK_LABEL = { kickflip: "Kickflip", popShove: "Pop shove-it", varialFlip: "Varial flip", treFlip: "360 flip", mistyGrab: "Misty grab", muteGrab: "Mute grab", barspin: "Barspin", tailwhip: "Tailwhip", whipBar: "Tailwhip barspin", g5050: "50-50", gboard: "Boardslide", gsoul: "Soul grind", gpegs: "Pegs" };
+export const TRICK_LABEL = { kickflip: "Kickflip", popShove: "Pop shove-it", varialFlip: "Varial flip", treFlip: "360 flip", mistyGrab: "Misty grab", muteGrab: "Mute grab", barspin: "Barspin", tailwhip: "Tailwhip", whipBar: "Tailwhip barspin", g5050: "50-50", gboard: "Boardslide", gsoul: "Soul grind", gpegs: "Pegs",
+  // 2026-10-15 — les figures neuves ; un spin n'a pas de nom (ses degrés en tiennent lieu), le 360 tailwhip se lit « 360 » + « Tailwhip »
+  heelflip: "Heelflip", doubleFlip: "Double kickflip", tripleFlip: "Triple kickflip", doubleHeel: "Double heelflip", hardflip: "Hardflip",
+  shove360: "360 shove-it", shove540: "540 shove-it", bigspin: "Bigspin", varialHeel: "Varial heelflip",
+  doubleBar: "Double barspin", heelwhip: "Heelwhip", xUp: "X-up", doubleWhip: "Double tailwhip", noHander: "No-hander", whip360: "Tailwhip",
+  handplant: "Handplant", piro: "Pirouette" };
 /* 2026-10-14 — LE NOM D'UNE GLISSE, selon la monture (le 50-50 d'un BMX se fait sur les PEGS) : UNE fonction pour le nom qui monte
    au-dessus de la tête (FermeGame.js) et pour la fiche « ? » du park — deux recopies de la règle des pegs finiraient par diverger. */
 export function grindLabel(kind, style) { return TRICK_LABEL[kind === "bmx" && style === "5050" ? "gpegs" : "g" + style]; }
@@ -149,6 +252,21 @@ const IMPACT_CATCH = 1.3;  // × `impact` : le choc qu'on absorbe encore, genoux
 const TRICK_FAST = 1.8;    // une figure se presse au plus de ce facteur (un kickflip en 0,23 s : un vrai kickflip dure ~0,3 s)
 const TRICK_DONE = 0.8;    // la part d'une figure qui suffit à la réception (le reste se rattrape)
 const TRICK_BUFFER = 0.22; // s : un appui de figure trop tôt (au décollage, au sol pendant la charge) est gardé, pas perdu
+/* 2026-10-15 — LES VARIANTES ET LES PROLONGATIONS (voir « LES FIGURES, PAR MONTURE ») : l'autre touche avant `COMBO_T` fait la
+   combinée ; la même touche après `MORE_GAP` (pas son rebond) prolonge ; une flèche fraîche en l'air n'est un ordre de rotation
+   qu'après `ORDER_DELAY` — d'ici là, un appui de figure la prend pour variante. */
+const COMBO_T = 0.1, MORE_GAP = 0.06, ORDER_DELAY = 0.12;
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-15 — LE HANDPLANT DES ROLLERS (Guillaume : « rendre possible les handstand sur les bords des rampes »).
+   ╚════════════════════════════════════════════════════════════════════════════
+   G TENU en arrivant au coping (la fin d'une montée, le haut d'un air de courbe) : une main sur le tube, le corps renversé, les
+   jambes en l'air — tant que G l'est, `HAND.MAX` s au plus. G lâché : on redescend dans la courbe, à reculons, en posant les roues
+   (`stepOff` : jamais une chute en sortant d'un handplant). On s'y pose si le coping est à moins de `R` à l'horizontale, entre `ZLO`
+   et `ZHI` de hauteur, et qu'on ne monte plus vite que `VZ` (un air qui file au-dessus passe). Seulement après un décollage de
+   COURBE (`vertAir`) : un ollie sur le plat de la mini-rampe ne s'accroche pas au coping d'à côté. */
+const HAND = { R: 0.5, ZLO: -0.18, ZHI: 0.7, VZ: 1.3, MAX: 3, OUT_V: 0.9 };
+/* La pirouette (au sol, rollers) : sous `PIRO_V` de vitesse, sur le plat. */
+const PIRO_V = 4.2, PIRO_FLAT = 0.2;
 const LIP_ASSIST = 0.14;   // cases : un flanc dont le dessus est à moins de ça au-dessus de la planche, en l'air, on s'y pose
 const RAIL_LIFT = 0.12;    // cases : un rail frôlé à moins de ça sous son dessus, en l'air, on passe
 /* La demi-longueur du véhicule le long du cap (cases), contre les tubes : la planche (80 cm), la trottinette roue à roue, le BMX
@@ -180,6 +298,7 @@ export function rideNew(kind, x, y, th) {
     kickT: 0, kick: 0, stride: 0, charge: 0, wasJump: false, spin: 0, spinT: 0, airT: 0,
     lean: 0, pumpK: 0, brake: 0, landed: null, bailed: null, bump: 0, fakie: false, lastAir: 0,
     trick: null, tricksDone: null, wasTrk: false, wasTrk2: false, noGrindT: 0, g: null, grinded: null, grindDone: null, flipped: null, dist: 0,
+    piro: null, piroEnd: null, hand: null, handDone: null, noHandT: 0, vertAir: false, arrowW: null, arrowAge: 0,
   };
 }
 
@@ -190,7 +309,7 @@ export function rideNew(kind, x, y, th) {
    Mute `st` et le rend. `st.landed` (un pas) : la réception qui vient d'avoir lieu, `{ air, spin, fakie, hard }` ; `st.bailed`
    (un pas) : la chute, `{ why }`. */
 export function rideStep(st, inp, dt) {
-  st.landed = null; st.bailed = null; st.grinded = null; st.grindDone = null; st.flipped = null; st.gateHit = false;
+  st.landed = null; st.bailed = null; st.grinded = null; st.grindDone = null; st.flipped = null; st.gateHit = false; st.piroEnd = null; st.handDone = null;
   if (st.landT > 0) st.landT = Math.max(0, st.landT - dt);
   st.acc += Math.min(0.1, Math.max(0, dt));
   while (st.acc >= STEP) { st.acc -= STEP; step1(st, inp || {}, STEP); }
@@ -218,14 +337,20 @@ function step1(st, inp, dt) {
   /* 2026-10-13 (soir) — LE TAMPON : un appui de figure qui arrive trop tôt (pendant la charge du saut, au décollage, encore collé au
      sol) est GARDÉ `TRICK_BUFFER` s et rejoué dès qu'il peut partir. Premier jet : il était perdu — Espace puis V tout de suite,
      le geste le plus naturel au clavier comme au doigt, ne faisait rien. */
-  if (trkV || trkG) st.trickQ = { v: trkV, g: trkG, t: TRICK_BUFFER };
+  /* 2026-10-15 — l'appui garde SA flèche (`mod`, `w`) : rejoué plus tard, il ne lit pas celle d'un autre instant. Au sol, aucune
+     variante : la flèche y est la direction, jamais un choix de figure. */
+  if (trkV || trkG) st.trickQ = { v: trkV, g: trkG, t: TRICK_BUFFER, mod: st.mode === "air" ? airMod(st, inp) : "", w: inp.ix || inp.iy ? Math.atan2(inp.iy, inp.ix) : null };
   else if (st.trickQ && !(st.mode === "ground" && inp.jump) && (st.trickQ.t -= dt) <= 0) st.trickQ = null;
   if (st.noGrindT > 0) st.noGrindT -= dt;
+  if (st.noHandT > 0) st.noHandT -= dt;
   if (st.mode === "grind") { st.trickQ = null; grindStep(st, V, inp, dt, release); if (!inp.jump) st.charge = 0; return; }
+  if (st.mode === "hand") { st.trickQ = null; handStep(st, V, inp, dt); if (!inp.jump) st.charge = 0; return; }
   if (st.mode === "air") {
-    if (st.trickQ && trickInput(st, st.trickQ.v, st.trickQ.g)) st.trickQ = null;
+    if (st.trickQ && trickInput(st, st.trickQ.v, st.trickQ.g, st.trickQ.mod, st.trickQ.w)) st.trickQ = null;
     trickStep(st, dt); airStep(st, V, inp, dt); if (!inp.jump) st.charge = 0; return;
   }
+  // la pirouette des rollers : V au sol, sans charger le saut
+  if (st.kind === "roller" && trkV && !inp.jump && piroInput(st, inp)) st.trickQ = null;
   if (st.trickQ && !inp.jump && !release) st.trickQ = null;   // au sol, seul l'appui PENDANT la charge attend le saut
   groundStep(st, V, inp, dt, release);
   if (!inp.jump) st.charge = 0;
@@ -234,6 +359,16 @@ function step1(st, inp, dt) {
 /* ── AU SOL ── */
 function groundStep(st, V, inp, dt, release) {
   const s = surf(st.x, st.y, S0);
+  if (st.piro) {
+    const P = st.piro;
+    P.t += dt;
+    if (P.t >= P.dur || Math.hypot(s.gu, s.gv) > PIRO_FLAT * 2) { st.piroEnd = { turns: P.a0 + PT.skateTrickAt("spin", 1, P.lv, P.a0).spin, lv: P.lv }; st.piro = null; }
+    else {
+      st.u *= Math.exp(-PT.TRICK.SPIN_DRAG * dt);
+      inp = { ...inp, ix: 0, iy: 0, push: false, stop: false };   // en pirouette, ni virage ni poussée : on tourne sur ses roues
+      release = false;
+    }
+  }
   const c = Math.cos(st.th), sn = Math.sin(st.th);
   const p = s.gu * c + s.gv * sn;                 // la pente le long du cap
   const q = -s.gu * sn + s.gv * c;                // la pente en travers (vers la gauche du cap)
@@ -326,7 +461,7 @@ function groundStep(st, V, inp, dt, release) {
   const zBal = st.z + vz * dt - 0.5 * G * dt * dt;
   if (release) {
     // ── LE SAUT (ollie, bunny hop) : la vitesse le long de la surface, plus une impulsion selon sa normale
-    const J = V.ollie[0] + (V.ollie[1] - V.ollie[0]) * Math.min(1, st.charge);
+    const J = ollieV(V, st.charge);
     const n = normalOf(s);
     takeoff(st, st.u * c * k2 + J * n[0], st.u * sn * k2 + J * n[1], vz + J * n[2], s, false, inp);
     return;
@@ -409,8 +544,22 @@ function predictLanding(st) {
 function airWant(st, V, inp) {
   if (inp.ix || inp.iy) {
     const w = Math.atan2(inp.iy, inp.ix);
-    if (st.airIn0 == null || Math.abs(wrap(w - st.airIn0)) > 0.8) { st.airIn0 = null; st.airOrder = true; return { th: wrap(w - st.airRef), order: true }; }
-  } else st.airIn0 = null;   // les flèches lâchées : la prochaine sera un ordre, même la même
+    if (st.airIn0 == null || Math.abs(wrap(w - st.airIn0)) > 0.8) {
+      /* 2026-10-15 — LA PREMIÈRE FLÈCHE FRAÎCHE DE L'AIR attend `ORDER_DELAY` avant d'être un ordre : une figure lancée d'ici là la prend
+         pour variante (`airMod`, puis `airIn0` : elle n'est plus un ordre). Une fois la rotation partie, la suivante est un ordre tout de
+         suite (on fait le tour des flèches pour un 360). */
+      if (!st.airOrder) {
+        if (st.arrowW == null) { st.arrowW = w; st.arrowAge = 0; }
+        if (st.arrowAge < ORDER_DELAY) return null;   // le temps de l'appui : ni ordre ni alignement (sinon le demi-tour voulu ne compterait qu'en partie)
+      }
+      st.airIn0 = null; st.airOrder = true; st.arrowW = null; return { th: wrap(w - st.airRef), order: true };
+    }
+    st.arrowW = null;
+  } else { st.airIn0 = null; st.arrowW = null; }   // les flèches lâchées : la prochaine sera un ordre, même la même
+  return airAlign(st, V);
+}
+/* Sans ordre, le cap qui retombe dans la trajectoire prévue (voir `airWant`). */
+function airAlign(st, V) {
   const p = st.airPred;
   if (!p || Math.hypot(p.tx, p.ty) < 0.3) return null;
   const d = Math.atan2(p.ty, p.tx);
@@ -428,6 +577,8 @@ function takeoff(st, vx, vy, vz, s, natural, inp) {
   }
   st.mode = "air"; st.vx = vx; st.vy = vy; st.vz = vz; st.spin = 0; st.airT = 0; st.lastAir = 0; st.airHitN = 0;
   st.popped = !natural;   // un saut voulu (le tail claque) ou un décollage du relief
+  st.vertAir = natural && slope > VERT_SLOPE && vz > 0;   // 2026-10-15 : un air de COURBE (le handplant ne se prend qu'au coping)
+  st.piro = null;
   st.thAir0 = st.th;
   airBegin(st, inp, st.u < -0.2);
 }
@@ -436,7 +587,7 @@ function takeoff(st, vx, vy, vz, s, natural, inp) {
 function airBegin(st, inp, backward) {
   st.airIn0 = inp && (inp.ix || inp.iy) ? Math.atan2(inp.iy, inp.ix) : null;
   st.airRef = backward ? Math.PI : 0;
-  st.airOrder = false; st.airDir = 0; st.stepOff = false; st.om = 0; st.railLifted = false;
+  st.airOrder = false; st.airDir = 0; st.stepOff = false; st.om = 0; st.railLifted = false; st.arrowW = null; st.arrowAge = 0;
   st.airPred = predictLanding(st); st.predT = 1 / 30;
 }
 
@@ -450,8 +601,19 @@ function airStep(st, V, inp, dt) {
      air raccourci par un heurt : le cap dessiné, `thV`, en lisse le coup de reins). `spin` ne compte que les rotations VOULUES (le nom « 180 »
      au-dessus de la tête n'est pas pour un demi-tour qu'on n'a pas fait). */
   if ((st.predT -= dt) <= 0) { st.airPred = predictLanding(st); st.predT = 1 / 30; }
+  if (st.arrowW != null) st.arrowAge += dt;
   let om = 0;
-  const want = airWant(st, V, inp);
+  /* 2026-10-15 — UNE FIGURE QUI FAIT TOURNER LE CORPS (`body` : le bigspin, les spins) MÈNE LE CAP tant qu'elle dure : il suit sa courbe
+     (`trickEase`) depuis le cap du départ (`th0`), et l'alignement sur la réception attend — le spin l'a déjà visée (`spinTotal`). */
+  const tkB = st.trick && st.trick.total != null && !st.trick.bodyDone ? st.trick : null;
+  const want = tkB ? null : airWant(st, V, inp);
+  if (tkB) {
+    const u = Math.min(1, tkB.t / tkB.dur), th1 = wrap(tkB.th0 + tkB.dir * tkB.total * trickEase(u)), d = wrap(th1 - st.th);
+    const th2 = turnTo(st, th1);
+    if (th2 !== st.th) { om = d / dt; if (tkB.spin) st.spin += d; }
+    if (u >= 1) tkB.bodyDone = true;
+    st.th = th2; st.om = om;
+  }
   if (want) {
     let err = wrap(want.th - st.th);
     // au demi-tour près, le sens ne se rejoue pas à chaque pas (±π se retourne au moindre bruit) : on garde celui pris
@@ -463,15 +625,19 @@ function airStep(st, V, inp, dt) {
       st.airDir = Math.sign(err);
     }
   }
-  const th1 = turnTo(st, wrap(st.th + om * dt));
-  if (th1 === st.th) om = 0;
-  st.th = th1; st.om = om;   // `om` : ce que le réseau envoie pour qu'on la voie tourner
-  if (want && want.order) st.spin += om * dt;
+  if (!tkB) {
+    const th1 = turnTo(st, wrap(st.th + om * dt));
+    if (th1 === st.th) om = 0;
+    st.th = th1; st.om = om;   // `om` : ce que le réseau envoie pour qu'on la voie tourner
+    if (want && want.order) st.spin += om * dt;
+  }
   const ox = st.x, oy = st.y, oz = st.z;
   let nx = st.x + st.vx * dt, ny = st.y + st.vy * dt;
   let nz = st.z + st.vz * dt;
   // une figure FINIE n'empêche pas l'accroche (un kickflip qui retombe sur le rail : premier jet, le rail était heurté — la chute)
   if (!(st.noGrindT > 0) && !(st.trick && (st.trick.grab || st.trick.t < st.trick.dur))) { const gc = grindCatch(st, oz, nx, ny, nz); if (gc) { enterGrind(st, gc); return; } }
+  // 2026-10-15 — le handplant : G tenu au coping, après un air de courbe (voir HAND)
+  if (st.kind === "roller" && inp.trick2 && st.vertAir && !(st.noHandT > 0) && st.vz < HAND.VZ) { const hc = handCatch(st, nx, ny, nz); if (hc) { enterHand(st, hc); return; } }
   /* Le corps contre un FLANC à côté de soi (est, ouest, nord), au-dessus du plat : on le longe — la vitesse qui y entre est ôtée,
      comme au sol. Au-dessus d'une courbe, rien (ses côtés montent, ce ne sont pas des flancs). */
   {
@@ -565,6 +731,16 @@ function airBlocked(st, nz, zl, skip) {
 
 /* ── LA RÉCEPTION : l'angle et le choc ── */
 function land(st, V) {
+  /* 2026-10-15 — UNE ROTATION DU CORPS FINIE AUX 4/5 SE FINIT AU CONTACT, comme le plateau : le cap prend sa valeur d'arrivée (s'il y tient
+     sans toucher un tube) AVANT que l'angle de réception ne soit jugé — sinon un 540 rattrapé retomberait de 80° de travers, la chute. */
+  {
+    const tb = st.trick;
+    if (tb && tb.total != null && !tb.bodyDone && tb.t >= tb.dur * TRICK_DONE) {
+      const thE = wrap(tb.th0 + tb.dir * tb.total);
+      if (clearAt(st, st.x, st.y, st.z, thE, rideHalf(st), true) >= 0) { if (tb.spin) st.spin += wrap(thE - st.th); st.th = thE; }
+      tb.bodyDone = true;
+    }
+  }
   const s = surf(st.x, st.y, S0);
   const n = normalOf(s);
   const vn = st.vx * n[0] + st.vy * n[1] + st.vz * n[2];      // négatif : on arrive dans la surface
@@ -875,7 +1051,7 @@ function grindExit(st, V, how, inp) {
   const lx = -uy, ly = ux;
   const hL = SP.heightAt(st.x + lx * 0.45, st.y + ly * 0.45), hR = SP.heightAt(st.x - lx * 0.45, st.y - ly * 0.45);
   const side = hL < hR ? 1 : -1;
-  if (how === "pop") { vz = V.ollie[1] * 0.85; vx += lx * side * 0.5; vy += ly * side * 0.5; }
+  if (how === "pop") { vz = V.grindPop; vx += lx * side * 0.5; vy += ly * side * 0.5; }
   if (how === "stall") { vx = lx * side * 0.9; vy = ly * side * 0.9; vz = 0.4; }
   st.mode = "air"; st.vx = vx; st.vy = vy; st.vz = vz; st.spin = 0; st.airT = 0; st.lastAir = 0; st.popped = how === "pop";
   st.z += 0.03;
@@ -887,31 +1063,106 @@ function grindExit(st, V, how, inp) {
   st.g = null;
 }
 
-/* ── LES FIGURES EN L'AIR ── `st.trick` = { name, t, dur, roll, yaw, bar, whip, grab } ; le dessin lit les angles, la réception
-   juge si elle est finie. Deux appuis rapprochés (V puis G, ou G puis V, moins d'un dixième de seconde) donnent la figure combinée. */
-/* Rend `true` si l'appui est CONSOMMÉ (la figure part, la combinée se forme, ou il n'y a plus le temps : elle ne partira jamais),
-   `false` s'il peut attendre (trop tôt, trop près du sol : le tampon le rejoue). */
-function trickInput(st, v, gk) {
-  if (!v && !gk) return true;
-  const T = TRICKS[st.kind]; if (!T) return true;
-  const tk = st.trick;
-  if (tk && tk.t < 0.1 * (tk.rate || 1)) {   // le second appui juste après le premier : la combinée
-    const combo = tk.key === "v" && gk ? T.vg : tk.key === "g" && v ? T.gv || T.vg : null;
-    if (combo) {
-      const rate = trickRate(st, combo, tk.t);
-      if (rate) { st.trick = { ...combo, key: "c", t: tk.t, rate }; return true; }
-    }
+/* ── LES FIGURES EN L'AIR ── `st.trick` = { name, t, dur, roll, yaw, bar, whip, grab, nohand, xup, (body : th0, dir, total) } ; le dessin
+   lit les angles, la réception juge si elle est finie. Voir « LES FIGURES, PAR MONTURE » pour les variantes, les prolongations et les
+   combinées. */
+/* La variante qu'une flèche choisit À L'APPUI (« x » : ←/→, « y » : ↑/↓, "" : aucune). Seule une flèche FRAÎCHE compte — pas celle du
+   décollage (`airIn0`, on poussait avec), ni celle d'une rotation déjà partie (`airOrder` : on tourne, on ne choisit pas). */
+function airMod(st, inp) {
+  if (!inp || (!inp.ix && !inp.iy) || st.airOrder) return "";
+  const w = Math.atan2(inp.iy, inp.ix);
+  if (st.airIn0 != null && Math.abs(wrap(w - st.airIn0)) <= 0.8) return "";
+  return Math.abs(inp.ix) > Math.abs(inp.iy) ? "x" : "y";
+}
+/* L'adoucissement d'une figure (le même que `trickAngles`) et son inverse (bissection : il est monotone sur [0, 1]). */
+const trickEase = (u) => { const k = Math.max(0, Math.min(1, u)); return k * k * (3 - 2 * k); };
+function easeInv(y) {
+  let a = 0, b = 1;
+  for (let k = 0; k < 24; k++) { const m = (a + b) / 2; if (trickEase(m) < y) a = m; else b = m; }
+  return (a + b) / 2;
+}
+/* La plus grande des rotations d'une figure (en tours) : c'est elle qui garde son angle quand on la prolonge. */
+const trickMag = (d) => Math.max(Math.abs(d.roll || 0), Math.abs(d.yaw || 0), Math.abs(d.bar || 0), Math.abs(d.whip || 0));
+/* Une figure qui fait tourner le CORPS : dans quel sens, de combien, en combien de temps. Un spin tourne VERS la flèche de l'appui (le
+   côté où elle tombe par rapport au cap ; sans flèche, ou pile devant ou derrière, dans le sens horaire) ; le bigspin, dans le sens
+   de son plateau. */
+function bodyPlan(st, def, w) {
+  let dir = Math.sign(def.yaw || 1);
+  if (def.spin) {
+    dir = 1;
+    if (w != null) { const e = wrap(w - st.th); if (Math.abs(e) > 0.15 && Math.abs(e) < Math.PI - 0.15) dir = Math.sign(e); }
   }
-  if (tk && tk.t < tk.dur) return true;                // une figure à la fois
+  const want = def.body * 2 * Math.PI, total = def.spin ? spinTotal(st, dir, want) : want;
+  return { dir, total, dur: def.dur * total / want, th0: st.th };
+}
+/* LE SPIN VISE LA RÉCEPTION : la rotation demandée, au tour près, qui FINIT dans le sens de la trajectoire prévue (`airPred`) — par
+   l'avant seul pour qui ne roule pas en arrière (le 360 lancé au quarter fait 540 : il redescend), par le bout le plus proche sinon.
+   Jamais moins d'un demi-tour. */
+function spinTotal(st, dir, want) {
+  const V = VEH[st.kind], p = st.airPred, fakieOK = V.fakie || st.airRef === Math.PI;
+  if (!p || Math.hypot(p.tx, p.ty) < 0.3) return want;
+  const d = Math.atan2(p.ty, p.tx), ends = fakieOK ? [d, d + Math.PI] : [d];
+  let best = want, be = Infinity;
+  for (const H of ends) {
+    const r = ((dir * wrap(H - st.th)) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const tot = r + 2 * Math.PI * Math.max(0, Math.round((want - r) / (2 * Math.PI)));
+    if (Math.abs(tot - want) < be - 1e-9) { be = Math.abs(tot - want); best = tot; }
+  }
+  return Math.max(best, Math.PI);
+}
+/* Rend `true` si l'appui est CONSOMMÉ (la figure part, se prolonge, la combinée se forme, ou il n'y a plus le temps : elle ne partira
+   jamais), `false` s'il peut attendre (trop tôt, trop près du sol : le tampon le rejoue). `mod` : la variante de la flèche, `w` : son
+   angle (le sens d'un spin). */
+function trickInput(st, v, gk, mod, w) {
+  if (!v && !gk) return true;
+  const S = TRICK_SETS[st.kind]; if (!S) return true;
+  const key = v ? "v" : "g", tk = st.trick;
+  if (tk && tk.t < tk.dur) {
+    const def0 = S.defs[tk.name];
+    if (tk.key !== key && tk.key !== "c" && tk.t < COMBO_T * (tk.rate || 1)) {   // l'autre touche juste après : la combinée
+      const cn = (def0 && (key === "g" ? def0.thenG : def0.thenV)) || (tk.key === "v" ? S.slots.vg : S.slots.gv || S.slots.vg);
+      const combo = cn && S.defs[cn];
+      if (combo && combo.body == null && tk.total == null) {
+        const rate = trickRate(st, combo, tk.t);
+        if (rate) { st.trick = { ...combo, key: "c", t: tk.t, rate }; return true; }
+      }
+      return true;
+    }
+    if (tk.key === key && tk.t >= MORE_GAP && def0 && def0.more) { trickMore(st, S.defs[def0.more]); return true; }   // le même : plus
+    return true;   // une figure à la fois
+  }
   if (st.airT < 0.06 || st.z - SP.heightAt(st.x, st.y) < 0.12) return false;   // pas encore décollé du sol : on attend
-  const def = v ? T.v : T.g;
+  const slotName = mod && S.slots[key + mod] ? S.slots[key + mod] : S.slots[key];
+  const def = slotName && S.defs[slotName];
   if (!def) return true;
-  const rate = trickRate(st, def, 0);
+  const plan = def.body != null ? bodyPlan(st, def, w) : null;
+  const probe = plan ? { ...def, dur: plan.dur } : def;
+  const rate = trickRate(st, probe, 0);
   if (!rate) return true;   // plus le temps : la figure ne part pas — jamais une chute pour un appui tardif
   if (tk) (st.tricksDone || (st.tricksDone = [])).push(tk.name);
-  st.trick = { ...def, key: v ? "v" : "g", t: 0, rate };
+  st.trick = { ...def, key, t: 0, rate, ...(plan || {}) };
+  if (mod && slotName !== S.slots[key] && w != null) { st.airIn0 = w; st.arrowW = null; }   // la flèche a servi de variante : plus un ordre
   st.flipped = def.name;   // un pas : le son du plateau qui tourne
   return true;
+}
+/* LA FIGURE PROLONGÉE (le même appui pendant qu'elle tourne) : elle repart de l'angle où elle est — jamais un saut — vers la suivante
+   (`more` : double, triple…) ; un spin gagne un demi-tour (un tour pour qui ne retombe pas en arrière). S'il ne reste pas l'air de la
+   finir, rien ne change. */
+function trickMore(st, def1) {
+  const tk = st.trick;
+  if (!def1 || !tk) return;
+  let nt;
+  if (tk.total != null) {
+    const V = VEH[st.kind], step = V.fakie || st.airRef === Math.PI ? Math.PI : 2 * Math.PI;
+    const tot1 = tk.total + step, dur1 = tk.dur * tot1 / tk.total, ang = tk.total * trickEase(tk.t / tk.dur);
+    nt = { ...tk, total: tot1, dur: dur1, t: easeInv(ang / tot1) * dur1 };
+  } else {
+    const p = trickMag(tk) * trickEase(tk.t / tk.dur), u1 = easeInv(Math.min(1, p / Math.max(1e-6, trickMag(def1))));
+    nt = { ...def1, key: tk.key, t: u1 * def1.dur };
+  }
+  const rate = trickRate(st, nt, nt.t);
+  if (!rate) return;
+  nt.rate = rate; st.trick = nt; st.flipped = def1.name;
 }
 /* La cadence d'une figure pour qu'elle FINISSE avant la réception prévue (`predictLanding`) : 1 si l'air suffit, plus vite sinon,
    au plus `TRICK_FAST` ; 0 si même pressée elle ne tiendrait pas. Un grab se tient le temps qu'on veut : toujours 1. */
@@ -929,16 +1180,90 @@ function trickStep(st, dt) {
   if (tk.t >= tk.dur) { tk.t = tk.dur; }
 }
 /* Les angles qu'une figure donne au dessin à l'instant (radians) : le plateau sur son grand axe, sur lui-même, le guidon, le
-   cadre. `tk` peut venir du réseau (un nom et un âge) : la même fonction le relit. */
+   cadre ; les mains lâchées (`nohand`) et le guidon croisé (`xup`) vont et reviennent (0 → 1 → 0). `tk` peut venir du réseau (un nom
+   et un âge) : la même fonction le relit. La rotation du CORPS n'est pas ici : c'est le cap (le réseau l'envoie). */
 export function trickAngles(tk) {
   if (!tk) return null;
-  const u = Math.max(0, Math.min(1, tk.t / tk.dur)), e = u * u * (3 - 2 * u);
-  return { roll: (tk.roll || 0) * 2 * Math.PI * e, yaw: (tk.yaw || 0) * 2 * Math.PI * e, bar: (tk.bar || 0) * 2 * Math.PI * e, whip: (tk.whip || 0) * 2 * Math.PI * e, grab: tk.grab ? Math.sin(Math.PI * u) : 0 };
+  const u = Math.max(0, Math.min(1, tk.t / tk.dur)), e = trickEase(u), arc = Math.sin(Math.PI * u);
+  /* le X-up : le guidon tourne jusqu'à ~160° (les poignées passent de l'autre côté, les bras se croisent) et revient — `bar` ne fait pas
+     un tour, il s'en va et revient */
+  const bar = tk.xup ? 0.88 * Math.PI * Math.sin(Math.PI * Math.min(1, u * 1.08)) : (tk.bar || 0) * 2 * Math.PI * e;
+  return { roll: (tk.roll || 0) * 2 * Math.PI * e, yaw: (tk.yaw || 0) * 2 * Math.PI * e, bar, whip: (tk.whip || 0) * 2 * Math.PI * e,
+    grab: tk.grab ? arc : 0, nohand: tk.nohand ? Math.min(1, arc * 1.6) : 0, xup: tk.xup ? 1 : 0 };
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ LA PIROUETTE DES ROLLERS (au sol) — la vrille de la patinoire sur des roues : V lance, chaque V de plus l'emballe (les quatre
+   ║ niveaux de `PT.TRICK.SPIN_LV`, du tour où l'on est — jamais un saut d'angle), elle finit de face (un tour entier).
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️ LE CAP NE TOURNE PAS : on roule où l'on roulait (une pirouette en roulant file droit) — c'est le DESSIN qui tourne (`piroAngle`),
+   comme sur la glace. Pendant qu'elle dure : ni virage, ni poussée, ni saut (Espace attend qu'elle finisse). Le réseau envoie son
+   niveau, son âge, son départ et son sens ; l'autre la relit avec la même fonction. */
+function piroInput(st, inp) {
+  const P = st.piro, L = PT.TRICK.SPIN_LV;
+  if (P) {
+    if (P.lv >= L.length - 1 || P.t < PT.TRICK.SPIN_GAP) return true;
+    P.a0 += PT.skateTrickAt("spin", P.t / P.dur, P.lv, P.a0).spin; P.lv++; P.t = 0; P.dur = L[P.lv].T;
+    return true;
+  }
+  if (st.mode !== "ground" || Math.abs(st.u) > PIRO_V) return false;
+  const s = surf(st.x, st.y, S1);
+  if (Math.hypot(s.gu, s.gv) > PIRO_FLAT) return false;
+  let dir = 1;
+  if (inp && (inp.ix || inp.iy)) { const e = wrap(Math.atan2(inp.iy, inp.ix) - st.th); if (Math.abs(e) > 0.15 && Math.abs(e) < Math.PI - 0.15) dir = Math.sign(e); }
+  st.piro = { lv: 0, t: 0, a0: 0, dur: L[0].T, dir };
+  st.flipped = "piro";
+  return true;
+}
+/* L'angle DESSINÉ de la pirouette (rad, signé), pour ma machine et pour celle d'un autre (`{ lv, t, a0, dir }`). */
+export function piroAngle(P) {
+  if (!P) return 0;
+  const L = PT.TRICK.SPIN_LV, lv = Math.max(0, Math.min(L.length - 1, P.lv | 0)), dur = L[lv].T;
+  return (P.dir < 0 ? -1 : 1) * 2 * Math.PI * ((P.a0 || 0) + PT.skateTrickAt("spin", Math.min(1, Math.max(0, P.t) / dur), lv, P.a0 || 0).spin);
+}
+/* ── LE HANDPLANT (voir HAND) ── le coping le plus proche qu'on peut saisir à la main. */
+function handCatch(st, nx, ny, nz) {
+  let best = null;
+  SP.PARK_GRINDS.forEach((L, li) => {
+    if (L.kind !== "coping") return;
+    for (let k = 0; k + 1 < L.pts.length; k++) {
+      const A = lineW(L, k), B = lineW(L, k + 1), dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      const t = Math.max(0, Math.min(1, ((nx - A[0]) * dx + (ny - A[1]) * dy) / (len * len)));
+      const px = A[0] + dx * t, py = A[1] + dy * t, d = Math.hypot(nx - px, ny - py), hl = A[2] + (B[2] - A[2]) * t, dz = nz - hl;
+      if (d > HAND.R || dz < HAND.ZLO || dz > HAND.ZHI) continue;
+      if (!best || d < best.d) best = { li, k, t, d, x: px, y: py, z: hl, ux: dx / len, uy: dy / len };
+    }
+  });
+  return best;
+}
+function enterHand(st, hc) {
+  // le côté de la courbe : le plus bas des deux, à une demi-case de part et d'autre du tube (le pont de l'autre côté reste au coping)
+  const lx = -hc.uy, ly = hc.ux;
+  const side = SP.heightAt(hc.x + lx * 0.45, hc.y + ly * 0.45) < SP.heightAt(hc.x - lx * 0.45, hc.y - ly * 0.45) ? 1 : -1;
+  if (st.trick) { if (!st.trick.grab) (st.tricksDone || (st.tricksDone = [])).push(st.trick.name); st.trick = null; }
+  st.mode = "hand"; st.hand = { T: 0, sx: lx * side, sy: ly * side };
+  st.x = hc.x; st.y = hc.y; st.z = hc.z; st.vx = st.vy = st.vz = 0; st.u = 0; st.om = 0;
+  st.flipped = "handplant";
+}
+function handStep(st, V, inp, dt) {
+  const h = st.hand;
+  h.T += dt;
+  if (!inp.trick2 || h.T >= HAND.MAX) handExit(st, inp);
+}
+/* On redescend dans la courbe, du côté bas, à reculons si le cap regarde le pont — et l'on pose les roues (`stepOff`). */
+function handExit(st, inp) {
+  const h = st.hand;
+  st.mode = "air"; st.vx = h.sx * HAND.OUT_V; st.vy = h.sy * HAND.OUT_V; st.vz = 0.3;
+  st.x += h.sx * 0.06; st.y += h.sy * 0.06; st.z += 0.02;
+  st.spin = 0; st.airT = 0; st.lastAir = 0; st.popped = false; st.vertAir = false;
+  airBegin(st, inp, Math.cos(st.th) * h.sx + Math.sin(st.th) * h.sy < 0);
+  st.stepOff = true; st.noGrindT = 0.4; st.noHandT = 0.6;
+  (st.tricksDone || (st.tricksDone = [])).push("handplant");
+  st.handDone = { T: h.T }; st.hand = null;
 }
 export function trickByName(kind, name) {
-  const T = TRICKS[kind] || {};
-  for (const k of Object.keys(T)) if (T[k].name === name) return T[k];
-  return null;
+  const S = TRICK_SETS[kind];
+  return (S && S.defs[name]) || null;
 }
 
 /* Ce que le dessin et le réseau lisent : la hauteur en l'air (au-dessus du relief sous soi), la vitesse horizontale. */

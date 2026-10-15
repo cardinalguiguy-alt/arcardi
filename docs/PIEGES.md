@@ -482,3 +482,13 @@ dépôt.
   `lib-canvas.mjs` les accepte sans rien faire : une planche de poses tirée hors navigateur montre les profils gauches (dessinés sous
   `scale(-1, 1)`) VIDES, sans erreur — on croit à un défaut de dessin. Une planche de poses qui tourne se juge dans un vrai navigateur
   (la page jetable `app/audit-riders`, 2026-10-13).
+- ⚠️⚠️ **UN DESSIN MIS EN CACHE FIGE TOUT CE QU'IL LIT, ET CE QUI BOUGE DOIT SE PEINDRE APRÈS LUI DANS L'ORDRE D'AVANT** (2026-10-15, le sol
+  cuit par blocs de Valley Town, `TOWN_GROUND`). Deux faces. (1) Le dessin cuit ne se refait pas : une grandeur mobile qu'il lirait (l'heure,
+  la météo, un état de jeu) y reste figée, sans erreur — d'où un seul point d'entrée (`paintTownGroundTile`) dont tout ce qui bouge passe par
+  `dyn`, et une CLÉ pour ce qui change rarement (le cran, la saison, la neige au sol, les atlas HD). (2) L'ordre : la boucle d'avant peignait
+  chaque case PUIS sa neige ; une case plus haute plus au sud (`e × 48 px`) recouvrait donc la neige de la case basse qu'elle cache. Le cache
+  pose tout le fixe AVANT toute neige : il faut RE-COPIER la case haute par-dessus (`townGroundReblit`). Et une recopie au pixel ne rejoue pas
+  un mélange à demi-pixel : le bord d'une marche à altitude fractionnaire, mélangé à la case du dessus SANS sa neige dans le bloc, ressortait
+  d'un trait clair à chaque marche sous la pluie (écart 100 sur 765, vu au pixel devant l'église) — ces cases se peignent en entier à leur tour.
+  Parade de vérification, la seule qui ait trouvé quelque chose : le temps figé, `Math.random` rejoué, une image par chemin, comparées au pixel
+  (`window.__arcardiGround.off`), et falsifiées par une tache posée dans un bloc.

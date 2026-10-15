@@ -1906,7 +1906,7 @@ sillage seulement) ; le classement aux temps ; le fantôme (aller-retour au huit
 (un passage de ligne compte toujours) rougit 8 contrôles. ⚠️ Ce qu'il ne voit pas : le réseau, l'écran (`CourseHud.js`), le
 dessin — la course à deux se joue avec `app/audit-duo` (docs/VERIFICATION.md §10).
 
-## `verify-monture.mjs` — LES MONTURES DU SKATEPARK SE JOUENT-ELLES ? (2026-10-11, 29 contrôles depuis le 2026-10-13 soir)
+## `verify-monture.mjs` — LES MONTURES DU SKATEPARK SE JOUENT-ELLES ? (2026-10-11, 50 contrôles depuis le 2026-10-15)
 
 Un banc qui JOUE (comme `verify-maire`) : la vraie physique (`monture.js`) sur le vrai relief (`skatepark.js`), pilotée par des ordres scriptés à 60 images/s. Poussée des quatre montures (le BMX
 arrache le premier), roue libre, pompage dans la mini-rampe (sans pomper on ne monte pas ; en pompant on sort au coping et l'on retombe en fakie ; le pompage plafonne), conservation de l'énergie
@@ -1918,6 +1918,12 @@ position sur un pas de 1/240 s), un pompage dix fois trop faible puis sans plafo
 demi-tour au quarter (sans « 180 » compté), la flèche du retour en fait un voulu, la flèche de travers tenue jusqu'au bout fait tomber ; un kickflip lancé au
 sommet se presse et retombe propre, lancé trop tard il ne part pas ; contre le flanc, la chute à fond de face (6,4 c/s), le rebond lancé (5 c/s), le flanc
 longé à fond de biais (43°). Et la plateforme du quarter : la flèche du nord tenue en montant pose sur le deck.
+**2026-10-15 — le saut chargé et les figures neuves** (§6 et §9) : l'ollie en trois points (une tape ~30 cm, 0,3 s ~60 cm — celui d'avant —, la charge pleine
+~1 m) et la hauteur qui croît avec la charge pour les quatre montures ; puis, JOUÉS sur le plat de la rangée v 9 (⚠️ premier jet à u 15 : le saut décollait de
+la paroi est du quarter, et toutes les figures « ne partaient pas » — le banc mentait sur un banc) : la flèche tenue au décollage n'est pas une variante, une
+flèche fraîche l'est (heelflip, hardflip) et ne fait pas tourner, le même V prolonge (double, triple), le bigspin retombe en fakie, les spins des rollers
+(360, 540, 720 en appuyant encore), le 360 du BMX (540 au quarter : il vise sa réception), la pirouette au sol (trois niveaux, un tour entier, le cap
+immobile), le handplant (tenu, lâché, et au bout de 3 s) — et le skate, G tenu au quarter, n'en fait pas.
 
 ## `verify-skatepark.mjs` — LA COLLISION DU SKATEPARK, JOUÉE AU HASARD (2026-10-13, 14 contrôles, ~60 s)
 

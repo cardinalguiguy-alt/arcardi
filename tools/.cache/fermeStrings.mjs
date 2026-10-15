@@ -5532,7 +5532,7 @@ export const FERME_STR = {
     skateTrickNeedSpeed: "L'axel demande de l'élan : lancez-vous d'abord.",
     /* 2026-10-11 — LE SKATEPARK : les commandes d'une monture. (Le NOM des figures n'est pas ici : il se dit en anglais dans tous
        les skateparks du monde — un nom propre, pas une traduction : `TRICK_LABEL`, monture.js.) */
-    parkRideHint: "🛹 Flèches : rouler (en l'air : se tourner vers elles) · Maj : pousser fort, pomper dans les courbes · Espace (tenir, lâcher) : sauter · V / G : figures · C : freiner · F : descendre",
+    parkRideHint: "🛹 Flèches : rouler · Maj : pousser fort, pomper · Espace (tenir, lâcher) : sauter · V / G : figures · F : descendre — le « ? » en bas à droite dit tout",
     parkSpinLabel: (deg) => `${deg}`,
     parkFakie: "fakie",
     parkBail: "Aïe !",
@@ -5552,7 +5552,12 @@ export const FERME_STR = {
     parkColor: "Couleur",
     parkRent: (g, min) => `Louer (${g} or, ${min} min)`,
     parkRentedLeft: (mm, ss) => `Louée — encore ${mm} min ${String(ss).padStart(2, "0")} s`,
-    parkRentedDesc: "Ta monture t'attend : F dans le park pour monter, F pour descendre.",
+    parkRentedDesc: (name) => `Ta monture (${name}) t'attend : F dans le park pour monter. Envie d'autre chose ? Choisis-la et échange : le temps qui reste continue, tu ne paies que l'écart.`,
+    // 2026-10-14 — l'échange pendant le bail (`E.resolveRentRide`)
+    parkKindCurrent: "la tienne",
+    parkSwapCost: (g) => (g > 0 ? `+${g} or` : "incluse"),
+    parkSwap: (g, name) => `Échanger — ${name}${g > 0 ? ` (+${g} or)` : ""}`,
+    parkSwapToast: (name, g) => `🛹 Échange fait : ${name}${g > 0 ? ` (−${g} or)` : ""}. Le temps de location continue.`,
     parkRentToast: (g, min) => `🛹 Monture louée pour ${min} minutes (−${g} or). Dans le park, F pour monter !`,
     parkHaveToast: "🛹 Ta location court encore : F dans le park pour monter.",
     parkClosedToast: "🛹 La cabane est fermée : le park n'est monté qu'au printemps.",
@@ -5561,8 +5566,34 @@ export const FERME_STR = {
     parkEndToast: "🛹 Ta location est finie : la monture retourne à la cabane.",
     // 2026-10-13 (soir) — les commandes DITES : l'invite pour monter, la ligne d'aide du clavier en monture, les boutons tactiles
     promptParkMount: (k) => `F : monter sur ${({ skate: "le skate", roller: "les rollers", scooter: "la trottinette", bmx: "le BMX" })[k] || "la monture"}`,
-    parkHelp1: "Flèches : rouler (devant : pousser · derrière : freiner) · Maj : pomper au creux des courbes · Espace : sauter (tenir, lâcher)",
-    parkHelp2: (t1, t2) => `En l'air : une flèche, on se tourne vers elle · V : ${t1} · G : ${t2} · V puis G : les deux · C : freiner net · F : descendre`,
+    /* 2026-10-14 — LE « ? » DU PARK (`SkateHelp.js`) : la fiche des commandes de la monture montée ou louée. `t` : les noms de ses
+       figures (`v`, `g`, les combinées `vg`, `gv`, ses glisses `grinds`) ou null (rien de loué) ; `touch` : au doigt, la colonne
+       de gauche nomme les BOUTONS. Une touche préfixée de « › » se lit « puis » (`helpThen`). */
+    helpThen: "puis",
+    parkHelpTip: "Aide : les commandes du skatepark",
+    parkHelpTitle: (name) => (name ? `🛹 ${name} : les commandes` : "🛹 Le skatepark : les commandes"),
+    parkHelpRows: (t, touch) => {
+      const K = touch
+        ? { dir: ["Pavé"], push: ["Pomper"], jump: ["Sauter"], v: [(t && t.v) || "Figure"], g: [(t && t.g) || "Figure"], stop: ["Freiner"], off: ["Descendre"] }
+        : { dir: ["Flèches", "ZQSD"], push: ["Maj"], jump: ["Espace"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"] };
+      const r = [
+        [K.dir, "Rouler : devant pousser, derrière freiner, côtés tourner."],
+        [K.push, "Pousser fort ; au creux d'une courbe, pomper pour monter plus haut."],
+        [K.jump, "Tenir : charger. Lâcher : sauter."],
+      ];
+      if (t && t.v) {
+        r.push([K.v, touch ? "En l'air." : `En l'air : ${t.v}.`], [K.g, touch ? "En l'air." : `En l'air : ${t.g}.`]);   // au doigt, le bouton porte déjà son nom
+        if (t.vg) r.push([[K.v[0], "›" + K.g[0]], `${t.vg}.`]);
+        if (t.gv) r.push([[K.g[0], "›" + K.v[0]], `${t.gv}.`]);
+      } else r.push([[K.v[0], K.g[0]], "En l'air : les figures de la monture louée."]);
+      r.push([K.dir.slice(0, 1), "En l'air : se tourner vers elle (à l'opposé : un 180). Sans rien, on s'aligne seul."]);
+      const gl = t && t.grinds && t.grinds.length ? t.grinds.map((x) => `${x.name} ${x.cross ? "en travers" : "dans l'axe"}`).join(", ") : "";
+      r.push([[], `Glisses${gl ? ` (${gl})` : ""} : retomber sur un rail, une arête, un coping — ça accroche seul.`]);
+      r.push([K.stop, "(tenue) Freiner net."]);
+      r.push([K.off, touch ? "Descendre (posé). Monter : le bouton d'action." : "Monter, descendre (posé)."]);
+      return r;
+    },
+    parkHelpNote: (rented) => `Une figure pas finie à la réception, c'est la chute. Le U de la mini-rampe : on y entre par la pente au sud.${rented ? " Une autre monture ? La cabane l'échange." : " Les montures se louent à la cabane, à l'est de la porte."}`,
     parkRideHintTouch: "🛹 Le pavé : rouler et tourner · Sauter : tenir pour charger, lâcher · les figures : en l'air · Pomper : au creux des courbes",
     parkBtnJump: "Sauter",
     parkBtnJumpSub: "tenir, lâcher",
@@ -7535,7 +7566,7 @@ export const FERME_STR = {
     duoSpace: "🤝 Not enough ice for that figure: move away from the boards.",
     duoToast: (key) => ({ duoGone: "🤝 The offer has expired.", duoBusy: "🤝 That skater is already doing a figure." }[key] || ""),
     skateTrickNeedSpeed: "An axel needs speed: get moving first.",
-    parkRideHint: "🛹 Arrows: ride (in the air: turn toward them) · Shift: push hard, pump in the curves · Space (hold, release): jump · V / G: tricks · C: brake · F: get off",
+    parkRideHint: "🛹 Arrows: ride · Shift: push hard, pump · Space (hold, release): jump · V / G: tricks · F: get off — the “?” at the bottom right has it all",
     parkSpinLabel: (deg) => `${deg}`,
     parkFakie: "fakie",
     parkBail: "Ouch!",
@@ -7555,7 +7586,11 @@ export const FERME_STR = {
     parkColor: "Color",
     parkRent: (g, min) => `Rent (${g} gold, ${min} min)`,
     parkRentedLeft: (mm, ss) => `Rented — ${mm} min ${String(ss).padStart(2, "0")} s left`,
-    parkRentedDesc: "Your ride is waiting: F in the park to get on, F to get off.",
+    parkRentedDesc: (name) => `Your ride (${name}) is waiting: F in the park to get on. Fancy something else? Pick it and swap: the time left keeps running, you only pay the difference.`,
+    parkKindCurrent: "yours",
+    parkSwapCost: (g) => (g > 0 ? `+${g} gold` : "included"),
+    parkSwap: (g, name) => `Swap — ${name}${g > 0 ? ` (+${g} gold)` : ""}`,
+    parkSwapToast: (name, g) => `🛹 Swapped: ${name}${g > 0 ? ` (−${g} gold)` : ""}. Your rental time keeps running.`,
     parkRentToast: (g, min) => `🛹 Ride rented for ${min} minutes (−${g} gold). In the park, press F to get on!`,
     parkHaveToast: "🛹 Your rental is still running: press F in the park to get on.",
     parkClosedToast: "🛹 The shack is closed: the park is only set up in spring.",
@@ -7563,8 +7598,31 @@ export const FERME_STR = {
     parkNoGoldToast: (g) => `🛹 Renting costs ${g} gold — the shared purse can't cover it.`,
     parkEndToast: "🛹 Your rental is over: the ride goes back to the shack.",
     promptParkMount: (k) => `F: get on the ${({ skate: "skateboard", roller: "inline skates", scooter: "scooter", bmx: "BMX" })[k] || "ride"}`,
-    parkHelp1: "Arrows: ride (ahead: push · back: brake) · Shift: pump in the dips of the curves · Space: jump (hold, release)",
-    parkHelp2: (t1, t2) => `In the air: an arrow turns you toward it · V: ${t1} · G: ${t2} · V then G: both · C: hard brake · F: get off`,
+    helpThen: "then",
+    parkHelpTip: "Help: skatepark controls",
+    parkHelpTitle: (name) => (name ? `🛹 ${name}: controls` : "🛹 The skatepark: controls"),
+    parkHelpRows: (t, touch) => {
+      const K = touch
+        ? { dir: ["Pad"], push: ["Pump"], jump: ["Jump"], v: [(t && t.v) || "Trick"], g: [(t && t.g) || "Trick"], stop: ["Brake"], off: ["Get off"] }
+        : { dir: ["Arrows", "WASD"], push: ["Shift"], jump: ["Space"], v: ["V"], g: ["G"], stop: ["C"], off: ["F"] };
+      const r = [
+        [K.dir, "Ride: ahead to push, back to brake, sideways to turn."],
+        [K.push, "Push hard; in the dip of a curve, pump to go higher."],
+        [K.jump, "Hold: charge. Release: jump."],
+      ];
+      if (t && t.v) {
+        r.push([K.v, touch ? "In the air." : `In the air: ${t.v}.`], [K.g, touch ? "In the air." : `In the air: ${t.g}.`]);
+        if (t.vg) r.push([[K.v[0], "›" + K.g[0]], `${t.vg}.`]);
+        if (t.gv) r.push([[K.g[0], "›" + K.v[0]], `${t.gv}.`]);
+      } else r.push([[K.v[0], K.g[0]], "In the air: your rented ride's tricks."]);
+      r.push([K.dir.slice(0, 1), "In the air: turn toward it (the opposite way: a 180). Hands off, you line up on your own."]);
+      const gl = t && t.grinds && t.grinds.length ? t.grinds.map((x) => `${x.name} ${x.cross ? "sideways" : "lined up"}`).join(", ") : "";
+      r.push([[], `Grinds${gl ? ` (${gl})` : ""}: land on a rail, an edge, a coping — it locks on by itself.`]);
+      r.push([K.stop, "(hold) Hard brake."]);
+      r.push([K.off, touch ? "Get off (landed). Get on: the action button." : "Get on, get off (landed)."]);
+      return r;
+    },
+    parkHelpNote: (rented) => `A trick still spinning at landing means a bail. The mini-ramp's U: roll in by the slope on its south side.${rented ? " Another ride? The shack swaps it." : " Rides are rented at the shack, east of the gate."}`,
     parkRideHintTouch: "🛹 The pad: ride and turn · Jump: hold to charge, release · tricks: in the air · Pump: in the dips of the curves",
     parkBtnJump: "Jump",
     parkBtnJumpSub: "hold, release",

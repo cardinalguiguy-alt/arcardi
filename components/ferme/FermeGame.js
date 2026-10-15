@@ -283,6 +283,26 @@ const BITMAP_LOG = { fn: null };
    bâtiments relevés à l'image précédente (`BITMAP_LOG`), en coordonnées du MONDE. Un objet de MODULE, pas un ref :
    aucun hook de plus (l'ordre des hooks est ce par quoi le harnais retrouve les siens). */
 const SUN_SHADOW = { buf: null, bitmaps: new Map() };
+/* ╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-14 — LE SOL DE VALLEY TOWN CUIT PAR BLOCS (Guillaume : « mon jeu est saccadé en zoom large quand j'arrive sur VT »).
+   ╚═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   Mesuré (1024 × 768, Mac, rAF chronométré) : au cran 1 la ville coûtait 15 ms de calcul par image, dont 11 dans la SEULE boucle du
+   sol — chaque case repeinte à chaque image (≈ 16 000 `fillRect` et 7 500 `drawImage`) —, contre 6 ms au cran 3. Le coût suit la
+   SURFACE vue : un écran plus grand que celui de la mesure fait pire, et la qualité adaptative (`PERF`) finissait par couper les
+   ombres et les reflets. Le décor FIXE du sol se peint donc une fois, par blocs d'environ 256 px d'écran au cran courant (`B` cases
+   de côté), et se recopie ensuite (`townGroundFrame`, `townGroundBlit`, dans la boucle de rendu).
+   · CE QUI EST CUIT : ce que `paintTownGroundTile` peint sans `dyn` — sol, revêtements (dallage HD compris), massifs, berge, eau
+     CUITE, falaises et leur habillage, voie et quai, caillebotis. CE QUI NE L'EST PAS : la neige et le sol mouillé (par case, à
+     chaque image, comme avant) et les cases LENTES (`townGroundSlow` : la patinoire, une falaise sous la neige, une marche sous la pluie), absentes des blocs
+     et peintes en entier à leur tour.
+   · LA CLÉ (`sig`, plus l'identité du monde de saison, des sprites et de la cuisson de l'eau) : le cran, la saison (les massifs),
+     la neige au sol et le sol mouillé (les cases lentes en dépendent), les atlas du dallage HD du cran. Qu'elle change, et tout se jette.
+   · Qu'un bloc manque à l'image : le chemin LENT pour toute l'image (jamais un sol à moitié cuit), et la cuisson avance de `budget` ms.
+   · ⚠️ Rien n'est cuit tant que l'eau ne l'est pas (son repli bouge avec `now`), ni pendant un fondu de zoom (échelle fractionnaire).
+   · `window.__arcardiGround` : l'état (blocs, temps de cuisson, images rapides / lentes) ; `off = true` rend le chemin lent — c'est
+     ainsi que les deux chemins se comparent au pixel. */
+const TOWN_GROUND = { off: false, tw: null, sprites: null, bake: null, sig: "", zm: 0, B: 0, maxE: 0, snowOn: false, dynOn: false, blocks: new Map(),
+  view: [0, -1, 0, -1], budget: 5, built: 0, bakeMs: 0, fast: 0, slow: 0, _exposed: false };
 /* 2026-10-05 (nuit) — l'insistance au portillon de la patinoire (`rinkGateHold`) : le temps poussé, le dernier message.
    LOCAL, et de module (aucun hook de plus). */
 const RINK_INSIST = { t: 0, toast: 0 };
@@ -10545,15 +10565,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        hauteur, la vitesse verticale et la vitesse de rotation à l'émission — le récepteur reconstruit la parabole et la vrille sur
        SON horloge (§3 : des durées, jamais une date ; rien de plus ne part, c'est le paquet de position). Absent à pied. */
     { const rdS = rideRef.current; if (rdS && m.zone === "town") {
-      const md = rdS.mode === "air" ? 1 : rdS.mode === "bail" ? 2 : rdS.mode === "grind" ? 3 : 0;
+      const md = rdS.mode === "air" ? 1 : rdS.mode === "bail" ? 2 : rdS.mode === "grind" ? 3 : rdS.mode === "hand" ? 4 : 0;
       pub.rd = [MO.VEH_KINDS.indexOf(rdS.kind), +rdS.th.toFixed(2), md];
       if (rdS.color) pub.rdc = rdS.color | 0;   // la couleur louée
       if (md === 1) {
         pub.rd.push(+rdS.z.toFixed(3), +rdS.vz.toFixed(2), +(rdS.om || 0).toFixed(1));
         // la figure en cours : son nom, son âge, et (2026-10-13 soir) sa CADENCE — pressée pour tenir dans l'air qui reste, elle tournerait
         // au ralenti chez l'autre, qui l'avance sur son horloge
-        if (rdS.trick) pub.rd.push(rdS.trick.name, Math.round(rdS.trick.t * 1000), +(rdS.trick.rate || 1).toFixed(2));
-      } else if (md === 3) pub.rd.push(+rdS.z.toFixed(3));   // en glisse : la hauteur de la ligne
+        if (rdS.trick) {
+          // 2026-10-15 — un spin replanifié (`dur` ≠ celle de la table, `MO.trickByName`) : l'âge et la cadence ramenés à la table
+          const d0 = (MO.trickByName(rdS.kind, rdS.trick.name) || rdS.trick).dur, k = d0 / rdS.trick.dur;
+          pub.rd.push(rdS.trick.name, Math.round(rdS.trick.t * k * 1000), +((rdS.trick.rate || 1) * k).toFixed(2));
+        }
+      } else if (md === 3 || md === 4) pub.rd.push(+rdS.z.toFixed(3));   // en glisse : la hauteur de la ligne ; au handplant, celle du coping
+      else if (md === 0 && rdS.piro) {
+        // 2026-10-15 — la pirouette des rollers : son niveau, son âge, son départ (en tours) et son sens — l'autre la relit (`MO.piroAngle`)
+        pub.rd.push(rdS.piro.lv, Math.round(rdS.piro.t * 1000), +rdS.piro.a0.toFixed(3), rdS.piro.dir);
+      }
     } }
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
@@ -12501,7 +12529,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const T3 = kind ? MO.TRICKS[kind] : null, lab = (d) => (d ? MO.TRICK_LABEL[d.name] : null);
       const touch = !!touchUiRef.current;
       return { show: true, help: "park", kind, touch, up: touch && !!st,
-        t: T3 ? { v: lab(T3.v), g: lab(T3.g), vg: lab(T3.vg), gv: lab(T3.gv), grinds: MO.grindStyles(kind) } : null };
+        // 2026-10-15 — les variantes (la flèche), les prolongations (le même appui), les spins, la pirouette et le handplant des rollers
+        t: T3 ? { v: lab(T3.v), g: lab(T3.g), vg: lab(T3.vg), gv: lab(T3.gv), vx: lab(T3.vx), vy: lab(T3.vy), gx: lab(T3.gx), gy: lab(T3.gy),
+          spin: MO.TRICK_SPIN_SLOTS(kind), more: MO.trickMoreLabels(kind), roller: kind === "roller", grinds: MO.grindStyles(kind) } : null };
     }
     if (!tw.rink) return null;
     const R = C.TOWN_RINK, fx = C.footX(m.x), fy = C.footY(m.y), M = 9;
@@ -21795,7 +21825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (st.bailed) parkSoundEvent("bail");
         if (st.kick > 0.9 && kick0 < 0.5) parkSoundEvent("kick");
         if (st.grinded) parkSoundEvent("grind");
-        if (st.flipped) parkSoundEvent("flip");
+        if (st.flipped) parkSoundEvent(st.flipped === "handplant" ? "land" : "flip", 0.25);   // 2026-10-15 : la main posée sur l'acier
       }
       /* LA POUSSIÈRE ET LES ÉTINCELLES : une bouffée à la réception (le pavé gris, la sciure du bois), au frein appuyé ; des étincelles
          d'acier pendant un grind, qui partent vers l'arrière et retombent. Locales (rien ne circule), peintes à la hauteur du relief. */
@@ -21828,6 +21858,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (parts.length) pushFx(parts.join(" "), "trick");
         }
         if (st.bailed) pushFx(L.parkBail, "bail");
+        if (st.piroEnd) pushFx(L.parkPiro(Math.round(st.piroEnd.turns)), "trick");   // 2026-10-15 : la pirouette des rollers, ses tours
         if (st.gateHit && now - fx.gateAt > 4000) { fx.gateAt = now; pushToast(L.parkGateNo); }
       }
       m.x = st.x - C.footX(0); m.y = st.y - C.footY(0);
@@ -22749,6 +22780,466 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       f.view(Math.max(0, cx - hw - 2), Math.max(0, cy - hh - 1), Math.min(tw.w - 1, cx + hw + 2), Math.min(tw.h - 1, cy + hh + 4));
       f.update(6, () => performance.now());
     }
+    /* ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+       2026-10-14 — LE DESSIN D'UNE CASE DU SOL DE LA VILLE, sorti de la boucle de `drawTownFrame` pour le sol cuit par blocs
+       (`TOWN_GROUND`, en tête du module). Le corps est celui de la boucle, au caractère près, avec deux portes : `dyn` nul (la
+       CUISSON d'un bloc) ne peint ni la neige du chaperon ni la patinoire, les deux couches qui bougent ; `dyn` = { snowF, iceNow,
+       meltWet } peint la case entière, comme avant. `ctx` est un PARAMÈTRE (le contexte du bloc, à la cuisson) : il masque celui
+       de la boucle, exprès.
+       ⚠️⚠️ TOUT CE QU'ON AJOUTE ICI EST CUIT. Une grandeur qui bouge (l'heure, la météo, un état de jeu) se lit dans `dyn` et rend
+       la case lente (`townGroundSlow`), ou se peint après, avec la neige — sinon elle se fige dans le bloc, sans erreur. Une
+       grandeur qui change rarement (une saison, un réglage) entre dans la clé de `townGroundFrame`.
+       ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+    function paintTownGroundTile(ctx, tw, sprites, x, y, i, g, e, px, py, now, elAt, dyn) {
+      const EP = C.TOWN_ELEV_PX;
+      const snowF = dyn ? dyn.snowF : null, iceNow = dyn ? dyn.iceNow : null, meltWet = dyn ? dyn.meltWet : null;
+      // Zip 235: use the real farm sprite tiles for a match with the farm
+      // look (grass/path/stone), keeping the fountain water for the pool.
+      /* ⚠️ ZIP 431 — L'HERBE DE LA VILLE N'EST PLUS CELLE DE LA FERME. Même
+         dessin, palette assombrie de 10 % (voir GRASS_TOWN dans fermeArt.js).
+         Le repli sur `sprites.grass` n'est pas de la politesse : un vieux
+         client qui n'aurait pas ce zip doit continuer à peindre de l'herbe,
+         pas un trou noir — c'est la même prudence que partout ailleurs sur les
+         atlas de sprites. */
+      const gTiles = sprites.townGrass || sprites.grass;
+      /* ⚠️ 438 : l'herbe de la ville est un pavé de 64 px (voir
+         `drawTownGrassTile`). Le repli sur les trois tuiles du 431 reste. */
+      if (g === C.G_GRASS) { if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py); }
+      // ZIP 434 — le revêtement vit dans fermeArt (§ drawTownRoadTile) pour
+      // qu'un banc puisse le REGARDER ; ici on ne garde que le repli.
+      else if (g === C.G_PATH) { if (!A.drawTownRoadTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(sprites.path, px, py); }
+      else if (g === C.G_PATH_STONE) {
+        /* ⚠️⚠️ ZIP 436 — LE DERNIER DAMIER DE 16 px DE LA VILLE EST PARTI
+           DANS `fermeArt`. Ce qu'il y avait ici depuis le 425 : `(x + y) % 2`
+           entre deux gris, cinq variantes de teinte, un joint clair au
+           nord-ouest. C'était déjà mieux que l'aplat d'avant, et c'est resté
+           un DAMIER DE PÉRIODE 16 px — le défaut que le 434 a corrigé sur les
+           rues, sur la surface qui entoure justement les escaliers du
+           tribunal. Quand Guillaume écrit « un écart flagrant de qualité de
+           textures » entre le sol pavé et les escaliers du courthouse, les
+           deux tiers de ce qu'il regarde sont ce dallage-ci.
+           Voir `A.drawTownFlagTile` et `tools/render-escaliers.mjs`. Le repli
+           est celui du 425, conservé intact : un atlas manquant doit rendre
+           une place grise, pas un trou. */
+        if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) {
+          const v = ((x * 41 + y * 23) % 5);
+          ctx.fillStyle = ((x + y) % 2 === 0) ? ["#b3b2b8", "#b6b5bb", "#afaeb4", "#b1b0b6", "#b4b3b9"][v]
+                                              : ["#a5a4ab", "#a8a7ae", "#a2a1a8", "#a6a5ac", "#a3a2a9"][v];
+          ctx.fillRect(px, py, T, T);
+          const st4 = (xx, yy) => {
+            if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+            return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
+          };
+          ctx.fillStyle = "#cfcabb";
+          if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
+          if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
+          if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
+          if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
+        }
+      }
+      else if (g === C.G_TOWN_LAWN) {
+        /* 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
+           rayée dans un seul sens, comme une pelouse qui vient d'être passée.
+           ⚠️⚠️ ZIP 436 — LA RAYURE ÉTAIT `x % 2`, C'EST-À-DIRE UNE BANDE PAR
+           CASE. Trouvé pendant l'audit graphique, et c'est la même famille que
+           la tuile unique du 434 : une alternance de période 32 px sur un
+           parterre de six cases donne trois bandes claires et trois sombres,
+           toutes de la même largeur, toutes alignées sur la grille. Ce n'est
+           pas une pelouse tondue, c'est un tissu à rayures.
+           ⚠️ CE QUI FAIT UNE PELOUSE TONDUE, C'EST LA LARGEUR DE LA TONDEUSE
+           ET LE FAIT QU'ELLE PASSE EN ALLER-RETOUR : des bandes de deux à
+           trois cases, alternées, avec un LISERÉ plus marqué à la jointure (là
+           où les deux passages se chevauchent). Trois cases valent 48 px, soit
+           ~1,2 m à l'échelle du jeu : la largeur d'une tondeuse autoportée.
+           ⚠️ Et la bande est calculée sur la coordonnée MONDE, jamais sur la
+           case du parterre : deux parterres voisins doivent avoir été tondus
+           par la même machine dans le même sens, sinon chaque massif a sa
+           propre rayure et on lit un patchwork. */
+        if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 13 + y * 7) % gTiles.length], px, py);
+        const MOW = 3;                                   // largeur de passe, en cases
+        const band = Math.floor(x / MOW) & 1;
+        ctx.fillStyle = band ? "rgba(24,70,30,0.10)" : "rgba(140,200,120,0.07)";
+        ctx.fillRect(px, py, T, T);
+        // La jointure des deux passes : un liseré d'un pixel, du côté sombre.
+        if (((x % MOW) + MOW) % MOW === 0) {
+          ctx.fillStyle = band ? "rgba(18,54,24,0.22)" : "rgba(150,210,140,0.14)";
+          ctx.fillRect(px, py, 1, T);
+        }
+      }
+      else if (g === C.G_TOWN_STAIR) {
+        /* ⚠️⚠️ ZIP 436 — LE DESSIN A DÉMÉNAGÉ DANS `fermeArt`, ET C'EST LE
+           SUJET DE LA CORRECTION. Ce qu'il y avait ici : un `fillRect` gris
+           uni plus quatre traits blancs et quatre traits noirs tous les
+           4 px, RIGOUREUSEMENT IDENTIQUES sur toutes les cases de toutes les
+           volées — à côté d'un revêtement de rue au motif de 64 px cuit avec
+           son granulat, ses éclats et ses joints décalés (434). Guillaume l'a
+           dit en une phrase : « un écart flagrant de qualité de textures ».
+           La cause n'est pas le soin, c'est que ce code-ci n'était REGARDABLE
+           par aucun banc (§4). Voir `A.drawTownStairTile` et
+           `tools/render-escaliers.mjs`. Le repli reste ici, comme pour les
+           revêtements : un atlas manquant doit rendre du gris, pas un trou. */
+        if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
+          const vertical = A.townStairVertical(tw, x, y);
+          ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
+          for (let s = 0; s < 4; s++) {
+            if (vertical) { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1); }
+            else { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px + s * 4 + 3, py, 1, T); }
+          }
+        }
+      }
+      else if (g === C.G_WATER) {
+        /* ⚠️ 425 — LES DEUX CASES DE LA FONTAINE NE SE PEIGNENT PAS EN EAU.
+           Elles restent G_WATER parce que c'est ce qui les rend
+           INFRANCHISSABLES (blockedTown teste le sol, pas le décor), mais
+           leur eau carrée débordait de tous les côtés du bassin rond — un
+           rectangle bleu autour d'une vasque de pierre, vu en jeu.
+           La collision et le dessin n'ont aucune raison de coïncider ici :
+           on les sépare, et la vraie eau est peinte plus bas, à la forme du
+           bassin. C'est le seul endroit de la ville où l'on fait ça, d'où le
+           test étroit sur l'emprise exacte de la fontaine. */
+        const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
+                   && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+        /* ⚠️ ZIP 435 — ON PEINT LE LIT, PAS L'EAU. Le trait d'eau ne suit
+           plus le bord de la case (voir `drawTownWaterTile` dans fermeArt) :
+           il la TRAVERSE. Ce qui reste hors du contour, sur une case de rive,
+           doit donc montrer le fond de la berge — d'où l'herbe ici, puis la
+           vase de `drawTownShoreTile` par-dessus, puis l'eau. L'ancien
+           `fillRect` bleu pleine case est précisément ce qui dessinait
+           l'escalier de 16 px. */
+        /* ⚠️ 2026-09-25 (phase 2) : la DALLE de la place, plus un aplat gris
+           (`#adacb3`) — c'était, avec la bordure que les dalles voisines
+           traçaient autour, le rectangle clair que l'audit a vu derrière la
+           vasque. Voir `drawTownFlagTile`. L'aplat reste en repli. */
+        if (inFtn) { if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); } }
+        else if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
+      }
+      else if (g === C.G_BRIDGE) {
+        /* Zip 426 — LE PONTON DU LAC. Des lames de bois posées SUR l'eau : on
+           peint donc l'eau d'abord (le ponton ne la remplace pas, il la
+           couvre), puis les planches et leur ombre portée. Sans l'eau
+           dessous, le ponton flotterait sur du vert. */
+        ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T);
+        /* ⚠️⚠️ ZIP 439 — LE TABLIER MONTE. La flèche vient de `townArchRise`
+           (une couche, pas un identifiant de sol — règle du 434) et vaut zéro
+           partout ailleurs, donc ce bloc reste exactement l'ancien pour le
+           ponton du lac, qui est plat et doit le rester.
+           ⚠️ ET LE DÉCALAGE VERS LE HAUT OUVRE UN TROU VERS LE SUD — ce trou
+           EST le flanc du pont, exactement comme la joue d'une falaise (425)
+           ou celle de l'estrade du tribunal (426). Sans lui on verrait l'eau
+           sous ses propres pieds sur trois pixels de haut, ce qui est le
+           défaut le plus lisible qu'un dénivelé puisse produire. */
+        const bRise = archPxTown(tw, x, y);
+        const bpy = py - bRise;
+        if (bRise > 0) {
+          ctx.fillStyle = "#6b4a30"; ctx.fillRect(px, bpy + T - 1, T, bRise + 1);
+          ctx.fillStyle = "rgba(30,20,12,0.35)"; ctx.fillRect(px, bpy + T + bRise - 1, T, 1);
+          ctx.fillStyle = "rgba(255,225,180,0.10)"; ctx.fillRect(px, bpy + T - 1, T, 1);
+        }
+        /* ⚠️⚠️ ZIP 439 — LA LAME EST CELLE DE LA PLANCHE DE RÉFÉRENCE, ET LE
+           DESSIN QU'ELLE REMPLACE ÉTAIT QUATRE BANDES DE COULEUR. Écrit au
+           426, jamais regardé depuis : `#b78f58` / `#9c7746` en alternance
+           tous les quatre pixels, plus un trait d'ombre. À côté des décors
+           importés, le ponton se lisait comme une RAMPE DE CARTON — c'est le
+           deuxième défaut le plus visible d'une capture du lac, après la
+           haie, et il est de la même famille (un dessin qui vit dans la
+           closure du rendu et que personne ne peut regarder, §4).
+           ⚠️ La tuile vient du TABLIER du pont de la planche, transposée à
+           l'import : les lames d'un ponton sont perpendiculaires à la marche,
+           et le ponton du lac court nord-sud quand le pont de la planche
+           court est-ouest. Le raisonnement est sur `deckPlank`. */
+        if (sprites.townDeck) ctx.drawImage(sprites.townDeck, px, bpy);
+        else {
+          ctx.fillStyle = "#a9834f"; ctx.fillRect(px, bpy, T, T);
+          for (let k = 0; k < 4; k++) {
+            ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
+            ctx.fillRect(px, bpy + k * 4, T, 4);
+            ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, bpy + k * 4 + 3, T, 1);
+          }
+        }
+        ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, bpy + T - 2, T, 2);
+      }
+      else ctx.drawImage(sprites.grass[0], px, py);
+
+      /* 2026-09-25 (phase 4) — L'OMBRE DU MUR QUI DOMINE CETTE CASE (voir
+         `A.drawTownWallFoot`) : posée ici, après le sol, parce que c'est la
+         seule case qui la voit. */
+      {
+        const upPx = (elAt(x, y - 1) - e) * EP;
+        if (upPx > 0.5 && y > 0 && !C.townGrandFlightCell(x, y)) A.drawTownWallFoot(ctx, px, py, upPx);
+      }
+      /* 2026-09-27 (nuit) — LA BOUCHE DU PASSAGE SOUS LE GRAND ESCALIER : la
+         chaussée s'assombrit en s'engageant sous la volée. C'est, avec le
+         passant qui disparaît dessous, ce qui fait lire un PONT et non une
+         rue qui bute contre un escalier. */
+      {
+        const BR = C.TOWN_STAIR_BRIDGE;
+        if (y >= BR.y && y < BR.y + BR.h && (x === BR.x - 1 || x === BR.x + BR.w)) A.drawStairBridgeMouth(ctx, px, py, x === BR.x - 1 ? 1 : -1);
+      }
+      /* ⚠️⚠️ ZIP 435 — LA BERGE, PUIS LE TRAIT D'EAU, DANS CET ORDRE ET
+         APRÈS LE SOL. Les deux vivent dans fermeArt (§ drawTownWaterTile)
+         pour que `tools/render-eau.mjs` puisse les REGARDER : c'est le piège
+         n°1 du projet, et l'eau est du dessin pur.
+         L'ordre porte tout le fondu : le sol donne le lit, la berge pose la
+         vase et les galets, l'eau vient MORDRE dessus en traversant la case.
+         Inversé, on obtiendrait des galets flottant sur l'eau.
+         ⚠️ Le bassin de la fontaine est hors jeu : ses deux cases sont de
+         l'eau pour la COLLISION seulement (voir plus haut), et sa vasque a
+         son propre dessin. Une berge de galets autour d'une fontaine de
+         pierre serait exactement le rectangle bleu que le 425 a corrigé. */
+      const inFountain = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
+                      && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+      if (!inFountain) {
+        /* ⚠️ ZIP 437 — LE MASSIF FLEURI PASSE AVANT LA BERGE, et l'ordre est
+           la seule chose qui compte ici : le générateur ne fleurit que la
+           PELOUSE, donc les deux ne peuvent pas se superposer — sauf sur une
+           case que la berge a gagnée après coup, où c'est bien la vase qui
+           doit couvrir les fleurs, et non l'inverse. */
+        A.drawTownBloomTile(ctx, sprites, tw, x, y, px, py);
+        A.drawTownShoreTile(ctx, sprites, tw, x, y, px, py);
+        A.drawTownWaterTile(ctx, sprites, tw, x, y, px, py, now);
+      }
+
+      /* ---- LA FALAISE. Le parement qui bouche le trou ouvert par le
+         décalage, vers le sud. On le dessine en assises de pierre, avec une
+         arête claire au sommet (le nez du rebord, qui accroche la lumière) et
+         une ombre portée au pied. */
+      const drop = e - elAt(x, y + 1);
+      if (drop > 0.01 && !C.townGrandFlightCell(x, y + 1)) {
+        const fh = drop * EP;
+        /* ⚠️⚠️ ZIP 436 — LE PAREMENT AUSSI EST PARTI DANS `fermeArt`. Ce
+           qu'il y avait : un aplat `#8f8a80`, une ligne sombre PLEINE
+           LARGEUR tous les 5 px, et UN joint vertical par case, toujours au
+           même endroit (`x % 2`). C'est mot pour mot le défaut de brique de
+           l'hôtel de ville au 433 — « ce qui fait la brique n'est pas la
+           ligne d'assise, c'est l'alternance des joints verticaux » — resté
+           ici parce que personne ne pouvait le regarder. Six cases de
+           falaise donnaient six fois le même mur. */
+        /* ⚠️⚠️ ZIP 447 — UNE MARCHE N'A PAS UNE FALAISE SOUS ELLE, ELLE A UNE
+           CONTREMARCHE. Le même trou, deux dessins, et le choix se fait sur
+           ce qu'EST la case, pas sur la hauteur du trou : une volée garde des
+           contremarches lisses même haute, un mur de soutènement garde son
+           appareil même bas. Décider au seuil de hauteur aurait produit des
+           escaliers qui changent de matière en montant. */
+        const surMarche = g === C.G_TOWN_STAIR;
+        const peint = surMarche
+          ? A.drawTownStairRiser(ctx, sprites, tw, x, y, px, py + T, fh)
+          : A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh);
+        if (!peint) { ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh); }
+        /* 2026-09-25 (phase 4) — le mur de soutènement est HABILLÉ (chaperon,
+           chaînes d'angle, contreforts, barbacanes, mousse, lierre, fougères) :
+           `A.drawTownWallDress`. Une contremarche garde son nez simple. Son
+           ombre au pied est posée par la case du bas (`drawTownWallFoot`,
+           plus haut) : peinte ici, sous le mur, elle était recouverte par le
+           sol de la rangée suivante — elle ne s'est jamais vue depuis le 447. */
+        if (surMarche) { ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2); }
+        else A.drawTownWallDress(ctx, tw, x, y, px, py, fh);
+        // 2026-09-28 (phase 12a) — la neige du chaperon (et du nez de la marche), selon l'épaisseur sur la terrasse.
+        if (snowF) {
+          const wm = NG.depthSnowMix(snowF.depthAt(x * T + 8, y * T + 8), (NG.h32(x, y, 9) % 100) / 100);
+          const lv = wm.k > 0.5 ? wm.b : wm.a;
+          if (lv) A.drawTownWallSnow(ctx, x, y, px, py, fh, lv, surMarche);
+        }
+      }
+      /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
+         vue de côté, elle n'a pas d'épaisseur.
+         ⚠️ MAIS PAS POUR UN ESCALIER, ET LE BANC DE RENDU L'A PROUVÉ (425).
+         Le flanc d'une volée présente un dénivelé de 0,4 à 0,6 unité : assez
+         pour BLOQUER (au-delà de TOWN_STEP_MAX) et trop peu pour former une
+         vraie falaise — c'est-à-dire un mur invisible, la pire espèce. Les
+         douze cas trouvés étaient tous là. On leur donne donc ce qu'un vrai
+         escalier a de toute façon : un LIMON, une joue de pierre qui borde la
+         volée. Le blocage devient une chose qu'on voit et qu'on comprend. */
+      const isStair = g === C.G_TOWN_STAIR;
+      for (const sd of [-1, 1]) {
+        const dside = e - elAt(x + sd, y);
+        if (dside <= 0.01) continue;
+        const bw = isStair ? 4 : 2;
+        const bx2 = sd < 0 ? px : px + T - bw;
+        if (isStair) {
+          // ZIP 436 — même déménagement que les marches et la falaise.
+          if (!A.drawTownStairCheek(ctx, sprites, tw, x, y, px, py, bx2, bw, dside * EP)) {
+            ctx.fillStyle = "#8f8a80"; ctx.fillRect(bx2, py, bw, T);
+            ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);
+            ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP);
+          }
+        } else A.drawTownWallSide(ctx, x, y, px, py, sd);   // 2026-09-25 (phase 4) : le chaperon qui tourne
+      }
+      /* 2026-09-27 (phase 10) — et l'ombre au PIED d'un mur est-ouest, sur la
+         case basse (un escalier voisin a son limon, pas d'ombre). */
+      if (!isStair) for (const sd of [-1, 1]) {
+        const up = elAt(x + sd, y) - e;
+        if (up > 0.5 && tw.ground[y * tw.w + x + sd] !== C.G_TOWN_STAIR) A.drawTownWallSideFoot(ctx, px, py, sd);
+      }
+
+      /* ⚠️⚠️ ZIP 427 — LA VOIE FERRÉE DE LA VILLE EST CELLE DE LA FERME,
+         LITTÉRALEMENT. Ce qu'il y avait ici depuis le 234, ce sont les six
+         lignes remplacées ci-dessous : un ballast plat, une traverse une
+         rangée sur deux, deux traits d'acier. À côté, la ferme posait le
+         sprite `railHalf` du zip 232 — ballast granuleux, traverses larges,
+         rail éclairé sur son arête. Deux dessins de la MÊME voie ferrée,
+         c'est-à-dire le doublon du §8 : le même objet, deux fois moins soigné
+         d'un côté, et rien pour le signaler tant qu'on ne compare pas les deux
+         écrans. Demande de Guillaume, mot pour mot : « la même forme et
+         attention graphique ... pour cohérence visuelle ».
+         On ne dessine donc plus une seconde voie : on pose la première.
+         Zéro sprite nouveau, et la divergence redevient impossible. */
+      /* ⚠️ 2026-09-13 — LA VOIE RESTE CELLE DE LA FERME (même pavé, même fonction) ;
+         LE QUAI, LUI, NE L'EST PLUS. Demande de Guillaume : « ultra chic côté ville,
+         plus élémentaire côté ferme ». Le 427 voulait « la même forme » pour la
+         cohérence ; la cohérence tient désormais par le SOIN, pas par le sprite. */
+      if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
+        A.drawStationTile(ctx, sprites, "rail", x - C.TOWN_RAIL_X, y, px, py);
+      }
+      if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
+        A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
+      }
+      /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver (`tw.duck`, monde d'hiver seulement), SOUS la
+         neige de la case : elle n'y laisse qu'une poussière et garde ses flocons dans les jours. */
+      if (tw.duck && tw.duck[y * tw.w + x]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
+      /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
+         (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
+      if (dyn && tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
+        const chI = tw.chantier ? chantierNow() : null;
+        if (chI) {
+          /* 2026-10-11 — LA GLACE QUI FOND (le froid coupé, `CH.PHASE.MELT`) : elle s'efface en paliers, du bord vers le milieu (la
+             bande protégeait mal les bords) ; dessous, la pierre MOUILLÉE (un voile froid) et des flaques qui rétrécissent jusqu'à la fin
+             des flaques (`PUDDLE`). Au démontage, il n'y a pas de glace. */
+          /* ⚠️ 2026-10-12 : premier jet, une opacité PAR CASE en paliers (vu en jeu : un carré de glace intacte au milieu, des marches
+             d'une case à l'autre) et une flaque rectangulaire par case. Maintenant : l'eau de la pluie dessous (`meltWet`), la glace
+             fondue AU PIXEL par-dessus (`CA.rinkMeltCanvas`). */
+          if (chI.type === "montage") {
+            if (meltWet) { const wc = meltWet.cell(x, y); if (wc) ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, py, T, T); }
+            const [m0, m1] = CH.PHASE.MELT;
+            if (chI.t < m1) {
+              const mc = CA.rinkMeltCanvas((w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }, C.TOWN_RINK, Math.max(0, (chI.t - m0) / (m1 - m0)));
+              ctx.drawImage(mc, (x - C.TOWN_RINK.x0) * T, (y - C.TOWN_RINK.y0) * T, T, T, px, py, T, T);
+            }
+          }
+        } else {
+        A.drawRinkIceTile(ctx, x, y, px, py);
+        if (iceNow && iceNow.st) { A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st); A.drawRinkGlossAt(ctx, x, y, px, py, iceNow.st); }   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
+        }
+      }
+    }
+    /* Une case LENTE ne se cuit pas : elle porte une couche qui bouge, peinte AU MILIEU de son dessin fixe (la neige du chaperon,
+       avant les arêtes ; la glace et son usure). Elle reste un trou dans les blocs et se peint en entier à son tour. ⚠️ Le même
+       prédicat sert à la cuisson ET à l'image : deux copies finiraient par diverger (§4). La falaise est celle de
+       `paintTownGroundTile` (même seuil, même exception de la volée).
+       ⚠️ ET SOUS LA PLUIE OU LA NEIGE (`dynOn`), UNE CASE À ALTITUDE FRACTIONNAIRE (une marche : 0,45 × 48 px) OU UN TABLIER À DEMI-PIXEL.
+       Son bord haut tombe à cheval sur un pixel d'écran, mélangé à moitié à la case du dessus ; la recopie (`townGroundReblit`)
+       rapporte ce mélange tel qu'il est dans le bloc — SANS la neige ou le sol mouillé de la case du dessus —, et l'arête de chaque
+       marche ressortait d'un trait clair (vu au pixel, sous la pluie, devant l'église : écart jusqu'à 100 sur 765). Peinte à son
+       tour, la marche se pose sur la case mouillée, exactement comme avant. */
+    function townGroundSlow(tw, x, y, g, e, elAt, snowOn, dynOn) {
+      if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) return true;
+      if (snowOn && e - elAt(x, y + 1) > 0.01 && !C.townGrandFlightCell(x, y + 1)) return true;
+      return dynOn && ((e * C.TOWN_ELEV_PX) % 1 !== 0 || (g === C.G_BRIDGE && archPxTown(tw, x, y) % 1 !== 0));
+    }
+    const townGroundKey = (bx, by) => (by + 64) * 4096 + (bx + 64);
+    function townGroundReset(G, tw, sprites, bake, sig, zm, snowOn, dynOn) {
+      for (const c of G.blocks.values()) { c.width = 0; c.height = 0; }   // la mémoire rendue tout de suite (WebKit compte les canevas)
+      G.blocks.clear();
+      let mx = 0;
+      for (let k = 0; k < tw.elev.length; k++) if (tw.elev[k] > mx) mx = tw.elev[k];
+      Object.assign(G, { tw, sprites, bake, sig, zm, snowOn, dynOn, maxE: mx, B: Math.max(4, Math.round(16 / zm)) });
+    }
+    /* Un bloc : les cases dont le DESSIN peut y tomber, dans l'ordre de la boucle (rangée par rangée), le canevas découpant le
+       reste — deux cases s'y recouvrent donc exactement comme à l'écran. Une case haute se peint plus haut que sa rangée
+       (`e × EP`, 48 px par unité) : les rangées SOUS le bloc y montent, d'où la marge du bas (l'altitude la plus haute du monde,
+       plus une case pour le dos d'âne d'un pont) ; une falaise, elle, ne descend jamais sous la rangée naturelle de sa case. Une
+       colonne et une rangée de garde de chaque côté. */
+    function townGroundBake(G, tw, sprites, bx, by) {
+      const t0 = performance.now();
+      const zm = G.zm, B = G.B, S = B * T * zm, EP = C.TOWN_ELEV_PX;
+      const c = document.createElement("canvas"); c.width = S; c.height = S;
+      const g2 = c.getContext("2d"); g2.imageSmoothingEnabled = false;
+      g2.setTransform(zm, 0, 0, zm, -bx * S, -by * S);
+      const elAt = (xx, yy) => (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h ? 0 : tw.elev[yy * tw.w + xx]);
+      const xa = Math.max(0, bx * B - 1), xb = Math.min(tw.w - 1, (bx + 1) * B);
+      const ya = Math.max(0, by * B - 1), yb = Math.min(tw.h - 1, (by + 1) * B + Math.ceil((G.maxE * EP + T) / T));
+      for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) {
+        if (C.townGrandFlightCell(x, y) && !C.townOverpassCell(x, y)) continue;   // la volée du grand escalier se peint d'un tenant (voir la boucle)
+        const i = y * tw.w + x, e = tw.elev[i];
+        if (townGroundSlow(tw, x, y, tw.ground[i], e, elAt, G.snowOn, G.dynOn)) continue;
+        paintTownGroundTile(g2, tw, sprites, x, y, i, tw.ground[i], e, x * T, y * T + -e * EP, 0, elAt, null);
+      }
+      G.built++; G.bakeMs += performance.now() - t0;
+      return c;
+    }
+    /* L'image : les blocs que la vue touche, cuits au besoin dans le budget ; `null` s'il en manque un (le chemin lent). S'il reste
+       du temps, UN bloc de la couronne autour de la vue (celui vers lequel on marche sera prêt avant qu'on y arrive) ; et l'oubli de
+       ce qui sort de la couronne. ⚠️ LA MÉMOIRE (iPad : WebKit plafonne le total des canevas, sans erreur — VERIFICATION.md §10) :
+       des blocs de ~256 px d'écran (`B`), la vue et UNE couronne — ≈ 17 Mo au cran 1 sur 1600 × 1000, ≈ 14 Mo sur un iPad de
+       1180 × 820. Des blocs deux fois plus grands en coûtaient le double pour la même vue. */
+    function townGroundFrame(tw, sprites, zm, snowOn, dynOn, cam) {
+      const G = TOWN_GROUND;
+      if (!G._exposed) { G._exposed = true; try { window.__arcardiGround = G; } catch (e) { /* hors navigateur */ } }
+      const bake = EAU.townWaterBakeReady(tw);
+      if (G.off || !bake || !sprites || zm < 1) { G.slow++; return null; }
+      const flag = sprites.townRoad && sprites.townRoad.flag, hc = HD.civicHD.on ? HD.civicHDCost(flag) : null;
+      // Le dallage HD se fabrique par atlas, un par cran : seuls ceux du cran courant changent ce qui se peint ici.
+      const hdN = hc ? hc.atlases.filter((k) => k.endsWith("-" + zm) || k === "h" + zm || k === "v" + zm).length : -1;
+      const sig = zm + "|" + E.seasonOf().key + "|" + (snowOn ? 1 : 0) + (dynOn ? 1 : 0) + "|" + (HD.civicHD.on ? hdN : "off");
+      if (G.tw !== tw || G.sprites !== sprites || G.bake !== bake || G.sig !== sig) townGroundReset(G, tw, sprites, bake, sig, zm, snowOn, dynOn);
+      const BW = G.B * T;
+      const bx0 = Math.floor(cam.x / BW), bx1 = Math.floor((cam.x + cam.vw - 0.001) / BW);
+      const by0 = Math.floor(cam.y / BW), by1 = Math.floor((cam.y + cam.vh - 0.001) / BW);
+      G.view = [bx0, bx1, by0, by1];
+      const t0 = performance.now();
+      let ready = true;
+      for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) {
+        const k = townGroundKey(bx, by);
+        if (G.blocks.has(k)) continue;
+        if (performance.now() - t0 < G.budget) G.blocks.set(k, townGroundBake(G, tw, sprites, bx, by));
+        else ready = false;
+      }
+      if (ready && performance.now() - t0 < G.budget / 2) {
+        ring: for (let by = by0 - 1; by <= by1 + 1; by++) for (let bx = bx0 - 1; bx <= bx1 + 1; bx++) {
+          if (bx < 0 || by < 0 || bx * BW >= tw.w * T || by * BW >= tw.h * T) continue;   // hors de la carte : rien à cuire
+          const k = townGroundKey(bx, by);
+          if (!G.blocks.has(k)) { G.blocks.set(k, townGroundBake(G, tw, sprites, bx, by)); break ring; }
+        }
+      }
+      if (G.blocks.size > (bx1 - bx0 + 3) * (by1 - by0 + 3)) {
+        for (const [k, c] of G.blocks) {
+          const bx = (k % 4096) - 64, by = Math.floor(k / 4096) - 64;
+          if (bx < bx0 - 1 || bx > bx1 + 1 || by < by0 - 1 || by > by1 + 1) { c.width = 0; c.height = 0; G.blocks.delete(k); }
+        }
+      }
+      if (ready) G.fast++; else G.slow++;
+      return ready ? G : null;
+    }
+    /* La copie des blocs de la vue, au pixel d'écran (transformation neutre : le bloc est déjà à l'échelle, rien ne se rééchantillonne),
+       puis la transformation commune rendue. */
+    function townGroundBlit(ctx, G, camSx, camSy) {
+      const [bx0, bx1, by0, by1] = G.view, zm = G.zm, S = G.B * T * zm;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) {
+        const c = G.blocks.get(townGroundKey(bx, by));
+        if (c) ctx.drawImage(c, bx * S - camSx, by * S - camSy);
+      }
+      ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
+    }
+    /* ⚠️⚠️ LA RE-COPIE D'UNE CASE HAUTE. Dans la boucle d'avant, une case peignait son sol PUIS sa neige et son sol mouillé ; une case
+       plus haute plus au sud, peinte plus tard et plus haut (`e × EP`), recouvrait donc la neige de la case basse qu'elle cache — le
+       bord nord d'une terrasse. Avec les blocs, tout le fixe est à l'écran AVANT toute neige : la neige de la case basse passerait
+       par-dessus la terrasse. La parade : quand une case haute (ou le tablier d'un pont qui monte) arrive dans la boucle et qu'une
+       couche mobile a déjà été peinte dans sa colonne plus bas que son sommet (`gDyn`), on recopie depuis le bloc le rectangle
+       qu'elle peint — sa case et sa falaise —, puis sa propre neige vient dessus, comme avant. Le rectangle est arrondi au pixel
+       d'écran vers l'extérieur (une altitude fractionnaire tombe entre deux pixels). Sans neige ni pluie, `gDyn` reste vide : rien. */
+    function townGroundReblit(ctx, G, rx, ry, rw, rh, camSx, camSy) {
+      const zm = G.zm, S = G.B * T * zm;
+      const X0 = Math.floor(rx * zm), Y0 = Math.floor(ry * zm), X1 = Math.ceil((rx + rw) * zm), Y1 = Math.ceil((ry + rh) * zm);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      for (let by = Math.floor(Y0 / S); by <= Math.floor((Y1 - 1) / S); by++) for (let bx = Math.floor(X0 / S); bx <= Math.floor((X1 - 1) / S); bx++) {
+        const c = G.blocks.get(townGroundKey(bx, by));
+        if (!c) continue;
+        const ox = bx * S, oy = by * S;
+        const a = Math.max(X0, ox), b = Math.max(Y0, oy), a2 = Math.min(X1, ox + S), b2 = Math.min(Y1, oy + S);
+        if (a2 > a && b2 > b) ctx.drawImage(c, a - ox, b - oy, a2 - a, b2 - b, a - camSx, b - camSy, a2 - a, b2 - b);
+      }
+      ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);
+    }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!tw || !sprites) return;
@@ -23092,6 +23583,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (e.a < 1) ctx.globalAlpha = 1;
         }
       };
+      /* 2026-10-14 — LE SOL CUIT PAR BLOCS : cette image en a-t-elle tous les blocs (sinon le chemin lent, et la cuisson avance
+         d'un pas) ? `gDyn` : par colonne, le bas de la dernière couche MOBILE peinte (neige, sol mouillé, case lente) — ce qu'une
+         case haute plus au sud doit recouvrir. Pendant un fondu de zoom (échelle fractionnaire), toujours le chemin lent. */
+      const gDynIn = { snowF, iceNow, meltWet };
+      const TGf = zmFrac ? null : townGroundFrame(tw, sprites, zm, !!snowF, !!(snowF || wetF), cam);
+      const gDyn = TGf ? new Float64Array(xR - xL + 1).fill(-Infinity) : null;
+      if (TGf) townGroundBlit(ctx, TGf, camSx, camSy);
       for (let y = yR0; y <= yBot; y++) for (let x = xL; x <= xR; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         /* 2026-09-27 (nuit) — LA VOLÉE DU GRAND ESCALIER EST PEINTE D'UN TENANT
@@ -23107,343 +23605,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const sx = (R - L) / T, sy = (B - Tp) / T;
           ctx.setTransform(sx, 0, 0, sy, L - px * sx, Tp - py * sy);
         }
-        // Zip 235: use the real farm sprite tiles for a match with the farm
-        // look (grass/path/stone), keeping the fountain water for the pool.
-        /* ⚠️ ZIP 431 — L'HERBE DE LA VILLE N'EST PLUS CELLE DE LA FERME. Même
-           dessin, palette assombrie de 10 % (voir GRASS_TOWN dans fermeArt.js).
-           Le repli sur `sprites.grass` n'est pas de la politesse : un vieux
-           client qui n'aurait pas ce zip doit continuer à peindre de l'herbe,
-           pas un trou noir — c'est la même prudence que partout ailleurs sur les
-           atlas de sprites. */
-        const gTiles = sprites.townGrass || sprites.grass;
-        /* ⚠️ 438 : l'herbe de la ville est un pavé de 64 px (voir
-           `drawTownGrassTile`). Le repli sur les trois tuiles du 431 reste. */
-        if (g === C.G_GRASS) { if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py); }
-        // ZIP 434 — le revêtement vit dans fermeArt (§ drawTownRoadTile) pour
-        // qu'un banc puisse le REGARDER ; ici on ne garde que le repli.
-        else if (g === C.G_PATH) { if (!A.drawTownRoadTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(sprites.path, px, py); }
-        else if (g === C.G_PATH_STONE) {
-          /* ⚠️⚠️ ZIP 436 — LE DERNIER DAMIER DE 16 px DE LA VILLE EST PARTI
-             DANS `fermeArt`. Ce qu'il y avait ici depuis le 425 : `(x + y) % 2`
-             entre deux gris, cinq variantes de teinte, un joint clair au
-             nord-ouest. C'était déjà mieux que l'aplat d'avant, et c'est resté
-             un DAMIER DE PÉRIODE 16 px — le défaut que le 434 a corrigé sur les
-             rues, sur la surface qui entoure justement les escaliers du
-             tribunal. Quand Guillaume écrit « un écart flagrant de qualité de
-             textures » entre le sol pavé et les escaliers du courthouse, les
-             deux tiers de ce qu'il regarde sont ce dallage-ci.
-             Voir `A.drawTownFlagTile` et `tools/render-escaliers.mjs`. Le repli
-             est celui du 425, conservé intact : un atlas manquant doit rendre
-             une place grise, pas un trou. */
-          if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) {
-            const v = ((x * 41 + y * 23) % 5);
-            ctx.fillStyle = ((x + y) % 2 === 0) ? ["#b3b2b8", "#b6b5bb", "#afaeb4", "#b1b0b6", "#b4b3b9"][v]
-                                                : ["#a5a4ab", "#a8a7ae", "#a2a1a8", "#a6a5ac", "#a3a2a9"][v];
-            ctx.fillRect(px, py, T, T);
-            const st4 = (xx, yy) => {
-              if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
-              return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
-            };
-            ctx.fillStyle = "#cfcabb";
-            if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
-            if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
-            if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
-            if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
-          }
-        }
-        else if (g === C.G_TOWN_LAWN) {
-          /* 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
-             rayée dans un seul sens, comme une pelouse qui vient d'être passée.
-             ⚠️⚠️ ZIP 436 — LA RAYURE ÉTAIT `x % 2`, C'EST-À-DIRE UNE BANDE PAR
-             CASE. Trouvé pendant l'audit graphique, et c'est la même famille que
-             la tuile unique du 434 : une alternance de période 32 px sur un
-             parterre de six cases donne trois bandes claires et trois sombres,
-             toutes de la même largeur, toutes alignées sur la grille. Ce n'est
-             pas une pelouse tondue, c'est un tissu à rayures.
-             ⚠️ CE QUI FAIT UNE PELOUSE TONDUE, C'EST LA LARGEUR DE LA TONDEUSE
-             ET LE FAIT QU'ELLE PASSE EN ALLER-RETOUR : des bandes de deux à
-             trois cases, alternées, avec un LISERÉ plus marqué à la jointure (là
-             où les deux passages se chevauchent). Trois cases valent 48 px, soit
-             ~1,2 m à l'échelle du jeu : la largeur d'une tondeuse autoportée.
-             ⚠️ Et la bande est calculée sur la coordonnée MONDE, jamais sur la
-             case du parterre : deux parterres voisins doivent avoir été tondus
-             par la même machine dans le même sens, sinon chaque massif a sa
-             propre rayure et on lit un patchwork. */
-          if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 13 + y * 7) % gTiles.length], px, py);
-          const MOW = 3;                                   // largeur de passe, en cases
-          const band = Math.floor(x / MOW) & 1;
-          ctx.fillStyle = band ? "rgba(24,70,30,0.10)" : "rgba(140,200,120,0.07)";
-          ctx.fillRect(px, py, T, T);
-          // La jointure des deux passes : un liseré d'un pixel, du côté sombre.
-          if (((x % MOW) + MOW) % MOW === 0) {
-            ctx.fillStyle = band ? "rgba(18,54,24,0.22)" : "rgba(150,210,140,0.14)";
-            ctx.fillRect(px, py, 1, T);
-          }
-        }
-        else if (g === C.G_TOWN_STAIR) {
-          /* ⚠️⚠️ ZIP 436 — LE DESSIN A DÉMÉNAGÉ DANS `fermeArt`, ET C'EST LE
-             SUJET DE LA CORRECTION. Ce qu'il y avait ici : un `fillRect` gris
-             uni plus quatre traits blancs et quatre traits noirs tous les
-             4 px, RIGOUREUSEMENT IDENTIQUES sur toutes les cases de toutes les
-             volées — à côté d'un revêtement de rue au motif de 64 px cuit avec
-             son granulat, ses éclats et ses joints décalés (434). Guillaume l'a
-             dit en une phrase : « un écart flagrant de qualité de textures ».
-             La cause n'est pas le soin, c'est que ce code-ci n'était REGARDABLE
-             par aucun banc (§4). Voir `A.drawTownStairTile` et
-             `tools/render-escaliers.mjs`. Le repli reste ici, comme pour les
-             revêtements : un atlas manquant doit rendre du gris, pas un trou. */
-          if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
-            const vertical = A.townStairVertical(tw, x, y);
-            ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
-            for (let s = 0; s < 4; s++) {
-              if (vertical) { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1); }
-              else { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px + s * 4 + 3, py, 1, T); }
-            }
-          }
-        }
-        else if (g === C.G_WATER) {
-          /* ⚠️ 425 — LES DEUX CASES DE LA FONTAINE NE SE PEIGNENT PAS EN EAU.
-             Elles restent G_WATER parce que c'est ce qui les rend
-             INFRANCHISSABLES (blockedTown teste le sol, pas le décor), mais
-             leur eau carrée débordait de tous les côtés du bassin rond — un
-             rectangle bleu autour d'une vasque de pierre, vu en jeu.
-             La collision et le dessin n'ont aucune raison de coïncider ici :
-             on les sépare, et la vraie eau est peinte plus bas, à la forme du
-             bassin. C'est le seul endroit de la ville où l'on fait ça, d'où le
-             test étroit sur l'emprise exacte de la fontaine. */
-          const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
-                     && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
-          /* ⚠️ ZIP 435 — ON PEINT LE LIT, PAS L'EAU. Le trait d'eau ne suit
-             plus le bord de la case (voir `drawTownWaterTile` dans fermeArt) :
-             il la TRAVERSE. Ce qui reste hors du contour, sur une case de rive,
-             doit donc montrer le fond de la berge — d'où l'herbe ici, puis la
-             vase de `drawTownShoreTile` par-dessus, puis l'eau. L'ancien
-             `fillRect` bleu pleine case est précisément ce qui dessinait
-             l'escalier de 16 px. */
-          /* ⚠️ 2026-09-25 (phase 2) : la DALLE de la place, plus un aplat gris
-             (`#adacb3`) — c'était, avec la bordure que les dalles voisines
-             traçaient autour, le rectangle clair que l'audit a vu derrière la
-             vasque. Voir `drawTownFlagTile`. L'aplat reste en repli. */
-          if (inFtn) { if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); } }
-          else if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
-        }
-        else if (g === C.G_BRIDGE) {
-          /* Zip 426 — LE PONTON DU LAC. Des lames de bois posées SUR l'eau : on
-             peint donc l'eau d'abord (le ponton ne la remplace pas, il la
-             couvre), puis les planches et leur ombre portée. Sans l'eau
-             dessous, le ponton flotterait sur du vert. */
-          ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T);
-          /* ⚠️⚠️ ZIP 439 — LE TABLIER MONTE. La flèche vient de `townArchRise`
-             (une couche, pas un identifiant de sol — règle du 434) et vaut zéro
-             partout ailleurs, donc ce bloc reste exactement l'ancien pour le
-             ponton du lac, qui est plat et doit le rester.
-             ⚠️ ET LE DÉCALAGE VERS LE HAUT OUVRE UN TROU VERS LE SUD — ce trou
-             EST le flanc du pont, exactement comme la joue d'une falaise (425)
-             ou celle de l'estrade du tribunal (426). Sans lui on verrait l'eau
-             sous ses propres pieds sur trois pixels de haut, ce qui est le
-             défaut le plus lisible qu'un dénivelé puisse produire. */
-          const bRise = archPxTown(tw, x, y);
-          const bpy = py - bRise;
-          if (bRise > 0) {
-            ctx.fillStyle = "#6b4a30"; ctx.fillRect(px, bpy + T - 1, T, bRise + 1);
-            ctx.fillStyle = "rgba(30,20,12,0.35)"; ctx.fillRect(px, bpy + T + bRise - 1, T, 1);
-            ctx.fillStyle = "rgba(255,225,180,0.10)"; ctx.fillRect(px, bpy + T - 1, T, 1);
-          }
-          /* ⚠️⚠️ ZIP 439 — LA LAME EST CELLE DE LA PLANCHE DE RÉFÉRENCE, ET LE
-             DESSIN QU'ELLE REMPLACE ÉTAIT QUATRE BANDES DE COULEUR. Écrit au
-             426, jamais regardé depuis : `#b78f58` / `#9c7746` en alternance
-             tous les quatre pixels, plus un trait d'ombre. À côté des décors
-             importés, le ponton se lisait comme une RAMPE DE CARTON — c'est le
-             deuxième défaut le plus visible d'une capture du lac, après la
-             haie, et il est de la même famille (un dessin qui vit dans la
-             closure du rendu et que personne ne peut regarder, §4).
-             ⚠️ La tuile vient du TABLIER du pont de la planche, transposée à
-             l'import : les lames d'un ponton sont perpendiculaires à la marche,
-             et le ponton du lac court nord-sud quand le pont de la planche
-             court est-ouest. Le raisonnement est sur `deckPlank`. */
-          if (sprites.townDeck) ctx.drawImage(sprites.townDeck, px, bpy);
-          else {
-            ctx.fillStyle = "#a9834f"; ctx.fillRect(px, bpy, T, T);
-            for (let k = 0; k < 4; k++) {
-              ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
-              ctx.fillRect(px, bpy + k * 4, T, 4);
-              ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, bpy + k * 4 + 3, T, 1);
-            }
-          }
-          ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, bpy + T - 2, T, 2);
-        }
-        else ctx.drawImage(sprites.grass[0], px, py);
-
-        /* 2026-09-25 (phase 4) — L'OMBRE DU MUR QUI DOMINE CETTE CASE (voir
-           `A.drawTownWallFoot`) : posée ici, après le sol, parce que c'est la
-           seule case qui la voit. */
-        {
-          const upPx = (elAt(x, y - 1) - e) * EP;
-          if (upPx > 0.5 && y > 0 && !C.townGrandFlightCell(x, y)) A.drawTownWallFoot(ctx, px, py, upPx);
-        }
-        /* 2026-09-27 (nuit) — LA BOUCHE DU PASSAGE SOUS LE GRAND ESCALIER : la
-           chaussée s'assombrit en s'engageant sous la volée. C'est, avec le
-           passant qui disparaît dessous, ce qui fait lire un PONT et non une
-           rue qui bute contre un escalier. */
-        {
-          const BR = C.TOWN_STAIR_BRIDGE;
-          if (y >= BR.y && y < BR.y + BR.h && (x === BR.x - 1 || x === BR.x + BR.w)) A.drawStairBridgeMouth(ctx, px, py, x === BR.x - 1 ? 1 : -1);
-        }
-        /* ⚠️⚠️ ZIP 435 — LA BERGE, PUIS LE TRAIT D'EAU, DANS CET ORDRE ET
-           APRÈS LE SOL. Les deux vivent dans fermeArt (§ drawTownWaterTile)
-           pour que `tools/render-eau.mjs` puisse les REGARDER : c'est le piège
-           n°1 du projet, et l'eau est du dessin pur.
-           L'ordre porte tout le fondu : le sol donne le lit, la berge pose la
-           vase et les galets, l'eau vient MORDRE dessus en traversant la case.
-           Inversé, on obtiendrait des galets flottant sur l'eau.
-           ⚠️ Le bassin de la fontaine est hors jeu : ses deux cases sont de
-           l'eau pour la COLLISION seulement (voir plus haut), et sa vasque a
-           son propre dessin. Une berge de galets autour d'une fontaine de
-           pierre serait exactement le rectangle bleu que le 425 a corrigé. */
-        const inFountain = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
-                        && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
-        if (!inFountain) {
-          /* ⚠️ ZIP 437 — LE MASSIF FLEURI PASSE AVANT LA BERGE, et l'ordre est
-             la seule chose qui compte ici : le générateur ne fleurit que la
-             PELOUSE, donc les deux ne peuvent pas se superposer — sauf sur une
-             case que la berge a gagnée après coup, où c'est bien la vase qui
-             doit couvrir les fleurs, et non l'inverse. */
-          A.drawTownBloomTile(ctx, sprites, tw, x, y, px, py);
-          A.drawTownShoreTile(ctx, sprites, tw, x, y, px, py);
-          A.drawTownWaterTile(ctx, sprites, tw, x, y, px, py, now);
-        }
-
-        /* ---- LA FALAISE. Le parement qui bouche le trou ouvert par le
-           décalage, vers le sud. On le dessine en assises de pierre, avec une
-           arête claire au sommet (le nez du rebord, qui accroche la lumière) et
-           une ombre portée au pied. */
-        const drop = e - elAt(x, y + 1);
-        if (drop > 0.01 && !C.townGrandFlightCell(x, y + 1)) {
-          const fh = drop * EP;
-          /* ⚠️⚠️ ZIP 436 — LE PAREMENT AUSSI EST PARTI DANS `fermeArt`. Ce
-             qu'il y avait : un aplat `#8f8a80`, une ligne sombre PLEINE
-             LARGEUR tous les 5 px, et UN joint vertical par case, toujours au
-             même endroit (`x % 2`). C'est mot pour mot le défaut de brique de
-             l'hôtel de ville au 433 — « ce qui fait la brique n'est pas la
-             ligne d'assise, c'est l'alternance des joints verticaux » — resté
-             ici parce que personne ne pouvait le regarder. Six cases de
-             falaise donnaient six fois le même mur. */
-          /* ⚠️⚠️ ZIP 447 — UNE MARCHE N'A PAS UNE FALAISE SOUS ELLE, ELLE A UNE
-             CONTREMARCHE. Le même trou, deux dessins, et le choix se fait sur
-             ce qu'EST la case, pas sur la hauteur du trou : une volée garde des
-             contremarches lisses même haute, un mur de soutènement garde son
-             appareil même bas. Décider au seuil de hauteur aurait produit des
-             escaliers qui changent de matière en montant. */
-          const surMarche = g === C.G_TOWN_STAIR;
-          const peint = surMarche
-            ? A.drawTownStairRiser(ctx, sprites, tw, x, y, px, py + T, fh)
-            : A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh);
-          if (!peint) { ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh); }
-          /* 2026-09-25 (phase 4) — le mur de soutènement est HABILLÉ (chaperon,
-             chaînes d'angle, contreforts, barbacanes, mousse, lierre, fougères) :
-             `A.drawTownWallDress`. Une contremarche garde son nez simple. Son
-             ombre au pied est posée par la case du bas (`drawTownWallFoot`,
-             plus haut) : peinte ici, sous le mur, elle était recouverte par le
-             sol de la rangée suivante — elle ne s'est jamais vue depuis le 447. */
-          if (surMarche) { ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2); }
-          else A.drawTownWallDress(ctx, tw, x, y, px, py, fh);
-          // 2026-09-28 (phase 12a) — la neige du chaperon (et du nez de la marche), selon l'épaisseur sur la terrasse.
-          if (snowF) {
-            const wm = NG.depthSnowMix(snowF.depthAt(x * T + 8, y * T + 8), (NG.h32(x, y, 9) % 100) / 100);
-            const lv = wm.k > 0.5 ? wm.b : wm.a;
-            if (lv) A.drawTownWallSnow(ctx, x, y, px, py, fh, lv, surMarche);
-          }
-        }
-        /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
-           vue de côté, elle n'a pas d'épaisseur.
-           ⚠️ MAIS PAS POUR UN ESCALIER, ET LE BANC DE RENDU L'A PROUVÉ (425).
-           Le flanc d'une volée présente un dénivelé de 0,4 à 0,6 unité : assez
-           pour BLOQUER (au-delà de TOWN_STEP_MAX) et trop peu pour former une
-           vraie falaise — c'est-à-dire un mur invisible, la pire espèce. Les
-           douze cas trouvés étaient tous là. On leur donne donc ce qu'un vrai
-           escalier a de toute façon : un LIMON, une joue de pierre qui borde la
-           volée. Le blocage devient une chose qu'on voit et qu'on comprend. */
-        const isStair = g === C.G_TOWN_STAIR;
-        for (const sd of [-1, 1]) {
-          const dside = e - elAt(x + sd, y);
-          if (dside <= 0.01) continue;
-          const bw = isStair ? 4 : 2;
-          const bx2 = sd < 0 ? px : px + T - bw;
-          if (isStair) {
-            // ZIP 436 — même déménagement que les marches et la falaise.
-            if (!A.drawTownStairCheek(ctx, sprites, tw, x, y, px, py, bx2, bw, dside * EP)) {
-              ctx.fillStyle = "#8f8a80"; ctx.fillRect(bx2, py, bw, T);
-              ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);
-              ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP);
-            }
-          } else A.drawTownWallSide(ctx, x, y, px, py, sd);   // 2026-09-25 (phase 4) : le chaperon qui tourne
-        }
-        /* 2026-09-27 (phase 10) — et l'ombre au PIED d'un mur est-ouest, sur la
-           case basse (un escalier voisin a son limon, pas d'ombre). */
-        if (!isStair) for (const sd of [-1, 1]) {
-          const up = elAt(x + sd, y) - e;
-          if (up > 0.5 && tw.ground[y * tw.w + x + sd] !== C.G_TOWN_STAIR) A.drawTownWallSideFoot(ctx, px, py, sd);
-        }
-
-        /* ⚠️⚠️ ZIP 427 — LA VOIE FERRÉE DE LA VILLE EST CELLE DE LA FERME,
-           LITTÉRALEMENT. Ce qu'il y avait ici depuis le 234, ce sont les six
-           lignes remplacées ci-dessous : un ballast plat, une traverse une
-           rangée sur deux, deux traits d'acier. À côté, la ferme posait le
-           sprite `railHalf` du zip 232 — ballast granuleux, traverses larges,
-           rail éclairé sur son arête. Deux dessins de la MÊME voie ferrée,
-           c'est-à-dire le doublon du §8 : le même objet, deux fois moins soigné
-           d'un côté, et rien pour le signaler tant qu'on ne compare pas les deux
-           écrans. Demande de Guillaume, mot pour mot : « la même forme et
-           attention graphique ... pour cohérence visuelle ».
-           On ne dessine donc plus une seconde voie : on pose la première.
-           Zéro sprite nouveau, et la divergence redevient impossible. */
-        /* ⚠️ 2026-09-13 — LA VOIE RESTE CELLE DE LA FERME (même pavé, même fonction) ;
-           LE QUAI, LUI, NE L'EST PLUS. Demande de Guillaume : « ultra chic côté ville,
-           plus élémentaire côté ferme ». Le 427 voulait « la même forme » pour la
-           cohérence ; la cohérence tient désormais par le SOIN, pas par le sprite. */
-        if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
-          A.drawStationTile(ctx, sprites, "rail", x - C.TOWN_RAIL_X, y, px, py);
-        }
-        if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
-          A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
-        }
-        /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver (`tw.duck`, monde d'hiver seulement), SOUS la
-           neige de la case : elle n'y laisse qu'une poussière et garde ses flocons dans les jours. */
-        if (tw.duck && tw.duck[y * tw.w + x]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
-        /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
-           (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
-        if (tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
-          const chI = tw.chantier ? chantierNow() : null;
-          if (chI) {
-            /* 2026-10-11 — LA GLACE QUI FOND (le froid coupé, `CH.PHASE.MELT`) : elle s'efface en paliers, du bord vers le milieu (la
-               bande protégeait mal les bords) ; dessous, la pierre MOUILLÉE (un voile froid) et des flaques qui rétrécissent jusqu'à la fin
-               des flaques (`PUDDLE`). Au démontage, il n'y a pas de glace. */
-            /* ⚠️ 2026-10-12 : premier jet, une opacité PAR CASE en paliers (vu en jeu : un carré de glace intacte au milieu, des marches
-               d'une case à l'autre) et une flaque rectangulaire par case. Maintenant : l'eau de la pluie dessous (`meltWet`), la glace
-               fondue AU PIXEL par-dessus (`CA.rinkMeltCanvas`). */
-            if (chI.type === "montage") {
-              if (meltWet) { const wc = meltWet.cell(x, y); if (wc) ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, py, T, T); }
-              const [m0, m1] = CH.PHASE.MELT;
-              if (chI.t < m1) {
-                const mc = CA.rinkMeltCanvas((w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }, C.TOWN_RINK, Math.max(0, (chI.t - m0) / (m1 - m0)));
-                ctx.drawImage(mc, (x - C.TOWN_RINK.x0) * T, (y - C.TOWN_RINK.y0) * T, T, T, px, py, T, T);
-              }
-            }
+        /* ⚠️⚠️ 2026-10-14 — LE SOL CUIT PAR BLOCS (`TOWN_GROUND`, voir `paintTownGroundTile`). Chemin lent (`!TGf`) :
+           exactement le dessin d'avant, case par case. Chemin rapide : le décor fixe est déjà à l'écran (recopié des blocs avant
+           la boucle) ; ici ne restent que les cases LENTES, peintes en entier à leur tour, et la RE-COPIE d'une case haute qui
+           doit recouvrir une couche mobile peinte avant elle — voir la note de `townGroundReblit`. */
+        if (!TGf) paintTownGroundTile(ctx, tw, sprites, x, y, i, g, e, px, py, now, elAt, gDynIn);
+        else {
+          const dropF = e - elAt(x, y + 1);
+          const faceF = dropF > 0.01 && !C.townGrandFlightCell(x, y + 1) ? dropF * EP : 0;
+          if (townGroundSlow(tw, x, y, g, e, elAt, !!snowF, !!(snowF || wetF))) {
+            paintTownGroundTile(ctx, tw, sprites, x, y, i, g, e, px, py, now, elAt, gDynIn);
+            if (gDyn[x - xL] < py + T + faceF) gDyn[x - xL] = py + T + faceF;
           } else {
-          A.drawRinkIceTile(ctx, x, y, px, py);
-          if (iceNow && iceNow.st) { A.drawRinkWearAt(ctx, x, y, px, py, iceNow.st); A.drawRinkGlossAt(ctx, x, y, px, py, iceNow.st); }   // 2026-10-06 : l'usure (quatre états), et la glace refaite derrière la lame
+            const liftF = g === C.G_BRIDGE ? archPxTown(tw, x, y) : 0;
+            if ((e > 0.01 || liftF > 0) && gDyn[x - xL] > py - liftF) townGroundReblit(ctx, TGf, px, py - liftF, T, liftF + T + faceF, camSx, camSy);
           }
         }
         /* 2026-09-29 (phase 12b) — le sol mouillé de cette case, sous la neige. */
         if (wetF && y >= y0 - 1) {
           const wc = wetF.cell(x, y);
-          if (wc) ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T);
+          if (wc) { ctx.drawImage(wc.img, wc.sx, wc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T); if (gDyn && gDyn[x - xL] < py + T) gDyn[x - xL] = py + T; }
         }
         /* 2026-09-28 (phase 12a) — la neige de cette case (voir plus haut). Le
            tablier d'un pont en arc monte avec son dos d'âne : sa neige aussi. */
         if (snowF && y >= y0 - 1) {
           const sc = snowF.cell(x, y);
-          if (sc) ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T);
+          if (sc) { ctx.drawImage(sc.img, sc.sx, sc.sy, T, T, px, g === C.G_BRIDGE ? py - archPxTown(tw, x, y) : py, T, T); if (gDyn && gDyn[x - xL] < py + T) gDyn[x - xL] = py + T; }
         }
         /* ⚠️ ZIP 435 — LE « REFLET RESPIRANT » DU 425 EST SUPPRIMÉ, PAS
            DÉPLACÉ. C'était `rgba(190,225,255, 0.25 + sin(now/900 + (x+y))·0.12)`
@@ -28867,11 +29054,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (V.push !== "kick" && Math.abs(st.u) > 0.4 && st.stride) { pose = "glide"; ph = st.stride; }
       // les genoux : on se ramasse en chargeant le saut, et l'on plie-déplie en pompant
       if (st.mode === "grind") pose = "grind";
-      const bend = st.mode === "ground" ? Math.max(Math.round(st.charge * 3), st.pumpK > 0.05 ? 2 : 0, Math.abs(st.lean) > 0.4 ? 1 : 0, Math.min(5, Math.ceil((st.landT || 0) * 18))) : st.mode === "grind" ? 2 : 0;
+      if (st.mode === "hand") pose = "hand";   // 2026-10-15 : le handplant des rollers
+      /* 2026-10-15 — la charge du saut se lit dans les genoux : quatre pixels à pleine charge (trois au plus avant, quand elle était pleine
+         en 0,3 s ; elle monte maintenant pendant une seconde, on la voit descendre) */
+      const bend = st.mode === "ground" ? Math.max(Math.round(st.charge * 4), st.pumpK > 0.05 ? 2 : 0, Math.abs(st.lean) > 0.4 ? 1 : 0, Math.min(5, Math.ceil((st.landT || 0) * 18))) : st.mode === "grind" ? 2 : 0;
       const ang = MO.trickAngles(st.trick);
-      // le cap DESSINÉ (`thV`, monture.js) : il rattrape en quelques images ce qui claque d'un pas à l'autre
-      return { ride: { kind: st.kind, th: st.thV != null ? st.thV : st.th, air: view.air, mode: st.mode, pose, ph, color: st.color | 0, bend, lean: Math.round(st.lean * 2), back: st.u < -0.3 && st.kind === "roller",
-        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: view.air * T };
+      // le cap DESSINÉ (`thV`, monture.js) : il rattrape en quelques images ce qui claque d'un pas à l'autre ; la pirouette le fait tourner
+      const thD = (st.thV != null ? st.thV : st.th) + MO.piroAngle(st.piro);
+      return { ride: { kind: st.kind, th: thD, air: view.air, mode: st.mode, pose, ph, color: st.color | 0, bend, lean: Math.round(st.lean * 2), back: st.u < -0.3 && st.kind === "roller",
+        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0,
+        nohand: ang ? ang.nohand : 0, xup: ang ? ang.xup : 0, piro: !!st.piro, hand: st.hand ? { T: st.hand.T, sx: st.hand.sx, sy: st.hand.sy } : null }, skAir: view.air * T };
     }
     /* 2026-10-11 — LA MONTURE D'UN AUTRE, DÉDUITE (§3) : le cap reçu ; en l'air, la parabole et la vrille reconstruites depuis
        la réception (`rdT0`) ; au sol, la hauteur est celle du relief sous ses pieds (déjà dans `liftPx`). La pose se lit du mode. */
@@ -28888,8 +29080,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const def = rd[6] ? MO.trickByName(kind, rd[6]) : null;   // la figure : relue par la même fonction, sur MON horloge
         if (def) ang = MO.trickAngles({ ...def, t: (rd[7] || 0) / 1000 + t * (+rd[8] || 1) });
       } else if (md === 3 && rd.length >= 4) { air = Math.max(0, rd[3] - SPK.heightAt(C.footX(p.x), C.footY(p.y))); pose = "grind"; }
-      return { ride: { kind, th, air, mode: md === 1 ? "air" : md === 2 ? "bail" : md === 3 ? "grind" : "ground", pose, ph: t * 2, color: rp.rdc | 0, bend: md === 3 ? 2 : 0, lean: 0,
-        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0 }, skAir: air * T };
+      else if (md === 4) pose = "hand";   // 2026-10-15 : le handplant (la hauteur du coping, déjà sous ses pieds)
+      let piro = false;
+      if (md === 0 && rd.length >= 7) { th += MO.piroAngle({ lv: rd[3], t: (rd[4] || 0) / 1000 + t, a0: rd[5], dir: rd[6] }); piro = true; }   // la pirouette, sur MON horloge
+      return { ride: { kind, th, air, mode: md === 1 ? "air" : md === 2 ? "bail" : md === 3 ? "grind" : md === 4 ? "hand" : "ground", pose, ph: t * 2, color: rp.rdc | 0, bend: md === 3 ? 2 : 0, lean: 0,
+        flip: ang ? ang.roll : 0, yaw: ang ? ang.yaw : 0, bar: ang ? ang.bar : 0, whip: ang ? ang.whip : 0, grab: ang ? ang.grab : 0,
+        nohand: ang ? ang.nohand : 0, xup: ang ? ang.xup : 0, piro, hand: md === 4 ? { T: t, sx: 0, sy: 0 } : null }, skAir: air * T };
     }
     function drawSelf(m) {
       // Zip 427 : ma tenue vient du même endroit que celle des autres (voir
@@ -30773,7 +30969,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
         ctx.restore();
       }
-      queueNameTag(p, isSelf, px + 8, py - 10 - (p.ride ? Math.round(p.skAir || 0) : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
+      // 2026-10-15 : au HANDPLANT, le corps renversé monte de 27 px au-dessus du coping (les bottines en haut) — le nom passe au-dessus d'elles
+      queueNameTag(p, isSelf, px + 8, py - 10 - (p.ride ? Math.round(p.skAir || 0) + (p.ride.pose === "hand" ? 6 : 0) : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
       // ⚠️ L'état du contexte que laissait l'ancienne écriture du nom : les
       // icônes ci-dessous (🩹, 🏆) comptaient sur son `textAlign` centré.
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";

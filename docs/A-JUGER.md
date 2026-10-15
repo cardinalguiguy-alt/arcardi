@@ -6,6 +6,23 @@
 
 ---
 
+### À juger — le saut chargé et les figures du park (2026-10-15, suite) : tes réponses aux questions de forme n'ont pas été données
+
+Les options RECOMMANDÉES ont été prises ; à confirmer ou à changer en jouant (le park chez soi : menu dev, « Skatepark et chantier ») :
+- **Le saut chargé** : Espace tenu jusqu'à une seconde, jusqu'à ~1 m (BMX 1,1 m). Assez long ? trop ? Les genoux qui plient : lisibles ?
+- **Les commandes des variantes** : une flèche enfoncée EN L'AIR juste avant V ou G (heelflip, hardflip, 360 shove-it, bigspin ; no-hander, X-up, 360,
+  360 tailwhip) ; le même appui qui prolonge (double, triple). Trouvables ? Les noms dans le « ? » suffisent-ils ?
+- **Les rollers** : la pirouette au sol (V, chaque V l'emballe) ; les spins en l'air (flèche + V, jusqu'au 720) ; le **handplant** — G tenu en arrivant au
+  coping (le quarter, la mini-rampe), lâché pour redescendre. La pose renversée (`app/audit-riders?k=roller`, les trois dernières rangées), lisible ?
+- La trottinette du joueur NAÏF tombe un peu plus (1,10 → 1,75/min au banc) : ses sauts plus hauts vont chercher les garde-corps. Gênant en jouant ?
+
+### À juger — la fluidité de Valley Town en zoom large (2026-10-15)
+
+Sur TON écran : arriver en train au cran le plus large (🔍− jusqu'au bout), marcher à travers la ville, puis sous la pluie et sous la neige. Plus de saccades ?
+Le sol est-il le même qu'avant ? (Il est maintenant peint d'avance par blocs : un défaut se verrait comme un carré de sol qui ne change pas avec la saison, une
+neige qui passe par-dessus le bord d'une terrasse, ou un bloc qui manque.) `?perf=1` dans l'URL affiche i/s et ms par image. Pas mesuré : ton Mac, un iPad,
+l'amie au Mac lent.
+
 ### À juger — le « ? » du park, l'échange à la cabane, l'entrée du U, les montures redessinées (2026-10-14)
 
 En jeu : louer un skate à la cabane (à l'est de la porte), le monter (F), puis :

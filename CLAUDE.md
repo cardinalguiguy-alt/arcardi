@@ -11,22 +11,23 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-14 — LE PARK : LE « ? », L'ÉCHANGE À LA CABANE, L'ENTRÉE DU U, LES MONTURES REDESSINÉES — DANS L'ARBRE, NON COMMITÉ
+### 2026-10-15 — DEUX LIVRAISONS DANS L'ARBRE, NON COMMITÉES : LE SOL CUIT DE VALLEY TOWN, LES FIGURES DU PARK
 
-Récit : journal du README de la ferme (2026-10-14). Le « ? » de la patinoire sert au park (`SkateHelp.js` : fiche de la monture montée ou louée, boutons
-nommés au doigt) et remplace la ligne d'aide du bas en monture ; la cabane ÉCHANGE pendant le bail (temps conservé, on paie ce qui dépasse `inv.ridePaid`,
-`E.rideSwapPrice`) ; le bout sud du U de la mini-rampe, une marche de 14 cm où skate, rollers et trottinette rebondissaient, devient une pente arrondie aux deux
-bouts ; planche (tranche colorée décidée AU PIXEL, trucks, roues), BMX (pneus épais, guidon à barre, pédalier, pegs), rollers agressifs (bottine `o.boot`).
-Bancs : `verify-monture` 29/29, `render-skatepark` 23/23, `verify-skatepark` 14/14, `render-patin` 4/4, `verify-patin` 82/82, `verify-syntax`, `verify-strings`,
-`verify-scope`, `verify-docs`. **Vu en jeu** : location puis échange skate → BMX, entrée du U, « ? » au clavier et au doigt simulé, les trois montures à la
-loupe. **Pas vu** : le « ? » de la patinoire (hiver non forçable), un vrai iPad, deux clients. **Supabase : rien** (champ JSON du sac).
+**Le sol cuit par blocs** (journal du README de la ferme, 2026-10-15) — « saccadé en zoom large à VT » : au cran 1 la boucle du sol repeignait chaque case
+à chaque image (11 ms sur 15). Le décor FIXE se cuit par blocs de ~256 px (`TOWN_GROUND`, `paintTownGroundTile`) ; neige, sol mouillé, patinoire, falaises
+enneigées, marches sous la pluie restent peints à l'image. 1600 × 1000, cran 1 : 15,7 → 4,9 ms/image ; 12 s de marche sans image lente ; 14 Mo. Sol
+identique au pixel (clair, pluie, neige + patinoire, crans 1 à 5). **Les figures du park** (journal 2026-10-15 suite) — saut chargé (1 s, ~1 m), variantes
+à la flèche fraîche, prolongations (double, triple), spins qui visent la réception, pirouette et handplant des rollers. Tes questions de forme sont restées
+sans réponse : les options recommandées ont été prises (`docs/A-JUGER.md`). Bancs : `verify-monture` 50/50, `verify-skatepark` 14/14, `render-skatepark`
+23/23, `verify-patin` 82/82, `verify-vallee` 359/359, `verify-pluie` 34/34, `verify-neige` 17/17, `verify-chantier` 23/23, `verify-strings`, `verify-syntax`,
+`verify-scope`, `verify-docs`. **Vu en jeu** : la fluidité mesurée, le double kickflip, la pirouette, le handplant. **Pas vu** : ton écran, un iPad, deux
+clients ; pas de backflip (non dessinable proprement avec la feuille). **Supabase : rien.**
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
 trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE PARK PAR GUILLAUME EN JEU
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER PAR GUILLAUME EN JEU : LA FLUIDITÉ À VT, PUIS LE PARK (FIGURES NEUVES COMPRISES)
 
-Les blocs en tête de `docs/A-JUGER.md` (le « ? », l'échange, l'entrée du U, les montures ; puis park jouable, chantier) ; puis le test iPad dès Xcode à jour
-(`docs/PROJETS.md` §3, ligne « Skatepark »), puis l'équipe de nettoyage (§4.1). Toujours en attente : l'amie au Mac lent.
+Les blocs en tête de `docs/A-JUGER.md` ; puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3), puis l'équipe de nettoyage (§4.1).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -81,7 +82,8 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
 | Quel banc pour ceci ? | `node tools/doc-index.mjs tools/README.md <mot>` | — |
 | « Reprends le travail » / choisir un chantier | le bloc REPRISE ci-dessus, puis `docs/A-JUGER.md` ; les projets décidés pas commencés : `docs/PROJETS.md` | — |
-| **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11 et 2026-10-14) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
+| **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
+| **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
@@ -300,6 +302,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - `floor(t × cadence)` AVEC `t` ABSOLU ET UNE CADENCE QUI VARIE TIRE UNE IMAGE AU HASARD
 - UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.
 - UN CANEVAS DÉCOUPE EN SILENCE CE QUI DÉPASSE DE SON CADRE
+- UN DESSIN MIS EN CACHE FIGE TOUT CE QU'IL LIT, ET CE QUI BOUGE DOIT SE PEINDRE APRÈS LUI DANS L'ORDRE D'AVANT
 - `ctx.drawImage` À 9 ARGUMENTS PREND UN RECTANGLE SOURCE EN PLUS DE LA DESTINATION — LES DEUX N'ONT PAS LE MÊME REPÈRE
 - `ctx.fillText` N'EST PAS RASTÉRISABLE HORS NAVIGATEUR
 - À ÉCHELLE NON ENTIÈRE, LE NAVIGATEUR LISSE LES BORDS D'UN `drawImage`, MÊME `imageSmoothingEnabled` COUPÉ

@@ -11,15 +11,22 @@ const HEADS = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => (k * Math.PI) / 4);
 const POSES = {
   skate: [["stand", {}], ["push .25", { pose: "push", ph: 0.25 }], ["push .7", { pose: "push", ph: 0.7 }], ["bend 3", { bend: 3 }], ["lean +2", { lean: 2, bend: 1 }],
     ["lean -2", { lean: -2, bend: 1 }], ["brake", { pose: "brake" }], ["hop", { pose: "hop", air: 0.4 }], ["grind", { pose: "grind", bend: 2 }],
-    ["kickflip", { pose: "hop", air: 0.45, flip: 2.2 }], ["shove", { pose: "hop", air: 0.45, yaw: 1.6 }], ["chute", { mode: "bail" }]],
+    ["kickflip", { pose: "hop", air: 0.45, flip: 2.2 }], ["shove", { pose: "hop", air: 0.45, yaw: 1.6 }],
+    // 2026-10-15 — les figures neuves : le heelflip (le plateau tourne dans l'autre sens), le hardflip, un double kickflip à mi-course
+    ["heelflip", { pose: "hop", air: 0.45, flip: -2.2 }], ["hardflip", { pose: "hop", air: 0.45, flip: 2.2, yaw: -1.6 }], ["double", { pose: "hop", air: 0.45, flip: 8.5 }],
+    ["charge 4", { bend: 4 }], ["chute", { mode: "bail" }]],
   roller: [["stand", {}], ["glide .2", { pose: "glide", ph: 0.2 }], ["glide .7", { pose: "glide", ph: 0.7 }], ["glide 1.3", { pose: "glide", ph: 1.3 }], ["brake", { pose: "brake" }],
-    ["hop", { pose: "hop", air: 0.4 }], ["grind", { pose: "grind", bend: 2 }], ["grab", { pose: "hop", air: 0.45, grab: 1 }], ["arrière", { back: true }], ["chute", { mode: "bail" }]],
+    ["hop", { pose: "hop", air: 0.4 }], ["grind", { pose: "grind", bend: 2 }], ["grab", { pose: "hop", air: 0.45, grab: 1 }], ["arrière", { back: true }],
+    // 2026-10-15 — la pirouette (bras levés, pieds serrés) et le handplant (retourné sur le coping, trois instants de son équilibre)
+    ["pirouette", { piro: true, bend: 1 }], ["handplant", { pose: "hand", mode: "hand", hand: { T: 0 } }], ["hand .3", { pose: "hand", mode: "hand", hand: { T: 0.3 } }], ["hand .6", { pose: "hand", mode: "hand", hand: { T: 0.6 } }],
+    ["chute", { mode: "bail" }]],
   scooter: [["stand", {}], ["push .25", { pose: "push", ph: 0.25 }], ["push .7", { pose: "push", ph: 0.7 }], ["bend 3", { bend: 3 }], ["lean +2", { lean: 2, bend: 1 }],
     ["brake", { pose: "brake" }], ["hop", { pose: "hop", air: 0.4 }], ["grind", { pose: "grind", bend: 2 }], ["barspin", { pose: "hop", air: 0.45, bar: Math.PI }],
-    ["tailwhip", { pose: "hop", air: 0.45, whip: 2 }], ["chute", { mode: "bail" }]],
+    ["tailwhip", { pose: "hop", air: 0.45, whip: 2 }], ["x-up", { pose: "hop", air: 0.45, xup: 1, bar: 2.7 }], ["heelwhip", { pose: "hop", air: 0.45, whip: -2 }], ["chute", { mode: "bail" }]],
   bmx: [["stand", {}], ["pédale .2", { pose: "glide", ph: 0.2 }], ["pédale .7", { pose: "glide", ph: 0.7 }], ["bend 3", { bend: 3 }], ["lean +2", { lean: 2, bend: 1 }],
     ["brake", { pose: "brake" }], ["hop", { pose: "hop", air: 0.4 }], ["pegs", { pose: "grind", bend: 2 }], ["barspin", { pose: "hop", air: 0.45, bar: Math.PI }],
-    ["tailwhip", { pose: "hop", air: 0.45, whip: 2 }], ["chute", { mode: "bail" }]],
+    ["tailwhip", { pose: "hop", air: 0.45, whip: 2 }], ["no-hander", { pose: "hop", air: 0.45, nohand: 1 }], ["x-up", { pose: "hop", air: 0.45, xup: 1, bar: 2.7 }],
+    ["double whip", { pose: "hop", air: 0.45, whip: 8.5 }], ["chute", { mode: "bail" }]],
 };
 const CW = 44, CH = 52, T = C.TILE;
 
@@ -51,12 +58,12 @@ export default function AuditRiders() {
     const small = document.createElement("canvas"); small.width = cols * CW; small.height = rows * CH;
     const ctx = small.getContext("2d"); ctx.imageSmoothingEnabled = false;
     poses.forEach(([, o], ri) => HEADS.forEach((th, ci) => {
-      const px = ci * CW + 14, py = ri * CH + 22;
+      const px = ci * CW + 14, py = ri * CH + 22;   // (le handplant tient dans la case : le coping est aux pieds, 15 px sous py, et il monte de 27)
       ctx.fillStyle = (ri + ci) % 2 ? "rgb(170,166,160)" : "rgb(160,156,150)"; ctx.fillRect(ci * CW, ri * CH, CW, CH);
       ctx.fillStyle = "rgba(20,20,30,0.28)"; ctx.fillRect(px + 3, py + 14, 10, 2);
       const air = o.air || 0;
       const p = { x: px / T, y: py / T, gender, ride: { kind, th, air, mode: o.mode || (air ? "air" : "ground"), pose: o.pose || "stand", ph: o.ph || 0, color: 0, bend: o.bend || 0, lean: o.lean || 0,
-        back: !!o.back, flip: o.flip || 0, yaw: o.yaw || 0, bar: o.bar || 0, whip: o.whip || 0, grab: o.grab || 0 } };
+        back: !!o.back, flip: o.flip || 0, yaw: o.yaw || 0, bar: o.bar || 0, whip: o.whip || 0, grab: o.grab || 0, nohand: o.nohand || 0, xup: o.xup || 0, piro: !!o.piro, hand: o.hand || null } };
       ctx.save(); MA.drawRide(ctx, sheet, px, py - Math.round(air * T), p, gender === "f"); ctx.restore();
     }));
     const c = ref.current; c.width = small.width * z; c.height = small.height * z;

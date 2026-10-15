@@ -25,13 +25,22 @@ function installHelpers() {
   window.HTMLMediaElement.prototype.play = function () { this.muted = true; this.volume = 0; return op.call(this); };
   const AC = window.AudioContext;
   if (AC) { const W = function (...a) { const c = new AC(...a); try { c.suspend(); } catch (e) {} c.resume = () => Promise.resolve(); return c; }; W.prototype = AC.prototype; window.AudioContext = W; window.webkitAudioContext = W; }
+  // MESURE DE FLUIDITÉ (2026-10-14) : `?raf=real` garde le VRAI rAF (le worker à 16 ms masquerait les à-coups) et chronomètre
+  // chaque rappel dans `__ft` : [horodatage de l'image, durée du rappel en ms]. Le volet doit être AFFICHÉ (masqué, le rAF s'arrête).
+  const realRaf = new URLSearchParams(location.search).get("raf") === "real";
+  if (realRaf) {
+    const nr = window.requestAnimationFrame.bind(window);
+    window.__ft = [];
+    window.requestAnimationFrame = (cb) => nr((t) => { const a = performance.now(); try { cb(t); } finally { if (window.__ft.length < 50000) window.__ft.push([t, performance.now() - a]); } });
+  }
   // rAF par worker (VERIFICATION.md) : une file, vidée à 16 ms ; __paused fige l'image sans rien perdre.
   const q = [];
-  window.requestAnimationFrame = (cb) => { q.push(cb); return q.length; };
+  if (!realRaf) window.requestAnimationFrame = (cb) => { q.push(cb); return q.length; };
   window.cancelAnimationFrame = () => {};
   const w = new Worker(URL.createObjectURL(new Blob(["setInterval(()=>postMessage(0),16);"])));
   window.__frames = 0;
-  w.onmessage = () => { if (window.__paused) return; window.__frames++; const t = performance.now(); const l = q.splice(0); for (const cb of l) { try { cb(t); } catch (e) { console.error(e); } } };
+  window.__ft = window.__ft || []; // MESURE DE FLUIDITÉ (2026-10-14) : en mode worker aussi, la durée de chaque image (volet masqué : le vrai rAF s’arrête)
+  w.onmessage = () => { if (window.__paused) return; window.__frames++; const t = performance.now(); const l = q.splice(0); for (const cb of l) { try { cb(t); } catch (e) { console.error(e); } } if (l.length && window.__ft.length < 50000) window.__ft.push([t, performance.now() - t]); };
   window.__w = w;
   window.__main = () => [...document.querySelectorAll("canvas")].sort((a, b) => b.width * b.height - a.width * a.height)[0];
   window.__sleep = (ms) => new Promise((r) => setTimeout(r, ms));

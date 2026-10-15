@@ -340,7 +340,7 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
      correspond, la main nue au bout ; un bras plutôt horizontal fléchit un rien au coude (vers le bas). */
   const arm = (srcX, shX, shY, hdX, hdY) => {
     let dx = hdX - shX, dy = hdY - shY;
-    const L0 = Math.hypot(dx, dy), LMAX = 8;
+    const L0 = Math.hypot(dx, dy), LMAX = o.armMax || 8;   // 2026-10-15 : `armMax`, les bras tendus du handplant (au-delà de la tête)
     if (L0 > LMAX) { dx *= LMAX / L0; dy *= LMAX / L0; }
     const n = Math.max(2, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)))), horiz = Math.abs(dx) > Math.abs(dy);
     const sag = horiz ? Math.min(1, Math.hypot(dx, dy) * 0.12) : 0;
@@ -492,8 +492,10 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
   if ((r.kind === "bmx" || r.kind === "scooter") && !r.grab) {
     // les poignées, projetées (le barspin les fait tourner : à mi-tour, on lâche le guidon — les mains restent en l'air)
     const bA = r.kind === "bmx" ? 0.27 : 0.3, bH = r.kind === "bmx" ? BMX_BAR_H : SCOOT_BAR_H, bB = r.kind === "bmx" ? 0.21 : 0.18;
-    const spinning = r.bar && Math.abs(Math.sin(r.bar / 2)) > 0.35;
-    if (!spinning && row !== 1) {   // de dos, le guidon est caché par le corps : les bras restent le long (tendus, ils se levaient vers lui)
+    /* 2026-10-15 — le X-UP : le guidon tourne jusqu'à ~160° et revient, LES MAINS RESTENT AUX POIGNÉES (elles passent de l'autre côté :
+       les bras se croisent) — ce n'est pas un barspin ; le NO-HANDER : les mains quittent le guidon au milieu de la figure. */
+    const spinning = !r.xup && r.bar && Math.abs(Math.sin(r.bar / 2)) > 0.35;
+    if (!spinning && !(r.nohand > 0.3) && row !== 1) {   // de dos, le guidon est caché par le corps : les bras restent le long (tendus, ils se levaient vers lui)
       const gs = [pr(bA, -bB, bH), pr(bA, bB, bH)].map(mir);
       const sideView = row === 2;
       // de profil, les deux poignées, la lointaine (plus haut à l'écran) d'abord : son bras passe DERRIÈRE le buste
@@ -515,6 +517,9 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
   // le BMX se monte penché sur son guidon : de profil, la tête et le buste avancent (+x : le repère du corps regarde à droite)
   if (r.kind === "bmx" && row === 2) o.lean += 1;
   if (r.grab) { o.bend += Math.round(2 * r.grab); o.arms = "down"; }   // la main va chercher la planche
+  /* 2026-10-15 — le NO-HANDER : les mains lâchées s'ouvrent (de face, de dos : « wide », à hauteur de poitrine) ; de profil, le bras proche
+     part en arrière (on ne voit pas un bras qui s'écarte vers nous), le buste se redresse d'un pixel */
+  if (r.nohand > 0.3) { o.arms = "wide"; if (row === 2) { o.swing = -Math.round(2 * r.nohand); o.lean -= 1; } }
   if (pose === "grind") { o.arms = r.kind === "skate" ? "wide" : o.arms; }
   if (pose === "brake") { o.lean = (flipX ? 1 : -1) * 2; o.bend = Math.max(o.bend, 2); }
   const body = (part) => {
@@ -575,7 +580,10 @@ function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
   } else if (pose === "brake") { A = [0.03, 0.15, 0]; B = [-0.03, -0.15, 0]; }
   else if (pose === "hop") { A = [0.02, 0.06, 0]; B = [-0.02, -0.06, 0]; }
   else if (pose === "grind") { A = [0.1, 0.07, 0]; B = [-0.1, -0.07, 0]; }
-  const ft = [A, B].map(([a, b, h]) => ({ a, b, h, push: pose === "glide" && sP > 0.2 && (b > 0) === !!legP, p: pr(a, b, ROLLER.SOLE + h) }));
+  if (pose === "hand") { drawRollerHandplant(ctx, sheet, row, px, R, F, r, flipX, skirt); return; }
+  // 2026-10-15 — la PIROUETTE : les pieds serrés sous soi (on tourne sur ses roues), voir plus bas pour les bras
+  if (r.piro) { A = [0.02, 0.04, 0]; B = [-0.02, -0.04, 0]; }
+  const ft = [A, B].map(([a, b, h]) => ({ a, b, h, push: !r.piro && pose === "glide" && sP > 0.2 && (b > 0) === !!legP, p: pr(a, b, ROLLER.SOLE + h) }));
   // le corps : les pieds en haut de la platine ; de profil, la paire proche/lointain (comme les pédales du BMX), dans le repère du miroir
   const mir = (q) => (flipX ? [2 * px + 16 - q[0], q[1]] : q);
   let a = mir(ft[0].p), b = mir(ft[1].p);
@@ -586,6 +594,8 @@ function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
   const o = { feet: [[a[0], a[1]], [b[0], b[1]]], skirt, bend: Math.max(bend0, r.bend || 0) + (r.grab ? Math.round(2 * r.grab) : 0), lean: (flipX ? -1 : 1) * (r.lean || 0),
     arms: r.grab ? "down" : pose === "hop" || pose === "grind" ? "wide" : pose === "brake" ? "out" : pose === "glide" && sP > 0.35 ? "out" : "down",
     armTilt: pose === "glide" ? (legP ? 1 : -1) : r.lean || 0 };
+  // la pirouette : les bras LEVÉS, ramenés au-dessus de la tête (la vrille du patin : on se grandit pour tourner vite), genoux souples
+  if (r.piro) { o.arms = "up"; o.bend = Math.max(1, r.bend || 0); o.armTilt = 0; }
   const pushF = ft.find((f) => f.push);
   if (!side && pushF) {
     // de face, la jambe qui pousse part tendue sur le côté (genou dans l'axe) ; l'autre s'ouvre comme à l'accroupi
@@ -642,6 +652,52 @@ function drawRollers(ctx, sheet, row, px, R, F, r, pose, flipX, skirt) {
   };
   if (flipX) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(o, -px)); ctx.restore(); }
   else drawRiderBody(ctx, sheet, row, px, 0, o);
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-15 — LE HANDPLANT DES ROLLERS : les mains sur le coping, le corps renversé, les jambes en l'air, les roues vers le ciel.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️ LE MÊME SQUELETTE, RETOURNÉ — pas une feuille de plus. Le corps est posé DEBOUT, jambes tendues, pieds serrés, les deux bras tendus
+   au-delà de la tête (`armMax`) jusqu'au point des mains ; puis toute l'image est retournée de haut en bas autour de ce point (le
+   coping, `pr(0, 0, 0)`) : la tête vient juste au-dessus du tube, les bras le long d'elle, les bottines et leurs platines tout en haut.
+   Les attaches restent au corps (§4 : un membre déplacé en bloc se détache) ; seule la longueur des bras change — chez des personnages à
+   grosse tête, des bras tendus au-delà d'elle sont la seule façon de les faire arriver au tube.
+   L'équilibre : le corps oscille d'un pixel (`lean`), au rythme de la tenue (`r.hand.T`) — on ne tient pas un handplant immobile.
+   ⚠️ Un `scale(1, -1)` : le faux canevas des bancs l'ignore (§4) — la pose se juge au navigateur (`app/audit-riders?k=roller&pose=hand`). */
+function drawRollerHandplant(ctx, sheet, row, px, R, F, r, flipX, skirt) {
+  const pr = projector(R, F), side = row === 2, H = pr(0, 0, 0);
+  const hx = Math.round(H[0]), hy = Math.round(H[1]);
+  const mir = (q) => (flipX ? [2 * px + 16 - q[0], q[1]] : q);
+  const Fy = hy + 25;   // debout, la tête en haut à 24 px des pieds, les mains un pixel au-dessus : elles tombent au point du coping
+  const T2 = r.hand ? r.hand.T || 0 : 0, wob = Math.round(Math.sin(T2 * 5.5) * 1.2);
+  const feet = side ? [[hx - 0.5, Fy], [hx + 0.5, Fy - 1]] : [[hx - 1.5, Fy], [hx + 1.5, Fy]];
+  const hands = side ? [[hx + 1, hy], [hx, hy]] : [[hx - 3, hy], [hx + 3, hy]];
+  const col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length];
+  const o = { feet: feet.map(mir), skirt, bend: 0, lean: (flipX ? -1 : 1) * wob, hands: hands.map(mir), armMax: 14, depth: 1.5 };
+  if (side) o.pedals = o.feet;
+  o.under = (fs2, sv) => {
+    for (const f of fs2) {
+      const x0 = Math.round(f[0] - 1), y = Math.round(f[1]);
+      if (sv) {
+        P1(ctx, x0 - 1, y, 6, 1, ROLLER.plate); P1(ctx, x0 + 1, y, 2, 1, ROLLER.block);
+        P1(ctx, x0 - 1, y + 1, 1, 1, ROLLER.wheelLo); P1(ctx, x0, y + 1, 1, 1, ROLLER.wheel); P1(ctx, x0 + 1, y + 1, 2, 1, ROLLER.anti);
+        P1(ctx, x0 + 3, y + 1, 1, 1, ROLLER.wheel); P1(ctx, x0 + 4, y + 1, 1, 1, ROLLER.wheelLo);
+      } else {
+        P1(ctx, x0, y, 3, 1, ROLLER.plate); P1(ctx, x0 + 1, y, 1, 1, ROLLER.block);
+        P1(ctx, x0, y + 1, 1, 1, ROLLER.anti); P1(ctx, x0 + 1, y + 1, 1, 1, ROLLER.wheel); P1(ctx, x0 + 2, y + 1, 1, 1, ROLLER.anti);
+      }
+    }
+  };
+  o.boot = (fx, fy, n, sv) => {
+    const x0 = Math.round(fx - 1), yb = Math.round(fy), Hh = Math.min(5, n);
+    const rw = (k, x, w, c) => { if (k <= Hh) P1(ctx, x, yb - k, w, 1, c); };
+    if (sv) { rw(1, x0 - 1, 5, col.deck); rw(2, x0 - 1, 5, col.deck); rw(2, x0 - 1, 2, col.deckHi); rw(3, x0 - 1, 4, col.deck); rw(4, x0, 3, ROLLER.cuff); rw(5, x0, 3, ROLLER.cuff); rw(5, x0 + 2, 1, ROLLER.buckle); }
+    else { rw(1, x0, 3, col.deck); rw(2, x0, 3, col.deck); rw(3, x0, 3, col.deck); rw(3, x0, 1, col.deckHi); rw(4, x0, 3, ROLLER.cuff); rw(5, x0, 3, ROLLER.cuff); rw(5, x0 + 1, 1, ROLLER.buckle); }
+  };
+  ctx.save();
+  ctx.translate(0, 2 * hy + 1); ctx.scale(1, -1);   // le retournement : la rangée du coping (hy) reste en hy
+  if (flipX) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawRiderBody(ctx, sheet, row, 0, 0, shiftFeet(o, -px)); }
+  else drawRiderBody(ctx, sheet, row, px, 0, o);
+  ctx.restore();
 }
 /* Sous le miroir (profil gauche), le corps est dessiné à x = 0 dans un repère retourné autour de px + 8 : ses pieds y sont à
    x − px (les points ont déjà été mirroités par `mir`). */
