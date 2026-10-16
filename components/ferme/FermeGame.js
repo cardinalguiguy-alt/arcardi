@@ -1266,6 +1266,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      pour une tenue, c'est un chapeau qu'on porte dans le menu et pas dans le
      monde. */
   const [boutiqueOpen, setBoutiqueOpen] = useState(null);
+  /* 2026-10-16 — LA TEINTE DE PEAU (voir `skinSet` dans hostHandleReq). `skinPick` : le choix en cours à l'écran de création ; `pendingSkinRef` : le
+     choix à envoyer dès que l'hôte connaît mon fermier (renvoyé tant que la garde-robe partagée ne le porte pas) ; `skinInvite` : l'invite faite
+     une fois aux personnages d'avant cette fonction. */
+  const [skinPick, setSkinPick] = useState(0);
+  const [skinInvite, setSkinInvite] = useState(false);
+  const pendingSkinRef = useRef(null);
+  const skinInviteDoneRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "playing") return;
+    const it = setInterval(() => {
+      const rec = (sharedRef.current.wardrobe || {})[me.id];
+      const has = rec && rec.skin !== undefined;
+      if (pendingSkinRef.current != null) {
+        if (has) pendingSkinRef.current = null;
+        else sendReq({ kind: "skinSet", idx: pendingSkinRef.current });
+      } else if (!has && !skinInviteDoneRef.current && farmersRef.current[me.id]) {
+        skinInviteDoneRef.current = true; setSkinInvite(true);
+      }
+    }, 1500);
+    return () => clearInterval(it);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
   const [newsBoardOpen, setNewsBoardOpen] = useState(false);
   const [wardrobeTick, setWardrobeTick] = useState(0);
   // Zip 280 (bijouterie) : modale de design ouverte + brouillon en cours
@@ -5930,6 +5952,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           dirtyRef.current = true;
         }
       }
+    } else if (req.kind === "skinSet") {
+      /* 2026-10-16 — LA TEINTE DE PEAU, ARBITRÉE PAR L'HÔTE. Le premier choix (`skin` encore absent) est gratuit et ne compte pas ; ensuite
+         C.SKIN_CHANGES_MAX changements, jamais un de plus. ⚠️ LE COMPTEUR VIT ICI, pas dans l'interface : un client qui afficherait « il vous
+         en reste 2 » sans que l'hôte le sache laisserait changer à l'infini. Même enregistrement que la garde-robe : sauvegarde et diffusion déjà là. */
+      const s2 = sharedRef.current;
+      if (!s2.wardrobe) s2.wardrobe = {};
+      const wr = s2.wardrobe[f.id] || (s2.wardrobe[f.id] = { owned: {}, worn: {} });
+      const idx = req.idx | 0;
+      if (idx >= 0 && idx < C.CHAR_SKIN_TONES.length) {
+        if (wr.skin === undefined) { wr.skin = idx; wr.skinChanges = 0; out.wardrobe = s2.wardrobe; dirtyRef.current = true; }
+        else if (idx === wr.skin) { /* même teinte : rien, et surtout rien de décompté */ }
+        else if ((wr.skinChanges | 0) >= C.SKIN_CHANGES_MAX) out.toast = { id: f.id, key: "skinNoMore" };
+        else { wr.skin = idx; wr.skinChanges = (wr.skinChanges | 0) + 1; out.wardrobe = s2.wardrobe; dirtyRef.current = true; }
+      }
     } else if (req.kind === "townWish") {
       /* LE VŒU DE LA FONTAINE (427). Une pièce jetée, une fois par jour de jeu
          et par joueur, et parfois la fontaine rend plus qu'elle n'a reçu.
@@ -9682,6 +9718,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     // ZIP 427 — Maison Garfield et fontaine à vœux.
     if (key === "boutiqueNoGold") return L.boutiqueNoGold;
+    if (key === "skinNoMore") return L.skinNoMore;
     if (key === "boutiqueBought") {
       const t = n || {};
       const it = (C.wardrobeCatalog(t.slot) || [])[(t.idx | 0) - 1];
@@ -10369,7 +10406,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }, []);
 
   // -------- Rejoindre (spawn) --------
-  function doJoin() { doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
+  function mySkinRec() { return (sharedRef.current.wardrobe || {})[me.id] || {}; }
+  /* Une rangée de pastilles de teinte. Rendue par APPEL, jamais comme composant déclaré ici (un type neuf à chaque rendu remplacerait les nœuds DOM). */
+  function skinSwatches(sel, onPick, locked) {
+    return (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", margin: "8px 0" }}>
+        {C.CHAR_SKIN_TONES.map((t, i) => (
+          <button key={"skin-" + t.id} title={lang === "en" ? t.nameEn : t.name} aria-label={lang === "en" ? t.nameEn : t.name}
+            disabled={locked && i !== sel} onClick={() => onPick(i)}
+            style={{ width: 34, height: 34, borderRadius: 8, background: t.main, border: i === sel ? "3px solid #ffd45a" : "2px solid rgba(0,0,0,0.4)",
+                     boxShadow: "inset 0 -8px 0 " + t.shade, cursor: locked && i !== sel ? "default" : "pointer", opacity: locked && i !== sel ? 0.45 : 1 }} />
+        ))}
+      </div>
+    );
+  }
+  function doJoin() {
+    pendingSkinRef.current = mySkinRec().skin === undefined ? skinPick : null;
+    doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
     meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false, zone: "farm" };
@@ -10491,7 +10544,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      voit pas, sans la moindre erreur pour le dire. */
   function wardrobeLookOf(playerId) {
     const wr = (sharedRef.current.wardrobe || {})[playerId];
-    return wr ? C.wardrobeLook(wr.worn) : null;
+    return C.playerLook(wr);
   }
   function pubMe() {
     const m = meRef.current;
@@ -38487,14 +38540,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <input className="ferme-name-input" maxLength={14} value={nameVal} onChange={e => setNameVal(e.target.value)} placeholder={L.namePlaceholder} autoFocus />
             <div className="ferme-char-pick">
               <div className={"ferme-char-card" + (gender === "m" ? " sel" : "")} onClick={() => setGender("m")}>
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", myOutfit) : null} sx={16} sy={24} w={48} h={72} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
                 <div>{L.fermier}</div>
               </div>
               <div className={"ferme-char-card" + (gender === "f" ? " sel" : "")} onClick={() => setGender("f")}>
-                <Sprite img={spritesReady ? spritesRef.current.getChar("f", myOutfit) : null} sx={16} sy={24} w={48} h={72} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar("f", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
                 <div>{L.fermiere}</div>
               </div>
             </div>
+            {/* 2026-10-16 — la teinte de peau : choix gratuit à la création (ne compte pas parmi les 2 changements). Déjà choisie : on ne la propose plus ici. */}
+            {mySkinRec().skin === undefined && (<>
+              <div className="ferme-join-sub">{L.skinSubFirst}</div>
+              {skinSwatches(skinPick, setSkinPick, false)}
+            </>)}
             <button className="ferme-btn ferme-join-btn" disabled={!worldReady} onClick={doJoin}>{L.joinBtn}</button>
             {/* Correctif audit lancement 2026-07 : tant que l'hôte n'a pas
                 chargé de ferme (réponse `nofarm` à nos hello), message
@@ -43190,14 +43248,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           `wardrobeTick` ne sert qu'à redemander un rendu, il ne PORTE rien.
           ⚠️ Et Leo commente à chaque ouverture d'onglet. C'est le personnage :
           il approuve tout, y compris ce que personne n'a encore choisi. */}
+      {/* 2026-10-16 — L'INVITE AUX PERSONNAGES D'AVANT : une fois par connexion, ignorable (« Plus tard » ne consomme rien). Choisir, ou « Garder la mienne »,
+          fixe le premier choix GRATUIT ; les 2 changements viennent ensuite, à la Maison Garfield (onglet Teint). */}
+      {skinInvite && (
+        <div className="ferme-modal open" onClick={() => setSkinInvite(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setSkinInvite(false)}>✕</button>
+            <h2>{L.skinTitle}</h2>
+            <div className="ferme-hint">{L.skinSubInvite}</div>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <Sprite img={spritesReady && meRef.current ? spritesRef.current.getChar(meRef.current.gender, meRef.current.outfit, false, false, false, false, false, false, skinPick > 0 ? "~" + skinPick : null) : null} sx={16} sy={24} w={48} h={72} />
+            </div>
+            {skinSwatches(skinPick, setSkinPick, false)}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button className="ferme-btn" onClick={() => { sendReq({ kind: "skinSet", idx: skinPick }); setSkinInvite(false); }}>OK</button>
+              <button className="ferme-btn" onClick={() => { sendReq({ kind: "skinSet", idx: 0 }); setSkinInvite(false); }}>{L.skinKeep}</button>
+              <button className="ferme-btn" onClick={() => setSkinInvite(false)}>{L.skinLater}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {boutiqueOpen && (() => {
-        const slot = C.WARDROBE_SLOTS.includes(boutiqueOpen) ? boutiqueOpen : "hat";
-        const cat = C.wardrobeCatalog(slot);
+        const slot = C.WARDROBE_SLOTS.includes(boutiqueOpen) || boutiqueOpen === "skin" ? boutiqueOpen : "hat";
+        const cat = slot === "skin" ? [] : C.wardrobeCatalog(slot);
         const wr = (sharedRef.current.wardrobe || {})[me.id] || { owned: {}, worn: {} };
         const owned = wr.owned[slot] || [];
         const worn = wr.worn[slot] | 0;
         const gold = sharedRef.current.money | 0;
-        const tabLabel = { hat: L.boutiqueSlotHat, scarf: L.boutiqueSlotScarf, outfit: L.boutiqueSlotOutfit, tint: L.boutiqueSlotTint };
+        const tabLabel = { hat: L.boutiqueSlotHat, scarf: L.boutiqueSlotScarf, outfit: L.boutiqueSlotOutfit, tint: L.boutiqueSlotTint, skin: L.boutiqueSlotSkin };
         // Répliques dérivées du temps, comme partout ailleurs dans ce zip :
         // deux joueurs dans la même boutique lisent la même chose.
         const carlaLine = pickShared(L.carlaShopLines, Math.floor(Date.now() / C.LEO_UPSELL_MS));
@@ -43217,7 +43295,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="info"><b>{L.leoRole}</b><span className="ferme-usage">{leoLine}</span></div>
               </div>
               <div style={{ display: "flex", gap: 6, margin: "12px 0 6px", flexWrap: "wrap" }}>
-                {C.WARDROBE_SLOTS.map(sl => (
+                {C.WARDROBE_SLOTS.concat("skin").map(sl => (
                   <button key={"wslot-" + sl} className={"ferme-btn" + (sl === slot ? " on" : "")} onClick={() => setBoutiqueOpen(sl)}>{tabLabel[sl]}</button>
                 ))}
               </div>
@@ -43225,12 +43303,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   toujours proposé. Sans lui, on ne pourrait plus retirer un
                   chapeau une fois acheté — et il faudrait vendre « pas de
                   chapeau » en vitrine, ce qui serait absurde à voir. */}
-              <div className="ferme-shop-row">
+              {slot === "skin" && (() => {
+                const rec = mySkinRec(), cur = rec.skin | 0, left = rec.skin === undefined ? 0 : Math.max(0, C.SKIN_CHANGES_MAX - (rec.skinChanges | 0));
+                return (<div>
+                  <div className="ferme-hint">{rec.skin === undefined ? L.skinSubFirst : L.skinSub(left, C.SKIN_CHANGES_MAX)}</div>
+                  {skinSwatches(cur, (i) => sendReq({ kind: "skinSet", idx: i }), rec.skin !== undefined && left === 0)}
+                </div>);
+              })()}
+              {slot !== "skin" && <div className="ferme-shop-row">
                 <div className="info"><b>{L.boutiqueNothing}</b></div>
                 {worn === 0
                   ? <span className="ferme-usage">{L.boutiqueWorn}</span>
                   : <button className="ferme-btn" onClick={() => sendReq({ kind: "wardrobeWear", slot, idx: 0 })}>{L.boutiqueRemove}</button>}
-              </div>
+              </div>}
               {cat.map((it, i) => {
                 const idx = i + 1, has = owned.includes(idx), isWorn = worn === idx;
                 return (

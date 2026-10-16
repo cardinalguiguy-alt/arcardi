@@ -8757,6 +8757,27 @@ export function wardrobeLook(worn) {
   const s = "w" + d(worn.hat) + d(worn.scarf) + d(worn.outfit) + d(worn.tint);
   return s === "w0000" ? null : s;   // rien porté = pas de chaîne du tout
 }
+/* 2026-10-16 — LA TEINTE DE PEAU. Huit teintes (la 0 est la peau d'origine, `CHAR_SKIN`), choisies à la création ; ensuite SKIN_CHANGES_MAX
+   changements, pas un de plus (demande de Guillaume : « 2 fois seulement »). L'état vit dans la garde-robe du joueur (`wardrobe[id].skin` = indice,
+   ABSENT tant qu'il n'a jamais choisi ; `.skinChanges` = changements déjà faits) : même sauvegarde, même diffusion, aucune migration. Elle voyage dans la
+   chaîne `look` sous la forme d'un suffixe `~<indice>` (jamais pour l'indice 0) — voir `playerLook`, seule fabrique, et `lookSkin` (fermeArt.js), seule lecture. */
+export const SKIN_CHANGES_MAX = 2;
+export const CHAR_SKIN_TONES = [
+  { id: "peach",     name: "Pêche",      nameEn: "Peach",      main: "#f0c8a0", shade: "#d8a878" },
+  { id: "porcelain", name: "Porcelaine", nameEn: "Porcelain",  main: "#f8dcc4", shade: "#e0bea4" },
+  { id: "golden",    name: "Dorée",      nameEn: "Golden",     main: "#e2b484", shade: "#c99a6a" },
+  { id: "olive",     name: "Olive",      nameEn: "Olive",      main: "#c89a6a", shade: "#ae8050" },
+  { id: "caramel",   name: "Caramel",    nameEn: "Caramel",    main: "#a8744a", shade: "#8c5c38" },
+  { id: "brown",     name: "Brune",      nameEn: "Brown",      main: "#8a5a34", shade: "#6e4527" },
+  { id: "ebony",     name: "Ébène",      nameEn: "Ebony",      main: "#6a4128", shade: "#52301c" },
+  { id: "night",     name: "Nuit",       nameEn: "Night",      main: "#4a2c1c", shade: "#36200f" },
+];
+/* La chaîne `look` complète d'un joueur : vêtements (`w####`) puis teinte (`~n`). Rien de porté et peau d'origine = null (paquet inchangé). */
+export function playerLook(wr) {
+  if (!wr) return null;
+  const s = wr.skin | 0, tag = s > 0 && s < CHAR_SKIN_TONES.length ? "~" + s : "";
+  return ((wr.worn ? wardrobeLook(wr.worn) : null) || "") + tag || null;
+}
 // Léo tient la caisse, et il en fait des tonnes : le prix affiché est le prix
 // payé, mais il l'annonce toujours avec une flatterie (voir leoUpsellLines).
 export const LEO_UPSELL_MS = 5200;

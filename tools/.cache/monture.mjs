@@ -126,7 +126,7 @@ const GRINDS_BY = {
    ⚠️ `body` : le CORPS tourne avec la monture, en tours — c'est le CAP lui-même qui tourne (la physique, le réseau, la réception le
    voient), pas un dessin. `spin` : une rotation sans autre nom que ses degrés (« 540 », compté dans `st.spin`), qui VISE LA RÉCEPTION —
    la trottinette et le BMX, qui ne retombent pas en arrière, finissent dans le sens de la trajectoire (un 360 lancé au quarter devient
-   un 540 : le demi-tour du retour en plus, `spinPlan`) ; le skate et les rollers par le bout le plus proche.
+   un 540 : le demi-tour du retour en plus, `spinTotal`) ; le skate et les rollers par le bout le plus proche.
    Le réseau ne voit que le NOM et l'âge (`trickByName` relit la même table, §3). */
 const TRICK_SETS = {
   skate: {

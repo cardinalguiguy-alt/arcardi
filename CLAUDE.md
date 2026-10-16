@@ -11,21 +11,17 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-15 — DEUX LIVRAISONS DANS L'ARBRE, NON COMMITÉES : LE SOL CUIT DE VALLEY TOWN, LES FIGURES DU PARK
+### 2026-10-16 — LA TEINTE DE PEAU (8 TEINTES, 2 CHANGEMENTS), NON COMMITÉE ; LES LIVRAISONS DU 2026-10-15 (SOL CUIT DE VT, FIGURES DU PARK) SONT TOUJOURS DANS L'ARBRE
 
-**Le sol cuit par blocs** (journal du README de la ferme, 2026-10-15) — « saccadé en zoom large à VT » : au cran 1 la boucle du sol repeignait chaque case
-à chaque image (11 ms sur 15). Le décor FIXE se cuit par blocs de ~256 px (`TOWN_GROUND`, `paintTownGroundTile`) ; neige, sol mouillé, patinoire, falaises
-enneigées, marches sous la pluie restent peints à l'image. 1600 × 1000, cran 1 : 15,7 → 4,9 ms/image ; 12 s de marche sans image lente ; 14 Mo. Sol
-identique au pixel (clair, pluie, neige + patinoire, crans 1 à 5). **Les figures du park** (journal 2026-10-15 suite) — saut chargé (1 s, ~1 m), variantes
-à la flèche fraîche, prolongations (double, triple), spins qui visent la réception, pirouette et handplant des rollers. Tes questions de forme sont restées
-sans réponse : les options recommandées ont été prises (`docs/A-JUGER.md`). Bancs : `verify-monture` 50/50, `verify-skatepark` 14/14, `render-skatepark`
-23/23, `verify-patin` 82/82, `verify-vallee` 359/359, `verify-pluie` 34/34, `verify-neige` 17/17, `verify-chantier` 23/23, `verify-strings`, `verify-syntax`,
-`verify-scope`, `verify-docs`. **Vu en jeu** : la fluidité mesurée, le double kickflip, la pirouette, le handplant. **Pas vu** : ton écran, un iPad, deux
-clients ; pas de backflip (non dessinable proprement avec la feuille). **Supabase : rien.**
+**Teinte de peau** (détail : `docs/PROJETS.md` §2) : choix gratuit à la création, puis 2 changements arbitrés par l'hôte (`skinSet`), onglet « Teint » de la
+Maison Garfield, invite une fois aux anciens. Vu en jeu : écran de choix + rendu de l'hôte, `verify-syntax`/`scope`/`strings`/`docs` verts. **Pas vu** :
+deux clients, iPad, pose assise/nage/combinaison/cheval. **Supabase : rien** (JSON de la garde-robe). **Guillaume veut ensuite un DRESSING dans
+l'intérieur de sa propre maison (comme GTA V)** : l'intérieur n'existe pas, c'est un chantier à part. Le sol cuit (`TOWN_GROUND`) et les figures du park
+(journal du README, 2026-10-15) restent à juger en jeu (`docs/A-JUGER.md`).
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
 trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER PAR GUILLAUME EN JEU : LA FLUIDITÉ À VT, PUIS LE PARK (FIGURES NEUVES COMPRISES)
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER PAR GUILLAUME EN JEU : LA TEINTE DE PEAU, LA FLUIDITÉ À VT, PUIS LE PARK ; ENSUITE LE DRESSING (CADRER AVEC LUI)
 
 Les blocs en tête de `docs/A-JUGER.md` ; puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3), puis l'équipe de nettoyage (§4.1).
 

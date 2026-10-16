@@ -34,6 +34,14 @@ aperçu qui teinterait la feuille entière peindrait le visage.
 
 ## 2. Création du personnage : teinte de peau et coiffure (décidé, à coder plus tard)
 
+**FAIT le 2026-10-16 (teinte seulement, la coupe reste à faire)** : 8 teintes (`C.CHAR_SKIN_TONES`), choix gratuit à la création, puis `C.SKIN_CHANGES_MAX` = 2
+changements, arbitrés par l'hôte (`skinSet`, FermeGame.js) ; état dans `wardrobe[id].skin` / `.skinChanges` (absent = jamais choisi) ; voyage dans `look`
+sous la forme `~n` (`C.playerLook`, `lookSkin` dans fermeArt.js). Invite une fois par connexion aux anciens (« Plus tard » ne consomme rien) ; les
+changements se font pour l'instant dans l'onglet « Teint » de la Maison Garfield. Vu : écran de choix + rendu du joueur (hôte). **Pas vu** : à deux
+clients, iPad, pose assise / nage / combinaison de patin / cheval. **Prochain chantier décidé (Guillaume, 2026-10-16) : un DRESSING dans l'intérieur de
+SA PROPRE maison, « comme dans GTA V »** — l'intérieur n'existe pas (entrer chez soi lance seulement le sommeil, `startSleep`) : à créer, puis y déplacer
+l'onglet Teint et la garde-robe.
+
 **Décision (2026-10-06)** : à la CRÉATION, le joueur choisit sa **teinte de peau** et sa **coupe de cheveux**. Pour les personnages DÉJÀ créés : **à la
 prochaine connexion**, on leur propose de choisir **leur teinte de peau seulement** (pas la coupe : elle reste celle d'aujourd'hui). ⚠️ **Pas à
 changer dans la session du 2026-10-06** : c'est une note pour les futurs changements d'Arcardi.
