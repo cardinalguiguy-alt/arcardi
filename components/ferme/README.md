@@ -1,5 +1,96 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-16 (nuit) — LES INTÉRIEURS, LOT 2a : LE MODE DÉCO, LE GARDE-MEUBLE, LES MURS ET SOLS PAYANTS
+
+Cadrage : ses huit réponses (`docs/PROJETS.md` §6). **Supabase : rien** — la maison de chacun est un champ de plus du JSON de `ferme_saves`
+(`homes[playerId]` : meubles posés, garde-meuble, décor des pièces ; absent = la maison de départ), comme la garde-robe. Chaque geste est UNE
+`req` arbitrée par l'hôte (`homePlace`, `homeStore`, `homeDecor`), qui diffuse la maison entière de ce joueur (`out.home`) ; jamais pendant un
+glisser. **Pas vu : la persistance réelle** (le Supabase factice ne garde rien) **ni l'iPad.**
+- **Le mode déco** (B, ou le bouton 🛋️ chez soi) : la marche se fige, les murs du fond se relèvent tous, une grille de points au quart de case ;
+  clic sur un meuble = le prendre, clic = le poser, R / clic droit / « ↻ Tourner » = tourner, Suppr / « 📦 Ranger » = au garde-meuble, Échap =
+  lâcher puis sortir. Le meuble tenu suit le pointeur, vert s'il peut se poser, rouge sinon ; les onglets de niveau regardent un autre étage.
+- **La règle de pose** (`homeCanPlace`, la même pour l'écran et pour l'hôte) : dans une pièce, ni mur, ni escalier, ni autre meuble debout (un
+  tapis se glisse dessous), 45 cm libres devant chaque porte, et **toutes les pièces et les escaliers restent atteignables** (le remplissage de
+  `verify-maison`, devenu règle de jeu). Le refus se dit (« Devant une porte : il faut pouvoir passer »).
+- **L'aimant** (`homeSnap`) : le geste au quart de case (décision 2), mais un meuble se plaque contre un mur à moins de 20 cm et BUTE contre lui
+  quand on le pousse au-delà ; positions rangées au VINGTIÈME de case (6 cm). ⚠️ Au quart pur, aucun meuble ne touchait un mur (les cloisons
+  tombent à 3,55, 4,35…) et le lit de départ, ramené sur la grille, mordait la cloison de la chambre (banc) ; arrondi vers l'extérieur, un figuier
+  plaqué au mur est dépassait de 2 cm (vu en jeu).
+- **Murs et sols** (onglet « Murs et sols ») : clic sur une pièce, puis papier (7, dont damas et pois, neufs), lambris (6, « aucun » compris) ou
+  sol (9) ; un échantillon peint par les mêmes peintres que la maison ; 1 500 / 1 000 / 2 500 or de la caisse commune ; recuit aussitôt.
+- **Le panneau** en colonne à droite (vu en jeu : en bandeau, il couvrait le séjour où l'on pose). Échap va d'abord aux panneaux ouverts (vu en
+  jeu : avalé par le mode déco, il laissait le menu développeur ouvert, qui bloquait toutes les touches).
+- **En attendant le catalogue (2b)** : menu développeur → « Maison » → « Garnir le garde-meuble » (un exemplaire de chaque meuble). 46 images
+  rendues (toutes les orientations utiles). Le tableau (objet de mur) ne se pose pas au sol : lot 2c.
+- **Vérifié** : `verify-maison` 93/93 (pose, refus, aimant contre chaque mur, rangement, décor payé, plan de référence intact, chaque nom dans les
+  deux langues) ; **en jeu** : le séjour meublé à la souris (canapé, kilim, table basse, fauteuil tourné, figuier, poêle), la plante morte rangée,
+  damas + noyer + lambris bois payés (5 000 or), la collision suit les meubles ; **à deux clients** : la pose de l'invité arbitrée par l'hôte, les
+  deux maisons identiques, aucune erreur.
+
+## 2026-10-16 (soir) — LES INTÉRIEURS, LOT 1 : LA COQUE DE L'ÉTROITE DANS LE JEU (zone « home »)
+
+Guillaume, après la pièce témoin : « Le style me va : lance le lot 1, la coque de la maison étroite dans le jeu. » **Supabase : rien** (aucun état
+nouveau : la maison et l'étage se lisent dans la position, le mobilier de départ est fixe). **Ce qui change pour les joueurs** : devant SA porte,
+une étroite (parcelles 0, 1, 2, 8 à 11 — les trois premiers joueurs) dit « E : entrer chez soi » ; on dort désormais au LIT (les autres largeurs
+gardent le sommeil à la porte jusqu'à leurs plans, lot 7). Devant la porte d'un autre, rien ne change (les visites : lot 4).
+- **Le plan** (`maison.js`, pur) : trois niveaux de 5 × 7 cases. RDC entrée, séjour, cuisine (tomettes, faïence, deux fenêtres côté jardin),
+  placard sous l'escalier ; étage palier, bains (cabochons), dressing, chambre (le lit) ; combles sous le rampant, trémie à garde-corps. La porte
+  et les fenêtres côté rue sont LUES sur la façade du modèle (N1 et N2 diffèrent ; la façade change avec R).
+- **Une seule carte pour toutes les maisons** : un emplacement par PARCELLE (8 cases), un niveau tous les 12 cases ; maison et étage se déduisent
+  de (x, y). Aucun champ de plus sur le réseau (§3).
+- **La collision** se mesure rectangle contre rectangle, la semelle entière (cloisons de 12 cm, corps de 57 cm : §4, la semelle aux coins).
+  **Aide de porte** (vue en jeu : on butait à 1 cm de l'axe d'une porte de 95 cm) : un pas bloqué glisse vers l'ouverture à moins de 30 cm.
+- **L'escalier** : volées droites superposées le long du mur ouest. À l'étage, la même emprise porte l'arrivée de la volée du bas et le départ de
+  celle du haut — « une case à deux sols » (§4) : entré par le sud on monte, par le nord on descend (`homeStairStep`). La volée du haut s'efface
+  à 30 % quand on se tient derrière elle (vu en jeu : sur le palier, le joueur disparaissait sous son haut).
+- **Les murs, façon Sims** (décidé en le voyant au banc) : seuls restent PLEINS le mur du fond de la maison et celui de la pièce où l'on est ; les
+  autres faces descendent à 35 cm, en fondu — on voit tout l'étage et qui s'y trouve. Murs latéraux et façade toujours coupés.
+- **Le dessin** (`maisonArt.js`) : sols et faces CUITS une fois (13 canevas), la liste triée d'un niveau (`homeDrawItems`) est la même pour le jeu et
+  le banc. Grain de 32 px par case, posé aux crans **2 et 4 seulement** (3 → 4, 5 → 4, 1 → 2) ; l'origine cuite est sur une case entière
+  (`HOME_OX` 1,6) — sinon 57,6 px au cran 4.
+- **La lumière** : le soleil entre par les fenêtres de la façade (le cisaillement d'`ombres.js`, borné aux murs — vu en jeu : la tache passait le mur
+  est) ; la nuit, l'ampoule nue de la pièce où quelqu'un se tient s'allume (couche de lumière de la ville, `lumiere.js`) ; les vitres du fond
+  prennent le ciel de l'heure. Le dormeur est dans son lit (la tête sur l'oreiller), les « Zzz » de sa façade s'allument comme avant.
+- **Pas de carte dedans** (M, le bouton, le tactile) : « La carte se lit dehors ».
+- **Vérifié** : `verify-maison` 62/62 (façades, calage, pièces atteignables, escalier, 360 000 pas au hasard sans traverser une cloison ni
+  rester coincé) ; `render-maison` (coque N1/N2, témoin) ; **en jeu** (Chromium, cran 4) : entrer, monter, chambre, dormir, se réveiller, combles,
+  redescendre, sortir — au clavier ; 14 h et 22 h ; 0,8 ms par image (p50), 1,1 ms (p95) ; **à deux clients** : chacun entre chez lui, l'autre le
+  voit en zone « home », la porte d'autrui ne s'ouvre pas ; aucune erreur. **Pas vu** : iPad, le tactile dedans, la touche R depuis l'intérieur.
+- **Retouche du même soir (Guillaume : « il faut une vraie idée de profondeur, perspective plus lisible entre les murs et le sol, là c'est un peu
+  à plat »)** : les murs LATÉRAUX s'évasent comme les verticales d'une caméra centrée (`HOME_FLARE` 0,11 × distance au centre × hauteur) — leur face
+  intérieure se voit (papier, lambris, plinthe le long du sol), le mur du fond s'élargit vers le haut pour les rejoindre, des piliers aux coins de
+  la façade : une boîte ouverte sur l'avant. Évasés, ils tombent HORS du sol à l'écran et ne cachent rien ; sol, collision, meubles et
+  personnages inchangés. Plus une ombre de 10 px au pied des faces, 7 px le long des murs latéraux, le fond un peu plus sombre. `HOME_OX` 1,6 → 2,0
+  (marge des murs évasés, l'origine cuite reste sur une case entière). `verify-maison` 62/62 ; **vu au banc seulement, pas en jeu**.
+- **Pas fait** : le contrat de la pièce (lot 2 : poser, tourner, ranger, papier et sols au choix), les fenêtres de la ville qui s'allumeraient
+  quand le propriétaire est chez lui la nuit, les autres largeurs (lot 7).
+
+## 2026-10-16 (suite) — LES INTÉRIEURS DES MAISONS : LE CADRAGE, LE STUDIO BLENDER, LA PIÈCE TÉMOIN (lot 0, à juger ; rien dans le jeu)
+
+Guillaume : « designer l'intérieur des maisons. accès règlementé […] très poussé. Je veux des plans cohérents avec la taille des maisons. et une ambiance
+personnalisable. il faudra pouvoir commander des meubles, des décos, acheter ou troquer des objets de décoration rares […] HAUT niveau de détail ».
+Huit décisions de forme posées et tranchées le jour même : **`docs/PROJETS.md` §6** (fabrication, taille, argent, visites, commandes, rares, état de départ,
+Codex). **Supabase : rien.** **Le jeu ne change pas** : aucun fichier chargé par le jeu n'est modifié ; `maisonArt.js` est neuf et seul son banc l'importe.
+- **L'échelle, mesurée sur les façades** : 1 case = 1,183 m (la porte de 2,04 m) ; les trois premiers joueurs ont des ÉTROITES (6,4 et 7 m de façade) —
+  plan proposé : 5 × 7 cases par niveau, trois niveaux (RDC entrée-séjour-cuisine, étage chambre-bains-dressing, combles).
+- **Le studio** (`tools/blender/studio.py`) : Blender n'est qu'un moteur de rendu, chaque meuble est une FONCTION Python (`meubles.py`), seuls des PNG
+  sortent — la leçon du 481 (le glTF du bureau du maire jamais regardé). **La projection du jeu, mesurée** : caméra orthographique à 45°,
+  `pixel_aspect_x = √2` → un cube d'une case = 32 px de large, de dessus et de face. Quatre paliers de lumière + un reflet, ombres froides, contour
+  d'un pixel par coque inversée. **Trois pièges trouvés en le montant** (commentés dans `studio.py`) : la coque du contour portait ombre au meuble
+  entier (tout sortait au palier d'ombre) ; le soleil se calibre contre la diffuse BLANCHE de la rampe (3,2, pas 4) ; des paliers écrits en linéaire
+  n'assombrissent la face que de 7 % à l'écran — ils s'écrivent en valeur perçue.
+- **Les meubles** (21 avec variantes, 36 images) : canapé, fauteuil club, table basse, kilim, bibliothèque, lampadaire, poêle à bois allumé, plante morte,
+  figuier lyre, guéridon et sa lampe, portemanteau, lit, tableau provisoire, escalier droit. Rendus en ligne de commande, **identiques au pixel** au rendu en
+  direct (`Blender -b -P tools/blender/rendre_meubles.py`, 19 s).
+- **Les murs et les sols au canevas** (`maisonArt.js`, `fillRect` seul, hasard tiré d'un hachage) : parquet à l'anglaise (4 essences), carreaux de ciment
+  (rosace à quatre carreaux), papiers peints (fleurs, rayures, vert anglais, toile bleue), lambris à panneaux, cimaise, corniche, porte entrouverte, arases,
+  flaque de soleil, ombre de contact.
+- **La pièce témoin** (`tools/render-maison.mjs` → `tools/out/maison-temoin-planche.png`, et `maison-mobilier.png`) : le RDC d'une étroite en quatre états —
+  départ (vide, plante morte), ambiance A de jour, A de nuit (lampes, poêle, lune), ambiance B. ⚠️ **Mesuré en l'écrivant : une cloison nord-sud de 2,50 m
+  cache sa propre porte** (68 px de mur pour 26 px de porte) — les murs latéraux et la façade sont donc COUPÉS À 35 CM, le mur du fond reste plein.
+- **Pas fait** : rien dans le jeu (lot 1) ; la cuisine, l'étage, les combles ; les tableaux Gemini ; le contre-jour dynamique (couper le mur qui cache le
+  joueur) ; la nuit du banc est un passage sur les pixels, celle du jeu passera par `lumiere.js`. **Pas vu** : à l'écran du jeu, sur iPad.
+
 ## 2026-10-15 (suite) — LE PARK : LE SAUT CHARGÉ, LES FIGURES AVANCÉES, LES SPINS ET LE HANDPLANT DES ROLLERS
 
 Guillaume : « ajouter des figures au skateboard / BMX, plus on maintient longtemps plus le saut est haut, et ajouter possibilité de figures plus avancées et

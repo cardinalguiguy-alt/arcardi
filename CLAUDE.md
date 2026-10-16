@@ -11,19 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-16 — LA TEINTE DE PEAU (8 TEINTES, 2 CHANGEMENTS), NON COMMITÉE ; LES LIVRAISONS DU 2026-10-15 (SOL CUIT DE VT, FIGURES DU PARK) SONT TOUJOURS DANS L'ARBRE
+### 2026-10-16 (nuit) — CHEZ SOI : LOTS 1 ET 2a DES INTÉRIEURS DANS LE JEU (le mode déco, le garde-meuble, murs et sols payants) ; RIEN DE COMMITÉ
 
-**Teinte de peau** (détail : `docs/PROJETS.md` §2) : choix gratuit à la création, puis 2 changements arbitrés par l'hôte (`skinSet`), onglet « Teint » de la
-Maison Garfield, invite une fois aux anciens. Vu en jeu : écran de choix + rendu de l'hôte, `verify-syntax`/`scope`/`strings`/`docs` verts. **Pas vu** :
-deux clients, iPad, pose assise/nage/combinaison/cheval. **Supabase : rien** (JSON de la garde-robe). **Guillaume veut ensuite un DRESSING dans
-l'intérieur de sa propre maison (comme GTA V)** : l'intérieur n'existe pas, c'est un chantier à part. Le sol cuit (`TOWN_GROUND`) et les figures du park
-(journal du README, 2026-10-15) restent à juger en jeu (`docs/A-JUGER.md`).
+**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-16 au README de la ferme) : sa porte, trois niveaux, escalier, lit, lumière,
+murs évasés ; et maintenant le MODE DÉCO (B) — poser, tourner, ranger, aimant des murs, règle de passage, papiers / lambris / sols payés à la
+caisse commune. État : `homes[playerId]` dans le JSON de `ferme_saves` (**Supabase : rien**, aucune migration ; absent = maison de départ).
+Neufs : `maison.js`, `maisonArt.js`, `maisonSprites.js` (GÉNÉRÉ par Blender), `public/maison/`, `tools/blender/`, `verify-maison` (93/93),
+`render-maison`. Vu en jeu et à deux clients, aucune erreur. **Pas vu : iPad, la sauvegarde réelle (le Supabase factice ne garde rien).**
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
-trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
+trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. L'extension MCP de Blender est ancienne (`uvx mcp-for-blender
+install-addon`) ; le rendu en ligne de commande n'en a pas besoin.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER PAR GUILLAUME EN JEU : LA TEINTE DE PEAU, LA FLUIDITÉ À VT, PUIS LE PARK ; ENSUITE LE DRESSING (CADRER AVEC LUI)
+### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
 
-Les blocs en tête de `docs/A-JUGER.md` ; puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3), puis l'équipe de nettoyage (§4.1).
+Avant : les blocs en tête de `docs/A-JUGER.md` (le mode déco, chez soi). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -81,6 +82,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
+| **Intérieurs des maisons** (zone « home » : plan, carte, collision, escalier, murs coupés, lumière ; meubles rendus par Blender ; à venir : déco, commandes, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 

@@ -9197,3 +9197,39 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
   .ferme-race-count{ font-size:92px; } .ferme-race-count.go{ font-size:72px; }
   .ferme-race-laps{ display:none; }
 }
+
+/* 2026-10-16 (lot 2a) — LE MODE DÉCO DE LA MAISON (FermeGame.js, `homeDecoUi`).
+   Un bandeau de papier en bas d'écran, au-dessus de la barre d'outils : il ne
+   couvre jamais le centre, où l'on pose. */
+.ferme-deco-fab{ right:202px; }
+.ferme-deco-panel{
+  /* ⚠️ EN COLONNE À DROITE, PAS EN BANDEAU (vu en jeu le 2026-10-16) : en bas
+     d'un petit écran, le bandeau couvrait le séjour — l'endroit même où l'on pose.
+     La maison est centrée : la colonne tient dans la marge de droite. */
+  position:fixed; right:12px; top:58px; bottom:92px; z-index:43;
+  width:min(300px, 42vw); overflow-y:auto;
+  background:var(--f-paper); border:3px solid var(--f-wood); border-radius:10px;
+  box-shadow:0 4px 0 var(--f-wood-d); padding:10px 12px; color:var(--f-ink); font-size:13px;
+}
+.ferme-deco-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:8px; }
+.ferme-deco-title{ font-weight:700; margin-right:4px; }
+.ferme-deco-seg{ display:flex; gap:2px; background:var(--f-paper-d); border-radius:8px; padding:2px; }
+.ferme-deco-seg button{ border:0; background:transparent; padding:4px 9px; border-radius:6px; cursor:pointer; font:inherit; color:inherit; }
+.ferme-deco-seg button.on{ background:var(--f-gold); box-shadow:0 2px 0 var(--f-wood-d); }
+.ferme-deco-gold{ font-weight:700; }
+.ferme-deco-garde{ display:flex; flex-wrap:wrap; gap:6px; }
+.ferme-deco-item{ display:flex; flex-direction:column; align-items:center; gap:2px; width:84px; padding:4px; border:2px solid var(--f-paper-d);
+  border-radius:8px; background:#fffaf0; cursor:pointer; font:inherit; color:inherit; }
+.ferme-deco-item:hover{ border-color:var(--f-wood); }
+.ferme-deco-item.on{ border-color:var(--f-gold); background:#fff3cf; }
+.ferme-deco-item img{ height:48px; image-rendering:pixelated; object-fit:contain; max-width:76px; }
+.ferme-deco-item span{ font-size:11px; text-align:center; line-height:1.15; }
+.ferme-deco-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:4px 0; }
+.ferme-deco-row-label{ width:100%; font-weight:700; }
+.ferme-deco-sw{ display:flex; flex-direction:column; align-items:center; padding:3px; border:2px solid var(--f-paper-d); border-radius:6px; background:#fffaf0;
+  cursor:pointer; font:inherit; color:inherit; }
+.ferme-deco-sw:hover{ border-color:var(--f-wood); }
+.ferme-deco-sw.on{ border-color:var(--f-gold); background:#fff3cf; cursor:default; }
+.ferme-deco-sw canvas{ width:66px; height:42px; image-rendering:pixelated; border-radius:3px; }
+.ferme-deco-sw span{ font-size:10px; }
+.ferme-deco-help{ margin-top:6px; font-size:11px; opacity:.75; }

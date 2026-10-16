@@ -40,7 +40,7 @@ sous la forme `~n` (`C.playerLook`, `lookSkin` dans fermeArt.js). Invite une foi
 changements se font pour l'instant dans l'onglet « Teint » de la Maison Garfield. Vu : écran de choix + rendu du joueur (hôte). **Pas vu** : à deux
 clients, iPad, pose assise / nage / combinaison de patin / cheval. **Prochain chantier décidé (Guillaume, 2026-10-16) : un DRESSING dans l'intérieur de
 SA PROPRE maison, « comme dans GTA V »** — l'intérieur n'existe pas (entrer chez soi lance seulement le sommeil, `startSleep`) : à créer, puis y déplacer
-l'onglet Teint et la garde-robe.
+l'onglet Teint et la garde-robe. **Cadré le même jour avec tous les intérieurs : §6.**
 
 **Décision (2026-10-06)** : à la CRÉATION, le joueur choisit sa **teinte de peau** et sa **coupe de cheveux**. Pour les personnages DÉJÀ créés : **à la
 prochaine connexion**, on leur propose de choisir **leur teinte de peau seulement** (pas la coupe : elle reste celle d'aujourd'hui). ⚠️ **Pas à
@@ -155,3 +155,91 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
   découpage en lots livrables (extérieur d'abord, puis salles).
 - **Pièges prévisibles** : nouveau lieu = nouveau repère de carte (noyau §4 : une position taguée par sa zone) ; l'altitude/étage se déduit et ne se
   diffuse pas ; ≤ 10 messages/s par client.
+
+---
+
+## 6. Les intérieurs des maisons des joueurs (lots 0, 1 et 2a FAITS — à juger en jeu ; 2b, 2c, 2d à faire)
+
+> Demande de Guillaume, 2026-10-16 : « designer l'intérieur des maisons. accès règlementé : sur invitation pour les maisons des autres,
+> et accès libre pour sa maison. […] très poussé. Je veux des plans cohérents avec la taille des maisons, et une ambiance personnalisable.
+> il faudra pouvoir commander des meubles, des décos, acheter ou troquer des objets de décoration rares […] HAUT niveau de détail ».
+> Le DRESSING « comme GTA V » du §2 vit dans cette maison.
+
+**Ce qui existe (vérifié ce jour-là)** : aucun intérieur de maison — la porte de SA parcelle lance le sommeil (`startSleep`, FermeGame.js) ;
+les intérieurs du tribunal, de la mairie et de l'église sont des « premiers jets » (`docs/AUDIT-2026-10.md`, partie 2 : murs d'une case,
+meubles = cases, aucune lumière) — **on n'en reprend pas le dessin**, seulement l'idée d'une carte unique aux niveaux empilés.
+
+**L'échelle, mesurée** : le vantail fait 2,04 m (`TOWN_HOUSE_DOOR_PX`) → **1 case = 1,18 m**. Mur du rez-de-chaussée (`wall`, à l'échelle de
+`townDoorScale`) : N1 6,4 m · N2 7,0 m · S2 (chaumière, RDC + combles) 7,6 m · S1 8,2 m · S4 8,3 m · S3 (maison de maître) 10,8 m ; les autres
+ont RDC + étage + combles. ⚠️ **Les parcelles de rang 0 à 2 (les trois premiers joueurs) sont toutes ÉTROITES** (`TOWN_HOUSES`) : le premier plan
+à dessiner est l'étroite, ~5 × 7 cases (49 m²) par niveau. Proposition montrée et non contestée : RDC entrée + séjour côté rue, cuisine-repas
+au fond, WC, escalier droit le long du mur gauche ; étage chambre côté rue (deux fenêtres), bains et dressing au fond ; combles bureau et
+chambre d'amis, bandes basses sous la pente. Les fenêtres côté rue sont CELLES DE LA FAÇADE (N1 et N2 n'ont pas les mêmes : le plan est
+par LARGEUR, les ouvertures du mur côté rue par MODÈLE — la façade change avec R, pas le plan).
+
+**Décisions de Guillaume (2026-10-16)** :
+1. **Fabrication** : meubles modélisés sous **Blender**, rendus en sprites au pixel d'écran (orientations et coloris par rendu, même angle et
+   même lumière pour tous) ; tableaux et objets rares en **images Gemini** (prompt proposé, Guillaume génère) ; murs, sols, papiers peints au
+   **canevas**. **Une pièce témoin (le séjour) se juge avant la série.**
+2. **Taille** : l'étroite d'abord ; **plus tard, déménager** dans une parcelle libre plus grande (S1, S4, S3), meubles compris — un but de long terme.
+3. **Argent** : la **caisse commune** paie (comme la garde-robe) ; **chaque objet appartient à UN joueur** (d'où le troc).
+4. **Visites** : chez soi, accès libre ; chez un autre, **sonnette** (le propriétaire en ligne ouvre ou refuse) **+ double des clés** confié et
+   révocable (ouvre en son absence). Un visiteur regarde, s'assoit, joue des objets ; **il ne déplace rien**.
+5. **Commandes** : un **catalogue chez soi, livré le lendemain matin** devant la porte ; **Marcel** (résident, « carve furniture ») fait des
+   pièces sur commande, **Colette** (« sew and dye clothes ») les tissus — rideaux, coussins, teinture ; s'ils n'ont pas emménagé, le catalogue suffit.
+6. **Rares — les quatre sources** : le **brocanteur du marché** (stock qui tourne chaque semaine, premier arrivé premier servi, l'hôte
+   arbitre ; **Aurélien**, « appraise gems », estime) ; le **troc entre joueurs** (objet contre objet, accord des deux) ; les **trophées**
+   d'activités (pêche rare, course, quête, park — ne s'achètent pas) ; les **séries de saison** (une saison, puis l'année suivante).
+7. **Au premier passage de porte** : **VIDE, sauf un lit dans la chambre et une plante MORTE dans le séjour** (sa réponse, mot pour mot).
+8. **Codex** : non — Claude seul.
+
+**Acquis sans objection** : cloisons FINES (pas d'une case : sinon aucune pièce n'est à l'échelle) ; vue en COUPE (le mur du fond se voit sur
+sa hauteur, le mur côté rue est coupé) ; toutes les maisons et leurs niveaux dans UNE carte, la maison et l'étage se DÉDUISENT de la position
+(noyau §3 et §4 : une position taguée par sa zone, rien de plus sur le réseau) ; l'ambiance suit le monde (soleil par les fenêtres à l'heure
+d'`ombres.js`, pluie et neige aux carreaux, lampe allumée dedans = fenêtre allumée dehors, feu dans la cheminée = fumée sur le toit,
+`fumee.js`) ; on DORT dans son lit (fini le sommeil à la porte) ; l'onglet Teint et la garde-robe déménagent au dressing ; tout l'état vit
+dans le JSON de `ferme_saves` — **aucune migration SQL**.
+
+**Lots, dans l'ordre** : 0 la pièce témoin (Blender, à juger) · 1 la coque de l'étroite (plan, cloisons, portes, escalier, lumière, lit, entrer
+et sortir) · 2 le mode déco (poser, tourner, ranger, garde-meuble ; murs, sols, peintures) · 3 catalogue, livraison, Marcel, Colette · 4 la
+sonnette et le double des clés · 5 les rares (brocanteur, troc, trophées, saisons) · 6 le dressing · 7 le déménagement et les autres largeurs.
+
+**Pièges prévisibles** : un sprite a un SENS DESSINÉ (face, côté, dos — le côté gauche n'est pas toujours le miroir du droit : une lampe
+posée à droite d'un fauteuil) ; l'emprise d'un meuble n'est pas son dessin (la collision a son rectangle de pied, pas la case) ; un meuble
+placé = UNE `req` au lâcher, jamais pendant qu'on le traîne (≤ 10 messages/s) ; le tri de dessin d'un meuble haut contre le mur du fond ;
+WebKit sur iPad plafonne le nombre de canevas (des centaines de sprites de meubles × coloris : un atlas, pas un canevas par variante).
+
+**Lot 0 — FAIT le 2026-10-16, à juger (`docs/A-JUGER.md`)** : le studio Blender (`tools/blender/studio.py`, `meubles.py`, `rendre_meubles.py`), 21 meubles
+et variantes, les murs et sols au canevas (`components/ferme/maisonArt.js`), la pièce témoin (`tools/render-maison.mjs`). Détail : journal du README de la
+ferme, 2026-10-16 (suite). **Décidé en l'écrivant, à lui soumettre** : murs latéraux et façade COUPÉS À 35 CM, mur du fond plein (une cloison pleine cache
+sa propre porte dans cette projection) ; plus tard, le mur qui cache le joueur se coupe à son tour (quand il passe dans la pièce du fond).
+Verdict de Guillaume sur le témoin (2026-10-16) : « Le style me va ».
+
+**Lot 1 — FAIT le 2026-10-16, à juger en jeu** : la zone « home » (`components/ferme/maison.js`, `maisonArt.js`, `drawHomeFrame` dans FermeGame.js),
+bancs `verify-maison` (62/62) et `render-maison`. Détail : journal du README de la ferme, 2026-10-16 (soir). **Décidé en l'écrivant, à lui
+soumettre** : les faces façon Sims (pleins : le mur du fond de la maison et celui de la pièce où l'on est), les crans 2 et 4 seuls à l'intérieur,
+l'aide de porte, pas de carte dedans, l'ampoule nue qui s'allume la nuit dans la pièce occupée. Retouche du même soir, à sa demande (« une vraie idée de profondeur ») : les murs
+latéraux évasés et l'ombre au pied des murs — **validés par lui au banc, puis vus en jeu** (RDC à 14 h, étage à 22 h).
+
+**Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
+1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une
+   palette en bas montre le GARDE-MEUBLE (ce qu'on possède et qui n'est pas posé).
+2. **Grille au quart de case** (30 cm) et quatre orientations ; une pose qui bloquerait une porte ou couperait une pièce est REFUSÉE (le
+   remplissage de `verify-maison` devient une règle de jeu : toutes les pièces restent atteignables).
+3. **Un premier catalogue dans le lot 2** : les meubles déjà rendus et une dizaine de nouveaux (Blender, `tools/blender/meubles.py`).
+4. **Papiers, lambris et sols pièce par pièce, payants** (caisse commune), visibles aussitôt.
+5. **Le catalogue est un objet CHEZ SOI** (dans l'entrée, E pour le feuilleter) : des pages par pièce, l'aperçu et les coloris ; une édition par saison.
+6. **La livraison : des CARTONS devant la porte** le lendemain matin ; dedans, ils sont dans l'entrée, E pour déballer → le garde-meuble.
+7. **Dès le lot 2, aussi** : les LUMIÈRES (lampes, poêle, plafonnier : E pour allumer ; la nuit, une pièce allumée allume sa fenêtre vue de la rue) ;
+   les TABLEAUX et MIROIRS au mur (une couche d'objets de mur ; tableaux définitifs : Gemini) ; la REVENTE à moitié prix depuis le garde-meuble ;
+   les RIDEAUX et TISSUS chez Colette (rideaux aux fenêtres, teinture des tissus).
+8. **Prix à l'échelle de la garde-robe** (chapeaux et tenues de 1 200 à 14 000 or) : une plante ≈ un chapeau, un canapé cinq à dix fois plus.
+**Découpage proposé (à livrer dans l'ordre, chacun vu en jeu)** : 2a le mode déco, le garde-meuble, les murs et sols payants · 2b le catalogue et
+les cartons · 2c lumières, objets de mur, revente · 2d Colette (rideaux, teinture).
+**2a FAIT le 2026-10-16 (nuit)** — journal du README de la ferme. Décidé en l'écrivant : l'aimant des murs (le geste reste au quart de case),
+les murs du fond tous relevés en mode déco, le panneau en colonne à droite, le menu développeur « Garnir le garde-meuble » en attendant 2b.
+**Prochain : 2b, le catalogue et les cartons.** **Rien de tout l'état ne demande de migration** : la maison
+de chacun (meubles posés, garde-meuble, décor des pièces, cartons) vit dans le JSON de `ferme_saves`, une `req` par geste (jamais pendant un
+glisser), l'hôte arbitre l'or. ⚠️ Piège prévisible : « un résolveur qui écrit un champ neuf doit être livré dans le même geste que sa
+déclaration et sa migration » (§4) — ici la déclaration et la lecture d'une sauvegarde ancienne (champ absent = maison de départ).
+

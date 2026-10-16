@@ -18816,8 +18816,9 @@ export function buildSprites() {
   function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = sugarWorker ? MARTIAL_HAIR : HAIR_COLORS[outfit % HAIR_COLORS.length];
-    const skin = sugarWorker ? MARTIAL_SKIN : SKIN;
-    const skinD = sugarWorker ? MARTIAL_SKIN_D : SKIN_D;
+    const tone = !sugarWorker && lookSkin(look) ? C.CHAR_SKIN_TONES[lookSkin(look)] : null;
+    const skin = sugarWorker ? MARTIAL_SKIN : tone ? tone.main : SKIN;
+    const skinD = sugarWorker ? MARTIAL_SKIN_D : tone ? tone.shade : SKIN_D;
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
     const bob = step !== 0 ? 1 : 0;
     const x = ox;
@@ -19431,7 +19432,14 @@ export function buildSprites() {
      (`wardrobeLook`, dans fermeConstants.js). Deux décodages du même vêtement,
      c'est la garantie qu'un jour on porte un chapeau que les autres ne voient
      pas — et le seul indice serait une capture d'écran comparée à une autre. */
+  /* La teinte de peau d'un joueur : suffixe `~n` de la chaîne (voir `playerLook`, fermeConstants.js). 0 = peau d'origine. */
+  function lookSkin(look) {
+    const i = typeof look === "string" ? look.indexOf("~") : -1;
+    const n = i < 0 ? 0 : look.charCodeAt(i + 1) - 48;
+    return n > 0 && n < C.CHAR_SKIN_TONES.length ? n : 0;
+  }
   function parseWardrobeLook(look) {
+    if (typeof look === "string" && look.indexOf("~") >= 0) look = look.slice(0, look.indexOf("~"));
     if (typeof look !== "string" || look.length !== 5 || look[0] !== "w") return null;
     const d = (k) => {
       const n = look.charCodeAt(k) - 48;

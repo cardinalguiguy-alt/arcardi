@@ -2006,3 +2006,22 @@ pas une dette qui attend : c'est une protection qui a déjà cessé.*
 ⚠️ **Il a été falsifié le jour où il a été écrit** (un faux banc qui sort en code 1 le fait bien
 crier, en le nommant) — c'est la règle du §10 de `CLAUDE.md`, appliquée à l'outil qui surveille les
 outils.
+
+## `render-maison.mjs` et `tools/blender/` — LES INTÉRIEURS DES MAISONS (2026-10-16, `docs/PROJETS.md` §6)
+
+- **`tools/blender/rendre_meubles.py`** (Blender 5.2, `/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/rendre_meubles.py`, 19 s) :
+  rend chaque meuble de la liste `TRAVAUX` dans ses orientations (S, E, N, W = le côté vers lequel regarde sa FACE) et ses variantes, dans
+  `public/maison/` (servies au jeu), avec le module GÉNÉRÉ `components/ferme/maisonSprites.js` : par image, sa taille, son ANCRE (`ax`, `ay` :
+  le pixel du coin avant-gauche de l'emprise, au sol) et son emprise tournée (`fw`, `fd`, en mètres). Le studio (caméra, lumière, contour) est `studio.py`, les meubles `meubles.py` (une fonction chacun).
+  Rendu en ligne de commande = rendu en direct, au pixel près (vérifié sur le canapé et le poêle).
+- **`render-maison.mjs`** (refait au lot 1 sur le VRAI plan, avec les fonctions du jeu : `maison.js`, `maisonArt.homeDrawItems`) : la COQUE
+  (`maison-coque-n1.png`, `-n2.png` : les trois niveaux au premier passage de porte, la fermière dans une pièce de chacun) et le TÉMOIN
+  (`maison-temoin-planche.png` : le RDC vide, meublé de jour, de nuit, ambiance B). Aucun contrôle chiffré : un banc à REGARDER.
+- **`verify-maison.mjs`** (lot 1, 62 contrôles ; **93 depuis le lot 2a** : §7 poser, refuser — escalier, mur, meuble, porte, passage coupé —,
+  l'aimant contre chaque mur du séjour, ranger, le décor payé, le plan de référence intact ; §8 chaque meuble, chaque papier, lambris, sol et
+  chaque raison de refus a son nom en français et en anglais — le piège du repli `||`, §4) : la porte et les fenêtres lues sur chaque façade étroite ; le calage au pixel de l'origine
+  cuite ; chaque pièce de chaque niveau atteignable (remplissage au pas de 5 cm, la vraie semelle) ; l'escalier (arrivées praticables, pas de
+  rebond, la case à deux sols de l'étage) ; 360 000 pas de marcheurs à but (jamais la semelle dans un mur, jamais coincé, toutes les pièces sauf
+  la trémie) ; l'aller-retour position → (maison, niveau, plan). ⚠️ Un premier jet de marcheurs AVEUGLES mesurait le tirage (90 % du temps
+  dans la cuisine selon la graine), pas le plan.
+

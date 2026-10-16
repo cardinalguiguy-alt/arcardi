@@ -6,6 +6,31 @@
 
 ---
 
+### À juger — LE MODE DÉCO (2026-10-16 nuit, lot 2a des intérieurs)
+
+Chez toi : B (ou 🛋️). Pour avoir des meubles avant le catalogue : menu développeur → Maison → « Garnir le garde-meuble ».
+- **Le geste** : prendre au clic, poser au clic, R ou clic droit pour tourner, Suppr pour ranger — naturel ? Le vert / rouge du meuble tenu, lisible ?
+- **L'aimant** : un meuble lâché près d'un mur s'y plaque (moins de 20 cm), et bute contre le mur quand on le pousse — trop fort, trop faible ?
+- **Les refus** (devant une porte, une pièce qui deviendrait inaccessible) : justes ? frustrants ?
+- **Murs et sols** : les prix (papier 1 500, lambris 1 000, sol 2 500 par pièce) ; les sept papiers, six lambris, neuf sols — à enrichir ?
+- **Le panneau** à droite : il gêne quelque part ?
+Pas vu : iPad (les boutons ↻ et 📦 sont là pour le doigt), la sauvegarde réelle sur Supabase.
+
+### À juger — CHEZ SOI, dans le jeu (2026-10-16, lot 1 des intérieurs)
+
+En ville, devant TA porte (une étroite) : « E : entrer chez soi ». Dedans, au clavier :
+- **Les murs** : seul reste plein le mur du fond de la pièce où tu es (et celui de la maison) ; les autres descendent à 35 cm quand tu passes d'une
+  pièce à l'autre. Lisible ? Le fondu, trop lent, trop rapide ?
+- **L'escalier** : la volée du bas mène à l'étage, celle de l'étage (on y entre par son pied, côté chambre) aux combles ; on redescend par le palier
+  et par la trémie. Naturel ? La volée qui s'efface quand on est derrière elle, sur le palier ?
+- **Les portes** : l'aide qui fait glisser vers une porte proche (moins de 30 cm) — on la sent ? elle gêne ?
+- **Le lit** : E pour se coucher (la tête sur l'oreiller), E pour se lever. **La nuit** : l'ampoule nue de la pièce où tu es s'allume.
+- **Le zoom** : dedans, seulement les crans 2 et 4 (le dessin reste net) — gênant ?
+- **Les combles** : vides et un peu nus (un grenier) — à meubler au lot 2, ou à habiller tout de suite (lucarne de toit, poutres) ?
+- **La profondeur** (ta demande, validée au banc) : les murs de côté évasés, vus en jeu par moi seulement — les piliers des coins de la façade
+  se lisent un peu comme des rampes : à reprendre ?
+Pas vu : iPad et le tactile dedans.
+
 ### À juger — le saut chargé et les figures du park (2026-10-15, suite) : tes réponses aux questions de forme n'ont pas été données
 
 Les options RECOMMANDÉES ont été prises ; à confirmer ou à changer en jouant (le park chez soi : menu dev, « Skatepark et chantier ») :
