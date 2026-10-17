@@ -11,21 +11,21 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-17 (nuit) — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER LENT, LIT, BAINS ; RIEN DE COMMITÉ
+### 2026-10-17 (après-midi) — CHEZ SOI : COTES D'USAGE À L'ÉCHELLE DU PERSONNAGE (TOUTE LA MAISON), MARCHE RALENTIE ; RIEN DE COMMITÉ
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). Après le jeu de Guillaume : la caméra se cadre PAR PIÈCE
-(`maison.homeCadre*`, `homeFrameNow`, `homeFitZoom` ; plan entier au bouton 📐 / touche P ; le cran manuel n'a plus cours chez soi), l'escalier est lent,
-marche par marche, et ne s'engage que sur un geste dans son sens (`homeStairStep(…, dir)`, l'aide de porte n'y glisse plus), le lit n'est à portée que dans
-sa pièce, bains à 3,0 × 3,4 avec fenêtre, miroir et lavabo à hauteur du personnage, verre évasé comme son cadre. Vu en jeu (1024 × 768, 1440 × 900),
-aucune erreur ; `verify-maison` 151/151, `verify-densite`, `verify-strings` verts. **Supabase : rien.** **Pas vu : iPad, deux clients, crans 6 et 8, la
-sauvegarde réelle ; le trajet exact de son bug « on passe dessous »** (deux causes corrigées, à lui de confirmer — `docs/A-JUGER.md`).
+**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). Sa demande : « la tête du player est en dessous des plans de travail et objets »
+(cuisine, bains, puis séjour, chambre, radiateurs) et « réduire un peu la vitesse dans la maison, pas sur les escaliers ». Faits : HAUTEURS d'usage ÷ `HOME_K` pour tous les
+sprites sauf tapis, tableau, escalier (`studio.ZK`, `meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES` ; cheminée à ×0,65) et pour ce qui est peint ou posé dessus
+(`maison.ECHELLE_USAGE`, `homeBedPillow`) ; marche ×0,75 (`homeSpeedMul`), escalier inchangé (1,87 cases/s). Vu en jeu (cuisine, bains, séjour, chambre, dormeur), vitesses
+mesurées ; `verify-maison` 162/162 (§12), `verify-strings`, `verify-densite` verts. **Supabase : rien.** **Pas vu** : iPad, deux clients, le mode déco avec les nouveaux gabarits,
+la sauvegarde réelle (`docs/A-JUGER.md`). Tout meuble NEUF du catalogue (2b) : l'ajouter aux deux listes d'échelle.
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
 trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. Le rendu Blender en ligne de commande (`Blender -b -P
-tools/blender/rendre_meubles.py`) est déterministe : n'en commiter que les PNG qui changent au pixel.
+tools/blender/rendre_meubles.py`) est déterministe : n'en commiter que les PNG qui changent au pixel (comparer à HEAD, remettre les autres).
 
 ### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
 
-Avant : le bloc en tête de `docs/A-JUGER.md` (cadrage, escalier, lit, bains). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+Avant : les deux blocs en tête de `docs/A-JUGER.md` (hauteurs et marche ; cadrage, escalier, lit, bains). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -83,7 +83,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
@@ -249,6 +249,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE PROPORTION N'EST PAS UNE DIMENSION, ET AUCUN BANC DU DÉPÔT NE MESURE UN RAPPORT ENTRE DEUX MORCEAUX
 - UNE TAILLE SE LIT CONTRE SES VOISINES : AGRANDIR LES VOISINS RAPETISSE CE QUI N'A PAS BOUGÉ
 - UN PERSONNAGE CHIBI A LA HAUTEUR D'UN ADULTE ET LA CARRURE DE DEUX : CONTRE DES COTES RÉELLES, IL PARAÎT GÉANT
+- UNE COTE D'USAGE SE COMPARE AU PERSONNAGE, PAS À SON ANCIENNE VALEUR : ×2 SUR LES EMPRISES SANS ÷2 SUR LES HAUTEURS LAISSE LE PERSONNAGE SOUS LE PLAN DE TRAVAIL
 - UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE HAUT
 - UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER
 - UNE CONDITION DE PROXIMITÉ DOIT MESURER CE QUE L'ACTION MESURE, PAS UNE APPROXIMATION QUI SUPPOSE QU'ON PEUT S'EN APPROCHER

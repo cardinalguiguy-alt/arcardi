@@ -94,6 +94,45 @@ export function homeToWorld(slot, level, lx, ly) {
 /* Le pied d'un personnage (la ligne de contact, `C.footX/footY`) en coordonnées du plan. */
 export const homeFootLocal = (x, y) => homeToLocal(C.footX(x), C.footY(y));
 
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-17 (après-midi) — LES COTES D'USAGE SE LISENT CONTRE LE PERSONNAGE
+   ╚════════════════════════════════════════════════════════════════════════
+   Guillaume : « la tête du player est en dessous des plans de travail et objets
+   [de la cuisine] ; pareil salle de bain […] pour une mise à l'échelle cohérente ».
+   Le plan et les murs sont à ×2 (`HOME_K`), pas le personnage : à côté d'eux il fait
+   `HOME_PERSO_M` = 0,85 m. Les cotes réelles d'un adulte (plan de travail à 0,90 m,
+   vasque à 0,86 m, miroir à 1,15 m, fenêtre à 0,90 m, interrupteur à 1,10 m) lui
+   arrivaient à la tête — et le correctif du soir (lavabo −20 cm, miroir 0,80 m,
+   fenêtre des bains 0,78 m) la laissait AU RAS de la tête. La règle : les HAUTEURS de
+   ce qui s'utilise debout se divisent par K, comme le personnage ; les emprises
+   (la grandeur de la pièce) et la hauteur des murs restent réelles.
+   ⚠️ DEUX ENDROITS PORTENT LA RÈGLE, ET UN BANC LES RECOUPE (`verify-maison` §12) :
+   ici, ce qui est PEINT sur les murs et les fenêtres ; `tools/blender/meubles.py`
+   (`ECHELLE_Z`), les sprites des équipements (plan de travail, évier, cuisinière,
+   lavabo, toilettes, baignoire : ×0,5 sur les hauteurs, rendus par Blender).
+   2026-10-17 (après-midi, sur son « oui ») : tout le reste suit — séjour, chambre, radiateurs (`ECHELLE_Z_SPRITES`). */
+export const HOME_PERSO_M = 1.70 / HOME_K;
+/* Les sprites dont Blender divise les hauteurs, et de combien (`tools/blender/meubles.py`, `ECHELLE_Z` : la même liste, recoupée par
+   `verify-maison` §12). Hors liste : le tapis (à plat), le tableau (suspendu) et l'escalier (ses marches font l'étage des murs).
+   ⚠️ La cheminée fait exception à ×1/K : écrasée à ×0,5 elle devenait une auge. */
+export const ECHELLE_Z_SPRITES = Object.fromEntries([
+  ...["plan_travail", "evier", "cuisiniere", "baignoire", "lavabo", "wc", "canape", "fauteuil", "table_basse", "bibliotheque", "lampadaire", "poele",
+      "gueridon", "portemanteau", "plante_morte", "plante_verte", "lit", "radiateur"].map((n) => [n, 1 / HOME_K]),
+  ["cheminee", 0.65],
+]);
+/* Le facteur d'un sprite (`canape_canard` → celui de `canape`, `plan_travail_118` → celui de `plan_travail`, `lampadaire_moutarde_allume`…). */
+export const homeZk = (sprite) => {
+  const base = Object.keys(ECHELLE_Z_SPRITES).find((n) => sprite === n || sprite.startsWith(n + "_"));
+  return base ? ECHELLE_Z_SPRITES[base] : 1;
+};
+export const ECHELLE_USAGE = {
+  fenetre: { allege: 0.70, haut: 1.90 },   // cuisine et bains (0,90–2,15 m avant) : l'appui passe sous le robinet (0,63 m), pas sous l'épaule
+  priseCuisine: 0.60,                      // sur la faïence, 15 cm au-dessus du plan (0,45 m)
+  priseBains: 0.50,
+  miroir: [0.62, 1.08],                    // autour du visage du personnage (0,6 à 0,8 m), au-dessus de la vasque (0,43 m)
+  conduit: { tablette: 0.70, trumeau: [0.86, 1.70] },   // la tablette de la cheminée (×0,65 : 1,08 → 0,70 m) et le trumeau au-dessus (1,24–2,20 avant)
+};
+
 // ─── le plan de l'étroite ────────────────────────────────────────────────
 /* Repère du plan : x vers l'est (0 = mur ouest intérieur), y vers la RUE
    (0 = mur nord intérieur, `d` = façade). `rects` : [x0, y0, x1, y1].
@@ -121,7 +160,7 @@ export const PLAN_ETROITE = {
         { id: "cage", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 2.0, 0.9, 4.5]] },
         { id: "entree", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 4.5, 2.2, 9]] },
         { id: "sejour", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[2.2, 4.5, 5, 9]] },
-        { id: "cuisine", sol: ["tomettes", "rouge"], murs: { papier: "platre", lambris: "faience" }, rects: [[1.0, 0, 5, 4.5]] },
+        { id: "cuisine", sol: ["tomettes", "rouge"], murs: { papier: "platre", lambris: "faience" }, rects: [[1.0, 0, 5, 4.5]], fenetre: ECHELLE_USAGE.fenetre },
       ],
       cloisons: [
         { x: 0.95, y0: 0, y1: 4.5 },                              // la cage d'escalier contre la cuisine
@@ -144,9 +183,9 @@ export const PLAN_ETROITE = {
       peints: [
         { quoi: "etagere", y: 0, x0: 1.12, x1: 1.88 },
         { quoi: "hotte", y: 0, x0: 3.0, x1: 3.59 },
-        { quoi: "conduit", y: 4.55, x0: 3.13, x1: 4.02 },
-        { quoi: "prise", y: 0, x: 1.5, z: 1.1 },
-        { quoi: "prise", y: 0, x: 4.78, z: 1.1 },
+        { quoi: "conduit", y: 4.55, x0: 3.13, x1: 4.02, tablette: ECHELLE_USAGE.conduit.tablette, bas: ECHELLE_USAGE.conduit.trumeau[0], haut: ECHELLE_USAGE.conduit.trumeau[1] },
+        { quoi: "prise", y: 0, x: 1.5, z: ECHELLE_USAGE.priseCuisine },
+        { quoi: "prise", y: 0, x: 4.78, z: ECHELLE_USAGE.priseCuisine },
       ],
     },
     { cle: "etage", mur: 2.5,
@@ -157,7 +196,7 @@ export const PLAN_ETROITE = {
            0,2 case au palier (couloir de 1,0 case, encore trois fois le corps) et 0,6 au dressing (3,0 × 1,9). La fenêtre
            est plus BASSE que celle des autres pièces (`fenetre`) : le personnage fait 0,85 m à l'échelle des murs
            (`HOME_K` = 2), un appui à 90 cm lui passait au-dessus de la tête. */
-        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.0, 0, 5, 3.4]], fenetre: { allege: 0.78, haut: 1.90 } },
+        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.0, 0, 5, 3.4]], fenetre: ECHELLE_USAGE.fenetre },
         { id: "dressing", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: null }, rects: [[2.0, 3.4, 5, 5.3]] },
         { id: "chambre", sol: ["parquet", "chene"], murs: { papier: "toile_bleue", lambris: "creme" }, rects: [[0, 5.3, 5, 9]] },
       ],
@@ -175,10 +214,10 @@ export const PLAN_ETROITE = {
         { sprite: "wc", o: "S", lx: 2.92, ly: 0 },
         { sprite: "baignoire", o: "S", lx: 3.45, ly: 0 },
       ],
-      // Le miroir et la prise sont à la hauteur du personnage, pas à celle d'un adulte de 1,70 m : voir `fenetre` ci-dessus.
+      // Le miroir et la prise sont à la hauteur du personnage, pas à celle d'un adulte de 1,70 m : voir `ECHELLE_USAGE`.
       peints: [
-        { quoi: "miroir", y: 0, x0: 2.22, x1: 2.62, bas: 0.80, haut: 1.38 },
-        { quoi: "prise", y: 0, x: 2.80, z: 0.95 },
+        { quoi: "miroir", y: 0, x0: 2.22, x1: 2.62, bas: ECHELLE_USAGE.miroir[0], haut: ECHELLE_USAGE.miroir[1] },
+        { quoi: "prise", y: 0, x: 2.80, z: ECHELLE_USAGE.priseBains },
       ],
     },
     { cle: "combles", mur: 1.0, pente: true,
@@ -289,7 +328,7 @@ export function homeFixes(plan, L, facade) {
 /* Où se pose la tête du dormeur : sur l'oreiller de gauche (le lit a la tête au nord). */
 export function homeBedPillow(f) {
   const [x0, y0, x1] = homeFurnitureRect(f);
-  return { lx: x0 + (x1 - x0) * 0.3, ly: y0 + 0.30, z: 0.58 };
+  return { lx: x0 + (x1 - x0) * 0.3, ly: y0 + 0.30, z: 0.58 * homeZk(f.sprite) };   // 2026-10-17 : le matelas descend avec le lit (×½)
 }
 
 // ─── la géométrie d'un niveau ────────────────────────────────────────────
@@ -418,6 +457,14 @@ export function homeInStair(plan, lx, ly) {
    plat au début et à la fin — le corps monte par à-coups, comme les jambes. */
 export const HOME_STAIR_SPEED = 0.36;
 export const HOME_STAIR_TREADS = 15;     // `rendre_meubles.py` : escalier, marches=15
+/* ⚠️ 2026-10-17 (après-midi) — « réduire un peu la vitesse de déplacement dans la maison (hors escaliers, la vitesse sur les
+   escaliers est parfaite) ». Dedans, `PLAYER_SPEED` (5,2 cases du monde/s) fait ~3 m/s à l'échelle des murs : un personnage de
+   0,85 m qui traverse la cuisine en 1,9 s. Hors volée on marche à `HOME_WALK_SPEED` de cette vitesse (la course s'y applique
+   comme avant) ; la volée garde SA vitesse ABSOLUE (5,2 × 0,36 = 1,87 cases/s) : le multiplicateur de la volée n'est donc PAS
+   composé avec celui de la marche — `homeSpeedMul` est l'unique endroit où les deux se rencontrent (le jeu l'appelle, le banc aussi).
+   Le pas de jambes suit (`dt × 9 × HOME_WALK_SPEED` : la même foulée qu'en ville). */
+export const HOME_WALK_SPEED = 0.75;
+export const homeSpeedMul = (onFlight, running) => (onFlight ? HOME_STAIR_SPEED : HOME_WALK_SPEED * (running ? C.RUN_SPEED_MULT : 1));
 /* Le marcheur est-il SUR une volée (celle qu'on voit : la volée du bas au rez-de-chaussée, celle du haut à l'étage
    une fois engagé depuis son pied) ? C'est ce qui le ralentit. */
 export function homeOnFlight(plan, L, st, lx, ly) {

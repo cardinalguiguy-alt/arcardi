@@ -201,6 +201,11 @@ check("la hauteur sur la volée : 0 en bas, un étage en haut",
   check("la hauteur monte MARCHE PAR MARCHE (pente aux joints ≪ pente au milieu d'une marche)", joints < 0.15 && milieux > 1.3, `joints ×${joints.toFixed(2)}, milieu ×${milieux.toFixed(2)} de la pente moyenne, ${H.HOME_STAIR_TREADS} marches`);
   const tVolee = (s.yPied - s.yHaut) / (5.2 / H.HOME_K * H.HOME_STAIR_SPEED);
   check("la volée prend entre 2 et 4 secondes", tVolee >= 2 && tVolee <= 4, `${tVolee.toFixed(2)} s à ${(5.2 * H.HOME_STAIR_SPEED).toFixed(2)} cases du monde par seconde`);
+  // 2026-10-17 (après-midi) : la marche est ralentie, la volée garde sa vitesse ABSOLUE (celle jugée parfaite : 5,2 × 0,36 cases/s)
+  const vVolee = C.PLAYER_SPEED * H.homeSpeedMul(true, true), vMarche = C.PLAYER_SPEED * H.homeSpeedMul(false, false);
+  check("la volée garde sa vitesse (1,87 cases/s, course ou pas) ; la marche dedans est plus lente que dehors, la course aussi",
+    Math.abs(vVolee - C.PLAYER_SPEED * 0.36) < 1e-9 && vMarche < C.PLAYER_SPEED && H.homeSpeedMul(false, true) < C.RUN_SPEED_MULT && vMarche > vVolee,
+    `volée ${vVolee.toFixed(2)}, marche ${vMarche.toFixed(2)} (${(vMarche / C.PLAYER_SPEED).toFixed(2)} de la ville), course ${(C.PLAYER_SPEED * H.homeSpeedMul(false, true)).toFixed(2)} cases/s`);
   check("on est « sur la volée » au rez-de-chaussée, pas sur le palier ni dans la trémie des combles",
     H.homeOnFlight(P, 0, { volee: null }, 0.45, 3.5) && !H.homeOnFlight(P, 0, { volee: null }, 0.45, 6) && !H.homeOnFlight(P, 2, { volee: "haut" }, 0.45, 3.5) && !H.homeOnFlight(P, 1, { volee: null }, 0.45, 3.5) && H.homeOnFlight(P, 1, { volee: "haut" }, 0.45, 3.5));
 }
@@ -491,6 +496,56 @@ console.log("\n=== 11. le lit se tient DANS SA PIÈCE ; un cadre par pièce ; le
   check("les bains : appui de fenêtre, miroir et prise plus bas que ceux d'un adulte (0,90 m, 1,15 m, 1,25 m)", bn.fenetre.allege < 0.90 && mi.bas < 1.15 && pr.z < 1.25, `appui ${bn.fenetre.allege} m, miroir ${mi.bas}–${mi.haut} m, prise ${pr.z} m`);
   const lav = MA_SPRITES.lavabo.S;
   check("le lavabo est plus bas qu'un lavabo d'adulte (rendu rebasé : image plus basse que 68 px d'origine)", lav.h < 68, `${lav.h} px`);
+
+  // ── 12. LES COTES D'USAGE SE LISENT CONTRE LE PERSONNAGE (2026-10-17, après-midi : « la tête du player est en dessous des
+  //       plans de travail et objets »). Le personnage fait 1,70 / K = 0,85 m à côté des murs ; ce qui s'utilise debout
+  //       ne doit pas le dépasser. ⚠️ La cote est lue sur l'IMAGE RENDUE (hauteur de l'image − sa profondeur), pas sur la table
+  //       du script Blender : c'est ce que le joueur voit.
+  console.log("\n=== 12. les cotes d'usage contre le personnage ===");
+  check("le personnage fait 1,70 / K à côté des murs", Math.abs(H.HOME_PERSO_M - 1.70 / H.HOME_K) < 1e-9, `${H.HOME_PERSO_M} m (K = ${H.HOME_K})`);
+  const py = fs.readFileSync(path.join(ROOT, "tools/blender/meubles.py"), "utf8");
+  const U0 = H.ECHELLE_USAGE;
+  const kPy = Number((py.match(/^HOME_K = ([0-9.]+)/m) || [])[1]);
+  check("le script Blender (meubles.py) a le même K que le jeu — une grandeur écrite à deux endroits", kPy === H.HOME_K, `Blender ${kPy}, jeu ${H.HOME_K}`);
+  const EQUIP = ["plan_travail_118", "plan_travail_165", "evier", "cuisiniere", "lavabo", "wc", "baignoire"];
+  const haut = (s) => (s.h / MA.MPX) * H.CASE_M - s.fd;                  // hauteur max de l'équipement, en m
+  const hauts = EQUIP.filter((n) => haut(MA_SPRITES[n].S) > 0.75 * H.HOME_PERSO_M);
+  check("aucun équipement d'usage (plans, évier, cuisinière, lavabo, toilettes, baignoire) ne dépasse les trois quarts du personnage", hauts.length === 0,
+    hauts.length ? "trop hauts : " + hauts.map((n) => `${n} ${haut(MA_SPRITES[n].S).toFixed(2)} m`).join(", ")
+                : EQUIP.map((n) => `${n} ${haut(MA_SPRITES[n].S).toFixed(2)}`).join(" · ") + ` (limite ${(0.75 * H.HOME_PERSO_M).toFixed(2)} m)`);
+  // falsification : la limite, posée sur les hauteurs de la veille (images de 83, 86, 83, 88, 57, 73, 78 px), les refuserait toutes (sept sur sept au 2026-10-17)
+  const AVANT = { plan_travail_118: 83, plan_travail_165: 86, evier: 83, cuisiniere: 88, lavabo: 57, wc: 73, baignoire: 78 };
+  const refus = EQUIP.filter((n) => ((AVANT[n] / MA.MPX) * H.CASE_M - MA_SPRITES[n].S.fd) > 0.75 * H.HOME_PERSO_M);
+  check("falsification : cette limite refuse les hauteurs d'avant (plans et cuisinière à 0,9 m)", refus.length >= 5, `${refus.length} sur ${EQUIP.length} refusés : ${refus.join(", ")}`);
+  // 2026-10-17 (après-midi) : le séjour, la chambre et les radiateurs suivent. La table du jeu (`maison.ECHELLE_Z_SPRITES`) et celle de Blender
+  // (`meubles.ECHELLE_Z`) sont DEUX écritures de la même liste : on les lit toutes les deux.
+  const tuple = (py.match(/ECHELLE_Z = \{nom: 1\.0 \/ HOME_K for nom in \(([^)]*)\)\}/) || [])[1] || "";
+  const pyNoms = [...tuple.matchAll(/"(\w+)"/g)].map((m) => m[1]);
+  const pyFacteurs = Object.fromEntries(pyNoms.map((n) => [n, 1 / kPy]));
+  for (const m of py.matchAll(/ECHELLE_Z\["(\w+)"\] = ([0-9.]+)/g)) pyFacteurs[m[1]] = Number(m[2]);
+  const jeuNoms = Object.keys(H.ECHELLE_Z_SPRITES).sort(), blNoms = Object.keys(pyFacteurs).sort();
+  check("la liste des sprites mis à l'échelle d'usage est la même dans le jeu et dans Blender, avec les mêmes facteurs",
+    JSON.stringify(jeuNoms) === JSON.stringify(blNoms) && jeuNoms.every((n) => Math.abs(H.ECHELLE_Z_SPRITES[n] - pyFacteurs[n]) < 1e-9),
+    `${jeuNoms.length} sprites : ${jeuNoms.join(", ")}`);
+  const exempts = ["tapis", "tableau", "escalier"];
+  const tous = Object.keys(MA_SPRITES).map((n) => n.replace(/(_(canard|vert|moutarde|allume|bleu|\d+))+$/, ""));
+  const oublies = [...new Set(tous)].filter((n) => !exempts.includes(n) && !(n in H.ECHELLE_Z_SPRITES));
+  check("aucun sprite n'échappe à l'échelle d'usage, sauf le tapis (à plat), le tableau (suspendu) et l'escalier (l'étage des murs)", oublies.length === 0, oublies.join(", ") || "tous couverts");
+  // les images rendues l'ont bien été à l'échelle : plus basses d'au moins 10 % que celles d'avant (hauteurs en px de la veille, `S` ou la première orientation)
+  const AV2 = { canape: 90, fauteuil: 83, table_basse: 63, bibliotheque: 140, lampadaire: 106, poele: 143, gueridon: 65, portemanteau: 110, plante_morte: 67, plante_verte: 91, lit: 182, radiateur_14: 49, cheminee: 92 };
+  const perimes = Object.entries(AV2).filter(([n, h0]) => MA_SPRITES[n].S.h > 0.9 * h0);
+  check("les images du séjour, de la chambre et des radiateurs sont rendues à l'échelle (au moins 10 % plus basses qu'avant) — un PNG périmé le trahirait",
+    perimes.length === 0, perimes.length ? "périmés : " + perimes.map(([n]) => n).join(", ") : Object.entries(AV2).map(([n, h0]) => `${n} ${h0}→${MA_SPRITES[n].S.h}`).join(" · "));
+  const oreiller = H.homeBedPillow({ sprite: "lit", o: "S", lx: 2.65, ly: 5.36 });
+  check("le dormeur descend avec le matelas (oreiller à 0,58 × facteur du lit) ; le trumeau suit la tablette de la cheminée (1,08 m × son facteur)",
+    Math.abs(oreiller.z - 0.58 * H.homeZk("lit")) < 1e-9 && Math.abs(U0.conduit.tablette - 1.08 * H.homeZk("cheminee")) < 0.02,
+    `oreiller ${oreiller.z.toFixed(2)} m, tablette peinte ${U0.conduit.tablette} m (sprite ${(1.08 * H.homeZk("cheminee")).toFixed(2)} m)`);
+  const cu = P.niveaux[0].pieces.find((p) => p.id === "cuisine"), U = H.ECHELLE_USAGE;
+  check("les fenêtres de la cuisine et des bains : l'appui passe sous la tête du personnage et au-dessus du robinet (0,63 m)",
+    [cu, bn].every((p) => p.fenetre && p.fenetre.allege >= 0.65 && p.fenetre.allege < H.HOME_PERSO_M), `cuisine ${cu.fenetre && cu.fenetre.allege} m, bains ${bn.fenetre && bn.fenetre.allege} m`);
+  check("le miroir commence sous la tête du personnage, les prises de la cuisine et des bains aussi",
+    mi.bas < H.HOME_PERSO_M && P.niveaux[0].peints.filter((q) => q.quoi === "prise").every((q) => q.z < H.HOME_PERSO_M) && pr.z < H.HOME_PERSO_M,
+    `miroir ${mi.bas} m, prises ${U.priseCuisine} et ${U.priseBains} m`);
 }
 function HMAmargin(L) { return 3.2 * H.HOME_K; }
 

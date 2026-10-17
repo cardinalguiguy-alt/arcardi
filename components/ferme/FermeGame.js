@@ -28426,7 +28426,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-10-17 (soir) — « gravir les escaliers est trop rapide » : sur la volée on marche à `HM.HOME_STAIR_SPEED`
            de la marche, et on ne court pas (voir `maison.js`). Le pas de jambes suit. */
         const onFlight = HM.homeOnFlight(HM.PLAN_ETROITE, prev.level, homeStairRef.current, prev.lx, prev.ly);
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (!onFlight && isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1) * (onFlight ? HM.HOME_STAIR_SPEED : 1);
+        // 2026-10-17 (après-midi) : marche ralentie dedans, la volée garde sa vitesse — voir `HM.homeSpeedMul`
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * HM.homeSpeedMul(onFlight, !onFlight && isRunningNow(dt, uiBlocked));
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -28458,7 +28459,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (stuck || canStandHome(nx, m.y)) m.x = nx; else if (!dy) nudge("y");
         if (stuck || canStandHome(m.x, ny)) m.y = ny; else if (!dx) nudge("x");
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
-        m.animT += dt * 9 * (onFlight ? 0.6 : 1);   // des pas plus lents sur la volée
+        m.animT += dt * 9 * (onFlight ? 0.6 : HM.HOME_WALK_SPEED);   // des pas plus lents sur la volée ; dehors de la volée, la foulée de la ville (9 à 5,2 cases/s)
         homeStairCheck(prev.ly, dx, dy);
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;

@@ -529,7 +529,7 @@ export function paintCabochons(ctx, x0, y0, w, h, v = "blanc", ox = 0, oy = 0) {
 }
 
 /* UNE FENÊTRE DANS UN MUR DU FOND (le mur nord, côté jardin) : allège à 90 cm,
-   haut à 2,15 m, embrasure, petits bois. Le VERRE est rendu à part (`glass`),
+   haut à 2,15 m par défaut (cuisine et bains : 70 cm et 1,90 m, `piece.fenetre`), embrasure, petits bois. Le VERRE est rendu à part (`glass`),
    pour que le ciel de l'heure s'y peigne à chaque image.
    2026-10-17 (64 px) : l'embrasure a sa profondeur (l'ébrasement d'ombre en
    haut et à droite), le dormant son battement, l'appui sa pierre et son ombre. */
@@ -579,8 +579,9 @@ export function paintPrise(ctx, cx, yFoot, z = 0.30) {
   rect(ctx, cx + 1, y + 1, 1, 1, "#3a332c");
   rect(ctx, cx - 2, y + 3, 4, 1, "#e2dacb");
 }
-export function paintInterrupteur(ctx, cx, yFoot, z = 1.10) {
-  // l'interrupteur à bascule d'une vieille maison : platine de porcelaine, levier de laiton
+export function paintInterrupteur(ctx, cx, yFoot, z = 0.60) {
+  // l'interrupteur à bascule d'une vieille maison : platine de porcelaine, levier de laiton.
+  // 2026-10-17 (après-midi) : à 0,60 m et non 1,10 m — à la poitrine du PERSONNAGE (0,85 m à l'échelle des murs, `HOME_K`), pas d'un adulte.
   const y = yFoot - pxOfM(z) - 3;
   rect(ctx, cx - 3, y - 1, 6, 8, "#c9bfa9");
   rect(ctx, cx - 2, y, 4, 6, "#f4efe4");
@@ -589,8 +590,10 @@ export function paintInterrupteur(ctx, cx, yFoot, z = 1.10) {
   rect(ctx, cx - 1, y + 1, 1, 1, "#f0d488");
 }
 export function paintHotte(ctx, x0, x1, yFoot, hPx) {
-  // la hotte émaillée au-dessus de la cuisinière (de 1,62 à 1,95 m), son conduit jusqu'au plafond
-  const yb = yFoot - pxOfM(1.62), yt = yFoot - pxOfM(1.95), w = x1 - x0;
+  /* la hotte émaillée au-dessus de la cuisinière (de 1,15 à 1,50 m), son conduit jusqu'au plafond.
+     2026-10-17 (après-midi) : 1,62 → 1,15 m. La cuisinière ne fait plus que 0,45 m (`meubles.ECHELLE_Z`) ; à 1,62 m la
+     hotte aurait flotté 1,17 m au-dessus des feux (0,73 m avant) — et elle reste de 30 cm au-dessus de la tête du personnage (0,85 m). */
+  const yb = yFoot - pxOfM(1.15), yt = yFoot - pxOfM(1.50), w = x1 - x0;
   const cw = Math.round(w * 0.36), cx0 = x0 + Math.round((w - cw) / 2);
   rect(ctx, cx0, yFoot - hPx + 8, cw, yt - (yFoot - hPx + 8), "#ddd4bd");
   rect(ctx, cx0, yFoot - hPx + 8, 1, yt - (yFoot - hPx + 8), "#eee6d2");
@@ -606,8 +609,9 @@ export function paintHotte(ctx, x0, x1, yFoot, hPx) {
   ctx.globalAlpha = 0.22; rect(ctx, x0 - 3, yb + 4, w + 6, 3, "#2a2018"); ctx.globalAlpha = 1;
 }
 export function paintEtagere(ctx, x0, x1, yFoot) {
-  // une planche à 1,55 m sur deux consoles, trois bocaux, une pile d'assiettes, un pichet
-  const y = yFoot - pxOfM(1.55), w = x1 - x0;
+  // une planche à 1,30 m sur deux consoles, trois bocaux, une pile d'assiettes, un pichet
+  // (2026-10-17 après-midi : 1,55 → 1,30 m, avec le plan de travail qui descend à 0,45 m ; le listel de faïence est à 1,20 m)
+  const y = yFoot - pxOfM(1.30), w = x1 - x0;
   for (const cx of [x0 + 6, x1 - 8]) { rect(ctx, cx, y + 3, 2, 8, "#6f4c2e"); rect(ctx, cx + 2, y + 3, 1, 6, "#5a3d24"); }
   const pots = [[0.10, 9, 13, "#c9dcd4", "#b48a5a"], [0.24, 8, 10, "#e3c98a", "#b48a5a"], [0.37, 7, 12, "#b8cbb0", "#9a7448"]];
   for (const [t, pw, ph, c, k] of pots) {
@@ -624,7 +628,8 @@ export function paintEtagere(ctx, x0, x1, yFoot) {
   ctx.globalAlpha = 0.18; rect(ctx, x0 + 1, y + 4, w - 2, 3, "#2a2018"); ctx.globalAlpha = 1;
 }
 export function paintMiroir(ctx, x0, x1, yFoot, bas = 1.15, haut = 1.75) {
-  // le miroir des bains (par défaut 1,15 à 1,75 m ; 2026-10-17 soir : 0,80 à 1,38 m, au-dessus du lavabo bas, à hauteur du personnage),
+  // le miroir des bains (par défaut 1,15 à 1,75 m ; 2026-10-17 soir : 0,80 à 1,38 m ; après-midi : 0,62 à 1,08 m, voir `peints` des bains —
+  // le visage du personnage de 0,85 m est à 0,6–0,8 m : un miroir de 0,80 lui arrivait au front),
   // cadre laqué, deux reflets en biais, une tablette de verre
   const yb = yFoot - pxOfM(bas), yt = yFoot - pxOfM(haut), w = x1 - x0;
   rect(ctx, x0, yt, w, yb - yt, "#e9e4d8");
@@ -637,14 +642,15 @@ export function paintMiroir(ctx, x0, x1, yFoot, bas = 1.15, haut = 1.75) {
   rect(ctx, x0 - 2, yb + 3, w + 4, 2, "#d6e2e4"); rect(ctx, x0 - 2, yb + 5, w + 4, 1, "#9fb0b4");
   rect(ctx, x0 + 4, yb - 3, 4, 6, "#d6e2e4"); rect(ctx, x0 + 5, yb - 8, 1, 6, "#d65a5a");      // le verre à dents et sa brosse
 }
-export function paintConduit(ctx, x0, x1, yFoot, hPx) {
+export function paintConduit(ctx, x0, x1, yFoot, hPx, tablette = 1.08, bas = 1.24, haut = 2.20) {
   /* Le conduit de la cheminée, du dessus de la tablette au plafond : la saillie
      se lit par ses arêtes (claire à gauche, ombrée à droite) ; dessus, le
      TRUMEAU parisien, un grand miroir à cadre doré et son fronton. */
-  const yTab = yFoot - pxOfM(1.08), top = yFoot - hPx + 8, w = x1 - x0;
+  // 2026-10-17 (après-midi) : la tablette de la cheminée est à 0,70 m (×0,65, `maison.ECHELLE_Z_SPRITES`) et non 1,08 m ; le trumeau de 0,86 à 1,70 m
+  const yTab = yFoot - pxOfM(tablette), top = yFoot - hPx + 8, w = x1 - x0;
   rect(ctx, x0, top, 2, yTab - top, "#fbf5e7");
   ctx.globalAlpha = 0.28; rect(ctx, x1 - 4, top, 4, yTab - top, "#2a2018"); ctx.globalAlpha = 1;
-  const mx0 = x0 + 6, mx1 = x1 - 6, my1 = yFoot - pxOfM(1.24), my0 = yFoot - pxOfM(2.20);
+  const mx0 = x0 + 6, mx1 = x1 - 6, my1 = yFoot - pxOfM(bas), my0 = yFoot - pxOfM(haut);
   rect(ctx, mx0, my0, mx1 - mx0, my1 - my0, "#b8903e");
   rect(ctx, mx0, my0, mx1 - mx0, 1, "#e6c56e"); rect(ctx, mx0, my0, 1, my1 - my0, "#e6c56e");
   rect(ctx, mx1 - 1, my0, 1, my1 - my0, "#7a5c22"); rect(ctx, mx0, my1 - 1, mx1 - mx0, 1, "#7a5c22");
@@ -794,7 +800,7 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
     else if (p.quoi === "hotte") paintHotte(g, px(p.x0), px(p.x1), Hh, wallPx);
     else if (p.quoi === "etagere") paintEtagere(g, px(p.x0), px(p.x1), Hh);
     else if (p.quoi === "miroir") paintMiroir(g, px(p.x0), px(p.x1), Hh, p.bas, p.haut);
-    else if (p.quoi === "conduit") paintConduit(g, px(p.x0), px(p.x1), Hh, wallPx);
+    else if (p.quoi === "conduit") paintConduit(g, px(p.x0), px(p.x1), Hh, wallPx, p.tablette, p.bas, p.haut);
   }
   for (const [a, b] of f.portes || []) {
     let X = b + 0.12;

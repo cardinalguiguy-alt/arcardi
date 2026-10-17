@@ -107,6 +107,17 @@ dépôt.
   régler l'échelle d'un décor meublé, poser le personnage contre ses meubles et compter des largeurs, pas
   des mètres.* Corollaire du même jour : ce qui est une grandeur du PERSONNAGE (la semelle de collision)
   reste au monde et se DIVISE par l'échelle pour entrer dans le décor.
+- ⚠️⚠️ **UNE COTE D'USAGE SE COMPARE AU PERSONNAGE, PAS À SON ANCIENNE VALEUR : ×2 SUR LES EMPRISES SANS ÷2 SUR LES
+  HAUTEURS LAISSE LE PERSONNAGE SOUS LE PLAN DE TRAVAIL** (2026-10-17). Le personnage fait 0,85 m à côté des murs
+  (`HOME_K` = 2) mais plans, vasques et miroirs gardaient leurs cotes d'adulte : « la tête du player est en dessous des plans
+  de travail et objets ». Un premier correctif (lavabo −20 cm, miroir 0,80 m, fenêtre 0,78 m) avait JUGÉ « plus bas qu'avant »
+  — et laissait le bord au ras de la tête. Le banc comparait à l'ancienne valeur (`< 0,90`), jamais au personnage. *Une cote
+  d'usage se vérifie contre le corps qui s'en sert : hauteur max de l'objet ≤ 3/4 de `HOME_PERSO_M`, lue sur l'image RENDUE
+  (hauteur − profondeur), pas sur la table qui l'a produite.* Les emprises restent réelles (elles font la grandeur de la
+  pièce), les hauteurs d'usage se divisent par K (`meubles.ECHELLE_Z`, `maison.ECHELLE_USAGE`, `ECHELLE_Z_SPRITES`) ; ce qui est peint au mur
+  (hotte, étagère, trumeau) et ce qui se pose sur le meuble (la tête du dormeur sur le matelas) suivent, sinon ils flottent. ⚠️ Une division uniforme écrase ce qui est
+  large et bas par nature : la cheminée à ×0,5 devenait une auge (0,65 retenu) — *regarder chaque meuble avant/après, pas la règle*. ⚠️ Le K de Blender (Python) et celui du jeu sont deux
+  écritures de la même grandeur : `verify-maison` §12 les recoupe.
 - ⚠️⚠️ **UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE
   HAUT** (2026-09-02). Le jour où les cinq maires ont eu cinq tailles, le tampon du bureau s'est
   retrouvé à 64 cm de l'épaule d'une femme dont le bras en fait 56 — et une cinématique inverse

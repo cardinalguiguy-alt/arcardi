@@ -1,5 +1,43 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-17 (après-midi) — CHEZ SOI : LES COTES D'USAGE À L'ÉCHELLE DU PERSONNAGE (TOUTE LA MAISON), MARCHE RALENTIE
+
+Ses deux messages : « la tête du player est en dessous des plans de travail et objets (cuisine), pareil salle de bain, pour une mise à l'échelle
+cohérente », puis « réduire un peu la vitesse de déplacement dans la maison (hors escaliers, la vitesse sur les escaliers est parfaite) ».
+**Supabase : rien** (vue, sprites et plan ; aucun état, aucun champ réseau).
+- **La cause** : le plan et les murs sont à ×2 (`HOME_K`), le personnage non — il fait `HOME_PERSO_M` = 0,85 m à côté d'eux — et plans de travail
+  (0,90 m), vasque (0,82 m après le correctif du soir), miroir, fenêtres et prises gardaient des cotes d'adulte. À l'écran, la tête passait SOUS
+  la ligne du plan. Le correctif de la veille avait comparé à l'ancienne valeur, pas au personnage (`docs/PIEGES.md`, « UNE COTE D'USAGE SE COMPARE
+  AU PERSONNAGE »).
+- **La règle** : les emprises restent réelles ; les HAUTEURS de ce qui s'utilise debout se divisent par K. **Sprites** (Blender) : `studio.ZK` multiplie
+  toutes les cotes de hauteur à la construction (box, cyl, ellipsoïde, tube), `meubles.ECHELLE_Z` le pose pour plan de travail ×2, évier, cuisinière,
+  lavabo, toilettes, baignoire (`rendre` le remet à 1 après chaque meuble) ; le décalage `DZ` du lavabo disparaît. Hauteur maximale rendue
+  (image − profondeur) : plans 0,50 m (0,98 avant), évier 0,50, cuisinière 0,58 (1,08), lavabo 0,41 (0,67), toilettes 0,41 (0,80), baignoire 0,36 (0,76) ;
+  images de 83 → 57 px (plans, évier), 88 → 61, 57 → 43, 73 → 52, 78 → 56. Le rendu complet est déterministe : 51 PNG sur 58 sortent identiques au pixel
+  (comparés à HEAD, remis tels quels), seuls ces sept changent. **Peint au mur** (`maison.ECHELLE_USAGE`, `maisonArt`) : fenêtres de la cuisine
+  ET des bains 0,70–1,90 m (0,90–2,15 et 0,78–1,90 avant : l'appui reste au-dessus du robinet, à 0,63 m), prises 0,60 (cuisine) et 0,50 m (bains),
+  miroir 0,62–1,08 m, interrupteurs 0,60 m (1,10 : dans toutes les pièces), hotte 1,15–1,50 m (1,62–1,95 : elle flottait 1,17 m au-dessus des feux),
+  étagère 1,30 m (1,55).
+- **La vitesse** : `maison.HOME_WALK_SPEED` = 0,75 (la course s'y applique comme avant : 6,8 cases/s) ; la volée garde sa vitesse ABSOLUE
+  (5,2 × 0,36 = 1,87 cases/s) — `homeSpeedMul(onFlight, running)` est l'unique endroit où les deux multiplicateurs se rencontrent, pour que celui de la
+  marche ne se compose pas avec celui de la volée. La foulée suit (`dt × 9 × 0,75` : la même qu'en ville).
+- **Le séjour, la chambre, les radiateurs (sur son « oui », même après-midi)** : canapé, fauteuil, table basse, bibliothèque, lampadaire, poêle,
+  guéridon, portemanteau, plantes, lit et radiateurs passent à ×½ en hauteur (`meubles.ECHELLE_Z` ; côté jeu `maison.ECHELLE_Z_SPRITES` + `homeZk`, recoupés par
+  `verify-maison` §12). Images : canapé 90 → 68 px, fauteuil 83 → 61, table basse 63 → 48, bibliothèque 140 → 80, lampadaire 106 → 62, poêle 143 → 94, lit 182 → 150,
+  radiateur 49 → 30. **Hors table** : le tapis (à plat), le tableau (suspendu : sa hauteur est un accrochage) et l'escalier (ses marches font l'étage de 2,70 m).
+  ⚠️ **La cheminée fait exception : ×0,65**, tablette à 0,70 m — à ×0,5 un foyer de 1,36 m de large devenait une auge de 0,54 m (planche avant/après), pendule
+  et bougeoirs minuscules. Elle entraîne ce qui est PEINT au-dessus (`ECHELLE_USAGE.conduit` : tablette du conduit 0,70 m, trumeau 0,86–1,70 m au lieu de
+  1,08 et 1,24–2,20). ⚠️ **Le dormeur suit le lit** : `homeBedPillow` rend `z` = 0,58 × `homeZk("lit")` = 0,29 m, sinon la tête flottait au-dessus du matelas
+  descendu. Les murs gardent 2,50 m (le personnage fait un tiers de leur hauteur) : non touchés, à juger.
+- **Vérifié** : `verify-maison` 158/158 (§12 : K recoupé entre Blender et le jeu, hauteur des sept équipements ≤ ¾ du personnage lue sur l'image
+  rendue, FALSIFIÉ contre les hauteurs d'avant — sept sur sept refusés —, fenêtres, miroir, prises ; la volée garde 1,87 cases/s), `verify-strings`,
+  `verify-densite`, `render-maison` ; **en jeu** (`app/audit-tmp`, 1440 × 900 : cuisine et séjour au cran 2, bains au cran 4, état injecté dans `sharedRef.homes`) : la
+  tête du personnage dépasse le plan, la vasque, le bord de la baignoire, la table basse, le dossier du canapé ; la tablette de la cheminée lui arrive à la poitrine ; le
+  dormeur (`m.sleeping` forcé) est sur l'oreiller ; vitesse MESURÉE : marche 3,92 cases/s (3,90 attendus), volée 1,87 ; aucune erreur de dessin à la console.
+  Preuves : `tools/out/maison-hauteurs-{cuisine,bains,sejour,chambre,dormeur}.png` (avant : `maison-equipee-*.png`). **Pas vu** : iPad, deux clients, la cuisine au
+  cran 4 (aucun écran de test assez grand), la sauvegarde réelle, le mode déco avec les nouveaux gabarits (les emprises n'ont pas bougé, mais les images hautes
+  d'hier — bibliothèque, lampadaire — sont plus basses sous le pointeur), la chambre autrement que par la couche du lit (pas de seconde chambre).
+
 ## 2026-10-17 (nuit) — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER LENT ET FIABLE, LIT, SALLE DE BAINS
 
 Ses quatre retours après avoir joué la maison, puis un cinquième en cours de route (« bug escalier : on passe dessous et ça active l'ascension ») :

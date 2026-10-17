@@ -233,6 +233,11 @@ latéraux évasés et l'ombre au pied des murs — **validés par lui au banc, p
 mode déco le prend aussi ; le cran manuel n'a plus cours chez soi), l'escalier se gravit en ~2,7 s marche par marche et ne se déclenche plus qu'à un geste
 dans son sens, le lit n'est à portée que dans sa pièce, la salle de bain passe à 3,0 × 3,4 cases avec fenêtre, miroir et lavabo à hauteur du personnage
 (0,85 m), le verre des fenêtres penche comme son cadre.
+**Même jour, l'après-midi — FAIT, à juger** : les COTES D'USAGE de la cuisine et des bains se lisent contre le personnage (0,85 m à côté des murs) : plans, évier,
+cuisinière, lavabo, toilettes, baignoire ×½ en hauteur (Blender, `meubles.ECHELLE_Z`), fenêtres, miroir, prises, interrupteurs, hotte, étagère abaissés
+(`maison.ECHELLE_USAGE`) ; marche ralentie à ×0,75 dans la maison, l'escalier inchangé. Puis, sur son « oui », le séjour, la chambre et les radiateurs à la même
+échelle (`maison.ECHELLE_Z_SPRITES` ; tapis, tableau et escalier exceptés ; cheminée à ×0,65). Tout NOUVEAU meuble du catalogue (lot 2b) se rend à ×½ : l'ajouter aux
+deux listes (`verify-maison` §12 refuse l'oubli).
 
 **Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
 1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une

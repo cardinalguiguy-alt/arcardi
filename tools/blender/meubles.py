@@ -847,13 +847,13 @@ def lavabo():
     """Le lavabo sur colonne, de faïence blanche : vasque à bord épais, deux
     robinets de laiton à croisillons, un savon rose. Le MIROIR est peint au mur.
     0,56 × 0,38 m (triché).
-    ⚠️ 2026-10-17 (soir) : BAS, à la hauteur du PERSONNAGE et pas d'un adulte — vasque à 0,66 m
-    (0,86 m avant). « Évier, miroir et fenêtre trop hauts, le perso est en dessous » : à
-    l'échelle ×2 du plan le personnage fait 0,85 m devant des murs de 2,50 m ; un bord à 0,86
-    lui arrivait à la tête. Tout le lavabo descend de 0,20 m (`DZ`), le miroir peint au mur
-    (`maison.js`, `peints` des bains) avec lui."""
+    ⚠️ 2026-10-17 : cotes RÉELLES (vasque à 0,86 m), mises à l'échelle du PERSONNAGE par
+    `ECHELLE_Z` (×0,5 : bord à 0,43 m). Le soir du 2026-10-17 on l'avait descendue de 20 cm
+    (`DZ` = 0,20, bord à 0,82 m) : encore à la tête d'un personnage de 0,85 m — « Évier,
+    miroir et fenêtre trop hauts, le perso est en dessous ». Le miroir peint au mur
+    (`maison.js`, `peints` des bains) suit la même échelle."""
     W, D = 0.56, 0.38
-    DZ = 0.20
+    DZ = 0.0
     r = root("lavabo")
     Ce = _m("faience_lavabo", CERAMIQUE, 0.45)
     La = _m("laiton", *METAL["laiton"])
@@ -896,6 +896,28 @@ COLORIS = {
 }
 
 
+# ─── L'ÉCHELLE D'USAGE : LES COTES DE HAUTEUR SE LISENT CONTRE LE PERSONNAGE ──
+# ⚠️⚠️ 2026-10-17 (après-midi) — « la tête du player est en dessous des plans de travail et objets ». Dedans, le
+# plan est à ×2 (`maison.HOME_K`) mais le personnage ne l'est pas : il fait 1,70 / 2 = 0,85 m à côté de ses meubles.
+# Un plan de travail à 0,90 m, une vasque à 0,82 m (déjà descendue de 20 cm le soir du 2026-10-17) lui arrivaient à la
+# tête : à l'écran, sa tête passait SOUS la ligne du plan. Les emprises restent celles du monde réel (c'est ce qui
+# fait la grandeur de la pièce) ; les HAUTEURS de ce qui s'utilise debout se divisent par K, comme le personnage :
+# le plan lui arrive à la poitrine (0,45 m), la baignoire au genou, la cuvette à la cuisse.
+# 2026-10-17 (après-midi, sur sa demande « passe le séjour, la chambre et les radiateurs à la même échelle ») : TOUS les meubles et
+# équipements de la maison, hors ce qui n'est pas une cote de corps — le TAPIS (à plat), le TABLEAU (suspendu : sa hauteur
+# est celle de l'accrochage, pas d'un meuble) et l'ESCALIER (ses marches font l'étage de 2,70 m des murs, `STOREY_M`).
+# ⚠️ Les cotes ci-dessous sont celles du monde RÉEL ; `studio.ZK` les multiplie à la construction (z0, h, rz, tubes).
+# ⚠️ CETTE LISTE EST RECOUPÉE avec `maison.SPRITES_ECHELLE_USAGE` par `verify-maison` §12 : ajouter un nom ici, c'est l'ajouter là.
+HOME_K = 2.0
+ECHELLE_Z = {nom: 1.0 / HOME_K for nom in (
+    "plan_travail", "evier", "cuisiniere", "baignoire", "lavabo", "wc",
+    "canape", "fauteuil", "table_basse", "bibliotheque", "lampadaire", "poele", "gueridon", "portemanteau",
+    "plante_morte", "plante_verte", "lit", "radiateur")}
+# ⚠️ LA CHEMINÉE FAIT EXCEPTION : un foyer de 1,36 m de large écrasé à ×0,5 devient une auge de 0,54 m (vu à la planche du
+# 2026-10-17, pendule et bougeoirs minuscules). À ×0,65 la tablette est à 0,70 m — encore sous la tête du personnage (0,85 m).
+ECHELLE_Z["cheminee"] = 0.65
+
+
 # ─── rendre un meuble dans ses orientations ──────────────────────────────
 def rendre(nom, fabrique, dossier, orients=("S", "E", "N", "W"), suffixe="", **kw):
     """Construit, rend chaque orientation dans `dossier/<nom><suffixe>_<O>.png`,
@@ -903,11 +925,15 @@ def rendre(nom, fabrique, dossier, orients=("S", "E", "N", "W"), suffixe="", **k
     mètres une fois tournée."""
     import os
     S.reset_scene(); S.setup()
-    r, w, d = fabrique(**kw)
-    meta = {}
-    for o in orients:
-        fw, fd = S.orient(r, w, d, o)
-        m = S.render(r, os.path.join(dossier, f"{nom}{suffixe}_{o}.png"))
-        m.update(fw=round(fw, 3), fd=round(fd, 3))
-        meta[o] = m
+    S.ZK = ECHELLE_Z.get(nom, 1.0)     # voir « L'ÉCHELLE D'USAGE » : posé le temps de CE meuble, jamais gardé pour le suivant
+    try:
+        r, w, d = fabrique(**kw)
+        meta = {}
+        for o in orients:
+            fw, fd = S.orient(r, w, d, o)
+            m = S.render(r, os.path.join(dossier, f"{nom}{suffixe}_{o}.png"))
+            m.update(fw=round(fw, 3), fd=round(fd, 3))
+            meta[o] = m
+    finally:
+        S.ZK = 1.0
     return meta

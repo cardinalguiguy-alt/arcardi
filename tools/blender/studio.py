@@ -51,6 +51,11 @@ from mathutils import Vector, Matrix
 T = 1.183                 # une case, en mètres
 PX = 64                   # pixels de dessin par case (2026-10-17 : 32 → 64, voir « LE GRAIN »)
 SQ2 = math.sqrt(2.0)
+# 2026-10-17 (après-midi) — L'ÉCHELLE VERTICALE D'UN MEUBLE : `ZK` multiplie toutes les COTES DE HAUTEUR (z0, h, rz, les z
+# d'un tube) à la construction ; les emprises (x, y) restent vraies. Les COTES D'USAGE (plan de travail, lavabo, baignoire)
+# se lisent contre le PERSONNAGE, qui fait 1/HOME_K de ce qu'il paraît à côté des murs (`maison.js`) : un plan à 0,90 m lui
+# arrivait à la tête. Posé par `meubles.rendre` pour la durée d'un meuble (table `meubles.ECHELLE_Z`) ; 1,0 partout ailleurs.
+ZK = 1.0
 VIEW = Vector((0.0, math.cos(math.radians(45)), -math.sin(math.radians(45))))   # direction de visée
 
 # La lumière vient d'en haut, de devant et de la gauche : N·L = 0,76 dessus,
@@ -298,6 +303,7 @@ def box(name, x0, y0, z0, w, d, h, material, parent=None, bevel=0.0, seg=2, outl
     me = bpy.data.meshes.new(name)
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
+    z0, h = z0 * ZK, h * ZK
     for v in bm.verts:
         v.co = Vector(((v.co.x + 0.5) * w, (v.co.y + 0.5) * d, (v.co.z + 0.5) * h))
     bm.to_mesh(me); bm.free()
@@ -323,6 +329,7 @@ def cyl(name, cx, cy, z0, r, h, material, parent=None, verts=20, r_top=None, out
     triche en ovale ; on triche pareil, à 0,7."""
     me = bpy.data.meshes.new(name)
     bm = bmesh.new()
+    z0, h = z0 * ZK, h * ZK
     bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=verts,
                           radius1=r, radius2=(r if r_top is None else r_top), depth=h)
     for v in bm.verts:
@@ -345,6 +352,7 @@ def ellipsoide(name, cx, cy, cz, rx, ry, rz, material, parent=None, rot=(0, 0, 0
     me = bpy.data.meshes.new(name)
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=max(4, seg // 2), radius=1.0)
+    cz, rz = cz * ZK, rz * ZK
     for v in bm.verts:
         v.co = Vector((v.co.x * rx, v.co.y * ry, v.co.z * rz))
     bm.to_mesh(me); bm.free()
@@ -370,7 +378,7 @@ def tube(name, pts, r, material, parent=None, outline=True, sides=10):
     sp = cu.splines.new('POLY')
     sp.points.add(len(pts) - 1)
     for i, p in enumerate(pts):
-        sp.points[i].co = (p[0], p[1], p[2], 1)
+        sp.points[i].co = (p[0], p[1], p[2] * ZK, 1)
     ob = bpy.data.objects.new(name, cu)
     cu.materials.append(material)
     _link(ob, parent)

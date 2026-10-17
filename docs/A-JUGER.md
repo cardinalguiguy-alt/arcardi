@@ -6,6 +6,18 @@
 
 ---
 
+### À juger — CHEZ SOI : LES HAUTEURS D'USAGE ET LA MARCHE (2026-10-17, après-midi)
+
+Entre chez toi, va à la cuisine puis à la salle de bain (étage), et colle-toi au plan, à l'évier, au lavabo, à la baignoire.
+- **Les hauteurs** : plans de travail, évier, cuisinière à 0,45–0,58 m (la tête du personnage les dépasse), lavabo, toilettes, baignoire plus bas encore ;
+  fenêtres de la cuisine et des bains à 0,70–1,90 m, miroir 0,62–1,08 m, hotte à 1,15 m. Juste, ou trop bas ? Les plans paraissent plus larges que hauts
+  (l'emprise est réelle, la hauteur divisée par 2) : un plan moins profond (0,55 → 0,45 m) les ramènerait en proportion — à dire si ça te gêne.
+- **Le séjour, la chambre, les radiateurs** : passés à la même échelle sur ton « oui » (canapé, fauteuil, table basse, bibliothèque, lampadaire, poêle, lit… à ×½ ;
+  la cheminée à ×0,65, tablette à 0,70 m, trumeau 0,86–1,70 m). Un meuble qui paraît trop bas maintenant (le lit à 0,3 m de matelas, la bibliothèque à 1 m) ?
+  Dis le nom : un facteur par meuble (`meubles.py` `ECHELLE_Z`, `maison.js` `ECHELLE_Z_SPRITES`). Pas touchés : le tapis, les tableaux, l'escalier. Le mur du fond reste à
+  2,50 m (trois fois le personnage) : trop haut ?
+- **La marche** : 25 % plus lente dedans (3,9 cases/s ; course 6,8), l'escalier inchangé. Assez, trop, pas assez ?
+
 ### À juger — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER, LIT, BAINS (2026-10-17, nuit)
 
 Entre chez toi, change de pièce à pied, monte et descends, puis P (ou 📐).
@@ -15,8 +27,8 @@ Entre chez toi, change de pièce à pied, monte et descends, puis P (ou 📐).
 - **L'escalier** : ~2,7 s la volée, marche par marche, sans course. Assez lent ? Trop ? Le fondu au changement d'étage (une coupe sèche aujourd'hui) ?
 - **Le bug « on passe dessous »** : deux causes corrigées (l'aide de porte glissait vers l'escalier ; la descente se déclenchait au premier contact).
   **Dis-moi par où tu passais si ça arrive encore** (rez-de-chaussée ou étage ? vers quelle pièce ?).
-- **Les bains** : 3,0 × 3,4 cases (14 m²), le dressing ne fait plus que 3,0 × 1,9 — assez ? Fenêtre (0,78 à 1,90 m), miroir (0,80 à 1,38 m) et
-  lavabo (20 cm plus bas) à hauteur du personnage : bien, ou encore trop hauts ? Les fenêtres des autres pièces restent à 0,90 m (la cuisine, la chambre) : à baisser aussi ?
+- **Les bains** : 3,0 × 3,4 cases (14 m²), le dressing ne fait plus que 3,0 × 1,9 — assez ? Fenêtre, miroir et lavabo : repris l'après-midi
+  (voir le bloc au-dessus). Les fenêtres des autres pièces (séjour, chambre : celles de la façade) restent à 0,90 m.
 - **Le lit** : se couche-t-on bien là où l'on attend, et nulle part ailleurs ?
 Pas vu : iPad, deux clients, les crans 6 et 8, un grand écran.
 
