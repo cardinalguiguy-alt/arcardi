@@ -2307,8 +2307,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      de sens qu'en ville et reste entièrement dans `townZoomNow`/`townZoomTarget`. */
   function viewZoomNow(dt) {
     let want = manualZoomRef.current || ZOOM;
-    /* 2026-10-16 — CHEZ SOI, LES CRANS PAIRS SEULEMENT (2 ou 4). La maison est
-       dessinée à 32 px par case (`maisonArt.js`) : au cran 4 un pixel de dessin
+    /* 2026-10-16 — CHEZ SOI, LES CRANS PAIRS SEULEMENT (2 ou 4). Un pixel de dessin
+       de la maison vaut un demi-pixel du monde (`maisonArt.js` ; 2026-10-17 : 64 px
+       pour une case du plan, qui en vaut deux du monde) : au cran 4 il
        fait 2 px d'écran, au cran 2 un seul ; aux crans 3 et 5 il en ferait 1,5 et
        2,5 — des pixels inégaux, le grouillement que la ville a payé (§4, « à
        échelle non entière… »). Le cran choisi n'est pas touché : il revient en
@@ -3277,7 +3278,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            des pièces, par joueur (`maison.js`, « LA MAISON DE CHACUN »). Même
            chemin que la garde-robe : un champ de plus dans le JSON de
            `ferme_saves`, AUCUNE MIGRATION ; absent = la maison de départ. */
-        homes: (saved && saved.homes) || {},
+        homes: HM.migrateHomes(saved && saved.homes),   // 2026-10-17 : le plan de 9 cases recale les maisons écrites sur celui de 7 (`HM.migrateHome`)
         /* ⚠️⚠️ ZIP 444 — LA QUÊTE DE L'ÉTOILE, ET C'EST ICI QUE VIT LA
            PERSISTANCE PAR CHECKPOINT DEMANDÉE PAR LE CHANTIER. Même chemin,
            même raison, AUCUNE MIGRATION SQL, AUCUNE MANIPULATION SUPABASE : un
@@ -3577,7 +3578,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       rinkRec: payload.rinkRec || null, rink: payload.rink || null,   // 2026-10-05 (nuit) : la patinoire
       snowmen: BN.normalizeSnowmen(payload.snowmen), snowRoll: payload.snowRoll || {},   // 2026-10-05
       wardrobe: payload.wardrobe || {},  // zip 427
-      homes: payload.homes || {},        // 2026-10-16 (lot 2a)
+      homes: HM.migrateHomes(payload.homes),   // 2026-10-16 (lot 2a) ; 2026-10-17 : recalées si écrites sur le plan de 7 cases
       star: Q.migrateStar(payload.star), // zip 444
       medals: MD.migrateMedals(payload.medals), // 2026-10-04
       board: GZ.migrateBoard(payload.board),    // 2026-10-04
@@ -28289,10 +28290,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const level = homeDecoRef.current.on ? homeDecoRef.current.level : ft0.level;   // lot 2a : le mode déco regarde le niveau choisi
       const o = HM.homeToWorld(slot, level, HMA.HOME_FX0, HMA.HOME_FY0);   // la case de l'origine des images cuites
       const P = HM.PLAN_ETROITE;
-      const fw = (P.w - 2 * HMA.HOME_FX0) * T, fh = (P.d + 0.6 - HMA.HOME_FY0) * T;
+      const fw = (P.w - 2 * HMA.HOME_FX0) * T * HM.HOME_K, fh = (P.d + 0.6 - HMA.HOME_FY0) * T * HM.HOME_K;   // 2026-10-17 : le plan à ×K
       const fx0 = o.x * T, fy0 = o.y * T;
       // Comme au tribunal : bornée au NIVEAU, et centrée quand il tient dans l'écran.
-      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      /* 2026-10-17 — LE REGARD MONTE D'UNE DEMI-HAUTEUR DE MUR. À ×2 (`HM.HOME_K`), un
+         niveau ne tient plus dans l'écran au cran 4 : centrée sur le joueur, la
+         caméra coupait le mur du fond de la pièce où il se tient (vu en jeu, au
+         milieu de la cuisine : ni fenêtres, ni faïence). Les murs se projettent vers
+         le HAUT de l'écran ; c'est donc là qu'il faut de la place. */
+      const lever = HMA.WALL_PX * T * HM.HOME_K / HMA.MPX * 0.5;
+      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2 - lever;
       if (level !== ft0.level) { cx = fx0 + fw / 2 - vw / 2; cy = fy0 + fh / 2 - vh / 2; }
       cx = fw <= vw ? fx0 + (fw - vw) / 2 : Math.max(fx0, Math.min(fx0 + fw - vw, cx));
       cy = fh <= vh ? fy0 + (fh - vh) / 2 : Math.max(fy0, Math.min(fy0 + fh - vh, cy));
@@ -28317,7 +28324,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       return memo.get(key);
     }
-    const homeImg = (nom) => loadBitmap("/maison/" + nom + ".png");
+    const homeImg = (nom) => loadBitmap(HM.homeSpriteUrl(nom));   // 2026-10-17 : l'URL vient de la table des meubles (verify-densite §1)
     let homeVoleeA = 1;
     function homeVoleeAlpha(lvl, ft, dt) {
       const s = HM.PLAN_ETROITE.escalier;
@@ -28365,7 +28372,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            butait sur le chambranle. Un pas bloqué glisse de côté vers l'ouverture
            si elle est à moins de 30 cm (le glissement d'angle des jeux vus de dessus). */
         const nudge = (axis) => {
-          for (let d = 0.04; d <= 0.3; d += 0.04) for (const sg of [-1, 1]) {
+          for (let d = 0.04; d <= 0.3 * HM.HOME_K; d += 0.04) for (const sg of [-1, 1]) {   // 30 cm du PLAN (2026-10-17 : ×K en cases du monde)
             const ox = axis === "x" ? sg * d : 0, oy = axis === "y" ? sg * d : 0;
             if (canStandHome(m.x + ox, m.y + oy) && canStandHome(m.x + ox + (axis === "x" ? 0 : dx * sp), m.y + oy + (axis === "y" ? 0 : dy * sp))) {
               if (axis === "x") m.x += sg * Math.min(sp, d); else m.y += sg * Math.min(sp, d);
@@ -28393,7 +28400,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const c = homeCamLast; if (!c) return null;
       const wx = (mouseRef.current.x / c.zm + c.cam.x) / T, wy = (mouseRef.current.y / c.zm + c.cam.y) / T;
       const o = HM.homeToWorld(c.slot, c.lvl, 0, 0);
-      return { lx: wx - o.x, ly: wy - o.y, slot: c.slot, lvl: c.lvl };
+      return { lx: (wx - o.x) / HM.HOME_K, ly: (wy - o.y) / HM.HOME_K, slot: c.slot, lvl: c.lvl };   // 2026-10-17 : le plan à ×K
     }
     function homeHandState() {
       const d = homeDecoRef.current, pt = homePointerLocal();
@@ -28515,7 +28522,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const CX = -Math.round(cam.x * zm), CY = -Math.round(cam.y * zm);
       const LX = Math.round(cam.o.x * T * zm) + CX, LY = Math.round(cam.o.y * T * zm) + CY;
       const world = () => ctx.setTransform(zm, 0, 0, zm, CX, CY);
-      const local = () => ctx.setTransform(zm / 2, 0, 0, zm / 2, LX, LY);
+      /* Le repère des images cuites : `HMA.MPX` px de dessin par case du plan, et
+         une case du plan vaut `HM.HOME_K` cases du monde (2026-10-17 : 64 px pour
+         2 cases de 16 px — un pixel de maison reste un demi-pixel du personnage). */
+      const AS = T * HM.HOME_K / HMA.MPX;
+      const local = () => ctx.setTransform(zm * AS, 0, 0, zm * AS, LX, LY);
       world();
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = HMA.HOME_VOID;
@@ -28536,7 +28547,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const [rise, set] = WX.sunHoursOfTag(season);
         const sh = OMB.sunShadow(hr, rise, set, season, wxFrame());
         if (sh && sh.a > 0.01) {
-          const prof = Math.min(70, Math.round(sh.k * HMA.pxOfM(1.2)));
+          const prof = Math.min(HMA.pxOfM(2.6), Math.round(sh.k * HMA.pxOfM(1.2)));   // 2026-10-17 : la borne en mètres (70 px à 32 px par case), plus en px
           for (const [a, b] of fac.fenetres[lvl] || []) {
             const [pa, py] = HMA.homePx(a, P.d), [pb] = HMA.homePx(b, P.d);
             HMA.paintSunPool(ctx, pa, py, pb - pa, prof, Math.round(sh.sx * prof * 0.6), Math.min(1, sh.a * 2.6), HMA.homePx(0, 0)[0], HMA.homePx(P.w, 0)[0]);
@@ -28582,14 +28593,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Les meubles de CETTE maison à ce niveau — moins celui qu'on tient en main (lot 2a).
       const hand = deco && deco.hand;
       const meubles = homeMeublesOfSlot(cam.slot, lvl).filter((f) => !(hand && hand.from === "pose" && f.u === hand.u));
+      // 2026-10-17 — les équipements de la maison (cuisine, bains, cheminée, radiateurs sous les fenêtres de SA façade)
+      // se dessinent comme les meubles ; ils ne sont pas dans `meubles` (le lit, la pose, le pointeur ne les voient pas).
       const items = HMA.homeDrawItems(bk.plan, lvl, {
         H: HM, faces: bk.faces, cutPx: (f) => cutMap.get(f.id), lows: HM.homeLows(P, lvl, fac),
-        meubles, meta: HOME_MEUBLES, img: homeImg, ciel: sky, ampoules: [...roomsLit.values()],
+        meubles: HM.homeFixes(P, lvl, fac).concat(meubles), meta: HOME_MEUBLES, img: homeImg, ciel: sky, ampoules: [...roomsLit.values()],
         // La volée du haut s'efface (fondu) quand on se tient derrière elle, sur le palier.
         voleeAlpha: homeVoleeAlpha(lvl, ft, dt),
       });
       const draws = items.map((it) => ({ y: it.key, fn: () => { local(); it.draw(ctx); world(); } }));
-      const rzOf = (pl) => Math.round(HM.homeStairLift(P, lvl, pl.lx, pl.ly) / HM.CASE_M * T);
+      const rzOf = (pl) => Math.round(HM.homeStairLift(P, lvl, pl.lx, pl.ly) / HM.CASE_M * T * HM.HOME_K);
       /* LE DORMEUR EST DANS SON LIT : sa tête sur l'oreiller, la couette dessus
          (le haut de la pose de face, coupé au menton). Les autres le voient
          pareil — `sleeping` voyage déjà avec la position (§3). */
@@ -28599,7 +28612,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const pw = HM.homeBedPillow(bed);
         const wpt = HM.homeToWorld(cam.slot, lvl, pw.lx, pw.ly);
         const sheet = sprites.getChar(p.gender, p.outfit, false, false, false, false, false, false, wardrobeLookOf(p.id) || p.look || null);
-        const hx = Math.round(wpt.x * T) - 8, hy = Math.round(wpt.y * T - pw.z / HM.CASE_M * T) - 10;
+        const hx = Math.round(wpt.x * T) - 8, hy = Math.round(wpt.y * T - pw.z / HM.CASE_M * T * HM.HOME_K) - 10;
         ctx.drawImage(sheet, 0, 0, 16, 11, hx, hy, 16, 11);
         const zt = (now / 900) % 1;
         ctx.save();
@@ -28631,8 +28644,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const lights = [], heads = [];
         for (const b of roomsLit.values()) {
           const wpt = HM.homeToWorld(cam.slot, lvl, b.lx, b.ly);
-          lights.push({ x: wpt.x * T, y: wpt.y * T, r: 3.2, c: "lamp", k: 1 });
-          heads.push({ x: wpt.x * T + 0.25, y: wpt.y * T - HMA.pxOfM(2.0) / 2, r: 3, k: 1 });
+          lights.push({ x: wpt.x * T, y: wpt.y * T, r: 3.2 * HM.HOME_K, c: "lamp", k: 1 });   // 2026-10-17 : les rayons suivent la pièce (×K)
+          heads.push({ x: wpt.x * T + 0.25, y: wpt.y * T - HMA.pxOfM(2.0) * AS, r: 3 * HM.HOME_K, k: 1 });
         }
         lightRendererRef.current.draw(ctx, { zm, Rx: -CX, Ry: -CY, W: canvas.width, H: canvas.height },
           { sky: amb, night: Math.max(night, 0.7), lights, heads, occluders: [], glows: [], screenGlows: [] });
@@ -43924,7 +43937,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const o = HM.homeOrients(gr.s)[0] || "S";
                   return (
                     <button key={gr.s} className={"ferme-deco-item" + (homeDecoUi.hand === gr.s ? " on" : "")} onClick={() => homeTakeFromGarde(gr.us[0])}>
-                      <img src={`/maison/${gr.s}_${o}.png`} alt="" />
+                      <img src={HM.homeSpriteUrl(gr.s + "_" + o)} alt="" />
                       <span>{L.homeMeubleName(gr.s)}{gr.us.length > 1 ? " ×" + gr.us.length : ""}</span>
                     </button>
                   );
@@ -44884,27 +44897,28 @@ function MedalBadge({ def, earned, px = 3 }) {
 
 /* 2026-10-16 (lot 2a) — UN ÉCHANTILLON du nuancier de la maison : un papier,
    un lambris ou un sol, peint par LES MÊMES peintres que la maison
-   (`maisonArt.js`), à 33 × 21 px de dessin (agrandi ×2, net). ⚠️ Déclaré ici,
+   (`maisonArt.js`), à 66 × 42 px de dessin (2026-10-17 : le grain de la maison
+   passe à 64 px par case — 33 × 21 à 32 px — la même surface de mur). ⚠️ Déclaré ici,
    au niveau du module, jamais dans le rendu du jeu (§4 : un composant déclaré
    dans le rendu d'un autre est un type neuf à chaque rendu). */
 function DecoSwatch({ quoi, val }) {
   const ref = useRef(null);
   useEffect(() => {
     const c = ref.current; if (!c) return;
-    const g = c.getContext("2d"), W = 33, H = 21;
+    const g = c.getContext("2d"), W = 66, H = 42;
     g.clearRect(0, 0, W, H);
     if (quoi === "papier") {
       const pp = HMA.PAPIERS[val] || HMA.PAPIERS.platre;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { g.fillStyle = pp.motif(x, y) || pp.fond; g.fillRect(x, y, 1, 1); }
     } else if (quoi === "lambris") {
-      HMA.paintWallFace(g, 0, H + 4, W, { papier: "platre", lambris: val || null }, 0, H + 4);
+      HMA.paintWallFace(g, 0, H + 8, W, { papier: "platre", lambris: val || null }, 0, H + 8);
     } else {
       const [mo, va] = String(val).split(":");
       const f = { parquet: HMA.paintParquet, ciment: HMA.paintCiment, tomettes: HMA.paintTomettes, carreaux: HMA.paintCabochons }[mo];
       if (f) f(g, 0, 0, W, H, va, 0, 0);
     }
   }, [quoi, val]);
-  return <canvas ref={ref} width={33} height={21} />;
+  return <canvas ref={ref} width={66} height={42} />;
 }
 function Sprite({ img, w = 32, h = 32, sx, sy }) {
   const ref = useCallback((node) => {

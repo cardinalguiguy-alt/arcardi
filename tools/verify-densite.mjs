@@ -102,7 +102,14 @@ title("1. tout bitmap passe par la table");
      `drawScreenExactBitmap` (FermeGame.js), dont l'URL sort de `townBitmapMip`. */
   const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|want\[key\]|C\.townBitmapMip\(SB, \w+\)\[key\]|mip\.glow|mip\.flood|mip\.snowL|mip\.snowH|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée ; `mip.snowL/H`, la neige des toits (phase 12a)
   const grassTpl = "`/town/${variant}.png`";
-  const stray = calls.filter(c => !tableRef.test(c.arg) && c.arg !== grassTpl);
+  /* 2026-10-17 — LES MEUBLES DES MAISONS ONT LEUR PROPRE TABLE : `maisonSprites.js`,
+     GÉNÉRÉE par Blender (`tools/blender/rendre_meubles.py`), où sont la taille et
+     l'ancre de chaque image, au grain des murs (`maisonArt.MPX`). Leur URL ne s'écrit
+     qu'à un endroit (`HM.homeSpriteUrl`) ; `verify-maison` §2 tient l'existence, la
+     taille et le grain de chaque PNG. Le premier jet (2026-10-16) écrivait
+     `"/maison/" + nom + ".png"` dans la boucle : ce banc rougissait depuis. */
+  const homeRef = /^HM\.homeSpriteUrl\(nom\)$/;
+  const stray = calls.filter(c => !tableRef.test(c.arg) && c.arg !== grassTpl && !homeRef.test(c.arg));
   /* « Un banc qui compte des occurrences doit publier combien il en a LUES »
      (CLAUDE.md §10) : sans ce nombre, un motif qui ne matche rien passerait vert. */
   /* Le NOMBRE d'appels change avec le code (6 à la phase 0, 3 depuis que les

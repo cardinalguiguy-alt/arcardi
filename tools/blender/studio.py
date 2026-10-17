@@ -24,10 +24,14 @@
    ⚠️ `pixel_aspect_y = √2` fait l'inverse (le cube s'élargit à 46 px) : ce
    n'est pas symétrique, essayé.
 
- LE GRAIN : 32 px par case (1 case = 1,183 m, la porte de 2,04 m des façades,
-   `TOWN_HOUSE_DOOR_PX`). C'est le grain des façades peintes (~31 « pixels »
-   de dessin par case). Le jeu rééchantillonne ensuite par cran de zoom, comme
-   les maisons (`tools/lib-mip.mjs`).
+ LE GRAIN : 64 px par case du plan (1 case = 1,183 m, la porte de 2,04 m des
+   façades, `TOWN_HOUSE_DOOR_PX`). ⚠️ 2026-10-17 — 32 → 64 : l'intérieur est passé
+   à ×2 contre le personnage (`maison.HOME_K`, « mon joueur paraît gigantesque »)
+   et Guillaume a demandé plus de détail (« les meubles trop grossiers ») ; un
+   pixel de meuble reste un demi-pixel du personnage à l'écran, une case en
+   compte quatre fois plus. Le contour reste d'environ un pixel (`add_outline`) :
+   il s'affine de moitié contre le meuble. Les cubes de mesure plus haut
+   donnaient 32 px à l'ancien grain ; la projection, elle, ne change pas.
 
  LA MATIÈRE « TOON » : la lumière d'une seule direction (haut, devant, gauche)
    est ramenée à QUATRE paliers (dessus 1, face 0,88, flanc gauche 0,74, ombre
@@ -45,7 +49,7 @@ import bpy, bmesh, math, json, os
 from mathutils import Vector, Matrix
 
 T = 1.183                 # une case, en mètres
-PX = 32                   # pixels de dessin par case
+PX = 64                   # pixels de dessin par case (2026-10-17 : 32 → 64, voir « LE GRAIN »)
 SQ2 = math.sqrt(2.0)
 VIEW = Vector((0.0, math.cos(math.radians(45)), -math.sin(math.radians(45))))   # direction de visée
 

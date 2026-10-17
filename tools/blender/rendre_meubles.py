@@ -49,6 +49,21 @@ TRAVAUX = [
     ("tableau", "", ("S",), {}),
     # La volée du plan de l'étroite (maison.js) : 2,70 m d'étage sur 2,5 cases (2,96 m), 15 marches.
     ("escalier", "", ("S",), dict(marches=15, larg=1.0, montee=2.7, giron=0.197)),
+    # 2026-10-17 — les ÉQUIPEMENTS (viennent avec la maison : `fixes` du plan, `maison.homeFixes`).
+    # Les radiateurs : trois longueurs, choisies sous chaque fenêtre de la façade selon la place.
+    ("radiateur", "_8", ("S",), dict(elements=8)),
+    ("radiateur", "_11", ("S",), dict(elements=11)),
+    ("radiateur", "_14", ("S",), dict(elements=14)),
+    ("cheminee", "", ("S",), {}),
+    ("cheminee", "_allume", ("S",), dict(allume=True)),
+    # La cuisine de l'étroite : 1,18 + 1,18 + 0,70 + 1,65 m le long du mur nord (4 cases du plan).
+    ("plan_travail", "_118", ("S",), dict(larg=1.18, objets="pain")),
+    ("plan_travail", "_165", ("S",), dict(larg=1.65, objets="fruits")),
+    ("evier", "", ("S",), dict(larg=1.18)),
+    ("cuisiniere", "", ("S",), {}),
+    ("baignoire", "", ("S",), {}),
+    ("lavabo", "", ("S",), {}),
+    ("wc", "", ("S",), {}),
 ]
 
 
@@ -65,7 +80,7 @@ def main():
     with open(MODULE, "w") as f:
         f.write("/* GÉNÉRÉ PAR tools/blender/rendre_meubles.py — NE PAS ÉDITER (2026-10-16).\n"
                 "   Par meuble et variante, par orientation (S, E, N, W : le côté vers lequel regarde\n"
-                "   la FACE du meuble) : la taille de l'image (w, h, px à 32 par case), son ANCRE (ax, ay :\n"
+                "   la FACE du meuble) : la taille de l'image (w, h, px à studio.PX par case), son ANCRE (ax, ay :\n"
                 "   le pixel du coin avant-gauche de l'emprise, au sol) et l'emprise tournée (fw, fd,\n"
                 "   en mètres). L'image est servie en /maison/<meuble><variante>_<orientation>.png. */\n")
         f.write("export const MEUBLES = " + json.dumps(meta, indent=1, sort_keys=True) + ";\n")

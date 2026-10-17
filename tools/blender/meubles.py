@@ -14,6 +14,21 @@
 
  Chaque fonction rend (racine, w, d) ; `COLORIS` donne les variantes de tissu
  et de bois qu'un joueur pourra commander (Colette teint, Marcel tourne).
+
+ ⚠️⚠️ 2026-10-17 — LA PROFONDEUR SE TRICHE. Dans la projection du jeu, la
+ profondeur ET la hauteur montent toutes deux vers le haut de l'écran à pleine
+ échelle (`studio.py`) : un meuble aussi profond que large s'y lit comme une
+ boîte allongée. Guillaume, sur le fauteuil club de 86 × 86 cm (53 × 92 px) :
+ « le fauteuil est trop profond par rapport à sa largeur ». Le dessinateur
+ triche, comme pour les ronds (`cyl(aplat=0.7)`) : les SIÈGES et les CAISSONS
+ sont dessinés à ~0,75-0,8 de leur profondeur réelle, leur largeur et leur
+ hauteur restent vraies. À vérifier sur toute pièce neuve : profondeur ≤ 0,8 ×
+ largeur pour ce qui se voit de face (le lit, long par nature, garde sa longueur).
+
+ 2026-10-17 — LES ÉQUIPEMENTS DE LA MAISON (radiateur, cheminée, cuisine,
+ bains, poteau de charpente) sont rendus ici comme les meubles, mais ils
+ viennent AVEC la maison (`maison.js`, `fixes` du plan) : ni catalogue ni
+ garde-meuble, ils ne se déplacent pas.
 =============================================================================
 """
 import math, random
@@ -92,10 +107,11 @@ def _bois(nom, essence, fil='X'):
 
 # ─── 1. LE CANAPÉ TROIS PLACES ───────────────────────────────────────────
 def canape(tissu="sauge", bois="noyer", coussins="moutarde"):
-    """2,00 × 0,90 m, assise à 45 cm, dossier à 84 cm. Bras roulés, trois
+    """2,00 × 0,82 m, assise à 45 cm, dossier à 84 cm. Bras roulés, trois
     coussins d'assise et trois de dossier, deux coussins jetés aux bouts,
-    pieds fuselés."""
-    W, D = 2.00, 0.90
+    pieds fuselés. (2026-10-17 : 0,90 de profondeur au premier jet — la
+    profondeur se triche, voir l'en-tête.)"""
+    W, D = 2.00, 0.82
     r = root("canape")
     T = mat(f"tissu_{tissu}", TISSU[tissu], lustre=0.08)
     Tc = mat(f"tissu_{coussins}", TISSU[coussins], lustre=0.05)
@@ -116,6 +132,20 @@ def canape(tissu="sauge", bois="noyer", coussins="moutarde"):
     for (x0, rz) in ((0.22, 10), (W - 0.62, -8)):
         c = box("jete", x0, D - 0.42, 0.50, 0.40, 0.13, 0.36, Tc, r, bevel=0.08, seg=3)
         c.rotation_euler = (math.radians(-14), math.radians(rz * 0.4), math.radians(rz))
+    # 2026-10-17 (64 px, « meubles trop grossiers ») : le passepoil au bord des coussins
+    # d'assise, deux capitons par coussin de dossier, la couture des bras, un plaid
+    # jeté sur le bras droit.
+    Pp = _m(f"passepoil_{tissu}", _assombrir(TISSU[tissu], 0.72))
+    for i in range(n):
+        x0 = 0.20 + i * lw
+        box(f"passepoil{i}", x0 + 0.02, 0.045, 0.505, lw - 0.04, 0.012, 0.012, Pp, r, outline=False)
+        for k in (0.33, 0.67):
+            ellipsoide(f"capiton{i}{k}", x0 + lw * k, D - 0.32, 0.70, 0.016, 0.01, 0.016, Pp, r, seg=8)
+    for x0 in (0.02, W - 0.04):
+        box("couture_bras", x0, 0.015, 0.60, 0.02, 0.01, 0.012, Pp, r, outline=False)
+    Pl = mat("plaid_canape", "#e3d6b8", tex=tex_rayures("#e3d6b8", "#7a3f2c", echelle=12.0, axe='Y', part=0.75))
+    box("plaid_bras", W - 0.21, 0.10, 0.60, 0.22, D - 0.30, 0.04, Pl, r, bevel=0.015)
+    box("plaid_pan", W - 0.03, 0.10, 0.30, 0.04, D - 0.30, 0.31, Pl, r, bevel=0.01, outline=False)
     return r, W, D
 
 # ─── matières communes ───────────────────────────────────────────────────
@@ -145,9 +175,11 @@ METAL = {"laiton": ("#c9a24a", 0.8), "fonte": ("#34302e", 0.35), "chrome": ("#c8
 
 # ─── 2. LE FAUTEUIL CLUB ─────────────────────────────────────────────────
 def fauteuil(cuir="cognac", bois="noyer"):
-    """0,86 × 0,86 m, cuir ciré (lustre), bras ronds, clous de laiton le long
-    des bras — un pixel chacun, sans contour."""
-    W, D = 0.86, 0.86
+    """0,92 × 0,70 m, cuir ciré (lustre), bras ronds, clous de laiton le long
+    des bras — un pixel chacun, sans contour. ⚠️ 2026-10-17 : 0,86 × 0,86 au
+    premier jet, « trop profond par rapport à sa largeur » (la profondeur se
+    triche, voir l'en-tête)."""
+    W, D = 0.92, 0.70
     r = root("fauteuil")
     Cu = _m(f"cuir_{cuir}", CUIR[cuir], lustre=0.55)
     Bw = _bois("pied", bois, fil='Z')
@@ -163,6 +195,17 @@ def fauteuil(cuir="cognac", bois="noyer"):
     box("assise", 0.18, 0.05, 0.36, W - 0.36, D - 0.25, 0.13, Cu, r, bevel=0.05, seg=3)
     c = box("coussin_dos", 0.19, D - 0.34, 0.46, W - 0.38, 0.14, 0.30, Cu, r, bevel=0.06, seg=3)
     c.rotation_euler = (math.radians(-10), 0, 0)
+    # 2026-10-17 (64 px) : le CAPITONNAGE du dos (des boutons en quinconce, cuir plus sombre),
+    # le passepoil du bord de l'assise, un coussin de laine posé de biais.
+    Cf = _m(f"cuir_{cuir}_fonce", _assombrir(CUIR[cuir], 0.62))
+    for j, z in enumerate((0.58, 0.68)):
+        for k in range(3 - j):
+            x = 0.27 + (k + 0.5 * j) * (W - 0.54) / 2
+            ellipsoide("bouton", x, D - 0.36 + j * 0.02, z, 0.014, 0.01, 0.014, Cf, r, seg=8)
+    box("passepoil", 0.19, 0.045, 0.49, W - 0.38, 0.01, 0.012, Cf, r, outline=False)
+    Co = mat("coussin_laine", TISSU["moutarde"], tex=tex_rayures(TISSU["moutarde"], "#e3d6b8", echelle=16.0, axe='X', part=0.8))
+    k = box("coussin", 0.24, D - 0.40, 0.48, 0.30, 0.10, 0.26, Co, r, bevel=0.06, seg=3)
+    k.rotation_euler = (math.radians(-16), 0, math.radians(8))
     return r, W, D
 
 
@@ -187,6 +230,13 @@ def table_basse(bois="chene"):
     cyl("cafe", 0.78, 0.30, 0.505, 0.036, 0.005, _m("cafe", "#3b2416"), r, verts=14, outline=False)
     box("anse", 0.82, 0.29, 0.44, 0.03, 0.02, 0.05, _m("faience", "#efe8da", 0.3), r, outline=False)
     cyl("bougie", 0.95, 0.42, 0.42, 0.035, 0.10, _m("cire", "#f2ead2"), r, verts=12, outline=False)
+    # 2026-10-17 (64 px) : le tiroir de la ceinture et son bouton, un soliflore et ses fleurs des champs.
+    box("tiroir", 0.35, 0.04, 0.32, 0.40, 0.012, 0.05, _bois("tiroir", bois, fil='X'), r, outline=False)
+    ellipsoide("bouton_tiroir", 0.55, 0.035, 0.345, 0.012, 0.008, 0.012, _m("laiton", *METAL["laiton"]), r)
+    cyl("soliflore", 0.62, 0.42, 0.42, 0.03, 0.12, _m("vase_vert", "#5e8a6a", 0.5), r, verts=12, r_top=0.015, aplat=0.7, outline=False)
+    for k, (dx, dz, c) in enumerate(((-0.03, 0.20, "#e3c34a"), (0.02, 0.23, "#f2ece0"), (0.04, 0.18, "#b4563a"))):
+        tube(f"tige{k}", [(0.62, 0.42, 0.53), (0.62 + dx, 0.42, 0.42 + dz)], 0.004, _m("tige_verte", "#5a7a3a"), r, outline=False)
+        ellipsoide(f"fleur{k}", 0.62 + dx, 0.42, 0.42 + dz, 0.022, 0.018, 0.016, _m(f"fleur_{c}", c), r, seg=8)
     return r, W, D
 
 
@@ -306,14 +356,22 @@ def lampadaire(abat="lin", metal="laiton", allume=False):
     cyl("liseré", 0.2, 0.2, 1.34, 0.215, 0.02, _m("galon", "#8a6a3a"), r, verts=28, aplat=0.7, outline=False)
     dedans = lumineux("ampoule", "#fff4d6") if allume else _m("dedans_abat", "#4a3a2a")
     cyl("dedans", 0.2, 0.2, 1.615, 0.125, 0.008, dedans, r, verts=24, aplat=0.7, outline=False)
+    # 2026-10-17 (64 px) : la frange au bord de l'abat-jour, la chaînette d'interrupteur.
+    Fr = _m("frange_abat", "#8a6a3a")
+    for k in range(18):
+        a = math.pi * (0.05 + 0.9 * k / 17)            # la moitié avant : celle qu'on voit
+        box("frange", 0.2 + math.cos(a) * 0.205 - 0.006, 0.2 - math.sin(a) * 0.205 * 0.7, 1.30, 0.012, 0.006, 0.045, Fr, r, outline=False)
+    tube("chainette", [(0.27, 0.16, 1.40), (0.27, 0.15, 1.24)], 0.004, Me, r, outline=False)
+    ellipsoide("gland", 0.27, 0.15, 1.23, 0.01, 0.01, 0.014, Me, r, seg=8)
     return r, W, D
 
 
 # ─── 7. LE POÊLE À BOIS ──────────────────────────────────────────────────
 def poele(email="fonte", allume=True):
-    """0,55 × 0,45 m de fonte, porte vitrée, tuyau qui monte puis rentre dans le
-    mur (25 cm derrière), une bouilloire émaillée dessus."""
-    W, D = 0.55, 0.45
+    """0,55 × 0,40 m de fonte (0,45 au premier jet : la profondeur se triche, voir
+    l'en-tête), porte vitrée, tuyau qui monte puis rentre dans le mur (25 cm
+    derrière), une bouilloire émaillée dessus."""
+    W, D = 0.55, 0.40
     r = root("poele")
     Fo = _m(f"email_{email}", *METAL.get(email, METAL["fonte"]))
     La = _m("laiton", *METAL["laiton"])
@@ -398,8 +456,8 @@ def plante_verte(graine=3):
     Tr = _m("tronc", "#6e5236")
     tube("tronc", [(0.25, 0.25, 0.38), (0.24, 0.25, 0.80), (0.27, 0.24, 1.25)], 0.022, Tr, r, outline=False)
     Fs = (_m("ficus1", "#2f6a2f"), _m("ficus2", "#478a3c"), _m("ficus3", "#62a64c"))
-    for k in range(16):
-        t = k / 15.0
+    for k in range(26):   # 2026-10-17 (64 px) : 26 feuilles (16 à 32 px par case : un figuier clairsemé)
+        t = k / 25.0
         z = 0.62 + t * 0.70
         a = rnd.uniform(0, math.tau)
         L = 0.10 + 0.06 * (1 - t)
@@ -430,6 +488,10 @@ def gueridon(bois="noyer", abat="moutarde", allume=False):
     dedans = lumineux("ampoule", "#fff4d6") if allume else _m("dedans_abat", "#4a3a2a")
     cyl("lampe_dedans", 0.17, 0.27, 0.857, 0.058, 0.006, dedans, r, verts=18, aplat=0.7, outline=False)
     box("livre", 0.27, 0.10, 0.585, 0.14, 0.10, 0.03, _m("couv_vert", "#3d5a3a"), r, outline=False)
+    # 2026-10-17 (64 px) : le napperon de dentelle sous la lampe, et des lunettes posées sur le livre.
+    cyl("napperon", 0.20, 0.25, 0.585, 0.12, 0.002, _m("dentelle", "#f2ece0"), r, verts=20, aplat=0.7, outline=False)
+    for dx in (0.0, 0.05):
+        cyl("verre", 0.31 + dx, 0.13, 0.616, 0.02, 0.003, _m("lunettes", "#2a2624"), r, verts=10, aplat=0.7, outline=False)
     return r, W, D
 
 
@@ -476,6 +538,13 @@ def lit(linge="lin", couette="canard", bois="chene"):
     box("tete", 0.0, D - 0.07, 0.0, W, 0.07, 1.05, Bw, r, bevel=0.015)
     for k in range(3):
         box("panneau", 0.10 + k * 0.42, D - 0.085, 0.50, 0.38, 0.02, 0.42, Bw, r, outline=False, bevel=0.005)
+    # 2026-10-17 (64 px) : la corniche de la tête de lit, ses deux colonnes à pommeau, celles du pied.
+    box("corniche_tete", -0.03, D - 0.09, 1.05, W + 0.06, 0.10, 0.05, Bw, r, bevel=0.01)
+    for x in (0.0, W - 0.07):
+        box("colonne_tete", x, D - 0.08, 0.0, 0.07, 0.08, 1.12, Bw, r, bevel=0.01)
+        ellipsoide("pommeau", x + 0.035, D - 0.04, 1.16, 0.04, 0.035, 0.04, Bw, r, outline=True, seg=10)
+        box("colonne_pied", x, -0.01, 0.0, 0.07, 0.08, 0.56, Bw, r, bevel=0.01)
+        ellipsoide("pommeau_pied", x + 0.035, 0.03, 0.59, 0.035, 0.03, 0.035, Bw, r, outline=True, seg=10)
     box("pied_lit", 0.0, 0.0, 0.0, W, 0.06, 0.48, Bw, r, bevel=0.012)
     box("longeronG", 0.0, 0.06, 0.12, 0.05, D - 0.13, 0.20, Bw, r)
     box("longeronD", W - 0.05, 0.06, 0.12, 0.05, D - 0.13, 0.20, Bw, r)
@@ -485,6 +554,11 @@ def lit(linge="lin", couette="canard", bois="chene"):
     for x0 in (0.08, W / 2 + 0.02):
         o = box("oreiller", x0, D - 0.50, 0.50, W / 2 - 0.10, 0.36, 0.14, Li, r, bevel=0.06, seg=3)
         o.rotation_euler = (math.radians(-12), 0, 0)
+        box("volant", x0 - 0.01, D - 0.52, 0.50, W / 2 - 0.08, 0.02, 0.05, Dr, r, outline=False)   # le volant de la taie
+    # La couette PIQUÉE : des coutures en travers, d'un ton plus sombre, tous les 25 cm.
+    Pq = _m(f"piqure_{couette}", _assombrir(cc, 0.70))
+    for k in range(1, 6):
+        box("piqure", 0.03, 0.05 + k * 0.24, 0.561, W - 0.06, 0.012, 0.004, Pq, r, outline=False)
     # Un plaid plié en travers du pied du lit, rayé.
     Pl = mat("plaid_moutarde", TISSU["moutarde"], tex=tex_rayures(TISSU["moutarde"], "#7a3f2c", echelle=9.0, axe='X', part=0.78))
     box("plaid", 0.0, 0.10, 0.555, W, 0.36, 0.05, Pl, r, bevel=0.025, seg=2)
@@ -543,6 +617,271 @@ def escalier(bois="chene", marches=14, larg=0.95, montee=2.62, giron=0.21):
     ellipsoide("pomme", W - 0.05, 0.0, 1.06, 0.05, 0.035, 0.045, Nm, r, outline=True)
     return r, W, D
 
+
+# ═══ 2026-10-17 — LES ÉQUIPEMENTS DE LA MAISON ═══════════════════════════
+CERAMIQUE = "#f2efe8"
+
+
+def _marbre():
+    # ⚠️ Premier jet veiné en long (fil Z, contraste fort) : des cannelures de bois, pas du marbre (planche du 2026-10-17).
+    return mat("marbre_blanc", "#e6e0d4", lustre=0.3, tex=tex_veinage("#e9e3d8", "#cfc7b9", fil='X'))
+
+
+# ─── 14. LE RADIATEUR DE FONTE (sous les fenêtres de la façade) ──────────
+def radiateur(elements=8, peinture="#e0d9c6"):
+    """Radiateur à colonnes, peint : des éléments de 6 cm (une colonne de 4 cm,
+    un jour d'un pixel), deux collecteurs, deux pieds, le robinet de laiton à
+    gauche. 74 cm pieds compris ; 12 cm de profondeur (16 réels, triché)."""
+    W, D = elements * 0.06, 0.12
+    r = root("radiateur")
+    Pe = _m(f"radiateur_{peinture}", peinture, 0.35)
+    La = _m("laiton", *METAL["laiton"])
+    for k in range(elements):
+        box(f"elem{k}", k * 0.06 + 0.01, 0.01, 0.10, 0.04, D - 0.02, 0.62, Pe, r, bevel=0.015, seg=3,
+            outline=(k == 0 or k == elements - 1))
+    box("collecteur_bas", 0.005, 0.035, 0.15, W - 0.01, D - 0.07, 0.04, Pe, r, outline=False)
+    box("collecteur_haut", 0.005, 0.035, 0.65, W - 0.01, D - 0.07, 0.04, Pe, r, outline=False)
+    for x in (0.03, W - 0.07):
+        box("pied", x, 0.02, 0.0, 0.04, D - 0.04, 0.11, Pe, r, outline=False)
+    tube("tuyau", [(-0.035, D / 2, 0.0), (-0.035, D / 2, 0.60)], 0.011, La, r, outline=False)
+    cyl("robinet", -0.035, D / 2, 0.58, 0.02, 0.05, La, r, verts=8, outline=False)
+    ellipsoide("volant", -0.035, D / 2, 0.645, 0.03, 0.025, 0.01, La, r)
+    return r, W, D
+
+
+# ─── 15. LA CHEMINÉE DE MARBRE (le séjour) ──────────────────────────────
+def cheminee(allume=False):
+    """Cheminée de marbre blanc veiné : jambages, linteau à cartouche, tablette
+    moulurée, sole de pierre ; dans le foyer le contrecœur de fonte, deux chenets,
+    trois bûches (allumée : des flammes). Sur la tablette, une pendule de bronze
+    et deux bougeoirs. 1,36 × 0,34 m (triché), 1,10 m. Le CONDUIT et le trumeau
+    sont peints sur le mur (`maisonArt.paintConduit`) : posés ici, ils flotteraient
+    quand le mur se coupe."""
+    W, D = 1.36, 0.34
+    r = root("cheminee")
+    Ma = _marbre()
+    Pi = _m("pierre_sole", "#a39b8e")
+    Fo = _m("fonte_foyer", "#2b2725", 0.3)
+    Su = _m("suie", "#17120f")
+    La = _m("laiton", *METAL["laiton"])
+    box("sole", 0.04, 0.0, 0.0, W - 0.08, 0.14, 0.03, Pi, r, bevel=0.005)
+    # ⚠️ Le foyer est un CREUX : un premier jet en bloc de suie plein cachait les bûches,
+    # les chenets et le feu (planche du 2026-10-17). Le fond, les flancs, l'âtre et la hotte
+    # intérieure sont des parois sombres ; ce qui est dedans se voit entre les jambages.
+    box("atre", 0.22, 0.12, 0.03, W - 0.44, D - 0.12, 0.01, Su, r, outline=False)
+    box("fond_foyer", 0.22, D - 0.03, 0.03, W - 0.44, 0.03, 0.77, Su, r, outline=False)
+    for x0 in (0.22, W - 0.25):
+        box("flanc_foyer", x0, 0.14, 0.03, 0.03, D - 0.14, 0.77, Su, r, outline=False)
+    box("hotte_foyer", 0.22, 0.14, 0.74, W - 0.44, D - 0.14, 0.06, Su, r, outline=False)
+    box("contrecoeur", 0.30, D - 0.045, 0.06, W - 0.60, 0.015, 0.52, Fo, r, outline=False)
+    ellipsoide("blason", W / 2, D - 0.05, 0.40, 0.09, 0.004, 0.11, _m("fonte_relief", "#3d3835", 0.4), r)
+    for x0 in (0.04, W - 0.24):
+        box("jambage", x0, 0.10, 0.03, 0.20, D - 0.10, 0.80, Ma, r, bevel=0.012)
+        box("base_jambage", x0 - 0.01, 0.09, 0.03, 0.22, D - 0.09, 0.08, Ma, r, bevel=0.006, outline=False)
+    box("linteau", 0.04, 0.10, 0.80, W - 0.08, D - 0.10, 0.22, Ma, r, bevel=0.012)
+    box("cartouche", W / 2 - 0.13, 0.085, 0.85, 0.26, 0.02, 0.12, Ma, r, bevel=0.01, outline=False)
+    box("tablette", 0.0, 0.07, 1.02, W, D - 0.06, 0.06, Ma, r, bevel=0.015, seg=3)
+    for x in (0.38, W - 0.42):                       # les chenets
+        box("chenet", x, 0.17, 0.03, 0.04, 0.10, 0.12, Fo, r, outline=False)
+        ellipsoide("pomme_chenet", x + 0.02, 0.17, 0.17, 0.025, 0.02, 0.025, La, r)
+    Bu = _m("buche", "#6e4a2c"); Bc = _m("buche_coupe", "#c49a68")
+    for k, (z, y) in enumerate(((0.10, 0.22), (0.10, 0.27), (0.17, 0.245))):
+        tube(f"buche{k}", [(0.40, y, z), (W - 0.40, y, z)], 0.035, Bu, r, outline=False)
+        box(f"coupe{k}", 0.385, y - 0.03, z - 0.03, 0.015, 0.06, 0.06, Bc, r, outline=False)
+    if allume:
+        F1, F2 = lumineux("flamme", "#ff9a3a"), lumineux("flamme_coeur", "#ffe08a")
+        for k, (x, h) in enumerate(((0.50, 0.22), (0.62, 0.30), (0.74, 0.26), (0.86, 0.20))):
+            ellipsoide(f"flamme{k}", x, 0.25, 0.24 + h / 2, 0.05, 0.03, h / 2, F1, r)
+            ellipsoide(f"coeur{k}", x, 0.23, 0.22 + h / 3, 0.025, 0.02, h / 3, F2, r)
+    # La pendule de bronze et ses deux bougeoirs.
+    box("pendule", W / 2 - 0.10, 0.14, 1.08, 0.20, 0.10, 0.24, La, r, bevel=0.02, seg=3)
+    box("socle_pendule", W / 2 - 0.13, 0.13, 1.08, 0.26, 0.12, 0.04, La, r, bevel=0.008, outline=False)
+    box("cadran", W / 2 - 0.05, 0.135, 1.19, 0.10, 0.006, 0.10, _m("email_blanc", "#f4f0e4", 0.4), r, outline=False)
+    for x in (0.16, W - 0.16):
+        cyl("bougeoir", x, 0.20, 1.08, 0.035, 0.02, La, r, verts=10, aplat=0.7, outline=False)
+        cyl("fut_bougeoir", x, 0.20, 1.10, 0.012, 0.16, La, r, verts=8, outline=False)
+        cyl("bougie", x, 0.20, 1.26, 0.014, 0.10, _m("cire", "#f2ead2"), r, verts=8, outline=False)
+    return r, W, D
+
+
+# ─── 16. LA CUISINE : PLANS DE TRAVAIL, ÉVIER, CUISINIÈRE ───────────────
+FACADE_CUISINE = "#d8d0b4"
+
+
+def _caisson(r, W, D, portes=None, tiroirs=True):
+    """Le caisson bas d'une cuisine (0,90 m plan compris) : socle en retrait,
+    portes à cadre, tiroirs, boutons de laiton. Rend la matière de façade."""
+    Fa = _m("facade_cuisine", FACADE_CUISINE, 0.15)
+    Fc = _m("facade_cuisine_cadre", _assombrir(FACADE_CUISINE, 0.86))
+    La = _m("laiton", *METAL["laiton"])
+    box("socle", 0.03, 0.06, 0.0, W - 0.06, D - 0.08, 0.10, _m("socle_cuisine", "#4f483d"), r, outline=False)
+    box("caisson", 0.0, 0.03, 0.10, W, D - 0.05, 0.76, Fa, r)
+    n = portes or max(1, round(W / 0.5))
+    lw = W / n
+    for i in range(n):
+        x0 = i * lw
+        if tiroirs:
+            box(f"tiroir{i}", x0 + 0.012, 0.012, 0.69, lw - 0.024, 0.02, 0.14, Fa, r, bevel=0.004, outline=False)
+            box(f"bouton_t{i}", x0 + lw / 2 - 0.02, 0.0, 0.75, 0.04, 0.014, 0.018, La, r, outline=False)
+        box(f"porte{i}", x0 + 0.012, 0.012, 0.12, lw - 0.024, 0.02, 0.55, Fa, r, bevel=0.004, outline=False)
+        box(f"panneau{i}", x0 + 0.05, 0.006, 0.17, lw - 0.10, 0.008, 0.45, Fc, r, outline=False)
+        bx = x0 + (lw - 0.07 if i % 2 == 0 else 0.04)
+        box(f"bouton{i}", bx, 0.0, 0.58, 0.022, 0.014, 0.022, La, r, outline=False)
+    return Fa
+
+
+def _plan(r, W, D):
+    box("plan", -0.01, 0.0, 0.86, W + 0.02, D, 0.04, _bois("plan_travail", "chene", fil='X'), r, bevel=0.004)
+
+
+def plan_travail(larg=1.18, objets="pain"):
+    """Un plan de travail sur caissons (0,55 m triché, 0,90 m). Dessus, selon
+    la longueur : la planche et le pain, le pot à ustensiles (« pain ») ; la
+    corbeille de fruits et les bocaux (« fruits »)."""
+    W, D = larg, 0.55
+    r = root("plan_travail")
+    _caisson(r, W, D)
+    _plan(r, W, D)
+    if objets == "pain":
+        box("planche", 0.18, 0.12, 0.90, 0.40, 0.26, 0.025, _bois("planche", "chene", fil='X'), r, outline=False)
+        ellipsoide("pain", 0.36, 0.25, 0.95, 0.15, 0.06, 0.045, _m("croute", "#c08a48"), r, outline=True)
+        cyl("pot_ustensiles", W - 0.22, 0.38, 0.90, 0.06, 0.16, _m("gres_bleu", "#4f6f8a", 0.4), r, verts=14, aplat=0.7)
+        for k, dx in enumerate((-0.025, 0.0, 0.025)):
+            tube(f"ustensile{k}", [(W - 0.22 + dx, 0.38, 1.0), (W - 0.22 + dx * 2, 0.37, 1.20)], 0.008,
+                 _bois("ustensile", "chene", fil='Z'), r, outline=False)
+    else:
+        cyl("corbeille", 0.40, 0.25, 0.90, 0.16, 0.07, _m("osier", "#b88a4a"), r, verts=18, r_top=0.19, aplat=0.7)
+        for k, (x, y, c) in enumerate(((0.34, 0.25, "#c8382a"), (0.44, 0.27, "#e0a32a"), (0.40, 0.22, "#7aa33a"))):
+            ellipsoide(f"fruit{k}", x, y, 1.00, 0.045, 0.04, 0.045, _m(f"fruit_{c}", c, 0.3), r, outline=True)
+        for k, x in enumerate((W - 0.40, W - 0.27, W - 0.15)):
+            cyl(f"bocal{k}", x, 0.42, 0.90, 0.045, 0.18 - k * 0.03, _m("verre_bocal", "#c9dcd4", 0.6), r, verts=12, aplat=0.7)
+            cyl(f"bouchon{k}", x, 0.42, 1.08 - k * 0.03, 0.04, 0.025, _m("liege", "#b48a5a"), r, verts=12, aplat=0.7, outline=False)
+    return r, W, D
+
+
+def evier(larg=1.18):
+    """L'évier de grès blanc (« timbre d'office ») encastré dans le plan, son
+    robinet col-de-cygne de laiton ; sous l'évier, un rideau à rayures au lieu
+    des portes, comme dans les vieilles cuisines ; un torchon pendu."""
+    W, D = larg, 0.55
+    r = root("evier")
+    Fa = _m("facade_cuisine", FACADE_CUISINE, 0.15)
+    La = _m("laiton", *METAL["laiton"])
+    box("socle", 0.03, 0.06, 0.0, W - 0.06, D - 0.08, 0.10, _m("socle_cuisine", "#4f483d"), r, outline=False)
+    box("caisson", 0.0, 0.03, 0.10, W, D - 0.05, 0.76, Fa, r)
+    Ri = mat("rideau_evier", "#f0e8d8", tex=tex_rayures("#f0e8d8", "#b4463a", echelle=26.0, axe='X', part=0.62))
+    box("rideau", 0.06, 0.005, 0.11, W - 0.12, 0.02, 0.70, Ri, r, outline=False)
+    box("tringle", 0.05, 0.0, 0.80, W - 0.10, 0.015, 0.02, La, r, outline=False)
+    _plan(r, W, D)
+    Ce = _m("gres_blanc", CERAMIQUE, 0.45)
+    bx = W / 2 - 0.36
+    box("bac", bx, 0.06, 0.86, 0.72, 0.42, 0.07, Ce, r, bevel=0.02, seg=3)
+    box("fond_bac", bx + 0.05, 0.11, 0.931, 0.62, 0.32, 0.002, _m("gres_ombre", "#c7cdcc"), r, outline=False)
+    cyl("bonde", W / 2, 0.27, 0.934, 0.02, 0.002, _m("bonde", "#7d817f"), r, verts=10, aplat=0.7, outline=False)
+    tube("col_de_cygne", [(W / 2, 0.47, 0.93), (W / 2, 0.47, 1.16), (W / 2, 0.40, 1.22), (W / 2, 0.32, 1.12)], 0.014, La, r, outline=False)
+    for dx in (-0.09, 0.09):
+        cyl("croisillon", W / 2 + dx, 0.47, 0.93, 0.012, 0.06, La, r, verts=8, outline=False)
+        ellipsoide("tete_robinet", W / 2 + dx, 0.47, 1.00, 0.028, 0.028, 0.012, La, r)
+    To = mat("torchon", "#f2ece0", tex=tex_rayures("#f2ece0", "#3e6a8a", echelle=40.0, axe='Z', part=0.8))
+    box("torchon", W - 0.24, -0.012, 0.58, 0.16, 0.01, 0.28, To, r, outline=False)
+    return r, W, D
+
+
+def cuisiniere(email="#e9e1cc"):
+    """La cuisinière émaillée crème : quatre feux sous leurs grilles de fonte, le
+    dosseret à barre chromée, la porte du four vitrée, la rangée de manettes ;
+    une cocotte rouge sur le feu arrière gauche. 0,70 × 0,55 m (triché)."""
+    W, D = 0.70, 0.55
+    r = root("cuisiniere")
+    Em = _m(f"email_cuisiniere_{email}", email, 0.5)
+    Fo = _m("fonte_grille", "#262321", 0.3)
+    Ch = _m("chrome", *METAL["chrome"])
+    box("socle", 0.03, 0.05, 0.0, W - 0.06, D - 0.07, 0.08, _m("socle_cuisine", "#4f483d"), r, outline=False)
+    box("corps", 0.0, 0.02, 0.08, W, D - 0.02, 0.78, Em, r, bevel=0.012)
+    box("bandeau", 0.0, 0.012, 0.70, W, 0.02, 0.12, Fo, r, outline=False)
+    for k in range(5):
+        cyl(f"manette{k}", 0.10 + k * 0.125, 0.0, 0.73, 0.022, 0.03, Em, r, verts=10, outline=False)
+    box("porte_four", 0.05, 0.0, 0.14, W - 0.10, 0.02, 0.52, Em, r, bevel=0.008)
+    box("hublot", 0.15, -0.004, 0.30, W - 0.30, 0.01, 0.24, _m("vitre_four", "#2a2422", 0.6), r, outline=False)
+    tube("poignee_four", [(0.10, -0.03, 0.62), (W - 0.10, -0.03, 0.62)], 0.012, Ch, r, outline=False)
+    box("dessus", 0.0, 0.02, 0.86, W, D - 0.02, 0.03, Fo, r, outline=False)
+    for (x, y) in ((0.18, 0.16), (0.52, 0.16), (0.18, 0.39), (0.52, 0.39)):
+        cyl("feu", x, y, 0.89, 0.09, 0.008, _m("bruleur", "#4a4440"), r, verts=16, aplat=0.75, outline=False)
+        box("grille_x", x - 0.11, y - 0.008, 0.897, 0.22, 0.016, 0.012, Fo, r, outline=False)
+        box("grille_y", x - 0.008, y - 0.085, 0.897, 0.016, 0.17, 0.012, Fo, r, outline=False)
+    box("dosseret", 0.0, D - 0.05, 0.89, W, 0.05, 0.13, Em, r, bevel=0.01)
+    tube("barre", [(0.03, D - 0.07, 0.97), (W - 0.03, D - 0.07, 0.97)], 0.01, Ch, r, outline=False)
+    Ro = _m("cocotte_rouge", "#b23a2a", 0.55)
+    cyl("cocotte", 0.18, 0.39, 0.91, 0.10, 0.10, Ro, r, verts=18, aplat=0.75)
+    cyl("couvercle_cocotte", 0.18, 0.39, 1.01, 0.105, 0.02, Ro, r, verts=18, aplat=0.75, outline=False)
+    ellipsoide("bouton_cocotte", 0.18, 0.39, 1.04, 0.025, 0.02, 0.015, _m("bouton_noir", "#2a2624"), r)
+    return r, W, D
+
+
+# ─── 17. LA SALLE DE BAINS : BAIGNOIRE, LAVABO, TOILETTES ───────────────
+def baignoire(robe="#2f4f3a"):
+    """La baignoire à pattes de lion : coque émaillée blanche à bord roulé, robe
+    peinte vert anglais, quatre pieds de laiton, la colonne de robinetterie et sa
+    douchette à gauche. 1,70 × 0,68 m (triché)."""
+    W, D = 1.70, 0.68
+    r = root("baignoire")
+    Ce = _m("email_baignoire", CERAMIQUE, 0.5)
+    Ro = _m(f"robe_{robe}", robe, 0.4)
+    La = _m("laiton", *METAL["laiton"])
+    for (x, y) in ((0.24, 0.12), (W - 0.24, 0.12), (0.24, D - 0.12), (W - 0.24, D - 0.12)):
+        ellipsoide("patte", x, y, 0.07, 0.045, 0.04, 0.07, La, r, outline=True, seg=10)
+        ellipsoide("griffe", x, y - 0.02, 0.015, 0.05, 0.04, 0.015, La, r, seg=10)
+    box("robe", 0.04, 0.03, 0.12, W - 0.08, D - 0.06, 0.46, Ro, r, bevel=0.17, seg=6)
+    box("bord", 0.0, 0.0, 0.55, W, D, 0.07, Ce, r, bevel=0.10, seg=5)
+    ellipsoide("creux", W / 2, D / 2, 0.621, (W - 0.16) / 2, (D - 0.14) / 2, 0.002, _m("email_ombre", "#c9d1d3"), r, seg=24)
+    ellipsoide("fond", W / 2 + 0.06, D / 2 - 0.03, 0.6215, (W - 0.40) / 2, (D - 0.30) / 2, 0.002, _m("email_fond", "#e3e9ea"), r, seg=24)
+    for dy in (-0.08, 0.08):
+        tube("colonne", [(0.11, D / 2 + dy, 0.62), (0.11, D / 2 + dy, 0.86)], 0.012, La, r, outline=False)
+        ellipsoide("tete", 0.11, D / 2 + dy, 0.88, 0.03, 0.03, 0.012, La, r)
+    tube("bec", [(0.11, D / 2, 0.84), (0.20, D / 2, 0.84), (0.24, D / 2, 0.78)], 0.012, La, r, outline=False)
+    ellipsoide("douchette", 0.06, D / 2 + 0.16, 0.86, 0.025, 0.025, 0.05, La, r)
+    return r, W, D
+
+
+def lavabo():
+    """Le lavabo sur colonne, de faïence blanche : vasque à bord épais, deux
+    robinets de laiton à croisillons, un savon rose. Le MIROIR est peint au mur.
+    0,56 × 0,38 m (triché)."""
+    W, D = 0.56, 0.38
+    r = root("lavabo")
+    Ce = _m("faience_lavabo", CERAMIQUE, 0.45)
+    La = _m("laiton", *METAL["laiton"])
+    cyl("colonne", W / 2, D * 0.55, 0.0, 0.10, 0.70, Ce, r, verts=18, r_top=0.075, aplat=0.7)
+    box("vasque", 0.0, 0.0, 0.70, W, D, 0.16, Ce, r, bevel=0.06, seg=4)
+    ellipsoide("creux", W / 2, D / 2 - 0.01, 0.861, (W - 0.12) / 2, (D - 0.13) / 2, 0.002, _m("email_ombre", "#c9d1d3"), r, seg=20)
+    for dx in (-0.12, 0.12):
+        cyl("robinet", W / 2 + dx, D - 0.06, 0.86, 0.012, 0.07, La, r, verts=8, outline=False)
+        ellipsoide("croisillon", W / 2 + dx, D - 0.06, 0.94, 0.028, 0.028, 0.01, La, r)
+    tube("bec", [(W / 2, D - 0.06, 0.86), (W / 2, D - 0.06, 0.95), (W / 2, D - 0.14, 0.92)], 0.011, La, r, outline=False)
+    ellipsoide("savon", 0.10, D - 0.08, 0.875, 0.035, 0.022, 0.014, _m("savon_rose", "#e8a9a0"), r, outline=True)
+    return r, W, D
+
+
+def wc(abattant="noyer"):
+    """Les toilettes à réservoir bas : cuvette de faïence, abattant de bois fermé,
+    réservoir et son bouton chromé. 0,40 × 0,55 m (triché)."""
+    W, D = 0.40, 0.55
+    r = root("wc")
+    Ce = _m("faience_wc", CERAMIQUE, 0.45)
+    box("reservoir", 0.02, D - 0.17, 0.40, W - 0.04, 0.17, 0.36, Ce, r, bevel=0.03, seg=3)
+    box("couvercle", 0.0, D - 0.18, 0.76, W, 0.19, 0.03, Ce, r, bevel=0.01, outline=False)
+    cyl("chasse", W / 2, D - 0.09, 0.79, 0.022, 0.012, _m("chrome", *METAL["chrome"]), r, verts=10, aplat=0.7, outline=False)
+    cyl("cuvette", W / 2, 0.22, 0.0, 0.11, 0.38, Ce, r, verts=20, r_top=0.16, aplat=1.0)
+    box("liaison", W / 2 - 0.10, 0.22, 0.12, 0.20, D - 0.39, 0.28, Ce, r, bevel=0.03, outline=False)
+    ellipsoide("abattant", W / 2, 0.21, 0.40, 0.17, 0.19, 0.018, _bois("abattant", abattant, fil='Y'), r, outline=True, seg=20)
+    box("charniere", W / 2 - 0.06, 0.38, 0.40, 0.12, 0.03, 0.025, _m("chrome", *METAL["chrome"]), r, outline=False)
+    return r, W, D
+
+
+# ─── 18. (le poteau de charpente : retiré le 2026-10-17) ─────────────────
+# ⚠️ Un poteau seul sous un faîtage qu'on ne dessine pas (la vue est en coupe, sans
+# toit), avec ses jambes de force et un bout de panne : vu à la planche, UNE POTENCE.
+# Les poutres des combles sont peintes sur leur rampant (`maisonArt.paintSlopeFace`).
 
 COLORIS = {
     "canape": [dict(tissu=t, bois=b, coussins=c) for (t, b, c) in (

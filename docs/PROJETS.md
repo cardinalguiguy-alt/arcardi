@@ -169,7 +169,15 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
 les intérieurs du tribunal, de la mairie et de l'église sont des « premiers jets » (`docs/AUDIT-2026-10.md`, partie 2 : murs d'une case,
 meubles = cases, aucune lumière) — **on n'en reprend pas le dessin**, seulement l'idée d'une carte unique aux niveaux empilés.
 
-**L'échelle, mesurée** : le vantail fait 2,04 m (`TOWN_HOUSE_DOOR_PX`) → **1 case = 1,18 m**. Mur du rez-de-chaussée (`wall`, à l'échelle de
+**⚠️ 2026-10-17 — L'ÉCHELLE DU PERSONNAGE, LE PLAN DE 9, LE GRAIN DE 64 (journal du README de la ferme)** : « mon joueur paraît gigantesque »,
+« pas assez de détail », « pas assez grande ». Ses réponses (maquette ×1 / ×1,5 / ×2 montrée) : **×2** (`maison.HOME_K` : une case du plan vaut deux
+cases du monde ; le plan reste à 1,18 m la case) ; **plus profonde aussi** (l'étroite passe à **5 × 9 cases**, même programme, pièces agrandies) ;
+le détail manque **aux meubles, aux murs et sols, et les pièces sont trop nues**. Faits : ×2, le plan de 9, le grain de 64 px (murs, sols, meubles).
+**Le soir même, sa réponse sur les pièces nues** : l'architecture (radiateurs sous les fenêtres, prises, interrupteurs, poutres des combles, appuis,
+cheminée au séjour) ET cuisine et bains équipés de base — faits, ce sont des ÉQUIPEMENTS du plan (`maison.homeFixes`), pas des meubles : ils
+amendent la décision 7 (la maison n'est plus vide au premier passage : elle est équipée, et seulement meublée d'un lit et d'une plante morte).
+Les modèles des meubles enrichis ; « le fauteuil trop profond » : la profondeur se triche (`meubles.py`, en tête).
+**L'échelle, mesurée (2026-10-16)** : le vantail fait 2,04 m (`TOWN_HOUSE_DOOR_PX`) → **1 case = 1,18 m**. Mur du rez-de-chaussée (`wall`, à l'échelle de
 `townDoorScale`) : N1 6,4 m · N2 7,0 m · S2 (chaumière, RDC + combles) 7,6 m · S1 8,2 m · S4 8,3 m · S3 (maison de maître) 10,8 m ; les autres
 ont RDC + étage + combles. ⚠️ **Les parcelles de rang 0 à 2 (les trois premiers joueurs) sont toutes ÉTROITES** (`TOWN_HOUSES`) : le premier plan
 à dessiner est l'étroite, ~5 × 7 cases (49 m²) par niveau. Proposition montrée et non contestée : RDC entrée + séjour côté rue, cuisine-repas

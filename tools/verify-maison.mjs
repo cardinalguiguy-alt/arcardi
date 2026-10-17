@@ -18,11 +18,19 @@
       l'escalier compris), sur tous les niveaux de N1 et N2 — jamais la semelle
       dans un mur, jamais coincés, et ils visitent toutes les pièces.
    6. La carte : maison et niveau se retrouvent depuis la position (aller-retour).
+   7. La maison de chacun (lot 2a) : poser, refuser, l'aimant, ranger, décorer.
+   8. Chaque chose a son nom, dans les deux langues.
+   9. (2026-10-17) Les maisons écrites sur le plan de 7 cases sont recalées sur
+      celui de 9 sans rien perdre (`migrateHome`).
+   ⚠️ 2026-10-17 — LE PLAN EST EN CASES DU PLAN, LA CARTE EN CASES DU MONDE
+   (`HOME_K` = 2) : le calage (§2) et le pas des marcheurs (§5) passent par K.
 
    Usage :  node tools/verify-maison.mjs
    ========================================================================== */
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { PNG } from "pngjs";
 import { installFakeDOM, loadFerme } from "./lib-canvas.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,11 +67,38 @@ for (const [mk, m] of Object.entries(C.TOWN_HOUSE_MODELS)) {
 // ─── 2. le calage ─────────────────────────────────────────────────────────
 console.log("\n=== 2. le calage au pixel ===");
 const isInt = (v) => Math.abs(v - Math.round(v)) < 1e-9;
-check("l'origine cuite tombe sur une case entière en x", isInt(H.HOME_OX + MA.HOME_FX0), String(H.HOME_OX + MA.HOME_FX0));
-check("l'origine cuite tombe sur une case entière en y", isInt(H.HOME_OY + MA.HOME_FY0), String(H.HOME_OY + MA.HOME_FY0));
+const K = H.HOME_K, ox0 = H.HOME_OX + MA.HOME_FX0 * K, oy0 = H.HOME_OY + MA.HOME_FY0 * K;   // l'origine cuite, en cases du MONDE
+check("l'origine cuite tombe sur une case entière du monde en x", isInt(ox0), String(ox0));
+check("l'origine cuite tombe sur une case entière du monde en y", isInt(oy0), String(oy0));
 check("un emplacement est un nombre entier de cases", isInt(H.HOME_SLOT_W) && isInt(H.HOME_LEVEL_H));
-check("le niveau tient dans son emplacement (murs projetés compris)", H.HOME_OY + MA.HOME_FY0 >= 0 && H.HOME_OY + P.d + 0.6 <= H.HOME_LEVEL_H, `${H.HOME_OY + MA.HOME_FY0} ≥ 0, ${H.HOME_OY + P.d + 0.6} ≤ ${H.HOME_LEVEL_H}`);
-check("la maison tient dans sa largeur", H.HOME_OX + MA.HOME_FX0 >= 0 && H.HOME_OX + P.w - MA.HOME_FX0 <= H.HOME_SLOT_W);
+check("le niveau tient dans son emplacement (murs projetés compris)", oy0 >= 0 && H.HOME_OY + (P.d + 0.6) * K <= H.HOME_LEVEL_H, `${oy0} ≥ 0, ${H.HOME_OY + (P.d + 0.6) * K} ≤ ${H.HOME_LEVEL_H}`);
+check("la maison tient dans sa largeur", ox0 >= 0 && H.HOME_OX + (P.w - MA.HOME_FX0) * K <= H.HOME_SLOT_W);
+/* 2026-10-17 — LA FINESSE. Un pixel de maison vaut un DEMI-pixel du monde (le
+   dessin tombe sur des pixels d'écran entiers aux crans 2 et 4), et les meubles
+   sont rendus AU MÊME GRAIN que les murs : un `maisonSprites.js` resté à 32 px
+   par case à côté de peintres à 64 dessinerait des meubles de poupée (§4 : un
+   contrôle qui compare une mesure à la constante qu'elle doit tenir suit la
+   constante — ici `MPX`, jamais « 64 » écrit en dur). */
+check("un pixel de maison = un demi-pixel du monde", Math.abs(C.TILE * K / MA.MPX - 0.5) < 1e-9, `${C.TILE} × ${K} / ${MA.MPX}`);
+{
+  /* La MÉDIANE du rapport largeur de l'image / (emprise × MPX) : un meuble n'est pas
+     son emprise (un portemanteau vu de côté est plus fin que son pied), mais l'ensemble
+     des images rendues à un autre grain se lit d'un coup (0,5 à 32 px par case). */
+  const M = mods.maisonSprites.MEUBLES, rap = [];
+  for (const os of Object.values(M)) for (const m of Object.values(os)) rap.push(m.w / (m.fw / H.CASE_M * MA.MPX));
+  rap.sort((a, b) => a - b);
+  const med = rap[rap.length >> 1];
+  check("les meubles sont rendus au grain des murs (médiane largeur / emprise × MPX ≈ 1)", med > 0.9 && med < 1.35, `médiane ${med.toFixed(2)} sur ${rap.length} images`);
+  // Chaque image de la table existe, à la taille annoncée (l'ancre en dépend) — par l'URL du jeu (`homeSpriteUrl`).
+  const manque = [];
+  for (const [nom, os] of Object.entries(M)) for (const [o, m] of Object.entries(os)) {
+    const f = path.join(ROOT, "public", H.homeSpriteUrl(nom + "_" + o));
+    if (!fs.existsSync(f)) { manque.push(nom + "_" + o + " absent"); continue; }
+    const png = PNG.sync.read(fs.readFileSync(f));
+    if (png.width !== m.w || png.height !== m.h) manque.push(`${nom}_${o} ${png.width}×${png.height} pour ${m.w}×${m.h}`);
+  }
+  check("chaque image de meuble existe, à la taille que la table annonce", manque.length === 0, manque.slice(0, 3).join(" ; ") || `${rap.length} PNG`);
+}
 
 // ─── 3. chaque pièce est atteignable ─────────────────────────────────────
 console.log("\n=== 3. chaque pièce est atteignable ===");
@@ -164,7 +199,8 @@ for (const mk of ["n1", "n2"]) {
   let bad = 0, trapped = 0, steps = 0, ups = 0, downs = 0;
   const visited = new Set(), levels = new Set();
   const cible = (L) => {
-    if (rnd() < 0.25) return L === 0 ? { lx: 0.45, ly: 1.0, monte: true } : L === 1 ? (rnd() < 0.5 ? { lx: 0.45, ly: 3.9, puis: { lx: 0.45, ly: 1.0 } } : { lx: 0.45, ly: 0.7, puis: { lx: 0.45, ly: 1.6 } }) : { lx: 0.45, ly: 1.6 };
+    // les buts d'escalier, lus sur le plan (2026-10-17 : écrits en dur pour le plan de 7, ils visaient des murs dans celui de 9)
+    if (rnd() < 0.25) return L === 0 ? { lx: 0.45, ly: s.yHaut, monte: true } : L === 1 ? (rnd() < 0.5 ? { lx: 0.45, ly: s.yPied + 0.4, puis: { lx: 0.45, ly: s.yHaut } } : { lx: 0.45, ly: s.yHaut - 0.3, puis: { lx: 0.45, ly: s.yHaut + 0.6 } }) : { lx: 0.45, ly: s.yHaut + 0.6 };
     const pcs = P.niveaux[L].pieces.filter((p) => p.id !== "cage");
     const pc = pcs[Math.floor(rnd() * pcs.length)], r = pc.rects[Math.floor(rnd() * pc.rects.length)];
     return { lx: r[0] + (r[2] - r[0]) * (0.2 + 0.6 * rnd()), ly: r[1] + (r[3] - r[1]) * (0.2 + 0.6 * rnd()) };
@@ -176,7 +212,7 @@ for (const mk of ["n1", "n2"]) {
       let dx = Math.sign(Math.round((tg.lx - lx) * 10)), dy = Math.sign(Math.round((tg.ly - ly) * 10));
       if (rnd() < 0.33) { const d = DIRS8[Math.floor(rnd() * 8)]; dx = d[0]; dy = d[1]; }
       const sol = H.homeSolids(P, L, fac);
-      const len = Math.hypot(dx, dy) || 1, sp = 0.09;
+      const len = Math.hypot(dx, dy) || 1, sp = 0.09;   // 9 cm du plan : à K = 2, deux pas du jeu (5,2 cases du monde par seconde à 60 images)
       const prevLy = ly;
       if (H.homeBoxFree(sol, lx + dx / len * sp, ly)) lx += dx / len * sp;
       if (H.homeBoxFree(sol, lx, ly + dy / len * sp)) ly += dy / len * sp;
@@ -209,7 +245,7 @@ for (const mk of ["n1", "n2"]) {
 // ─── 6. la carte ──────────────────────────────────────────────────────────
 console.log("\n=== 6. maison et niveau se lisent dans la position ===");
 let rt = true;
-for (let slot = 0; slot < C.TOWN_HOUSES.length; slot++) for (let L = 0; L < 3; L++) for (const [lx, ly] of [[0, 0], [4.9, 6.9], [2.5, 3.5], [-0.3, -2.9]]) {
+for (let slot = 0; slot < C.TOWN_HOUSES.length; slot++) for (let L = 0; L < 3; L++) for (const [lx, ly] of [[0, 0], [P.w - 0.1, P.d - 0.1], [2.5, 3.5], [-0.3, -2.9]]) {
   const w = H.homeToWorld(slot, L, lx, ly), b = H.homeToLocal(w.x, w.y);
   if (b.slot !== slot || b.level !== L || Math.abs(b.lx - lx) > 1e-9 || Math.abs(b.ly - ly) > 1e-9) rt = false;
 }
@@ -228,38 +264,39 @@ console.log("\n=== 7. poser, ranger, décorer (lot 2a) ===");
   const g = H.resolveHomeGift(h);
   check("le menu développeur garnit le garde-meuble", g.ok && h.g.length === g.n && !h.g.some((it) => it.s === "escalier"), `${h.g.length} meubles`);
   const canape = h.g.find((it) => it.s === "canape");
-  // contre le mur nord du séjour (x 2.2..5, y 3.5) : x = 2.6, y = 3.6 → en quarts
-  let r = H.resolveHomePlace(h, { u: canape.u, o: "S", n: 0, x: 48, y: 71 }, P, fac);
-  check("poser le canapé contre le mur du séjour", r.ok, JSON.stringify(r));
+  // face à la cheminée (2026-10-17 : elle occupe le mur nord du séjour, x 3,0..4,15) : x = 2,6, y = 7,0 → en vingtièmes
+  let r = H.resolveHomePlace(h, { u: canape.u, o: "N", n: 0, x: 52, y: 140 }, P, fac);
+  check("poser le canapé face à la cheminée", r.ok, JSON.stringify(r));
   check("il a quitté le garde-meuble", !h.g.some((it) => it.u === canape.u) && h.m.some((it) => it.u === canape.u));
-  r = H.resolveHomePlace(h, { u: canape.u, o: "S", n: 0, x: 0, y: 20 }, P, fac);
+  r = H.resolveHomePlace(h, { u: canape.u, o: "S", n: 0, x: 0, y: 60 }, P, fac);
   check("refusé dans la cage d'escalier", !r.ok && r.raison === "escalier", JSON.stringify(r));
   r = H.resolveHomePlace(h, { u: canape.u, o: "S", n: 0, x: 95, y: 70 }, P, fac);
   check("refusé à cheval sur un mur", !r.ok, JSON.stringify(r));
   const biblio = h.g.find((it) => it.s === "bibliotheque");
-  r = H.resolveHomePlace(h, { u: biblio.u, o: "S", n: 0, x: 25, y: 71 }, P, fac);
+  r = H.resolveHomePlace(h, { u: biblio.u, o: "S", n: 0, x: 25, y: 91 }, P, fac);
   check("refusé devant la porte de la cuisine (le seuil)", !r.ok && (r.raison === "porte" || r.raison === "meuble" || r.raison === "passage"), JSON.stringify(r));
   const fauteuil = h.g.find((it) => it.s === "fauteuil");
-  r = H.resolveHomePlace(h, { u: fauteuil.u, o: "S", n: 0, x: 48, y: 71 }, P, fac);
+  r = H.resolveHomePlace(h, { u: fauteuil.u, o: "S", n: 0, x: 56, y: 140 }, P, fac);
   check("refusé sur le canapé (deux meubles debout ne se chevauchent pas)", !r.ok && r.raison === "meuble", JSON.stringify(r));
   const tapis = h.g.find((it) => it.s === "tapis");
-  r = H.resolveHomePlace(h, { u: tapis.u, o: "S", n: 0, x: 50, y: 90 }, P, fac);
+  r = H.resolveHomePlace(h, { u: tapis.u, o: "S", n: 0, x: 50, y: 110 }, P, fac);
   check("un tapis se glisse sous les meubles", r.ok, JSON.stringify(r));
-  // fermer le passage : de quoi boucher l'entrée (x 0..2.2, y 3.5..7) d'un mur de meubles
-  const bloque = { m: [{ u: 900, s: "lit", o: "E", n: 0, x: 0, y: 90 }, { u: 901, s: "canape", o: "W", n: 0, x: 25, y: 75 }], g: [], d: {}, k: 902 };
+  // fermer le passage : de quoi boucher l'entrée (x 0..2.2, y 4.5..9) d'un mur de meubles
+  const bloque = { m: [{ u: 900, s: "lit", o: "E", n: 0, x: 0, y: 110 }, { u: 901, s: "canape", o: "W", n: 0, x: 25, y: 95 }], g: [], d: {}, k: 902 };
   const vb = H.homeCanPlace(P, fac, { ...bloque, m: [bloque.m[0]] }, bloque.m[1], 901);
   check("refusé quand une pièce ou l'escalier devient inatteignable", !vb.ok, JSON.stringify(vb));
   {
-    const sp = H.homeSnap(P, fac, 0, "canape", "S", 3.6, 3.6 + 0.38);
-    check("l'aimant : un canapé lâché près du mur du séjour s'y plaque", sp.y / H.HOME_Q === 3.55 || Math.abs(sp.y / H.HOME_Q - 3.55) < 0.051, `y = ${sp.y / H.HOME_Q}`);
-    const sp2 = H.homeSnap(P, fac, 0, "canape", "S", 3.6, 5.5);
+    // contre le mur nord de la chambre (la cloison à 5,3, sa face à 5,35 ; la cheminée tient celui du séjour)
+    const sp = H.homeSnap(P, fac, 1, "canape", "S", 3.6, 5.4 + 0.35);
+    check("l'aimant : un canapé lâché près du mur de la chambre s'y plaque", Math.abs(sp.y / H.HOME_Q - 5.35) < 0.051, `y = ${sp.y / H.HOME_Q}`);
+    const sp2 = H.homeSnap(P, fac, 0, "canape", "S", 3.6, 6.8);
     check("l'aimant : loin des murs, le pas est le quart de case", Math.abs(((sp2.y / H.HOME_Q) * 4) - Math.round((sp2.y / H.HOME_Q) * 4)) < 1e-9, `y = ${sp2.y / H.HOME_Q}`);
   }
   {
     // l'aimant ne fait jamais dépasser dans un mur : chaque meuble lâché contre chaque mur du séjour
     let bad = [];
     for (const s of ["plante_verte", "canape", "bibliotheque", "lit", "poele", "fauteuil"]) for (const o of H.homeOrients(s)) {
-      for (const [px, py] of [[2.3, 5.2], [4.9, 5.2], [3.6, 3.6], [3.6, 6.9], [4.9, 6.9], [2.3, 3.6]]) {
+      for (const [px, py] of [[2.3, 6.7], [4.9, 6.7], [3.6, 4.6], [3.6, 8.9], [4.9, 8.9], [2.3, 4.6]]) {
         const sp = H.homeSnap(P, fac, 0, s, o, px, py);
         const rr = H.homeItemRect({ s, o, x: sp.x, y: sp.y });
         const murs = H.homeSolids(P, 0, fac, []);
@@ -289,7 +326,7 @@ console.log("\n=== 7. poser, ranger, décorer (lot 2a) ===");
 console.log("\n=== 8. les noms, dans les deux langues ===");
 {
   const { fermeStrings: FS } = await loadFerme(ROOT, ["fermeStrings"]);
-  const RAISONS = ["sprite", "niveau", "grille", "dehors", "escalier", "mur", "meuble", "porte", "passage", "inconnu", "catalogue", "piece", "deja", "or"];
+  const RAISONS = ["sprite", "niveau", "grille", "dehors", "escalier", "mur", "meuble", "porte", "passage", "inconnu", "catalogue", "piece", "deja", "or", "equipement"];
   for (const lang of ["fr", "en"]) {
     const Ls = FS.fstr(lang);
     const meubles = Object.keys(mods.maisonSprites.MEUBLES).filter((k) => !/_allume$/.test(k));
@@ -301,6 +338,83 @@ console.log("\n=== 8. les noms, dans les deux langues ===");
     check(`${lang} : chaque raison de refus a un texte`, r.length === 0, r.join(","));
     check(`${lang} : chaque niveau et chaque pièce a un nom`, P.niveaux.every((lv) => Ls.homeLevelName(lv.cle) && lv.pieces.every((p) => Ls.homeRoomName(p.id))));
   }
+}
+
+// ─── 9. les maisons du plan de 7 cases (2026-10-17) ───────────────────────
+console.log("\n=== 9. une maison écrite sur le plan de 7 cases ===");
+{
+  const fac = H.homeFacade(null, P);
+  // Une maison de la veille (pas de `pv`) : le lit de départ, le canapé au milieu du séjour
+  // d'alors (y 6,0), un fauteuil dans la cuisine, un fauteuil EN DOUBLE sur le premier
+  // (impossible à reposer : il doit finir au garde-meuble, pas disparaître), et une table
+  // basse contre le mur nord de la cuisine, là où sont maintenant les plans de travail.
+  const vieille = { m: [
+    { u: 1, s: "lit", o: "S", n: 1, x: 53, y: 87 },
+    { u: 2, s: "canape", o: "S", n: 0, x: 48, y: 120 },
+    { u: 3, s: "fauteuil", o: "S", n: 0, x: 60, y: 30 },
+    { u: 4, s: "fauteuil", o: "S", n: 0, x: 60, y: 30 },
+    { u: 6, s: "table_basse", o: "S", n: 0, x: 26, y: 1 },
+  ], g: [{ u: 5, s: "tapis" }], d: { "0:sejour": { p: "damas" } }, k: 7 };
+  const n = H.migrateHome(vieille);
+  const at = (u) => n.m.find((it) => it.u === u);
+  check("elle passe à la version du plan", n.pv === H.HOME_PLAN_V && vieille.pv === undefined, `pv ${n.pv} (l'ancienne n'est pas modifiée)`);
+  check("le lit suit la chambre (+1 case)", at(1) && at(1).y === 107, JSON.stringify(at(1)));
+  check("le canapé suit le séjour (+1 case)", at(2) && at(2).y === 140, JSON.stringify(at(2)));
+  check("la table basse tombée sur la cuisine équipée part au garde-meuble", !at(6) && n.g.some((it) => it.u === 6));
+  check("le fauteuil de la cuisine ne bouge pas", at(3) && at(3).y === 30, JSON.stringify(at(3)));
+  check("le fauteuil en double part au garde-meuble", !at(4) && n.g.some((it) => it.u === 4));
+  check("rien ne se perd (posés + garde-meuble)", n.m.length + n.g.length === vieille.m.length + vieille.g.length, `${n.m.length} posés, ${n.g.length} au garde-meuble`);
+  check("le décor des pièces est gardé", n.d["0:sejour"] && n.d["0:sejour"].p === "damas");
+  check("chaque meuble reposé est posable", n.m.every((it) => H.homeCanPlace(P, fac, n, it, it.u).ok));
+  check("une maison déjà au plan de 9 n'est pas touchée", H.migrateHome(n) === n);
+  check("la maison de départ est au plan de 9", H.homeDepart().pv === H.HOME_PLAN_V);
+  // Une maison déjà au plan de 9 (pv 2, la veille des équipements) : RIEN ne bouge, seul ce qui tombe sur un équipement s'en va.
+  const v2 = { m: [{ u: 1, s: "canape", o: "N", n: 0, x: 52, y: 140 }, { u: 2, s: "fauteuil", o: "S", n: 0, x: 62, y: 0 }], g: [], d: {}, k: 3, pv: 2 };
+  const n2 = H.migrateHome(v2);
+  check("plan de 9 sans équipements → avec : le canapé ne bouge pas", n2.m.some((it) => it.u === 1 && it.y === 140));
+  check("plan de 9 sans équipements → avec : le fauteuil sur la cuisinière part au garde-meuble", !n2.m.some((it) => it.u === 2) && n2.g.some((it) => it.u === 2));
+}
+
+// ─── 10. les équipements de la maison (2026-10-17) ─────────────────────────
+console.log("\n=== 10. les équipements (cuisine, bains, cheminée, radiateurs) ===");
+{
+  const M = mods.maisonSprites.MEUBLES;
+  for (const mk of ["n1", "n2"]) for (const variant of ["simple", "riche"]) {
+    const m = C.TOWN_HOUSE_MODELS[mk];
+    if (!m || !m.variants[variant]) continue;
+    const fac = H.homeFacade({ model: mk, variant }, P);
+    for (let L = 0; L < P.niveaux.length; L++) {
+      const fx = H.homeFixes(P, L, fac);
+      const sansImage = fx.filter((f) => !(M[f.sprite] && M[f.sprite][f.o]));
+      const murs = H.homeSolids(P, L, fac, [], false);
+      const rects = fx.map(H.homeFurnitureRect);
+      const inter = (a, b) => a[2] > b[0] + 1e-6 && a[0] < b[2] - 1e-6 && a[3] > b[1] + 1e-6 && a[1] < b[3] - 1e-6;
+      const dansMur = fx.filter((f, i) => murs.some((w) => inter(rects[i], w)));
+      const croises = rects.some((a, i) => rects.some((b, j) => j > i && inter(a, b)));
+      const portes = H.homeDoorClearances(P, L).filter(() => true);
+      const devantPorte = fx.filter((f, i) => portes.some((c) => inter(rects[i], c)));
+      const horsPiece = fx.filter((f, i) => { const pc = H.homeRoomAt(P, L, (rects[i][0] + rects[i][2]) / 2, (rects[i][1] + rects[i][3]) / 2); return !pc || pc.id === "cage"; });
+      const ok = !sansImage.length && !dansMur.length && !croises && !devantPorte.length && !horsPiece.length;
+      check(`${mk} ${variant} niveau ${L} : ${fx.length} équipements, chacun rendu, dans sa pièce, hors des murs, des portes et des autres`, ok,
+        [sansImage.length && "sans image : " + sansImage.map((f) => f.sprite), dansMur.length && "dans un mur : " + dansMur.map((f) => f.sprite),
+         croises && "deux se chevauchent", devantPorte.length && "devant une porte : " + devantPorte.map((f) => f.sprite),
+         horsPiece.length && "hors pièce : " + horsPiece.map((f) => f.sprite)].filter(Boolean).join(" ; "));
+      if (L < 2) {
+        const rad = fx.filter((f) => /^radiateur/.test(f.sprite)).length, fen = (fac.fenetres[L] || []).length;
+        check(`${mk} ${variant} niveau ${L} : un radiateur sous chaque fenêtre de la façade`, rad === fen, `${rad} radiateurs, ${fen} fenêtres`);
+      }
+    }
+  }
+  const fac = H.homeFacade({ model: "n2", variant: "simple" }, P);
+  check("la cuisine a son évier, sa cuisinière, ses plans de travail ; les bains leur baignoire, lavabo, toilettes ; le séjour sa cheminée",
+    ["evier", "cuisiniere", "plan_travail_118", "plan_travail_165", "cheminee"].every((s) => H.homeFixes(P, 0, fac).some((f) => f.sprite === s)) &&
+    ["baignoire", "lavabo", "wc"].every((s) => H.homeFixes(P, 1, fac).some((f) => f.sprite === s)));
+  const h = H.homeClone(H.homeOf({}, "x")); H.resolveHomeGift(h);
+  check("aucun équipement au garde-meuble du menu développeur", !h.g.some((it) => H.homeFixe(it.s)), `${h.g.length} meubles`);
+  check("un équipement ne se pose pas (ce n'est pas un meuble)", H.homeCanPlace(P, fac, h, { u: 999, s: "baignoire", o: "S", n: 1, x: 60, y: 120 }).raison === "sprite");
+  const v = H.homeCanPlace(P, fac, h, { u: 998, s: "fauteuil", o: "S", n: 0, x: 62, y: 0 });
+  check("un meuble posé sur un équipement : refusé, raison « equipement »", !v.ok && v.raison === "equipement", JSON.stringify(v));
+  check("on ne marche pas à travers la baignoire", !H.homeBoxFree(H.homeSolids(P, 1, fac), 4.2, 0.4));
 }
 
 console.log(`\n${ok} OK, ${ko} ÉCHEC`);

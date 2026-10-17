@@ -11,20 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-16 (nuit) — CHEZ SOI : LOTS 1 ET 2a DES INTÉRIEURS DANS LE JEU (le mode déco, le garde-meuble, murs et sols payants) ; RIEN DE COMMITÉ
+### 2026-10-17 (soir) — CHEZ SOI À ×2, ÉQUIPÉE : L'ÉCHELLE, LE PLAN DE 9, LE GRAIN DE 64 PX, CUISINE, BAINS, CHEMINÉE ; RIEN DE COMMITÉ
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-16 au README de la ferme) : sa porte, trois niveaux, escalier, lit, lumière,
-murs évasés ; et maintenant le MODE DÉCO (B) — poser, tourner, ranger, aimant des murs, règle de passage, papiers / lambris / sols payés à la
-caisse commune. État : `homes[playerId]` dans le JSON de `ferme_saves` (**Supabase : rien**, aucune migration ; absent = maison de départ).
-Neufs : `maison.js`, `maisonArt.js`, `maisonSprites.js` (GÉNÉRÉ par Blender), `public/maison/`, `tools/blender/`, `verify-maison` (93/93),
-`render-maison`. Vu en jeu et à deux clients, aucune erreur. **Pas vu : iPad, la sauvegarde réelle (le Supabase factice ne garde rien).**
+**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). L'intérieur à ×2 contre le personnage
+(`maison.HOME_K`), l'étroite à 5 × 9 cases, murs, sols et meubles à 64 px par case ; puis les ÉQUIPEMENTS du plan (`maison.homeFixes` : cuisine,
+bains, cheminée, radiateurs déduits de la façade), les détails peints aux murs, des meubles plus riches, la profondeur trichée (`meubles.py`).
+Anciennes maisons recalées (`migrateHome`, `pv` 3). Vu en jeu, aucune erreur ; `verify-maison` 134/134, `verify-densite`, `verify-strings` verts.
+**Supabase : rien.** **Pas vu : iPad, deux clients, la sauvegarde réelle.**
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
 trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. L'extension MCP de Blender est ancienne (`uvx mcp-for-blender
 install-addon`) ; le rendu en ligne de commande n'en a pas besoin.
 
 ### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
 
-Avant : les blocs en tête de `docs/A-JUGER.md` (le mode déco, chez soi). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+Avant : le bloc en tête de `docs/A-JUGER.md` (chez soi à ×2, équipée). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -82,7 +82,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte, collision, escalier, murs coupés, lumière ; meubles rendus par Blender ; à venir : déco, commandes, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
@@ -247,6 +247,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN SPRITE N'A PAS DE SENS INTERDIT, IL A UN SENS DESSINÉ
 - UNE PROPORTION N'EST PAS UNE DIMENSION, ET AUCUN BANC DU DÉPÔT NE MESURE UN RAPPORT ENTRE DEUX MORCEAUX
 - UNE TAILLE SE LIT CONTRE SES VOISINES : AGRANDIR LES VOISINS RAPETISSE CE QUI N'A PAS BOUGÉ
+- UN PERSONNAGE CHIBI A LA HAUTEUR D'UN ADULTE ET LA CARRURE DE DEUX : CONTRE DES COTES RÉELLES, IL PARAÎT GÉANT
 - UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE HAUT
 - UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER
 - UNE CONDITION DE PROXIMITÉ DOIT MESURER CE QUE L'ACTION MESURE, PAS UNE APPROXIMATION QUI SUPPOSE QU'ON PEUT S'EN APPROCHER

@@ -1,5 +1,65 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-17 (soir) — CHEZ SOI : L'ARCHITECTURE, LA CUISINE ET LES BAINS ÉQUIPÉS, DES MEUBLES PLUS RICHES
+
+Sa réponse à « les pièces trop nues » : **l'architecture** (radiateurs sous les fenêtres, prises, interrupteurs, poutres aux combles, appuis,
+cheminée au séjour) **ET une cuisine et une salle de bains équipées de base**, puis les meubles plus riches. En cours de route : « attention à
+l'échelle avec les meubles, le fauteuil est trop profond par rapport à sa largeur ». **Supabase : rien.**
+- **Les équipements viennent avec la maison** (`maison.js`, « LES ÉQUIPEMENTS DE LA MAISON ») : dans le PLAN (`fixes` de chaque niveau), jamais
+  dans l'état du joueur — ni garde-meuble, ni catalogue, ni déplacement. Ils bloquent la marche et la pose (raison « equipement »). La cuisine le
+  long du mur nord (plan de travail, évier de grès sous la fenêtre avec son rideau à rayures, cuisinière émaillée et sa cocotte, plan de travail) ;
+  les bains (lavabo sur colonne, toilettes à abattant de bois, baignoire à pattes de lion) ; la cheminée de marbre contre le mur nord du séjour
+  (pendule, bougeoirs, bûches ; une version allumée, rendue, pour le lot 2c). Les **radiateurs se déduisent de la façade** : un sous chaque fenêtre
+  côté rue, aussi long que la pièce le permet (trois longueurs).
+- **Ce qui se peint sur les murs** (`maisonArt.js`) : la hotte, l'étagère à bocaux, le miroir des bains, le conduit de la cheminée et son trumeau
+  doré, un interrupteur à côté de chaque porte, des prises là où rien ne les cache ; les pannes, la faîtière et les jambettes sur le rampant des
+  combles ; une tablette de chêne aux fenêtres de la façade. ⚠️ Peint et non posé : debout devant le mur, une hotte flotterait quand le mur se
+  coupe à 35 cm. ⚠️ Un POTEAU de charpente debout dans les combles, sous un faîtage qu'on ne dessine pas : vu à la planche, une potence — retiré.
+- **La profondeur se triche** (`meubles.py`, en tête) : dans cette projection la profondeur monte à pleine échelle vers le haut de l'écran ; le
+  fauteuil passe de 86 × 86 à 92 × 70 cm, le canapé de 90 à 82 cm de profondeur, le poêle de 45 à 40 ; les équipements sont dessinés ainsi.
+- **Les meubles plus riches** (Blender) : passepoil, capitons et plaid du canapé ; capitonnage, passepoil et coussin de laine du fauteuil ;
+  corniche, colonnes à pommeau, couette piquée et volants du lit ; tiroir et soliflore de la table basse ; frange et chaînette du lampadaire ;
+  napperon et lunettes du guéridon ; un figuier de 26 feuilles.
+- **Les maisons déjà meublées** (`pv` 2 → 3) : rien ne bouge ; un meuble qui tombe sur un équipement part au garde-meuble (`migrateHome`).
+- **La fluidité** : une face de mur pleine est cuite UNE fois évasée (elle se recopiait rangée par rangée à chaque image : ~350 `drawImage`), la
+  tache de soleil se peint par deux rangées. Le dessin de la maison (chronomètre posé puis retiré) : 1,5 → 1,0 ms au séjour, 0,8 en cuisine.
+- **Vérifié** : `verify-maison` 134/134 (§10 : chaque équipement rendu, dans sa pièce, hors des murs, des portes et des autres, un radiateur par
+  fenêtre de façade sur N1/N2 simple et riche, aucun au garde-meuble, refus « equipement », la migration des maisons du plan sans équipements) ;
+  `verify-densite`, `verify-strings`, `verify-docs` verts ; `render-maison` ; **en jeu** : la cuisine, les bains (le corps s'arrête devant la
+  cuisinière et la baignoire), les combles, le séjour meublé face à la cheminée, la chambre et ses deux radiateurs ; aucune erreur.
+  Preuves : `tools/out/maison-equipee-{sejour,cuisine,bains,chambre}.png`. **Pas vu** : iPad, deux clients, la sauvegarde réelle.
+
+## 2026-10-17 — CHEZ SOI À ×2 : L'ÉCHELLE DU PERSONNAGE, LE PLAN DE 9 CASES, LE GRAIN DE 64 PX
+
+Guillaume : « gros problème d'échelle pour ma maison, mon joueur paraît gigantesque », puis « le niveau de détail n'est pas suffisant. La maison
+n'est pas assez grande aussi ». **Mesuré en jeu** : le personnage avait la bonne HAUTEUR (23 px = 1,70 m, la porte des façades) mais un corps de
+chibi (10 px d'épaules, 74 cm, une tête de 45 cm) à côté de meubles aux cotes réelles — un canapé de 2 m ne faisait que 2,5 largeurs de lui.
+Maquette ×1 / ×1,5 / ×2 montrée (`tools/out/maison-echelle-maquette.png` ; en jeu avant / après : `maison-echelle-avant.png`, `-apres.png`) ; **ses réponses** : ×2 ; le détail manque aux meubles, aux murs et sols
+ET les pièces sont trop nues ; la maison plus profonde aussi. **Supabase : rien** (`homes` reste dans le JSON de `ferme_saves`).
+- **L'échelle** (`maison.HOME_K` = 2) : le plan, les meubles et les sauvegardes restent en cases DU PLAN (1,183 m) ; seul le passage au monde
+  multiplie par K (`homeToLocal`, `homeToWorld`, les emplacements de la carte « home »). La semelle du corps est une grandeur du PERSONNAGE : elle
+  se DIVISE par K pour entrer dans le plan (`HOME_BOX_R`, `HOME_BODY_D`) — laissée telle, le corps aurait gardé 57 cm dans un dessin de 37.
+- **Le plan de l'étroite : 5 × 9 cases** (10,6 m de profondeur, plus grande dedans que dehors, la façade ne change pas) : cuisine-repas et séjour
+  +1 case chacun, l'escalier recule avec la cuisine, bains et dressing plus grands, la chambre +1. Les maisons écrites sur le plan de 7 sont
+  recalées au chargement (`migrateHome`, `pv` = 2) : chaque meuble suit sa pièce, celui qui ne trouve plus sa place va au garde-meuble.
+- **Le grain : 64 px par case** (32 avant) pour les murs, les sols (`maisonArt.MPX`) et les meubles (Blender, `studio.PX`, 46 images rendues en
+  6 s) : un pixel de maison reste un demi-pixel du personnage à l'écran, une case en compte quatre fois plus. Les peintres réécrits en
+  conséquence, avec ce que les pixels gagnés permettent : lames de parquet à chanfrein, fils et nœuds, planches clouées aux combles ; rosace de
+  ciment à filet et usure ; tomettes en VRAIS hexagones (⚠️ premier jet découpé rangée par rangée : des écailles de toit, vu en jeu — chaque
+  pixel prend maintenant la tomette au centre le plus proche) ; cabochons à reflet ; papiers redessinés (le bouquet a ses pétales, le damas son
+  fleuron cerné, les pois leur reflet) ; corniche à trois moulures, plinthe à gorge, lambris à cadre ET table, faïence biseautée ; porte à deux
+  panneaux et poignée sur platine ; fenêtre à six carreaux, battement et appui de pierre ; garde-corps, paillasson tressé, ampoule à douille.
+- **La caméra monte d'une demi-hauteur de mur** (vu en jeu : au cran 4 le niveau ne tient plus dans l'écran, et au milieu de la cuisine on ne
+  voyait plus son mur du fond).
+- **`verify-densite` repasse au vert** (rouge depuis le 2026-10-16 : l'URL des meubles écrite dans la boucle) : elle ne s'écrit plus qu'à un endroit
+  (`HM.homeSpriteUrl`) ; `verify-maison` vérifie l'existence, la taille et le GRAIN de chaque PNG (la médiane largeur / emprise × MPX ≈ 1).
+- **Vérifié** : `verify-maison` 106/106 (calage à K, finesse, 360 000 pas au hasard sans traverser une cloison, toutes les pièces visitées, la
+  migration d'une maison de la veille sans rien perdre) ; `verify-densite` vert ; `render-maison` (coques N1/N2, témoin) ; **en jeu** (Chromium,
+  cran 4) : entrer, la cuisine, monter par la volée, les portes des bains, du dressing et de la chambre, les combles, redescendre par la trémie,
+  le séjour meublé à l'échelle, le mode déco (la plante prise et reposée au point exact du pointeur) ; 0,40 ms par image (p50), 1,20 (p95) ;
+  aucune erreur. **Pas vu** : iPad, deux clients, la sauvegarde réelle.
+- **La suite de la même demande** (les meubles plus riches, les éléments fixes des pièces) : l'entrée du soir, ci-dessus.
+
 ## 2026-10-16 (nuit) — LES INTÉRIEURS, LOT 2a : LE MODE DÉCO, LE GARDE-MEUBLE, LES MURS ET SOLS PAYANTS
 
 Cadrage : ses huit réponses (`docs/PROJETS.md` §6). **Supabase : rien** — la maison de chacun est un champ de plus du JSON de `ferme_saves`

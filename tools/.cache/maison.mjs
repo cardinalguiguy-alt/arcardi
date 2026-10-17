@@ -16,14 +16,34 @@
    exactement comme l'étage du tribunal se lit dans son y. Aucun champ ne
    s'ajoute au paquet de position.
 
-   ⚠️ L'ÉCHELLE EST CELLE DE LA FAÇADE : 1 case = 1,183 m (la porte de 2,04 m,
-   `C.TOWN_HOUSE_DOOR_PX`). Le plan de l'ÉTROITE fait 5 × 7 cases par niveau
-   (5,9 × 8,3 m, murs extérieurs de 40 cm en plus), trois niveaux. Les fenêtres
+   ⚠️ LE PLAN EST À L'ÉCHELLE DE LA FAÇADE : 1 case DU PLAN = 1,183 m (la porte
+   de 2,04 m, `C.TOWN_HOUSE_DOOR_PX`). Le plan de l'ÉTROITE fait 5 × 9 cases
+   par niveau (5,9 × 10,6 m, murs extérieurs de 40 cm en plus), trois niveaux
+   — plus profonde dedans que dehors (Guillaume, 2026-10-17 : « la maison n'est
+   pas assez grande », l'option « plus profonde aussi » ; la façade ne change pas).
+
+   ⚠️⚠️ 2026-10-17 — MAIS LE PERSONNAGE N'Y EST PAS À L'ÉCHELLE : `HOME_K` = 2
+   CASES DU MONDE PAR CASE DU PLAN. Guillaume : « gros problème d'échelle pour
+   ma maison, mon joueur paraît gigantesque ». Mesuré en jeu : le personnage a
+   la bonne HAUTEUR (23 px peints = 1,70 m) mais un corps de chibi — 10 px
+   d'épaules, 74 cm, une tête de 45 cm — à côté de meubles aux cotes réelles :
+   un canapé trois places ne faisait que 2,5 largeurs de personnage, et sa
+   tête la taille de la table basse. Maquette ×1 / ×1,5 / ×2 montrée, ×2
+   choisi : c'est l'échelle des jeux « cosy » (le personnage mesuré contre
+   ses meubles, pas contre un mètre). Le plan, les meubles, les sauvegardes
+   restent en cases DU PLAN ; seul le passage au monde multiplie par K
+   (`homeToLocal`, `homeToWorld`), et la semelle du corps, qui est une
+   grandeur du MONDE, se divise par K pour entrer dans le plan
+   (`HOME_BOX_R`, `HOME_BODY_D`). Le dessin garde un pixel de maison pour un
+   demi-pixel du personnage : la finesse double avec l'échelle
+   (`maisonArt.MPX` 64, les meubles rendus à 64 px par case).
+   Les fenêtres
    côté rue et la porte d'entrée sont LUES sur la façade peinte du modèle
    (`homeFacade`) — jamais recopiées : N1 et N2 n'ont pas les mêmes, et la
    façade se change avec R.
 
-   ⚠️ LES CLOISONS FONT 12 CM (0,1 case), LE CORPS 0,48 CASE : la collision se
+   ⚠️ LES CLOISONS FONT 12 CM (0,1 case), LE CORPS 0,24 CASE DU PLAN (0,48 du
+   monde, divisé par `HOME_K`) : la collision se
    mesure RECTANGLE CONTRE RECTANGLE, jamais aux coins de la semelle — une
    cloison plus fine que le corps passerait ENTRE deux coins (§4, « une semelle
    testée à ses coins enjambe tout ce qui est plus fin qu'elle »).
@@ -39,30 +59,37 @@
 import * as C from "./fermeConstants.mjs";
 import { MEUBLES } from "./maisonSprites.mjs";
 
-export const CASE_M = 1.183;
+export const CASE_M = 1.183;          // une case DU PLAN
+export const HOME_K = 2;              // 2026-10-17 : cases du MONDE par case du PLAN (voir l'en-tête)
 export const STOREY_M = 2.7;          // d'un plancher au suivant
 export const EP_EXT = 0.34;           // mur extérieur : 40 cm
 export const EP_INT = 0.10;           // cloison : 12 cm
-export const HOME_BOX_R = 0.24;       // demi-largeur de la semelle à l'intérieur (57 cm de large ; une porte en fait 95)
+/* LA SEMELLE DU CORPS, EN CASES DU PLAN : celle du monde (0,48 × `C.BODY_DEPTH`,
+   comme en ville) divisée par K. ⚠️ C'est une grandeur du PERSONNAGE : la
+   laisser à 0,24 (sa valeur d'avant ×2) aurait gardé un corps de 57 cm dans un
+   personnage dessiné à 37 cm d'épaules — il aurait buté à un pas des meubles. */
+export const HOME_BOX_R = 0.24 / HOME_K;          // demi-largeur : 28 cm de large (une porte en fait 95)
+export const HOME_BODY_D = C.BODY_DEPTH / HOME_K; // profondeur de la semelle
 
-// ─── la carte des intérieurs ─────────────────────────────────────────────
-export const HOME_SLOT_W = 8;         // cases par emplacement (5 de plan, les murs, de la marge)
-export const HOME_LEVEL_H = 12;       // cases par niveau (7 de plan, la hauteur des murs projetée au-dessus)
-/* Le coin nord-ouest du plan dans son emplacement. ⚠️ CHOISI POUR QUE L'ORIGINE
-   DES IMAGES CUITES (`maisonArt.HOME_FX0/FY0`, −0,6 et −3 cases) TOMBE SUR UNE
-   CASE ENTIÈRE (1,0 et 1,0) : posées au cran 2 ou 4, elles tombent alors sur des
-   pixels d'écran entiers — à 1,5, l'origine arrivait à 57,6 px au cran 4. */
-export const HOME_OX = 2.0;   // 2026-10-16 (soir) : 1,6 → 2,0 avec la marge des murs évasés (`maisonArt.HOME_FX0` −1)
-export const HOME_OY = 4.0;
+// ─── la carte des intérieurs (en cases DU MONDE) ─────────────────────────
+export const HOME_SLOT_W = 8 * HOME_K;    // par emplacement : 8 cases du plan (5 de plan, les murs, de la marge)
+export const HOME_LEVEL_H = 14 * HOME_K;  // par niveau : 14 cases du plan (9 de plan, la hauteur des murs projetée au-dessus)
+/* Le coin nord-ouest du plan dans son emplacement, en cases du monde.
+   ⚠️ CHOISI POUR QUE L'ORIGINE DES IMAGES CUITES (`maisonArt.HOME_FX0/FY0`, −1
+   et −3 cases du plan) TOMBE SUR UNE CASE ENTIÈRE DU MONDE : posées au cran 2
+   ou 4, elles tombent alors sur des pixels d'écran entiers — à 1,5, l'origine
+   arrivait à 57,6 px au cran 4. */
+export const HOME_OX = 2.0 * HOME_K;   // 2026-10-16 (soir) : 1,6 → 2,0 avec la marge des murs évasés (`maisonArt.HOME_FX0` −1)
+export const HOME_OY = 4.0 * HOME_K;
 export const homeSlotOf = (x) => Math.floor(x / HOME_SLOT_W);
 export const homeLevelOf = (y) => Math.floor(y / HOME_LEVEL_H);
 /* Un point du MONDE (cases) → sa maison, son niveau, ses coordonnées dans le plan. */
 export function homeToLocal(x, y) {
   const slot = homeSlotOf(x), level = homeLevelOf(y);
-  return { slot, level, lx: x - slot * HOME_SLOT_W - HOME_OX, ly: y - level * HOME_LEVEL_H - HOME_OY };
+  return { slot, level, lx: (x - slot * HOME_SLOT_W - HOME_OX) / HOME_K, ly: (y - level * HOME_LEVEL_H - HOME_OY) / HOME_K };
 }
 export function homeToWorld(slot, level, lx, ly) {
-  return { x: slot * HOME_SLOT_W + HOME_OX + lx, y: level * HOME_LEVEL_H + HOME_OY + ly };
+  return { x: slot * HOME_SLOT_W + HOME_OX + lx * HOME_K, y: level * HOME_LEVEL_H + HOME_OY + ly * HOME_K };
 }
 /* Le pied d'un personnage (la ligne de contact, `C.footX/footY`) en coordonnées du plan. */
 export const homeFootLocal = (x, y) => homeToLocal(C.footX(x), C.footY(y));
@@ -78,57 +105,96 @@ export const homeFootLocal = (x, y) => homeToLocal(C.footX(x), C.footY(y));
    ([a, b] le long de la ligne) ; `garde` : un garde-corps (bas, à claire-voie).
    `pleins` : ce qui ne se traverse pas (le placard sous l'escalier, le bas des
    pentes du toit). `fenetresNord` : les fenêtres du mur du fond (le jardin). */
+/* ⚠️ 2026-10-17 — 7 → 9 CASES DE PROFONDEUR (Guillaume : « plus profonde aussi »).
+   Le programme ne change pas (celui montré le 2026-10-16 et non contesté) : les
+   deux cases gagnées vont aux pièces qu'on habite — la cuisine-repas et le
+   séjour prennent une case chacun (4,7 × 5,3 m et 3,3 × 5,3 m), l'escalier
+   recule d'une case avec la cuisine, les bains et le dressing s'élargissent,
+   la chambre gagne une case (5,9 × 4,4 m). Les sauvegardes écrites sur le plan
+   de 7 cases sont recalées par `migrateHome` (`HOME_PLAN_V`). */
 export const PLAN_ETROITE = {
-  taille: "narrow", w: 5, d: 7,
-  escalier: { x0: 0.0, x1: 0.9, yPied: 3.5, yHaut: 1.0 },
+  taille: "narrow", w: 5, d: 9,
+  escalier: { x0: 0.0, x1: 0.9, yPied: 4.5, yHaut: 2.0 },
   niveaux: [
     { cle: "rdc", mur: 2.5,
       pieces: [
-        { id: "cage", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 1.0, 0.9, 3.5]] },
-        { id: "entree", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 3.5, 2.2, 7]] },
-        { id: "sejour", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[2.2, 3.5, 5, 7]] },
-        { id: "cuisine", sol: ["tomettes", "rouge"], murs: { papier: "platre", lambris: "faience" }, rects: [[1.0, 0, 5, 3.5]] },
+        { id: "cage", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 2.0, 0.9, 4.5]] },
+        { id: "entree", sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 4.5, 2.2, 9]] },
+        { id: "sejour", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[2.2, 4.5, 5, 9]] },
+        { id: "cuisine", sol: ["tomettes", "rouge"], murs: { papier: "platre", lambris: "faience" }, rects: [[1.0, 0, 5, 4.5]] },
       ],
       cloisons: [
-        { x: 0.95, y0: 0, y1: 3.5 },                              // la cage d'escalier contre la cuisine
-        { y: 3.5, x0: 0.9, x1: 5, portes: [[1.25, 2.05]] },       // l'entrée et le séjour contre la cuisine
-        { x: 2.2, y0: 3.5, y1: 7, portes: [[4.45, 5.25]] },       // l'entrée contre le séjour
+        { x: 0.95, y0: 0, y1: 4.5 },                              // la cage d'escalier contre la cuisine
+        { y: 4.5, x0: 0.9, x1: 5, portes: [[1.25, 2.05]] },       // l'entrée et le séjour contre la cuisine
+        { x: 2.2, y0: 4.5, y1: 9, portes: [[5.6, 6.4]] },         // l'entrée contre le séjour
       ],
-      pleins: [{ nom: "placard", rect: [0, 0, 0.9, 1.0] }],      // sous la volée du haut
+      pleins: [{ nom: "placard", rect: [0, 0, 0.9, 2.0] }],      // sous la volée du haut
       fenetresNord: [[2.0, 2.85], [3.75, 4.6]],
+      // 2026-10-17 — LES ÉQUIPEMENTS (voir « LES ÉQUIPEMENTS DE LA MAISON ») : la cuisine le long
+      // du mur nord (l'évier sous la fenêtre de gauche), la cheminée contre le mur nord du séjour.
+      fixes: [
+        { sprite: "plan_travail_118", o: "S", lx: 1.0, ly: 0 },
+        { sprite: "evier", o: "S", lx: 2.0, ly: 0 },
+        { sprite: "cuisiniere", o: "S", lx: 3.0, ly: 0 },
+        { sprite: "plan_travail_165", o: "S", lx: 3.6, ly: 0 },
+        { sprite: "cheminee", o: "S", lx: 3.0, ly: 4.55 },
+      ],
+      // Ce qui se PEINT sur la face d'un mur du fond (`y` : le pied de la face) : il se coupe avec lui.
+      peints: [
+        { quoi: "etagere", y: 0, x0: 1.12, x1: 1.88 },
+        { quoi: "hotte", y: 0, x0: 3.0, x1: 3.59 },
+        { quoi: "conduit", y: 4.55, x0: 3.13, x1: 4.02 },
+        { quoi: "prise", y: 0, x: 1.5, z: 1.1 },
+        { quoi: "prise", y: 0, x: 4.78, z: 1.1 },
+      ],
     },
     { cle: "etage", mur: 2.5,
       pieces: [
-        { id: "cage", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 1.0, 0.9, 3.5]] },
-        { id: "palier", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 0, 2.2, 1.0], [1.0, 1.0, 2.2, 4.3], [0, 3.5, 1.0, 4.3]] },
-        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.2, 0, 5, 2.4]] },
-        { id: "dressing", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: null }, rects: [[2.2, 2.4, 5, 4.3]] },
-        { id: "chambre", sol: ["parquet", "chene"], murs: { papier: "toile_bleue", lambris: "creme" }, rects: [[0, 4.3, 5, 7]] },
+        { id: "cage", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 2.0, 0.9, 4.5]] },
+        { id: "palier", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 0, 2.2, 2.0], [1.0, 2.0, 2.2, 5.3], [0, 4.5, 1.0, 5.3]] },
+        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.2, 0, 5, 2.8]] },
+        { id: "dressing", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: null }, rects: [[2.2, 2.8, 5, 5.3]] },
+        { id: "chambre", sol: ["parquet", "chene"], murs: { papier: "toile_bleue", lambris: "creme" }, rects: [[0, 5.3, 5, 9]] },
       ],
       cloisons: [
-        { x: 0.95, y0: 1.0, y1: 3.5, garde: true },               // le garde-corps de la volée
-        { x: 2.2, y0: 0, y1: 4.3, portes: [[0.12, 0.92], [3.0, 3.8]] },
-        { y: 2.4, x0: 2.2, x1: 5 },
-        { y: 4.3, x0: 0, x1: 5, portes: [[1.2, 2.0]] },
+        { x: 0.95, y0: 2.0, y1: 4.5, garde: true },               // le garde-corps de la volée
+        { x: 2.2, y0: 0, y1: 5.3, portes: [[0.5, 1.3], [3.65, 4.45]] },
+        { y: 2.8, x0: 2.2, x1: 5 },
+        { y: 5.3, x0: 0, x1: 5, portes: [[1.2, 2.0]] },
       ],
       pleins: [],
       fenetresNord: [[3.2, 3.95]],
+      fixes: [
+        { sprite: "lavabo", o: "S", lx: 2.33, ly: 0 },
+        { sprite: "wc", o: "S", lx: 2.95, ly: 0 },
+        { sprite: "baignoire", o: "S", lx: 3.5, ly: 0 },
+      ],
+      peints: [
+        { quoi: "miroir", y: 0, x0: 2.37, x1: 2.76 },
+        { quoi: "prise", y: 0, x: 2.86, z: 1.25 },
+      ],
     },
     { cle: "combles", mur: 1.0, pente: true,
       pieces: [
-        { id: "cage", sol: ["vide"], murs: { papier: "platre", lambris: null }, rects: [[0, 1.0, 0.9, 3.5]] },
-        { id: "combles", sol: ["parquet", "brut"], murs: { papier: "platre", lambris: null }, rects: [[0, 0, 5, 7]] },
+        { id: "cage", sol: ["vide"], murs: { papier: "platre", lambris: null }, rects: [[0, 2.0, 0.9, 4.5]] },
+        { id: "combles", sol: ["parquet", "brut"], murs: { papier: "platre", lambris: null }, rects: [[0, 0, 5, 9]] },
       ],
       cloisons: [
-        { x: 0.95, y0: 1.0, y1: 3.5, garde: true },
-        { y: 3.5, x0: 0, x1: 0.95, garde: true },
+        { x: 0.95, y0: 2.0, y1: 4.5, garde: true },
+        { y: 4.5, x0: 0, x1: 0.95, garde: true },
       ],
-      pleins: [{ nom: "sous_pente", rect: [0, 0, 5, 0.35] }, { nom: "sous_pente", rect: [0, 6.6, 5, 7] }],
+      pleins: [{ nom: "sous_pente", rect: [0, 0, 5, 0.35] }, { nom: "sous_pente", rect: [0, 8.65, 5, 9] }],
       fenetresNord: [],
     },
   ],
 };
 export const homePlanOf = (size) => (size === "narrow" ? PLAN_ETROITE : null);
+/* L'IMAGE D'UN MEUBLE (`MEUBLES`, rendue par Blender) : le SEUL endroit où son URL
+   s'écrit (2026-10-17). Sa taille et son ancre sont dans la table générée
+   `maisonSprites.js` ; `verify-maison` §2 vérifie que chaque PNG existe à la
+   taille annoncée et au grain des murs, `verify-densite` §1 que le jeu ne charge
+   aucune image par une URL écrite ailleurs. */
+export const homeSpriteUrl = (nom) => "/maison/" + nom + ".png";
 export const homeHasInterior = (hsn) => !!hsn && !hsn.model && !!homePlanOf(C.townHouseSize(hsn));
 
 /* LA FAÇADE VUE DE L'INTÉRIEUR : la porte d'entrée et les fenêtres côté rue de
@@ -164,14 +230,54 @@ export function homeFacade(look, plan = PLAN_ETROITE) {
    NORD-OUEST de l'emprise ; l'emprise vient du sprite rendu (`MEUBLES`, en
    mètres) — le dessin et la collision lisent la même. */
 export const HOME_DEPART = [
-  { id: "lit", sprite: "lit", o: "S", niveau: 1, lx: 2.65, ly: 4.36 },
-  { id: "plante_morte", sprite: "plante_morte", o: "S", niveau: 0, lx: 4.42, ly: 3.66 },
+  { id: "lit", sprite: "lit", o: "S", niveau: 1, lx: 2.65, ly: 5.36 },          // 2026-10-17 : +1 avec la chambre (plan de 9)
+  { id: "plante_morte", sprite: "plante_morte", o: "S", niveau: 0, lx: 4.42, ly: 4.66 },
 ];
 export function homeFurnitureRect(f) {
   const s = MEUBLES[f.sprite] && MEUBLES[f.sprite][f.o];
   const fw = s ? s.fw / CASE_M : 1, fd = s ? s.fd / CASE_M : 1;
   return [f.lx, f.ly, f.lx + fw, f.ly + fd];
 }
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-17 — LES ÉQUIPEMENTS DE LA MAISON (« pièces trop nues »)
+   ╚════════════════════════════════════════════════════════════════════════
+   Guillaume a choisi l'architecture (radiateurs sous les fenêtres, prises,
+   interrupteurs, poutres des combles, appuis, cheminée au séjour) ET une
+   cuisine et une salle de bains équipées de base. ⚠️ ILS VIENNENT AVEC LA
+   MAISON : ils sont dans le PLAN (`fixes` de chaque niveau), jamais dans
+   l'état du joueur — ni garde-meuble, ni catalogue, ni déplacement, rien de
+   plus dans la sauvegarde ni sur le réseau. Ils bloquent la marche et la pose
+   comme un meuble (raison « equipement »). Les RADIATEURS se déduisent de la
+   façade : un sous chaque fenêtre côté rue, aussi long que la place le permet
+   (la façade change avec R, eux aussi). Ce qui se PEINT sur un mur (prises,
+   hotte, miroir, conduit et trumeau, poutres) est dans `maisonArt.js` : posé
+   en sprite, il flotterait quand le mur se coupe à 35 cm. */
+export const HOME_FIXE = /^(radiateur|cheminee|plan_travail|evier|cuisiniere|baignoire|lavabo|wc)(_|$)/;
+export const homeFixe = (s) => HOME_FIXE.test(s);
+const RADIATEURS = [["radiateur_14", 0.84], ["radiateur_11", 0.66], ["radiateur_8", 0.48]];   // [sprite, longueur en m]
+const fixMemo = new Map();
+export function homeFixes(plan, L, facade) {
+  const lv = plan.niveaux[L];
+  if (!lv) return [];
+  const key = plan.taille + "|" + L + "|" + (facade ? JSON.stringify(facade.fenetres[L] || []) : "");
+  if (fixMemo.has(key)) return fixMemo.get(key);
+  const out = (lv.fixes || []).map((f, i) => ({ id: "fixe:" + L + ":" + i, sprite: f.sprite, o: f.o, niveau: L, lx: f.lx, ly: f.ly, fixe: true }));
+  if (facade && !lv.pente) for (const [a, b] of facade.fenetres[L] || []) {
+    const c = (a + b) / 2, yy = plan.d - 0.2;
+    const pc = homeRoomAt(plan, L, c, yy);
+    if (!pc || pc.id === "cage") continue;
+    const rr = pc.rects.find(([x0, y0, x1, y1]) => c >= x0 && c < x1 && yy >= y0 && yy < y1);
+    const lo = Math.max(a, rr[0] + 0.08), hi = Math.min(b, rr[2] - 0.08);
+    const pick = RADIATEURS.find(([nom, m]) => MEUBLES[nom] && m / CASE_M <= hi - lo + 1e-9);
+    if (!pick) continue;
+    const m = MEUBLES[pick[0]].S, fw = m.fw / CASE_M, fd = m.fd / CASE_M;
+    out.push({ id: "radiateur:" + L + ":" + out.length, sprite: pick[0], o: "S", niveau: L, lx: (lo + hi) / 2 - fw / 2, ly: plan.d - fd, fixe: true });
+  }
+  if (fixMemo.size > 64) fixMemo.clear();
+  fixMemo.set(key, out);
+  return out;
+}
+
 /* Où se pose la tête du dormeur : sur l'oreiller de gauche (le lit a la tête au nord). */
 export function homeBedPillow(f) {
   const [x0, y0, x1] = homeFurnitureRect(f);
@@ -199,10 +305,11 @@ export function homeRoomAt(plan, L, lx, ly) {
    extérieurs (la façade percée de sa porte au rez-de-chaussée), les cloisons
    moins leurs portes, les garde-corps, les pleins, le mobilier posé. */
 const solidMemo = new Map();
-export function homeSolids(plan, L, facade, meubles = HOME_DEPART) {
+export function homeSolids(plan, L, facade, meubles = HOME_DEPART, avecFixes = true) {
   /* ⚠️ La clé porte les MEUBLES EUX-MÊMES (lot 2a : on les déplace) — une clé au
-     nombre de meubles rendait la collision d'avant après un déplacement. */
-  const key = plan.taille + "|" + L + "|" + (facade ? facade.porte.join(",") : "") + "|" + meubles.filter((f) => f.niveau === L && !/^tapis/.test(f.sprite)).map((f) => f.sprite + f.o + f.lx + "," + f.ly).join(";");
+     nombre de meubles rendait la collision d'avant après un déplacement.
+     2026-10-17 : et les FENÊTRES de la façade (les radiateurs s'en déduisent). */
+  const key = plan.taille + "|" + L + "|" + (facade ? facade.porte.join(",") + JSON.stringify(facade.fenetres[L] || []) : "") + "|" + (avecFixes ? 1 : 0) + "|" + meubles.filter((f) => f.niveau === L && !/^tapis/.test(f.sprite)).map((f) => f.sprite + f.o + f.lx + "," + f.ly).join(";");
   if (solidMemo.size > 200) solidMemo.clear();
   if (solidMemo.has(key)) return solidMemo.get(key);
   const { w, d } = plan, lv = plan.niveaux[L], e = EP_EXT, h = EP_INT / 2;
@@ -217,14 +324,16 @@ export function homeSolids(plan, L, facade, meubles = HOME_DEPART) {
     else for (const [a, b] of splitGaps(c.x0, c.x1, c.portes)) R.push([a, c.y - h, b, c.y + h]);
   }
   for (const p of lv.pleins) R.push(p.rect.slice());
+  if (avecFixes) for (const f of homeFixes(plan, L, facade)) R.push(homeFurnitureRect(f));   // 2026-10-17 : les équipements
   for (const f of meubles) if (f.niveau === L && !/^tapis/.test(f.sprite)) R.push(homeFurnitureRect(f));   // un tapis se marche dessus
   solidMemo.set(key, R);
   return R;
 }
 /* LA SEMELLE CONTRE LES RECTANGLES. (fx, fy) : la ligne de contact du pied, en
-   coordonnées du plan. La boîte va de fy − BODY_DEPTH à fy en profondeur. */
+   coordonnées du plan. La boîte va de fy − HOME_BODY_D à fy en profondeur
+   (2026-10-17 : `C.BODY_DEPTH` est une profondeur du MONDE, divisée par K). */
 export function homeBoxFree(solids, fx, fy, r = HOME_BOX_R) {
-  const bx0 = fx - r, bx1 = fx + r, by0 = fy - C.BODY_DEPTH, by1 = fy;
+  const bx0 = fx - r, bx1 = fx + r, by0 = fy - HOME_BODY_D, by1 = fy;
   for (const [x0, y0, x1, y1] of solids) {
     if (bx1 > x0 + 1e-6 && bx0 < x1 - 1e-6 && by1 > y0 + 1e-6 && by0 < y1 - 1e-6) return false;
   }
@@ -260,8 +369,9 @@ export function homeStairLift(plan, L, lx, ly) {
    la volée du haut), on monte ; entré par le NORD (le palier), on descend la
    volée du bas, qui arrive là. */
 /* ⚠️ 0,45 ET PAS MOINS : au rez-de-chaussée, le placard sous la volée du haut
-   arrête la semelle (profonde de `C.BODY_DEPTH`, 0,31) à 1,31 du mur nord — un
-   déclenchement à 0,30 de `yHaut` (1,30) n'était jamais atteint (premier jet). */
+   arrête la semelle à sa profondeur au-delà de `yHaut` (0,31 au premier jet, 0,155
+   depuis K = 2) — un déclenchement à 0,30 de `yHaut` n'était jamais atteint
+   avec la semelle d'alors (premier jet). */
 export const HOME_STAIR_TRIG = 0.45;
 export function homeStairStep(plan, L, st, prevLy, lx, ly) {
   const s = plan.escalier, N = plan.niveaux.length;
@@ -400,14 +510,60 @@ export const HOME_DECOR = {
    garde-robe (décision 8 : chapeaux et tenues de 1 200 à 14 000 or). */
 export const HOME_DECOR_PRIX = { papier: 1500, lambris: 1000, sol: 2500 };
 
+/* LA VERSION DU PLAN sur laquelle les positions d'une maison sont écrites
+   (`pv`). Absente = 1, le plan de 7 cases du 2026-10-16 ; 2 = le plan de 9
+   (2026-10-17) ; 3 = le même avec ses équipements (cuisine, bains, cheminée). Une maison d'une autre version est recalée par `migrateHome`,
+   au CHARGEMENT de la sauvegarde (FermeGame.js) — jamais à chaque image. */
+export const HOME_PLAN_V = 3;   // 3 (2026-10-17, le soir) : les équipements entrent dans le plan
 export function homeDepart() {
   let k = 1;
-  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, k };
+  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, k, pv: HOME_PLAN_V };
 }
 /* La maison d'un joueur, telle quelle (jamais modifiée ici). */
 export function homeOf(homes, id) {
   const h = homes && homes[id];
   return h && Array.isArray(h.m) ? h : homeDepart();
+}
+/* 2026-10-17 — RECALER UNE MAISON ÉCRITE SUR LE PLAN DE 7 CASES. Les pièces
+   du sud ont reculé (séjour, entrée, chambre : +1 case ; le dressing +0,4 ; le
+   sud des combles +2, le flanc de la trémie +1) ; chaque meuble suit la bande
+   où tombait le centre de son emprise, puis il est REPOSÉ par la règle de
+   l'hôte (`homeCanPlace`) dans l'ordre : celui qui ne trouve plus sa place
+   part au garde-meuble, rien ne se perd. ⚠️ La façade réelle n'est pas connue
+   au chargement (elle dépend du propriétaire) : la règle se juge contre la
+   façade par défaut — seul le point d'arrivée de la porte en dépend, à
+   quelques décimètres près. Pure : rend une maison neuve. */
+const PV1_BANDES = [
+  [[3.5, 1.0]],                        // rdc : y ≥ 3,5 → +1
+  [[4.3, 1.0], [2.4, 0.4]],            // étage : chambre +1, dressing +0,4
+  [[3.5, 2.0], [1.0, 1.0]],            // combles : le sud +2, le flanc de la trémie +1
+];
+export function migrateHome(h) {
+  if (!h || !Array.isArray(h.m) || h.pv === HOME_PLAN_V) return h;
+  /* Le recalage des bandes ne vaut que pour le plan de 7 ; depuis le plan de 9, une
+     version de plus (les équipements) ne déplace rien : on REPOSE seulement, et ce qui
+     tombe sur un équipement part au garde-meuble. */
+  const decale = !(h.pv >= 2);
+  const out = homeClone(h);
+  out.pv = HOME_PLAN_V;
+  if (!Array.isArray(out.g)) out.g = [];
+  if (!out.d || typeof out.d !== "object") out.d = {};
+  const fac = homeFacade(null), poses = out.m;
+  out.m = [];
+  for (const it of poses) {
+    const [, y0, , y1] = homeItemRect(it), yc = (y0 + y1) / 2;
+    const b = decale && (PV1_BANDES[it.n] || []).find(([seuil]) => yc >= seuil);
+    const cand = { ...it, y: it.y + Math.round((b ? b[1] : 0) * HOME_Q) };
+    if (homeCanPlace(PLAN_ETROITE, fac, out, cand).ok) out.m.push(cand);
+    else out.g.push({ u: it.u, s: it.s });
+  }
+  return out;
+}
+export function migrateHomes(homes) {
+  if (!homes || typeof homes !== "object") return {};
+  const out = {};
+  for (const [id, h] of Object.entries(homes)) out[id] = migrateHome(h);
+  return out;
 }
 /* Un meuble posé, dans le repère du plan (cases). */
 export const homeItemLx = (it) => it.x / HOME_Q;
@@ -517,25 +673,28 @@ export function homeKeyPoints(plan, L, facade) {
    fonction pour la grille du joueur (vert / rouge) et pour l'hôte (qui tranche). */
 export function homeCanPlace(plan, facade, home, cand, ignoreU = null) {
   const L = cand.n;
-  if (!MEUBLES[cand.s] || !MEUBLES[cand.s][cand.o] || homeWallItem(cand.s) || cand.s === "escalier") return { ok: false, raison: "sprite" };
+  if (!MEUBLES[cand.s] || !MEUBLES[cand.s][cand.o] || homeWallItem(cand.s) || cand.s === "escalier" || homeFixe(cand.s)) return { ok: false, raison: "sprite" };
   if (L < 0 || L >= plan.niveaux.length) return { ok: false, raison: "niveau" };
   if (!Number.isInteger(cand.x) || !Number.isInteger(cand.y)) return { ok: false, raison: "grille" };
   const r = homeItemRect(cand);
   if (r[0] < -1e-6 || r[1] < -1e-6 || r[2] > plan.w + 1e-6 || r[3] > plan.d + 1e-6) return { ok: false, raison: "dehors" };
   const s = plan.escalier;
   if (inter(r, [s.x0, s.yHaut - (L > 0 ? 1.0 : 0), s.x1 + EP_INT, s.yPied + (L < plan.niveaux.length - 1 ? 0.5 : 0)])) return { ok: false, raison: "escalier" };
-  const murs = homeSolids(plan, L, facade, []);
+  const murs = homeSolids(plan, L, facade, [], false);
   if (murs.some((w) => inter(r, w))) return { ok: false, raison: "mur" };
   // le centre de l'emprise doit être dans une pièce (pas sous la pente des combles)
   const pc = homeRoomAt(plan, L, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
   if (!pc || pc.id === "cage") return { ok: false, raison: "dehors" };
+  // 2026-10-17 : les équipements de la maison (un tapis ne se glisse pas sous une cuisine non plus)
+  const fixes = homeFixes(plan, L, facade).map(homeFurnitureRect);
+  if (fixes.some((w) => inter(r, w))) return { ok: false, raison: "equipement" };
   if (homeFlat(cand.s)) return { ok: true, raison: null };
   const autres = home.m.filter((it) => it.n === L && it.u !== ignoreU && !homeFlat(it.s));
   if (autres.some((it) => inter(r, homeItemRect(it)))) return { ok: false, raison: "meuble" };
   if (homeDoorClearances(plan, L).some((c) => inter(r, c))) return { ok: false, raison: "porte" };
   // ⚠️ LE PASSAGE : toutes les pièces et tous les points d'arrivée restent atteignables
   // (le remplissage de `verify-maison`, devenu une règle de jeu — décision 2).
-  const sol = [...murs, ...autres.map(homeItemRect), r];
+  const sol = [...murs, ...fixes, ...autres.map(homeItemRect), r];
   if (!homeReachableAll(plan, L, facade, sol)) return { ok: false, raison: "passage" };
   return { ok: true, raison: null };
 }
@@ -603,7 +762,7 @@ export function resolveHomeDecor(home, req, plan) {
 /* Le menu développeur : un exemplaire de chaque meuble au garde-meuble (le
    catalogue est le lot 2b). Jamais l'escalier, qui vient avec la maison. */
 export function resolveHomeGift(home) {
-  const base = Object.keys(MEUBLES).filter((s) => s !== "escalier" && !/_allume$/.test(s) && !homeWallItem(s));
+  const base = Object.keys(MEUBLES).filter((s) => s !== "escalier" && !/_allume$/.test(s) && !homeWallItem(s) && !homeFixe(s));
   for (const s of base) home.g.push({ u: home.k++, s });
   return { ok: true, n: base.length };
 }

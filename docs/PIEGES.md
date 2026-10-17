@@ -98,6 +98,15 @@ dépôt.
   derrière eux. *Avant de retoucher un dessin qu'on dit changé, le mesurer contre sa version d'avant* (une
   copie de travail au commit voulu, le même script) : ce qui a changé est souvent autour de lui, et le
   retoucher aurait abîmé la seule chose qui était juste.
+- ⚠️⚠️ **UN PERSONNAGE CHIBI A LA HAUTEUR D'UN ADULTE ET LA CARRURE DE DEUX : CONTRE DES COTES RÉELLES,
+  IL PARAÎT GÉANT** (2026-10-17). L'intérieur des maisons était à l'échelle EXACTE de la porte des façades
+  (1 case = 1,183 m) et le personnage aussi, par sa hauteur (23 px = 1,70 m) — « mon joueur paraît
+  gigantesque ». Ses 10 px d'épaules font 74 cm et sa tête 45 cm : contre un canapé de 2 m, il ne faisait
+  que 2,5 largeurs. Un bâtiment vu du dehors se juge à sa porte (une hauteur) ; un décor qu'on HABITE se
+  juge à la carrure, et à celle-là on agrandit la pièce et ses meubles (×2, `maison.HOME_K`). *Avant de
+  régler l'échelle d'un décor meublé, poser le personnage contre ses meubles et compter des largeurs, pas
+  des mètres.* Corollaire du même jour : ce qui est une grandeur du PERSONNAGE (la semelle de collision)
+  reste au monde et se DIVISE par l'échelle pour entrer dans le décor.
 - ⚠️⚠️ **UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE
   HAUT** (2026-09-02). Le jour où les cinq maires ont eu cinq tailles, le tampon du bureau s'est
   retrouvé à 64 cm de l'épaule d'une femme dont le bras en fait 56 — et une cinématique inverse

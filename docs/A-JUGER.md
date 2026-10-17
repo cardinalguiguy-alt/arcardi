@@ -6,6 +6,26 @@
 
 ---
 
+### À juger — CHEZ SOI À ×2, ÉQUIPÉE (2026-10-17) : l'échelle, le plan de 9 cases, le détail, la cuisine, les bains, la cheminée
+
+Entre chez toi (une étroite) et promène-toi, de préférence avec des meubles (menu développeur → Maison → « Garnir le garde-meuble », puis B).
+- **L'échelle** : ton personnage contre le canapé, le fauteuil, le lit — juste, maintenant ? (×2 choisi sur maquette.) Au cran 4 la maison déborde
+  de l'écran et la caméra te suit ; au cran 2 un étage tient presque entier — lequel joues-tu dedans ?
+- **Le plan de 9 cases** (décidé en l'écrivant, sur le programme d'avant) : la cuisine-repas et le séjour ont pris une case chacun, la chambre une
+  case, les bains et le dressing grandissent, l'escalier recule avec la cuisine. Une pièce trop vide, trop longue ? Une pièce qui manque (WC,
+  bureau, seconde chambre aux combles) ?
+- **Le détail des murs et des sols** (64 px par case) : parquet, tomettes, ciment, cabochons, papiers, lambris, corniche, fenêtres — assez ?
+  trop chargé quelque part ?
+- **La caméra** monte d'une demi-hauteur de mur (pour voir le mur du fond de la pièce où tu es) : agréable ou gênante en bas, devant la porte ?
+- **Les hauteurs** : le mur du fond fait 2,50 m, soit trois fois ta hauteur à l'écran (le personnage est chibi) — trop haut ?
+- **Les équipements** (le soir) : la cuisine (évier sous la fenêtre, rideau à rayures, cuisinière, étagère, hotte), les bains (lavabo et miroir,
+  toilettes, baignoire à pattes de lion), la cheminée et son trumeau doré, un radiateur sous chaque fenêtre de la façade, prises et interrupteurs,
+  les poutres du rampant des combles. Le style, les couleurs (façades de cuisine crème, baignoire vert anglais) ? Une pièce encore trop nue ?
+  ⚠️ La cheminée prend le mur nord du séjour : le canapé ne s'y adosse plus (le témoin lui fait face) — c'est bien là que tu la veux ?
+- **Les meubles** : le fauteuil élargi (92 × 70 cm, ta remarque), le canapé moins profond ; le plaid, les capitons, le lit à colonnes — assez ?
+  La cheminée n'est jamais allumée en jeu (la version allumée existe : elle attend le lot 2c, « E pour allumer »).
+Pas vu : iPad, deux clients.
+
 ### À juger — LE MODE DÉCO (2026-10-16 nuit, lot 2a des intérieurs)
 
 Chez toi : B (ou 🛋️). Pour avoir des meubles avant le catalogue : menu développeur → Maison → « Garnir le garde-meuble ».

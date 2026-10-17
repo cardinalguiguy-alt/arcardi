@@ -5,8 +5,10 @@
    Deux planches, composées avec LES MÊMES FONCTIONS que la zone « home » du jeu :
    le plan (`maison.js`), les cuissons et la liste des dessins (`maisonArt.js`),
    les sprites de meubles rendus par Blender (`public/maison/`, ancres dans
-   `maisonSprites.js`) et la fermière du jeu (`S.getChar`, agrandie ×2 au plus
-   proche voisin : 16 px de dessin par case pour elle, 32 pour la maison).
+   `maisonSprites.js`) et la fermière du jeu (`S.getChar`, agrandie au plus
+   proche voisin : 16 px de dessin par case du MONDE pour elle, `MPX` par case du
+   PLAN pour la maison, et une case du plan vaut `HOME_K` cases du monde —
+   2026-10-17 : 64 px et ×2, elle est donc agrandie ×2 comme avant).
 
    1. LA COQUE (`maison-coque-<modèle>.png`) — les trois niveaux de l'étroite
       tels qu'on les trouve au premier passage de porte (vides, sauf le lit et
@@ -40,6 +42,7 @@ const A = mods.fermeArt, MA = mods.maisonArt, H = mods.maison, C = mods.fermeCon
 const META = mods.maisonSprites.MEUBLES;
 const S = A.buildSprites();
 const { MPX, CASE_M } = MA;
+const KC = MPX / (C.TILE * H.HOME_K);   // px de maison par px du personnage (2 : 64 px pour 2 cases de 16)
 const mk = (w, h) => { const el = document.createElement("canvas"); el.width = w; el.height = h; return el; };
 
 const images = new Map();
@@ -73,10 +76,12 @@ function compose(plan, L, look, o = {}) {
   // le soleil par les fenêtres de la façade (l'après-midi), de jour
   if (!o.nuit) for (const [a, b] of facade.fenetres[L] || []) {
     const [pa, py] = MA.homePx(a, plan.d), [pb] = MA.homePx(b, plan.d);
-    MA.paintSunPool(g, pa, py, pb - pa, 44, -18, 0.9, MA.homePx(0, 0)[0], MA.homePx(plan.w, 0)[0]);
+    MA.paintSunPool(g, pa, py, pb - pa, MA.pxOfM(1.63), -MA.pxOfM(0.66), 0.9, MA.homePx(0, 0)[0], MA.homePx(plan.w, 0)[0]);
   }
   const faces = H.homeFaces(plan, L).map((f) => ({ f, bake: MA.bakeHomeFace(mk, plan, L, f) }));
-  const meubles = (o.meubles || H.HOME_DEPART.filter((m) => m.niveau === L));
+  // 2026-10-17 : les équipements de la maison (la nuit, la cheminée est allumée)
+  const fixes = H.homeFixes(plan, L, facade).map((f) => (o.nuit && f.sprite === "cheminee" ? { ...f, sprite: "cheminee_allume" } : f));
+  const meubles = fixes.concat(o.meubles || H.HOME_DEPART.filter((m) => m.niveau === L));
   const items = MA.homeDrawItems(plan, L, {
     H, faces, cutPx: (f) => (f.ext || !o.perso || f.room === (H.homeRoomAt(plan, L, o.perso[0], o.perso[1]) || {}).id ? 1e9 : 0), lows: H.homeLows(plan, L, facade),
     meubles, meta: META, img, ciel, ampoules: o.ampoules || [],
@@ -87,8 +92,8 @@ function compose(plan, L, look, o = {}) {
     const [px, py] = MA.homePx(lx, ly);
     const rz = Math.round(lift / CASE_M * MPX);
     items.push({ key: ly, draw: (ctx) => {
-      ctx.globalAlpha = 0.25; ctx.fillStyle = "#20160f"; ctx.fillRect(px - 9, py - 2 - rz, 18, 4); ctx.globalAlpha = 1;
-      ctx.drawImage(CHAR, 0, 0, 16, 24, px - 16, py - 30 - rz, 32, 48);   // pieds (ligne de contact, 15 px d'art) sur (px, py)
+      ctx.globalAlpha = 0.25; ctx.fillStyle = "#20160f"; ctx.fillRect(px - 4.5 * KC, py - KC - rz, 9 * KC, 2 * KC); ctx.globalAlpha = 1;
+      ctx.drawImage(CHAR, 0, 0, 16, 24, px - 8 * KC, py - 15 * KC - rz, 16 * KC, 24 * KC);   // pieds (ligne de contact, 15 px d'art) sur (px, py)
     } });
   }
   items.sort((a, b) => a.key - b.key);
@@ -112,7 +117,7 @@ function nuit(cv, W, Hh, lumieres) {
   }
 }
 
-function planche(nom, cvs, k = 2) {
+function planche(nom, cvs, k = 1) {   // 2026-10-17 : à 64 px par case, la planche se lit à 1:1 (×2 à 32)
   const gap = 8;
   const W = cvs.reduce((s, c) => s + c.width + gap, gap), Hh = Math.max(...cvs.map((c) => c.height)) + 2 * gap;
   const pl = makeCanvas(W, Hh);
@@ -131,27 +136,29 @@ const P = H.PLAN_ETROITE;
 for (const model of ["n1", "n2"]) {
   const look = { model, variant: "simple" };
   planche(`maison-coque-${model}.png`, [
-    compose(P, 0, look, { perso: [3.4, 5.4] }),
-    compose(P, 1, look, { perso: [0.45, 2.3] }),      // sur la volée de l'étage : elle monte aux combles
-    compose(P, 2, look, { perso: [3.0, 3.6] }),
+    compose(P, 0, look, { perso: [3.4, 6.6] }),
+    compose(P, 1, look, { perso: [0.45, P.escalier.yHaut + 1.3] }),      // sur la volée de l'étage : elle monte aux combles
+    compose(P, 2, look, { perso: [3.0, 4.6] }),
   ]);
 }
 
 // 2. LE TÉMOIN — le rez-de-chaussée meublé, sur le VRAI plan.
+/* 2026-10-17 : le plan de 9 cases — le séjour commence à 4,5 (3,5 avant) et
+   s'arrête à 9 : la composition d'avant glisse d'une case, plus profonde d'autant. */
+const DY = P.niveaux[0].pieces.find((p) => p.id === "sejour").rects[0][1] - 3.5;
+/* 2026-10-17 (le soir) : la CHEMINÉE tient le mur nord du séjour (équipement de la
+   maison) — le canapé lui fait face, dos à la façade, le fauteuil sur le côté. */
 const SEJOUR_A = [
-  { sprite: "escalier", o: "S", lx: -9, ly: -9 },     // (placeholder retiré plus bas : la volée vient du plan)
-  { sprite: "portemanteau", o: "S", lx: 1.6, ly: 6.15 },
-  { sprite: "plante_verte", o: "S", lx: 4.45, ly: 4.55 },
-  { sprite: "tableau", o: "S", lx: 3.05, ly: 3.55 },
-  { sprite: "lampadaire", o: "S", lx: 2.3, ly: 3.6 },
-  { sprite: "canape", o: "S", lx: 2.68, ly: 3.58 },
-  { sprite: "poele", o: "S", lx: 4.38, ly: 3.76 },
-  { sprite: "table_basse", o: "S", lx: 3.0, ly: 4.7 },
-  { sprite: "fauteuil", o: "N", lx: 2.55, ly: 5.95 },
-  { sprite: "gueridon", o: "S", lx: 3.35, ly: 6.2 },
-  { sprite: "plante_morte", o: "S", lx: 4.5, ly: 6.4 },
-].filter((m) => m.lx >= 0);
-const TAPIS = (nom) => ({ sprite: nom, o: "S", lx: 2.5, ly: 4.45 });
+  { sprite: "portemanteau", o: "S", lx: 1.6, ly: 7.9 },
+  { sprite: "lampadaire", o: "S", lx: 2.32, ly: 4.62 },
+  { sprite: "plante_verte", o: "S", lx: 4.42, ly: 4.62 },
+  { sprite: "table_basse", o: "S", lx: 3.1, ly: 5.95 },
+  { sprite: "fauteuil", o: "W", lx: 4.32, ly: 5.7 },
+  { sprite: "canape", o: "N", lx: 2.75, ly: 7.2 },
+  { sprite: "gueridon", o: "S", lx: 2.3, ly: 7.35 },
+  { sprite: "plante_morte", o: "S", lx: 4.5, ly: 8.3 },
+];
+const TAPIS = (nom) => ({ sprite: nom, o: "S", lx: 2.6, ly: 5.4 });
 const decoA = { entree: { sol: ["ciment", "classique"], murs: { papier: "rayures", lambris: "creme" } },
                 sejour: { sol: ["parquet", "chene"], murs: { papier: "fleurs", lambris: "sauge" } } };
 const decoB = { entree: { sol: ["ciment", "bleu"], murs: { papier: "toile_bleue", lambris: "bleu" } },
@@ -166,15 +173,15 @@ function temoin(deco, nuitOn, swaps) {
   // le tapis est à plat : dessiné sous tout, avant la liste
   const lum = [];
   if (nuitOn) {
-    const L1 = MA.homePx(2.3 + 0.17, 3.6 + 0.34 - 1.48 / CASE_M); lum.push({ x: L1[0], y: L1[1], r: 2.6 * MPX, k: 1.0, c: [255, 196, 120] });
-    const L2 = MA.homePx(4.38 + 0.23, 3.76 + 0.38 - 0.4 / CASE_M); lum.push({ x: L2[0], y: L2[1], r: 1.9 * MPX, k: 0.75, c: [255, 140, 60] });
-    const L3 = MA.homePx(3.35 + 0.15, 6.2 + 0.39 - 0.8 / CASE_M); lum.push({ x: L3[0], y: L3[1], r: 1.6 * MPX, k: 0.8, c: [255, 190, 110] });
-    const L4 = MA.homePx(4.0, 6.6); lum.push({ x: L4[0], y: L4[1], r: 1.6 * MPX, k: 0.35, c: [150, 175, 230] });
+    const L1 = MA.homePx(2.32 + 0.17, 4.62 + 0.34 - 1.48 / CASE_M); lum.push({ x: L1[0], y: L1[1], r: 2.6 * MPX, k: 1.0, c: [255, 196, 120] });
+    const L2 = MA.homePx(3.0 + 0.57, 4.55 + 0.2 - 0.2 / CASE_M); lum.push({ x: L2[0], y: L2[1], r: 2.2 * MPX, k: 0.85, c: [255, 140, 60] });   // le feu
+    const L3 = MA.homePx(2.3 + 0.15, 7.35 + 0.39 - 0.8 / CASE_M); lum.push({ x: L3[0], y: L3[1], r: 1.6 * MPX, k: 0.8, c: [255, 190, 110] });
+    const L4 = MA.homePx(4.0, 8.6); lum.push({ x: L4[0], y: L4[1], r: 1.6 * MPX, k: 0.35, c: [150, 175, 230] });
   }
-  return compose(plan, 0, { model: "n2", variant: "simple" }, { meubles: [tapis, ...meubles].map((m) => ({ ...m, niveau: 0 })), nuit: nuitOn, lumieres: lum, perso: [4.0, 6.1] });
+  return compose(plan, 0, { model: "n2", variant: "simple" }, { meubles: [tapis, ...meubles].map((m) => ({ ...m, niveau: 0 })), nuit: nuitOn, lumieres: lum, perso: [3.9, 6.95] });
 }
 planche("maison-temoin-planche.png", [
-  compose(P, 0, { model: "n2", variant: "simple" }, { perso: [3.3, 5.3] }),
+  compose(P, 0, { model: "n2", variant: "simple" }, { perso: [3.3, 5.3 + DY] }),
   temoin(decoA, false, {}),
   temoin(decoA, true, {}),
   temoin(decoB, false, { canape: "canape_canard", fauteuil: "fauteuil_vert", tapis: "tapis_bleu", lampadaire: "lampadaire_moutarde" }),
