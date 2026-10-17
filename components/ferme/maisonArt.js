@@ -533,8 +533,9 @@ export function paintCabochons(ctx, x0, y0, w, h, v = "blanc", ox = 0, oy = 0) {
    pour que le ciel de l'heure s'y peigne à chaque image.
    2026-10-17 (64 px) : l'embrasure a sa profondeur (l'ébrasement d'ombre en
    haut et à droite), le dormant son battement, l'appui sa pierre et son ombre. */
-export function paintWallWindow(ctx, x0, yFoot, w) {
-  const yA = yFoot - pxOfM(0.90), yH = yFoot - pxOfM(2.15);
+export function paintWallWindow(ctx, x0, yFoot, w, allege = 0.90, haut = 2.15) {
+  // 2026-10-17 (soir) : `allege` et `haut` en paramètres — la fenêtre des bains est plus basse (`piece.fenetre`).
+  const yA = yFoot - pxOfM(allege), yH = yFoot - pxOfM(haut);
   rect(ctx, x0 - 4, yH - 4, w + 8, yA - yH + 8, "#d9cfb9");        // l'embrasure
   rect(ctx, x0 - 4, yH - 4, w + 8, 1, "#bfb193");
   rect(ctx, x0 - 4, yH - 4, 1, yA - yH + 8, "#e8e0cc");
@@ -622,9 +623,10 @@ export function paintEtagere(ctx, x0, x1, yFoot) {
   rect(ctx, x0, y, w, 3, "#a8794a"); rect(ctx, x0, y, w, 1, "#c99c68"); rect(ctx, x0, y + 3, w, 1, "#6f4c2e");
   ctx.globalAlpha = 0.18; rect(ctx, x0 + 1, y + 4, w - 2, 3, "#2a2018"); ctx.globalAlpha = 1;
 }
-export function paintMiroir(ctx, x0, x1, yFoot) {
-  // le miroir des bains (1,15 à 1,75 m), cadre laqué, deux reflets en biais, une tablette de verre
-  const yb = yFoot - pxOfM(1.15), yt = yFoot - pxOfM(1.75), w = x1 - x0;
+export function paintMiroir(ctx, x0, x1, yFoot, bas = 1.15, haut = 1.75) {
+  // le miroir des bains (par défaut 1,15 à 1,75 m ; 2026-10-17 soir : 0,80 à 1,38 m, au-dessus du lavabo bas, à hauteur du personnage),
+  // cadre laqué, deux reflets en biais, une tablette de verre
+  const yb = yFoot - pxOfM(bas), yt = yFoot - pxOfM(haut), w = x1 - x0;
   rect(ctx, x0, yt, w, yb - yt, "#e9e4d8");
   rect(ctx, x0, yt, w, 1, "#fbf8f0"); rect(ctx, x0 + w - 1, yt, 1, yb - yt, "#c9c1ae"); rect(ctx, x0, yb - 1, w, 1, "#c9c1ae");
   for (let y = yt + 3; y < yb - 3; y++) {
@@ -753,7 +755,7 @@ export function bakeHomeFace(mk, plan, L, f) {
   const glass = [];
   for (const [a, b] of f.fenetres || []) {
     const pa = Math.round((a - f.x0) * MPX), pb = Math.round((b - f.x0) * MPX);
-    if (pb - pa > pxOfM(0.2)) glass.push(paintWallWindow(g, pa, Hh, pb - pa));
+    if (pb - pa > pxOfM(0.2)) glass.push(paintWallWindow(g, pa, Hh, pb - pa, piece.fenetre && piece.fenetre.allege, piece.fenetre && piece.fenetre.haut));
   }
   paintWallDetails(g, plan, L, f, Hh, wallPx);
   paintWallTop(g, 0, 0, W, capPx);
@@ -791,7 +793,7 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
     if (p.quoi === "prise") paintPrise(g, px(p.x), Hh, p.z);
     else if (p.quoi === "hotte") paintHotte(g, px(p.x0), px(p.x1), Hh, wallPx);
     else if (p.quoi === "etagere") paintEtagere(g, px(p.x0), px(p.x1), Hh);
-    else if (p.quoi === "miroir") paintMiroir(g, px(p.x0), px(p.x1), Hh);
+    else if (p.quoi === "miroir") paintMiroir(g, px(p.x0), px(p.x1), Hh, p.bas, p.haut);
     else if (p.quoi === "conduit") paintConduit(g, px(p.x0), px(p.x1), Hh, wallPx);
   }
   for (const [a, b] of f.portes || []) {
@@ -909,6 +911,33 @@ export function drawBulb(ctx, px, pyFloor, allume, plafondPx = WALL_PX) {
    ⚠️ LA VOLÉE se trie à son bout NORD (`yHaut`) : qui marche dessus a les pieds
    plus au sud, il est donc dessiné après elle ; qui se tient sur le palier,
    au nord, passe derrière son haut — c'est ce que voit la caméra. */
+/* LE VERRE ÉVASÉ d'une fenêtre d'une face : le verre à plat (`paintGlass`, pour ce ciel), puis rangée par rangée avec
+   LA MÊME correspondance que la face cuite (`bakeHomeFace` : la rangée r, à la hauteur z, s'étire de `a` à `b`). Gardé
+   par ciel (arrondi à 1/24 par canal) dans `bake.glassFl`. Rend { c, dx } (dx : depuis le bord gauche de la face) ou
+   null sans fabrique de canevas. */
+function flaredGlass(mk, bake, f, g, ciel, plan) {
+  const memo = bake.glassFl || (bake.glassFl = new Map());
+  const key = g[0] + "," + g[1] + "|" + ciel.map((v) => Math.round(v * 24)).join(",");
+  if (memo.has(key)) return memo.get(key);
+  if (memo.size > 40) memo.clear();
+  const [gx, gy, gw, gh] = g, xc = plan.w / 2, W = bake.W;
+  const src = mk(gw, gh), sg = src.getContext("2d");
+  paintGlass(sg, [0, 0, gw, gh], ciel);
+  const rows = [];
+  let mn = Infinity, mx = -Infinity;
+  for (let ry = 0; ry < gh; ry++) {
+    const z = Math.min(bake.wallPx, bake.H - (gy + ry));
+    const a = Math.round(flarePx(f.x0, z, xc)), b = W + Math.round(flarePx(f.x1, z, xc)), sc = (b - a) / W;
+    const l = Math.round(a + gx * sc), r = Math.round(a + (gx + gw) * sc);
+    rows.push([l, r]); mn = Math.min(mn, l); mx = Math.max(mx, r);
+  }
+  const c = mk(Math.max(1, mx - mn), gh), cg = c.getContext("2d");
+  cg.imageSmoothingEnabled = false;
+  rows.forEach(([l, r], ry) => cg.drawImage(src, 0, ry, gw, 1, l - mn, ry, Math.max(1, r - l), 1));
+  const e = { c, dx: mn };
+  memo.set(key, e);
+  return e;
+}
 export const HOME_FLAT = /^tapis/;
 export function homeDrawItems(plan, L, o) {
   const out = [], H = o.H;
@@ -926,6 +955,12 @@ export function homeDrawItems(plan, L, o) {
         ctx.drawImage(bake.c, 0, r, bake.W, 1, a, py - bake.H + r, b - a, 1);
       }
       if (top === 0) for (const g of bake.glass) {
+        /* ⚠️ 2026-10-17 (soir) — « fenêtre pas inclinée en perspective comme le cadre » : le CADRE est cuit évasé (chaque
+           rangée s'écarte du centre avec sa hauteur, `bakeHomeFace`) mais le VERRE, peint à chaque image pour le ciel de l'heure,
+           n'était que DÉCALÉ à sa mi-hauteur : un rectangle droit dans un cadre qui penche. On évase le verre de la même
+           façon, rangée par rangée, et on le garde par ciel (un ciel qui change lentement, quelques cuissons par heure). */
+        const fl = o.mk && flaredGlass(o.mk, bake, f, g, o.ciel, plan);
+        if (fl) { ctx.drawImage(fl.c, px + fl.dx, py - bake.H + g[1]); continue; }
         const z = bake.H - (g[1] + g[3] / 2), d = Math.round(flarePx(f.x0 + g[0] / MPX, z, xc));
         paintGlass(ctx, [px + g[0] + d, py - bake.H + g[1], g[2], g[3]], o.ciel);
       }

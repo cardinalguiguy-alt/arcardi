@@ -6,6 +6,20 @@
 
 ---
 
+### À juger — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER, LIT, BAINS (2026-10-17, nuit)
+
+Entre chez toi, change de pièce à pied, monte et descends, puis P (ou 📐).
+- **Le cadrage** : la caméra se centre sur la pièce, glisse à la porte, le reste s'assombrit (62 %, dégradé de 28 px). Trop sombre ? Trop vif le
+  changement de zoom d'une pièce à l'autre (cran 2 / 4 / 6 selon la taille de la pièce et de ton écran) ? Le plan entier au bouton : bien là ?
+  ⚠️ Le zoom manuel (molette, +/−) ne fait plus rien chez soi — c'est le cadre qui décide ; à regretter ?
+- **L'escalier** : ~2,7 s la volée, marche par marche, sans course. Assez lent ? Trop ? Le fondu au changement d'étage (une coupe sèche aujourd'hui) ?
+- **Le bug « on passe dessous »** : deux causes corrigées (l'aide de porte glissait vers l'escalier ; la descente se déclenchait au premier contact).
+  **Dis-moi par où tu passais si ça arrive encore** (rez-de-chaussée ou étage ? vers quelle pièce ?).
+- **Les bains** : 3,0 × 3,4 cases (14 m²), le dressing ne fait plus que 3,0 × 1,9 — assez ? Fenêtre (0,78 à 1,90 m), miroir (0,80 à 1,38 m) et
+  lavabo (20 cm plus bas) à hauteur du personnage : bien, ou encore trop hauts ? Les fenêtres des autres pièces restent à 0,90 m (la cuisine, la chambre) : à baisser aussi ?
+- **Le lit** : se couche-t-on bien là où l'on attend, et nulle part ailleurs ?
+Pas vu : iPad, deux clients, les crans 6 et 8, un grand écran.
+
 ### À juger — CHEZ SOI À ×2, ÉQUIPÉE (2026-10-17) : l'échelle, le plan de 9 cases, le détail, la cuisine, les bains, la cheminée
 
 Entre chez toi (une étroite) et promène-toi, de préférence avec des meubles (menu développeur → Maison → « Garnir le garde-meuble », puis B).

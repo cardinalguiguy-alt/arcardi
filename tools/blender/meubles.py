@@ -846,19 +846,25 @@ def baignoire(robe="#2f4f3a"):
 def lavabo():
     """Le lavabo sur colonne, de faïence blanche : vasque à bord épais, deux
     robinets de laiton à croisillons, un savon rose. Le MIROIR est peint au mur.
-    0,56 × 0,38 m (triché)."""
+    0,56 × 0,38 m (triché).
+    ⚠️ 2026-10-17 (soir) : BAS, à la hauteur du PERSONNAGE et pas d'un adulte — vasque à 0,66 m
+    (0,86 m avant). « Évier, miroir et fenêtre trop hauts, le perso est en dessous » : à
+    l'échelle ×2 du plan le personnage fait 0,85 m devant des murs de 2,50 m ; un bord à 0,86
+    lui arrivait à la tête. Tout le lavabo descend de 0,20 m (`DZ`), le miroir peint au mur
+    (`maison.js`, `peints` des bains) avec lui."""
     W, D = 0.56, 0.38
+    DZ = 0.20
     r = root("lavabo")
     Ce = _m("faience_lavabo", CERAMIQUE, 0.45)
     La = _m("laiton", *METAL["laiton"])
-    cyl("colonne", W / 2, D * 0.55, 0.0, 0.10, 0.70, Ce, r, verts=18, r_top=0.075, aplat=0.7)
-    box("vasque", 0.0, 0.0, 0.70, W, D, 0.16, Ce, r, bevel=0.06, seg=4)
-    ellipsoide("creux", W / 2, D / 2 - 0.01, 0.861, (W - 0.12) / 2, (D - 0.13) / 2, 0.002, _m("email_ombre", "#c9d1d3"), r, seg=20)
+    cyl("colonne", W / 2, D * 0.55, 0.0, 0.10, 0.70 - DZ, Ce, r, verts=18, r_top=0.075, aplat=0.7)
+    box("vasque", 0.0, 0.0, 0.70 - DZ, W, D, 0.16, Ce, r, bevel=0.06, seg=4)
+    ellipsoide("creux", W / 2, D / 2 - 0.01, 0.861 - DZ, (W - 0.12) / 2, (D - 0.13) / 2, 0.002, _m("email_ombre", "#c9d1d3"), r, seg=20)
     for dx in (-0.12, 0.12):
-        cyl("robinet", W / 2 + dx, D - 0.06, 0.86, 0.012, 0.07, La, r, verts=8, outline=False)
-        ellipsoide("croisillon", W / 2 + dx, D - 0.06, 0.94, 0.028, 0.028, 0.01, La, r)
-    tube("bec", [(W / 2, D - 0.06, 0.86), (W / 2, D - 0.06, 0.95), (W / 2, D - 0.14, 0.92)], 0.011, La, r, outline=False)
-    ellipsoide("savon", 0.10, D - 0.08, 0.875, 0.035, 0.022, 0.014, _m("savon_rose", "#e8a9a0"), r, outline=True)
+        cyl("robinet", W / 2 + dx, D - 0.06, 0.86 - DZ, 0.012, 0.07, La, r, verts=8, outline=False)
+        ellipsoide("croisillon", W / 2 + dx, D - 0.06, 0.94 - DZ, 0.028, 0.028, 0.01, La, r)
+    tube("bec", [(W / 2, D - 0.06, 0.86 - DZ), (W / 2, D - 0.06, 0.95 - DZ), (W / 2, D - 0.14, 0.92 - DZ)], 0.011, La, r, outline=False)
+    ellipsoide("savon", 0.10, D - 0.08, 0.875 - DZ, 0.035, 0.022, 0.014, _m("savon_rose", "#e8a9a0"), r, outline=True)
     return r, W, D
 
 

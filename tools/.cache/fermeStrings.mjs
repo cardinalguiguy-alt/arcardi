@@ -3501,6 +3501,9 @@ export const FERME_STR = {
     homeNoMap: "🗺️ La carte se lit dehors.",
     // 2026-10-16 (lot 2a) — le mode déco
     homeDecoBtn: "Décorer (B)",
+    homePlanBtn: "Plan de la maison (P)",      // 2026-10-17 (soir) : la vue du niveau entier, à la demande
+    homePlanOn: "📐 Plan entier du niveau",
+    homePlanOff: "🏠 Vue par pièce",
     homeDecoTitle: "Décorer",
     homeDecoTabMeubles: "Meubles",
     homeDecoTabMurs: "Murs et sols",
@@ -5983,6 +5986,9 @@ export const FERME_STR = {
     homeNoMap: "🗺️ The map is for outside.",
     // 2026-10-16 (lot 2a) — decorating
     homeDecoBtn: "Decorate (B)",
+    homePlanBtn: "House plan (P)",             // 2026-10-17 (evening): the whole-floor view, on demand
+    homePlanOn: "📐 Whole floor",
+    homePlanOff: "🏠 Room view",
     homeDecoTitle: "Decorate",
     homeDecoTabMeubles: "Furniture",
     homeDecoTabMurs: "Walls & floors",

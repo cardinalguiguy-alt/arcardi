@@ -126,6 +126,9 @@ dépôt.
   hasard, ne la lisait pas. *Deux formules voisines qui mesurent deux choses différentes se
   ressemblent assez pour qu'on ne les compare jamais* — et celle qui ne peut jamais être vraie ne
   lève aucune erreur : elle attend, silencieuse, une condition que personne n'atteindra.
+  ⚠️ **MÊME LEÇON, 2026-10-17 : « E : se coucher » S'AFFICHAIT DEPUIS LE DRESSING.** La portée du lit se mesurait en ligne droite, cloison
+  comprise (`homeNearFurniture`) — le dressing touche la chambre à 5 cm du lit. Atteindre un meuble, c'est être DANS SA PIÈCE : `homeNearFurnitureIn`.
+  Et l'escalier : un geste (frôler, glisser de côté, remonter) n'est pas une intention — `homeStairStep` lit le SENS du pas.
 
 - ⚠️⚠️⚠️ **UN RÉSOLVEUR QUI ÉCRIT UN CHAMP NEUF DOIT ÊTRE LIVRÉ DANS LE MÊME GESTE QUE SA
   DÉCLARATION *ET* SA MIGRATION** (audit 2026-09-12, le défaut le plus cher de tout le chantier
@@ -501,3 +504,11 @@ dépôt.
   d'un trait clair à chaque marche sous la pluie (écart 100 sur 765, vu au pixel devant l'église) — ces cases se peignent en entier à leur tour.
   Parade de vérification, la seule qui ait trouvé quelque chose : le temps figé, `Math.random` rejoué, une image par chemin, comparées au pixel
   (`window.__arcardiGround.off`), et falsifiées par une tache posée dans un bloc.
+
+- ⚠️⚠️ **CE QUI SE PEINT À CHAQUE IMAGE SUR UN DESSIN CUIT ET DÉFORMÉ DOIT SUBIR LA MÊME DÉFORMATION** (2026-10-17, le verre des fenêtres de la
+  maison). La face d'un mur est cuite UNE fois et évasée rangée par rangée (`HOME_FLARE` : chaque rangée s'écarte du centre avec sa hauteur) ; le
+  verre, lui, se repeint à chaque image pour le ciel de l'heure — et n'était que DÉCALÉ à sa mi-hauteur : un rectangle droit dans un cadre qui
+  penche, « fenêtre pas inclinée en perspective comme le cadre ». Aucune erreur, aucun banc ne mesure l'accord de deux morceaux (voir « UNE
+  PROPORTION N'EST PAS UNE DIMENSION »). La parade : le verre passe par LA MÊME correspondance rangée par rangée (`maisonArt.flaredGlass`), cuit
+  par ciel arrondi et gardé — pas une troisième formule qui approche la seconde. *Une déformation qui s'applique à un morceau et pas à l'autre
+  se voit au premier regard et ne se mesure nulle part.*

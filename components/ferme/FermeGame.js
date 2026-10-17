@@ -1835,6 +1835,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const homeFacadeMemoRef = useRef(new Map());
   // 2026-10-16 (lot 2a) — le mode déco (lu par la boucle) et son panneau (rendu React) ; `homeTick` : une maison a changé.
   const homeDecoRef = useRef({ on: false, level: 0, hand: null, tab: "meubles", room: null });
+  /* 2026-10-17 (soir) — LE CADRAGE PAR PIÈCE (« j'entre dans une pièce, le cadrage se resserre ou se centre sur la
+     pièce ; la vue plan total par un bouton, pas par défaut » — Guillaume). `homePlanViewRef` : la vue du niveau
+     entier (bouton ; le mode déco la prend aussi) ; `homeFocusRef` : le cadre (une pièce ou un groupe de pièces,
+     `HM.homeCadreAt`) où l'on se tient, avec sa marge d'hystérésis ; `homeCamRef` : le centre LISSÉ de la caméra. */
+  const homePlanViewRef = useRef(false);
+  const [homePlanView, setHomePlanView] = useState(false);
+  const homeFocusRef = useRef({ slot: -1, level: -1, key: null });
+  const homeCamRef = useRef(null);
+  const homeDimRef = useRef(null);   // le cadre assombri autour de la pièce (lissé comme la caméra)
   const [homeDecoUi, setHomeDecoUi] = useState(null);
   const [homeTick, setHomeTick] = useState(0);
   const homeTickRef = useRef(0);   // le même compteur, lisible par la boucle (closure aux dépendances fixes)
@@ -2305,6 +2314,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      sous 0,01, jamais de valeur fractionnaire pour toujours, voir sa note sur
      le grouillement du pixel art — mais SANS le dézoom de monument, qui n'a
      de sens qu'en ville et reste entièrement dans `townZoomNow`/`townZoomTarget`. */
+  /* ╔═════════════════════════════════════════════════════════════════════╗
+     ║ 2026-10-17 (soir) — CHEZ SOI, LE CADRE ET SON ZOOM                    ║
+     ╚═════════════════════════════════════════════════════════════════════╝
+     Le cadre (`homeFrameNow`) : la pièce où l'on se tient, ou le niveau entier (bouton « plan », mode déco), en pixels
+     du MONDE. Le zoom (`homeFitZoom`) : le plus grand cran PAIR (8, 6, 4, 2 — un pixel de maison vaut un demi-pixel du
+     monde, les crans impairs donnent des pixels inégaux, voir `viewZoomNow`) dont l'écran contient ce cadre ; la pièce
+     remplit l'écran au lieu de nager dans la maison. Le cran manuel (molette, +/−) n'a plus cours chez soi : c'est le
+     cadre qui décide, le plan entier est le bouton. Qui ne tient pas à l'écran (petit écran, grande pièce) est suivi
+     (`getCamHome`), avec 12 % de tolérance avant de reculer d'un cran. */
+  const HOME_HUD_BOTTOM = 100;   // la barre d'outils du bas : le cadre se centre au-dessus d'elle
+  function homeFrameNow() {
+    const m = meRef.current, T = C.TILE, P = HM.PLAN_ETROITE;
+    const ft = HM.homeFootLocal(m.x, m.y), d = homeDecoRef.current;
+    const level = d.on ? d.level : ft.level;
+    const whole = d.on || homePlanViewRef.current || ft.level !== level;
+    let box, key = "plan";
+    if (whole) box = [HMA.HOME_FX0, HMA.HOME_FY0, P.w - HMA.HOME_FX0, P.d + 0.6];   // l'image cuite du niveau, murs du fond compris
+    else {
+      const f = homeFocusRef.current, cand = HM.homeCadreAt(P, level, ft.lx, ft.ly);
+      /* On ne change de cadre que bien DEDANS le suivant (0,2 case au-delà du précédent) : planté dans une porte, on ne
+         fait pas osciller la caméra. */
+      if (f.slot !== ft.slot || f.level !== level || !f.key) { f.slot = ft.slot; f.level = level; f.key = cand || HM.homeCadreOf(P, level, P.niveaux[level].pieces[0].id); }
+      else if (cand && cand !== f.key && HM.homeDistToRects(HM.homeCadreRects(P, level, f.key), ft.lx, ft.ly) > 0.2) f.key = cand;
+      key = f.key; box = HM.homeCadreBox(P, level, key);
+    }
+    const o = HM.homeToWorld(ft.slot, level, box[0], box[1]);
+    return { slot: ft.slot, level, key, whole, x0: o.x * T, y0: o.y * T, w: (box[2] - box[0]) * T * HM.HOME_K, h: (box[3] - box[1]) * T * HM.HOME_K };
+  }
+  function homeFitZoom(fr) {
+    const W = window.innerWidth, H = Math.max(120, window.innerHeight - (homeDecoRef.current.on ? 0 : HOME_HUD_BOTTOM));   // le mode déco garde tout l'écran (comme avant)
+    /* UNE PIÈCE DOIT TENIR EN ENTIER (12 % de tolérance, largeur et hauteur) : vue en cours de route, le mur du fond
+       avec sa fenêtre, son miroir et son lavabo sortait de l'écran dès qu'on se tenait au sud. Seuls les GROUPES de pièces
+       (la cage d'escalier avec l'entrée ou le palier : 322 px de haut) peuvent déborder en hauteur, d'un facteur 2 au
+       cran 4 — la caméra y suit le joueur ; au cran 2 tout redevenait une vue d'ensemble. Le plan entier doit tenir. */
+    for (const z of [8, 6, 4]) {
+      const tw = fr.whole ? 1 : 1.12, th = fr.whole ? 1 : z === 4 && fr.key.includes("+") ? 2 : 1.12;
+      if (fr.w <= (W / z) * tw && fr.h <= (H / z) * th) return z;
+    }
+    return 2;
+  }
+  function homePlanToggle() {
+    const v = !homePlanViewRef.current;
+    homePlanViewRef.current = v; setHomePlanView(v);
+    pushToast(v ? L.homePlanOn : L.homePlanOff);
+  }
   function viewZoomNow(dt) {
     let want = manualZoomRef.current || ZOOM;
     /* 2026-10-16 — CHEZ SOI, LES CRANS PAIRS SEULEMENT (2 ou 4). Un pixel de dessin
@@ -2314,7 +2368,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        2,5 — des pixels inégaux, le grouillement que la ville a payé (§4, « à
        échelle non entière… »). Le cran choisi n'est pas touché : il revient en
        sortant. */
-    if (meRef.current && meRef.current.zone === "home") want = want >= 3 ? 4 : 2;
+    if (meRef.current && meRef.current.zone === "home") want = homeFitZoom(homeFrameNow());
     if (!viewZoomRef.current) { viewZoomRef.current = want; return want; }
     const k = Math.min(1, (dt || 0.016) / C.TOWN_ZOOM_MS * 1000);
     let v = viewZoomRef.current + (want - viewZoomRef.current) * k;
@@ -17714,6 +17768,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.x = w.x - C.BODY_CX; m.y = w.y - C.BODY_FY; m.dir = 1; m.moving = false;
         homeStairRef.current = { volee: null };
         homeCutRef.current = new Map();
+        homeCamRef.current = null; homeDimRef.current = null; homeFocusRef.current = { slot: -1, level: -1, key: null }; homePlanViewRef.current = false; setHomePlanView(false);   // 2026-10-17 : une visite repart de la pièce où l'on entre
         sendPos();
         pushToast(L.homeEnterToast);
       } else if (zt.dest === "townFromHome") {
@@ -28283,27 +28338,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        seuls de la zone (`viewZoomNow`) — parce que l'origine cuite est sur une
        case entière (`HM.HOME_OX`). */
     function canStandHome(x, y) { return HM.homeCanStand(x, y, homeFacadeOfSlot, homeMeublesOfSlot); }
-    function getCamHome() {
+    function getCamHome(dt) {
       const m = meRef.current, z = curZoom();
       const vw = canvas.width / z, vh = canvas.height / z;
-      const ft0 = HM.homeFootLocal(m.x, m.y), slot = ft0.slot;
-      const level = homeDecoRef.current.on ? homeDecoRef.current.level : ft0.level;   // lot 2a : le mode déco regarde le niveau choisi
+      const vhf = Math.max(1, (canvas.height - (homeDecoRef.current.on ? 0 : HOME_HUD_BOTTOM)) / z);   // la partie libre, au-dessus de la barre d'outils
+      const ft0 = HM.homeFootLocal(m.x, m.y), fr = homeFrameNow(), slot = fr.slot, level = fr.level;
       const o = HM.homeToWorld(slot, level, HMA.HOME_FX0, HMA.HOME_FY0);   // la case de l'origine des images cuites
-      const P = HM.PLAN_ETROITE;
-      const fw = (P.w - 2 * HMA.HOME_FX0) * T * HM.HOME_K, fh = (P.d + 0.6 - HMA.HOME_FY0) * T * HM.HOME_K;   // 2026-10-17 : le plan à ×K
-      const fx0 = o.x * T, fy0 = o.y * T;
-      // Comme au tribunal : bornée au NIVEAU, et centrée quand il tient dans l'écran.
-      /* 2026-10-17 — LE REGARD MONTE D'UNE DEMI-HAUTEUR DE MUR. À ×2 (`HM.HOME_K`), un
-         niveau ne tient plus dans l'écran au cran 4 : centrée sur le joueur, la
-         caméra coupait le mur du fond de la pièce où il se tient (vu en jeu, au
-         milieu de la cuisine : ni fenêtres, ni faïence). Les murs se projettent vers
-         le HAUT de l'écran ; c'est donc là qu'il faut de la place. */
-      const lever = HMA.WALL_PX * T * HM.HOME_K / HMA.MPX * 0.5;
-      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2 - lever;
-      if (level !== ft0.level) { cx = fx0 + fw / 2 - vw / 2; cy = fy0 + fh / 2 - vh / 2; }
-      cx = fw <= vw ? fx0 + (fw - vw) / 2 : Math.max(fx0, Math.min(fx0 + fw - vw, cx));
-      cy = fh <= vh ? fy0 + (fh - vh) / 2 : Math.max(fy0, Math.min(fy0 + fh - vh, cy));
-      return { x: cx, y: cy, vw, vh, slot, level, o };
+      /* 2026-10-17 (soir) — LA CAMÉRA SE CADRE SUR LA PIÈCE (voir `homeFrameNow`). Elle vise le centre du cadre quand il tient
+         à l'écran (la pièce, entière, centrée) ; sinon elle SUIT le joueur sans sortir du cadre — c'est ce que faisait la
+         borne au niveau entier avant, resserrée à la pièce. Le centre est LISSÉ (≈ 0,3 s) : en changeant de pièce, la
+         caméra glisse et le zoom (`viewZoomNow`) suit, au lieu de sauter. Le plan entier (bouton, mode déco) garde le
+         regard remonté d'une demi-hauteur de mur (2026-10-17 : le mur du fond de la pièce du joueur tient à l'écran). */
+      const lever = fr.whole ? HMA.WALL_PX * T * HM.HOME_K / HMA.MPX * 0.5 : 0;
+      const pcx = (m.x + 0.5) * T, pcy = (m.y + 0.5) * T - lever;
+      const other = level !== ft0.level;   // le mode déco regarde un autre niveau : on ne suit personne
+      const fit = (c, lo, len, view) => (len <= view ? lo + len / 2 : Math.max(lo + view / 2, Math.min(lo + len - view / 2, c)));
+      const tx = other ? fr.x0 + fr.w / 2 : fit(pcx, fr.x0, fr.w, vw);
+      const ty = other ? fr.y0 + fr.h / 2 : fit(pcy, fr.y0, fr.h, vhf);
+      let cm = homeCamRef.current;
+      const kk = slot + "|" + level;
+      if (!cm || cm.k !== kk || !dt) cm = homeCamRef.current = { k: kk, x: tx, y: ty };
+      else {
+        const a = 1 - Math.exp(-dt * 8);
+        cm.x += (tx - cm.x) * a; cm.y += (ty - cm.y) * a;
+        if (Math.abs(tx - cm.x) < 0.2) cm.x = tx;
+        if (Math.abs(ty - cm.y) < 0.2) cm.y = ty;
+      }
+      return { x: cm.x - vw / 2, y: cm.y - vhf / 2, vw, vh, slot, level, o, fr };
     }
     /* Les cuissons d'un niveau : le sol et chaque face, une fois (13 canevas pour
        les trois niveaux — §10 : sur iPad, c'est le NOMBRE de canevas qui compte). */
@@ -28336,10 +28397,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     /* UN PAS SUR L'ESCALIER (voir `HM.homeStairStep`) : on change de niveau dans
        la MÊME maison, au même x ; le changement se diffuse comme une position. */
-    function homeStairCheck(prevLy) {
+    function homeStairCheck(prevLy, dx, dy) {
       const m = meRef.current, P = HM.PLAN_ETROITE;
       const f = HM.homeFootLocal(m.x, m.y);
-      const r = HM.homeStairStep(P, f.level, homeStairRef.current, prevLy, f.lx, f.ly);
+      const r = HM.homeStairStep(P, f.level, homeStairRef.current, prevLy, f.lx, f.ly, { dx, dy });   // 2026-10-17 : le sens du pas (voir `maison.js`)
       homeStairRef.current = r.st;
       if (!r.aller) return;
       const w = HM.homeToWorld(f.slot, r.aller.level, f.lx, r.aller.ly);
@@ -28361,19 +28422,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
+        const prev = HM.homeFootLocal(m.x, m.y);
+        /* 2026-10-17 (soir) — « gravir les escaliers est trop rapide » : sur la volée on marche à `HM.HOME_STAIR_SPEED`
+           de la marche, et on ne court pas (voir `maison.js`). Le pas de jambes suit. */
+        const onFlight = HM.homeOnFlight(HM.PLAN_ETROITE, prev.level, homeStairRef.current, prev.lx, prev.ly);
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (!onFlight && isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1) * (onFlight ? HM.HOME_STAIR_SPEED : 1);
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
-        const prev = HM.homeFootLocal(m.x, m.y);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         const stuck = !canStandHome(m.x, m.y);
         /* L'AIDE DE PORTE (vue en jeu le 2026-10-16) : une porte fait 0,8 case, le
            corps 0,48 — poussé droit vers une porte à un centimètre de son axe, on
            butait sur le chambranle. Un pas bloqué glisse de côté vers l'ouverture
            si elle est à moins de 30 cm (le glissement d'angle des jeux vus de dessus). */
+        /* ⚠️ 2026-10-17 (soir) — « bug escalier : on passe dessous et ça active l'ascension ». L'aide de porte cherchait
+           l'ouverture la plus proche DES DEUX CÔTÉS, et celle du pied de l'escalier compte pour une : un joueur qui visait la
+           porte de la cuisine, à moins de 15 cm du chambranle, glissait vers l'escalier et le montait. Elle ne
+           glisse plus jamais dans une emprise d'escalier (sauf si l'on y est déjà). */
+        /* Pas seulement l'emprise : la COLONNE de l'escalier (la largeur où la semelle passe dans la volée, du haut de la volée vers le
+           sud). Un glissement vers x = 0,77 à 4,54 n'est pas dans l'emprise (elle commence à 4,5) mais un pas plus loin vers le nord,
+           c'est la volée — c'est la première version de ce garde-fou, vue en jeu. */
+        const inStair = (x, y) => { const f = HM.homeFootLocal(x, y), e = HM.PLAN_ETROITE.escalier; return f.lx <= e.x1 - HM.HOME_BOX_R + 0.02 && f.ly >= e.yHaut - 0.35; };   // la largeur où la semelle PASSE dans la volée (0,78)
+        const inStairNow = inStair(m.x, m.y);
         const nudge = (axis) => {
           for (let d = 0.04; d <= 0.3 * HM.HOME_K; d += 0.04) for (const sg of [-1, 1]) {   // 30 cm du PLAN (2026-10-17 : ×K en cases du monde)
             const ox = axis === "x" ? sg * d : 0, oy = axis === "y" ? sg * d : 0;
+            if (!inStairNow && inStair(m.x + ox, m.y + oy)) continue;
             if (canStandHome(m.x + ox, m.y + oy) && canStandHome(m.x + ox + (axis === "x" ? 0 : dx * sp), m.y + oy + (axis === "y" ? 0 : dy * sp))) {
               if (axis === "x") m.x += sg * Math.min(sp, d); else m.y += sg * Math.min(sp, d);
               return true;
@@ -28384,8 +28458,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (stuck || canStandHome(nx, m.y)) m.x = nx; else if (!dy) nudge("y");
         if (stuck || canStandHome(m.x, ny)) m.y = ny; else if (!dx) nudge("x");
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
-        m.animT += dt * 9;
-        homeStairCheck(prev.ly);
+        m.animT += dt * 9 * (onFlight ? 0.6 : 1);   // des pas plus lents sur la volée
+        homeStairCheck(prev.ly, dx, dy);
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;
       maybeSendPos();
@@ -28458,6 +28532,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          toutes les touches. Et B n'ouvre rien tant qu'un panneau est là. */
       if (devMenuOpenRef.current || mapOpenRef.current || shopOpenRef.current || bagOpenRef.current || binOpenRef.current) return false;
       if (e.code === "KeyB" && !e.repeat) { homeDecoToggle(); return true; }
+      if (e.code === "KeyP" && !e.repeat && !d.on) { homePlanToggle(); return true; }   // 2026-10-17 (soir) : le plan entier, à la demande
       if (!d.on) return false;
       if (e.code === "KeyR" && !e.repeat) { homeRotateHand(); return true; }
       if ((e.code === "Delete" || e.code === "Backspace") && !e.repeat) { homeHandStore(); return true; }
@@ -28515,7 +28590,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const m = meRef.current, sprites = spritesRef.current;
       if (!m || !sprites) return;
       const P = HM.PLAN_ETROITE;
-      const cam = getCamHome(), zm = curZoom();
+      const cam = getCamHome(dt), zm = curZoom();
       const lvl = cam.level, fac = homeFacadeOfSlot(cam.slot);
       const ft = HM.homeFootLocal(m.x, m.y);
       starViewRef.current = { cam, zoom: zm };
@@ -28598,6 +28673,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const items = HMA.homeDrawItems(bk.plan, lvl, {
         H: HM, faces: bk.faces, cutPx: (f) => cutMap.get(f.id), lows: HM.homeLows(P, lvl, fac),
         meubles: HM.homeFixes(P, lvl, fac).concat(meubles), meta: HOME_MEUBLES, img: homeImg, ciel: sky, ampoules: [...roomsLit.values()],
+        mk: (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; },   // 2026-10-17 : le verre évasé, cuit par ciel
         // La volée du haut s'efface (fondu) quand on se tient derrière elle, sur le palier.
         voleeAlpha: homeVoleeAlpha(lvl, ft, dt),
       });
@@ -28650,6 +28726,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         lightRendererRef.current.draw(ctx, { zm, Rx: -CX, Ry: -CY, W: canvas.width, H: canvas.height },
           { sky: amb, night: Math.max(night, 0.7), lights, heads, occluders: [], glows: [], screenGlows: [] });
       }
+      /* 2026-10-17 (soir) — « surtout la pièce dans laquelle on se trouve » : ce qui est hors du cadre de la pièce s'assombrit
+         (le voisinage reste lisible, il ne tire plus l'œil). Le cadre assombri suit la caméra (même lissage), le plan
+         entier l'éteint. En espace ÉCRAN : quatre bandes autour du cadre, un dégradé de 28 px à son bord. */
+      {
+        const fr = cam.fr, kk = cam.slot + "|" + lvl;
+        const tg = fr.whole ? null : { x0: fr.x0, y0: fr.y0, x1: fr.x0 + fr.w, y1: fr.y0 + fr.h };
+        let dm = homeDimRef.current;
+        if (!dm || dm.k !== kk) dm = homeDimRef.current = { k: kk, r: tg ? { ...tg } : null, a: tg ? 1 : 0 };
+        else {
+          const e = 1 - Math.exp(-dt * 8);
+          if (tg) { if (!dm.r) dm.r = { ...tg }; for (const q of ["x0", "y0", "x1", "y1"]) dm.r[q] += (tg[q] - dm.r[q]) * e; dm.a += (1 - dm.a) * e; }
+          else dm.a += (0 - dm.a) * e;
+        }
+        if (dm.r && dm.a > 0.02) {
+          const Wc = canvas.width, Hc = canvas.height, al = 0.62 * dm.a, F = 28;
+          const X0 = Math.round((dm.r.x0 - cam.x) * zm), X1 = Math.round((dm.r.x1 - cam.x) * zm), Y0 = Math.round((dm.r.y0 - cam.y) * zm), Y1 = Math.round((dm.r.y1 - cam.y) * zm);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          const col = (a) => "rgba(16,11,8," + a.toFixed(3) + ")";
+          ctx.fillStyle = col(al);
+          if (Y0 > 0) ctx.fillRect(0, 0, Wc, Math.min(Hc, Y0));
+          if (Y1 < Hc) ctx.fillRect(0, Math.max(0, Y1), Wc, Hc - Math.max(0, Y1));
+          const yA = Math.max(0, Y0), yB = Math.min(Hc, Y1);
+          if (yB > yA) {
+            if (X0 > 0) ctx.fillRect(0, yA, Math.min(Wc, X0), yB - yA);
+            if (X1 < Wc) ctx.fillRect(Math.max(0, X1), yA, Wc - Math.max(0, X1), yB - yA);
+            const feather = (x, y, w, h, hor, rev) => {
+              if (w <= 0 || h <= 0) return;
+              const g = hor ? ctx.createLinearGradient(rev ? x + w : x, 0, rev ? x : x + w, 0) : ctx.createLinearGradient(0, rev ? y + h : y, 0, rev ? y : y + h);
+              g.addColorStop(0, col(al)); g.addColorStop(1, col(0));
+              ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+            };
+            feather(X0, yA, F, yB - yA, true, false); feather(X1 - F, yA, F, yB - yA, true, true);
+            feather(Math.max(0, X0), Y0, Math.min(Wc, X1) - Math.max(0, X0), F, false, false); feather(Math.max(0, X0), Y1 - F, Math.min(Wc, X1) - Math.max(0, X0), F, false, true);
+          }
+        }
+        world();
+      }
       if (deco) homeDecoOverlay(bk, home, fac, lvl, local, world, dt);
       drawStarChevron(cam, zm);
       // ---- Le bandeau : le niveau et la pièce, en espace ÉCRAN.
@@ -28664,7 +28777,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       let cpk = null;
       if (!m.sleeping && !deco) {
         if (lvl === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) cpk = "homeExit";
-        else if (bed && HM.homeNearFurniture(bed, ft.lx, ft.ly)) cpk = energyRef.current >= C.MAX_ENERGY ? "homeBedFull" : "homeBed";
+        else if (bed && HM.homeNearFurnitureIn(P, lvl, bed, ft.lx, ft.ly)) cpk = energyRef.current >= C.MAX_ENERGY ? "homeBedFull" : "homeBed";   // 2026-10-17 : dans la pièce du lit, pas à travers la cloison
       }
       setPromptKeyThrottled(cpk);
       setMountPromptThrottled(null);
@@ -38265,7 +38378,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const P = HM.PLAN_ETROITE, ft = HM.homeFootLocal(m0.x, m0.y), fac = homeFacadeOfSlot(ft.slot);
       if (ft.level === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) { leaveHome(); return; }
       const bed = homeMeublesOfSlot(ft.slot, ft.level).find((f) => /^lit/.test(f.sprite));   // lot 2a : le lit est où on l'a posé
-      if (bed && HM.homeNearFurniture(bed, ft.lx, ft.ly)) { startSleep(); return; }
+      if (bed && HM.homeNearFurnitureIn(P, ft.level, bed, ft.lx, ft.ly)) { startSleep(); return; }   // 2026-10-17 : dans la pièce du lit
       return;
     }
     if (m0 && m0.zone === "court") {
@@ -39534,6 +39647,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* 2026-10-16 (lot 2a) — chez soi : le mode déco (touche B). */}
       {meRef.current && meRef.current.zone === "home" && !homeDecoUi && HM.homeFootLocal(meRef.current.x, meRef.current.y).slot === homeSlotOfId(me.id) && (
         <button className="ferme-quick-fab ferme-deco-fab" title={L.homeDecoBtn} onClick={homeDecoToggle}>🛋️</button>
+      )}
+      {/* 2026-10-17 (soir) — chez soi : la vue du PLAN ENTIER, à la demande (touche P). Par défaut la caméra se cadre sur la pièce. */}
+      {meRef.current && meRef.current.zone === "home" && !homeDecoUi && (
+        <button className={"ferme-quick-fab ferme-plan-fab" + (homePlanView ? " on" : "")} title={L.homePlanBtn} onClick={homePlanToggle}>📐</button>
       )}
       {/* 2026-09-23 — LE BOUTON DE ZOOM NORMAL. Guillaume, après avoir joué avec
           le zoom manuel du ter (molette, +/-, `0`) : « j'aime bien pouvoir

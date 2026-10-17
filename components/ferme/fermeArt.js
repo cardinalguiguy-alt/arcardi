@@ -18859,7 +18859,10 @@ export function buildSprites() {
       if (dir === 1) P(g, x + 4, 3 + bob, 8, 4, hair);
       else P(g, x + 4, 2 + bob, 8, 2, hair);
     }
-    const mouth = sugarWorker ? "#4a2f1c" : "#c88a6a"; // ombre de bouche relative à la peau (peau marron -> ombre plus foncée que le clair "#c88a6a" par défaut, sinon elle ressortirait plus claire que la peau)
+    // 2026-10-17 — Sur les peaux mates (olive et au-delà, indice ≥ 3) le saumon "#c88a6a" virait au rose : la bouche devient brune comme celle de Jérôme Martial (#4a2f1c sur #8a5a34 = 54 % de la peau).
+    const mouthOnTan = tone && lookSkin(look) >= 3
+      ? "#" + [1, 3, 5].map((i) => Math.round(parseInt(skin.slice(i, i + 2), 16) * 0.54).toString(16).padStart(2, "0")).join("") : null;
+    const mouth = sugarWorker ? "#4a2f1c" : mouthOnTan || "#c88a6a"; // ombre de bouche relative à la peau (peau marron -> ombre plus foncée que le clair "#c88a6a" par défaut, sinon elle ressortirait plus claire que la peau)
     if (dir === 0) {
       P(g, x + 6, 5 + bob, 1, 2, "#3a2a1e"); P(g, x + 9, 5 + bob, 1, 2, "#3a2a1e");
       P(g, x + 6, 8 + bob, 4, 1, mouth);

@@ -1,5 +1,45 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-17 (nuit) — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER LENT ET FIABLE, LIT, SALLE DE BAINS
+
+Ses quatre retours après avoir joué la maison, puis un cinquième en cours de route (« bug escalier : on passe dessous et ça active l'ascension ») :
+1) l'escalier se gravit trop vite et sans réalisme ; 2) il veut surtout **la pièce où l'on se tient**, le plan entier par un bouton ; 3) salle de bain
+trop petite, lavabo, miroir et fenêtre trop hauts (« le perso est en dessous »), fenêtre pas inclinée comme son cadre ; 4) le lit répond depuis une
+autre pièce. **Supabase : rien** (aucun état neuf, tout est de la vue, du plan ou du dessin).
+- **Le lit** : la portée se mesurait en ligne droite, cloison comprise — le dressing touche la chambre à 5 cm du lit. `maison.homeNearFurnitureIn` :
+  le point de l'emprise le plus proche doit tomber dans la pièce où l'on se tient. `verify-maison` §11 balaie tout le niveau (0 point à travers un
+  mur sur 13 619 praticables) et se FALSIFIE contre l'ancienne portée (476 points qu'elle atteignait à travers la cloison). En jeu : aucune invite
+  depuis le dressing, E n'y couche personne ; « Le lit (pas fatigué) » dans la chambre.
+- **L'escalier** : vitesse sur la volée = `HOME_STAIR_SPEED` (0,36) de la marche, pas de course, jambes plus lentes (×0,6) — la volée prend
+  ~2,7 s (mesuré en jeu à 0,42 : 1,8 s, refait à 0,36 ; 0,7 s avant). La hauteur des pieds monte MARCHE PAR MARCHE (`homeStairLift`, 15 marches, vite
+  au milieu, à plat aux joints). `homeOnFlight` dit si l'on est sur la volée qu'on voit.
+- **Le bug « dessous »** — non reproduit tel quel, deux causes trouvées et corrigées : (a) **l'aide de porte** cherchait l'ouverture la plus proche
+  des deux côtés ; à moins de ~15 cm du chambranle de la cuisine, l'escalier comptait pour une et on le montait (mesuré en jeu : x = 0,95 → 0,77 à
+  4,5, puis la volée). Elle ne glisse plus dans la COLONNE de l'escalier (`updateMeHome`, `inStair`) ; (b) **l'escalier se déclenchait au premier contact**,
+  quel que soit le geste : au palier de l'étage on se tient sous le haut de la volée que la caméra dessine, un pas vers le sud tombait sur la volée du
+  bas et le personnage réapparaissait en haut d'une volée. `homeStairStep(…, dir)` : le sens du pas (nord pour monter, sud pour descendre) et la
+  descente à `HOME_STAIR_DESC` (0,25) DANS la trémie. ⚠️ Il reste que, passé ce seuil en marchant vers le sud au palier nord, on descend — c'est la
+  volée du bas, qui arrive là ; si son trajet à lui est un autre, à lui de dire où.
+- **Le cadrage par pièce** : `maison.homeCadreAt/Box/Rects` (la pièce, ou un groupe — la cage s'ouvre sur l'entrée ou le palier), `FermeGame.homeFrameNow`
+  (le cadre en px du monde ; on ne change de cadre que 0,2 case DANS le suivant), `homeFitZoom` (le plus grand cran PAIR 8/6/4/2 dont l'écran contient
+  le cadre ; une pièce doit tenir en entier à 12 % près, seuls les groupes — 322 px — peuvent déborder en hauteur au cran 4, la caméra y suit le
+  joueur), `getCamHome(dt)` (centre lissé, e^(−8 t)). Ce qui est hors du cadre s'assombrit (4 bandes écran, dégradé de 28 px, lissé comme la caméra).
+  Le plan entier : bouton 📐 ou P (`homePlanToggle`), le mode déco le prend aussi ; chaque visite repart de la pièce d'entrée. **Le cran manuel n'a plus
+  cours chez soi** (c'est le cadre qui décide). Mesuré en jeu : bains au cran 2 à 1024 × 768 (la pièce tient en entier) et au cran 4 à 1440 × 900, chambre au cran 4 à 1440 × 900, entrée + cage au cran 4
+  à 1024 × 768 (suivi) ; les autres pièces sont CALCULÉES (cuisine et séjour → cran 2 à 1024 × 768, dressing → cran 4), pas regardées.
+- **La salle de bain** : 2,8 × 2,8 → 3,0 × 3,4 cases (10,2 cases², 14 m²) ; elle prend 0,2 au palier (couloir de 1,0, `x = 2,0`) et 0,6 au dressing
+  (3,0 × 1,9). Le personnage fait 0,85 m à l'échelle des murs (×2) : fenêtre des bains de 0,78 à 1,90 m (`piece.fenetre`, 0,90 à 2,15 ailleurs), miroir de
+  0,80 à 1,38 m, prise à 0,95, **lavabo rendu 20 cm plus bas** (`meubles.py`, `DZ` ; Blender : les 57 autres images sortent identiques au pixel, seul
+  `lavabo_S.png` change).
+- **Le verre incliné comme le cadre** : le cadre est cuit évasé rangée par rangée, le verre (repeint à chaque image pour le ciel) n'était que DÉCALÉ à
+  sa mi-hauteur. `maisonArt.flaredGlass` l'évase avec la même correspondance (cuit par ciel arrondi à 1/24, 40 entrées au plus ; sans fabrique de
+  canevas `o.mk`, retour à l'ancien tracé).
+- **Vérifié** : `verify-maison` 151/151 (§4 gardes d'escalier et marches, §11 lit, cadres, bains) ; `verify-strings` (1394 = 1394), `verify-densite`,
+  `render-maison` (fenêtre, miroir, lavabo vus sur `tools/out/maison-coque-n1.png`), `no-undef` sur les trois fichiers ; **en jeu** (harnais
+  `app/audit-tmp`, 1024 × 768 et 1440 × 900) : le lit, l'aide de porte à x = 0,95 / 1,02 / 1,1 / 1,2 / 1,6, la volée chronométrée, le plan (P), le mode
+  déco, les bains au cran 2 et 4 ; aucune erreur de console. **Pas vu** : iPad, deux clients, les crans 6 et 8 (aucun écran de test assez grand), le dressing
+  et la chambre à ces crans, le mode déco sur un grand écran.
+
 ## 2026-10-17 (soir) — CHEZ SOI : L'ARCHITECTURE, LA CUISINE ET LES BAINS ÉQUIPÉS, DES MEUBLES PLUS RICHES
 
 Sa réponse à « les pièces trop nues » : **l'architecture** (radiateurs sous les fenêtres, prises, interrupteurs, poutres aux combles, appuis,

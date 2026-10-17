@@ -84,7 +84,7 @@ function compose(plan, L, look, o = {}) {
   const meubles = fixes.concat(o.meubles || H.HOME_DEPART.filter((m) => m.niveau === L));
   const items = MA.homeDrawItems(plan, L, {
     H, faces, cutPx: (f) => (f.ext || !o.perso || f.room === (H.homeRoomAt(plan, L, o.perso[0], o.perso[1]) || {}).id ? 1e9 : 0), lows: H.homeLows(plan, L, facade),
-    meubles, meta: META, img, ciel, ampoules: o.ampoules || [],
+    meubles, meta: META, img, ciel, ampoules: o.ampoules || [], mk,
   });
   if (o.perso) {
     const [lx, ly] = o.perso;

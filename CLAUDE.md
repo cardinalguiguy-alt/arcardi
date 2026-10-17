@@ -11,20 +11,21 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-17 (soir) — CHEZ SOI À ×2, ÉQUIPÉE : L'ÉCHELLE, LE PLAN DE 9, LE GRAIN DE 64 PX, CUISINE, BAINS, CHEMINÉE ; RIEN DE COMMITÉ
+### 2026-10-17 (nuit) — CHEZ SOI : CADRAGE PAR PIÈCE, ESCALIER LENT, LIT, BAINS ; RIEN DE COMMITÉ
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). L'intérieur à ×2 contre le personnage
-(`maison.HOME_K`), l'étroite à 5 × 9 cases, murs, sols et meubles à 64 px par case ; puis les ÉQUIPEMENTS du plan (`maison.homeFixes` : cuisine,
-bains, cheminée, radiateurs déduits de la façade), les détails peints aux murs, des meubles plus riches, la profondeur trichée (`meubles.py`).
-Anciennes maisons recalées (`migrateHome`, `pv` 3). Vu en jeu, aucune erreur ; `verify-maison` 134/134, `verify-densite`, `verify-strings` verts.
-**Supabase : rien.** **Pas vu : iPad, deux clients, la sauvegarde réelle.**
+**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). Après le jeu de Guillaume : la caméra se cadre PAR PIÈCE
+(`maison.homeCadre*`, `homeFrameNow`, `homeFitZoom` ; plan entier au bouton 📐 / touche P ; le cran manuel n'a plus cours chez soi), l'escalier est lent,
+marche par marche, et ne s'engage que sur un geste dans son sens (`homeStairStep(…, dir)`, l'aide de porte n'y glisse plus), le lit n'est à portée que dans
+sa pièce, bains à 3,0 × 3,4 avec fenêtre, miroir et lavabo à hauteur du personnage, verre évasé comme son cadre. Vu en jeu (1024 × 768, 1440 × 900),
+aucune erreur ; `verify-maison` 151/151, `verify-densite`, `verify-strings` verts. **Supabase : rien.** **Pas vu : iPad, deux clients, crans 6 et 8, la
+sauvegarde réelle ; le trajet exact de son bug « on passe dessous »** (deux causes corrigées, à lui de confirmer — `docs/A-JUGER.md`).
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
-trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. L'extension MCP de Blender est ancienne (`uvx mcp-for-blender
-install-addon`) ; le rendu en ligne de commande n'en a pas besoin.
+trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. Le rendu Blender en ligne de commande (`Blender -b -P
+tools/blender/rendre_meubles.py`) est déterministe : n'en commiter que les PNG qui changent au pixel.
 
 ### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
 
-Avant : le bloc en tête de `docs/A-JUGER.md` (chez soi à ×2, équipée). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+Avant : le bloc en tête de `docs/A-JUGER.md` (cadrage, escalier, lit, bains). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -82,7 +83,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
@@ -302,6 +303,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN `const` DE HAUT NIVEAU N'EST PAS UNE PROPRIÉTÉ DE `window`.
 - UN CANEVAS DÉCOUPE EN SILENCE CE QUI DÉPASSE DE SON CADRE
 - UN DESSIN MIS EN CACHE FIGE TOUT CE QU'IL LIT, ET CE QUI BOUGE DOIT SE PEINDRE APRÈS LUI DANS L'ORDRE D'AVANT
+- CE QUI SE PEINT À CHAQUE IMAGE SUR UN DESSIN CUIT ET DÉFORMÉ DOIT SUBIR LA MÊME DÉFORMATION
 - `ctx.drawImage` À 9 ARGUMENTS PREND UN RECTANGLE SOURCE EN PLUS DE LA DESTINATION — LES DEUX N'ONT PAS LE MÊME REPÈRE
 - `ctx.fillText` N'EST PAS RASTÉRISABLE HORS NAVIGATEUR
 - À ÉCHELLE NON ENTIÈRE, LE NAVIGATEUR LISSE LES BORDS D'UN `drawImage`, MÊME `imageSmoothingEnabled` COUPÉ

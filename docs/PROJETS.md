@@ -229,6 +229,11 @@ soumettre** : les faces façon Sims (pleins : le mur du fond de la maison et cel
 l'aide de porte, pas de carte dedans, l'ampoule nue qui s'allume la nuit dans la pièce occupée. Retouche du même soir, à sa demande (« une vraie idée de profondeur ») : les murs
 latéraux évasés et l'ombre au pied des murs — **validés par lui au banc, puis vus en jeu** (RDC à 14 h, étage à 22 h).
 
+**Retours de jeu du 2026-10-17 (nuit) — FAITS, à juger** (journal du README de la ferme) : le cadrage se fait PAR PIÈCE (plan entier : bouton 📐 ou P, le
+mode déco le prend aussi ; le cran manuel n'a plus cours chez soi), l'escalier se gravit en ~2,7 s marche par marche et ne se déclenche plus qu'à un geste
+dans son sens, le lit n'est à portée que dans sa pièce, la salle de bain passe à 3,0 × 3,4 cases avec fenêtre, miroir et lavabo à hauteur du personnage
+(0,85 m), le verre des fenêtres penche comme son cadre.
+
 **Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
 1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une
    palette en bas montre le GARDE-MEUBLE (ce qu'on possède et qui n'est pas posé).

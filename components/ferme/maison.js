@@ -130,6 +130,7 @@ export const PLAN_ETROITE = {
       ],
       pleins: [{ nom: "placard", rect: [0, 0, 0.9, 2.0] }],      // sous la volée du haut
       fenetresNord: [[2.0, 2.85], [3.75, 4.6]],
+      cadres: [["cage", "entree"]],        // 2026-10-17 : les pièces qui se cadrent ENSEMBLE (voir `homeCadreAt`) — la volée s'ouvre sur l'entrée
       // 2026-10-17 — LES ÉQUIPEMENTS (voir « LES ÉQUIPEMENTS DE LA MAISON ») : la cuisine le long
       // du mur nord (l'évier sous la fenêtre de gauche), la cheminée contre le mur nord du séjour.
       fixes: [
@@ -151,27 +152,33 @@ export const PLAN_ETROITE = {
     { cle: "etage", mur: 2.5,
       pieces: [
         { id: "cage", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 2.0, 0.9, 4.5]] },
-        { id: "palier", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 0, 2.2, 2.0], [1.0, 2.0, 2.2, 5.3], [0, 4.5, 1.0, 5.3]] },
-        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.2, 0, 5, 2.8]] },
-        { id: "dressing", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: null }, rects: [[2.2, 2.8, 5, 5.3]] },
+        { id: "palier", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: "creme" }, rects: [[0, 0, 2.0, 2.0], [1.0, 2.0, 2.0, 5.3], [0, 4.5, 1.0, 5.3]] },
+        /* 2026-10-17 (soir) — « salle de bain pas assez grande » : 2,8 × 2,8 → 3,0 × 3,4 cases (3,5 × 4,0 m). Elle prend
+           0,2 case au palier (couloir de 1,0 case, encore trois fois le corps) et 0,6 au dressing (3,0 × 1,9). La fenêtre
+           est plus BASSE que celle des autres pièces (`fenetre`) : le personnage fait 0,85 m à l'échelle des murs
+           (`HOME_K` = 2), un appui à 90 cm lui passait au-dessus de la tête. */
+        { id: "bains", sol: ["carreaux", "blanc"], murs: { papier: "platre", lambris: "faience" }, rects: [[2.0, 0, 5, 3.4]], fenetre: { allege: 0.78, haut: 1.90 } },
+        { id: "dressing", sol: ["parquet", "chene"], murs: { papier: "rayures", lambris: null }, rects: [[2.0, 3.4, 5, 5.3]] },
         { id: "chambre", sol: ["parquet", "chene"], murs: { papier: "toile_bleue", lambris: "creme" }, rects: [[0, 5.3, 5, 9]] },
       ],
       cloisons: [
         { x: 0.95, y0: 2.0, y1: 4.5, garde: true },               // le garde-corps de la volée
-        { x: 2.2, y0: 0, y1: 5.3, portes: [[0.5, 1.3], [3.65, 4.45]] },
-        { y: 2.8, x0: 2.2, x1: 5 },
-        { y: 5.3, x0: 0, x1: 5, portes: [[1.2, 2.0]] },
+        { x: 2.0, y0: 0, y1: 5.3, portes: [[0.5, 1.3], [3.95, 4.75]] },
+        { y: 3.4, x0: 2.0, x1: 5 },
+        { y: 5.3, x0: 0, x1: 5, portes: [[1.1, 1.9]] },
       ],
       pleins: [],
-      fenetresNord: [[3.2, 3.95]],
+      fenetresNord: [[3.55, 4.30]],
+      cadres: [["cage", "palier"]],
       fixes: [
-        { sprite: "lavabo", o: "S", lx: 2.33, ly: 0 },
-        { sprite: "wc", o: "S", lx: 2.95, ly: 0 },
-        { sprite: "baignoire", o: "S", lx: 3.5, ly: 0 },
+        { sprite: "lavabo", o: "S", lx: 2.18, ly: 0 },
+        { sprite: "wc", o: "S", lx: 2.92, ly: 0 },
+        { sprite: "baignoire", o: "S", lx: 3.45, ly: 0 },
       ],
+      // Le miroir et la prise sont à la hauteur du personnage, pas à celle d'un adulte de 1,70 m : voir `fenetre` ci-dessus.
       peints: [
-        { quoi: "miroir", y: 0, x0: 2.37, x1: 2.76 },
-        { quoi: "prise", y: 0, x: 2.86, z: 1.25 },
+        { quoi: "miroir", y: 0, x0: 2.22, x1: 2.62, bas: 0.80, haut: 1.38 },
+        { quoi: "prise", y: 0, x: 2.80, z: 0.95 },
       ],
     },
     { cle: "combles", mur: 1.0, pente: true,
@@ -185,6 +192,7 @@ export const PLAN_ETROITE = {
       ],
       pleins: [{ nom: "sous_pente", rect: [0, 0, 5, 0.35] }, { nom: "sous_pente", rect: [0, 8.65, 5, 9] }],
       fenetresNord: [],
+      cadres: [["cage", "combles"]],
     },
   ],
 };
@@ -301,6 +309,48 @@ export function homeRoomAt(plan, L, lx, ly) {
   }
   return null;
 }
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-17 (soir) — LE CADRAGE PAR PIÈCE (« j'entre dans une pièce, le cadrage
+   ║ se resserre ou se centre sur la pièce » — Guillaume ; la vue du plan entier
+   ║ devient un bouton, plus la vue par défaut).
+   ╚════════════════════════════════════════════════════════════════════════
+   Un CADRE est la pièce où l'on se tient, ou un groupe de pièces qui n'en font
+   qu'une pour l'œil (`cadres` du niveau : la cage d'escalier s'ouvre sur l'entrée,
+   se cadrer sur 0,9 case de large n'aurait aucun sens). Pur : le jeu y lit où
+   poser la caméra, le banc y vérifie que chaque pièce tombe dans un cadre. */
+export function homeCadreOf(plan, L, pieceId) {
+  const lv = plan.niveaux[L];
+  const grp = (lv.cadres || []).find((g) => g.includes(pieceId));
+  return grp ? grp.join("+") : pieceId;
+}
+export function homeCadreAt(plan, L, lx, ly) {
+  const pc = homeRoomAt(plan, L, lx, ly);
+  return pc ? homeCadreOf(plan, L, pc.id) : null;
+}
+/* Les rectangles du plan d'un cadre (la réunion des pièces de son groupe). */
+export function homeCadreRects(plan, L, key) {
+  const ids = key.split("+"), out = [];
+  for (const p of plan.niveaux[L].pieces) if (ids.includes(p.id)) for (const r of p.rects) out.push(r);
+  return out;
+}
+/* L'ENVELOPPE d'un cadre, en cases du plan : de quoi voir ses murs entiers — la
+   face du fond monte de la hauteur du mur (2,11 cases), les murs latéraux
+   évasés débordent de 0,6 case, la coupe du devant et les pieds du personnage
+   demandent un peu de marge. Rend [x0, y0, x1, y1]. */
+export function homeCadreBox(plan, L, key) {
+  const rs = homeCadreRects(plan, L, key), lv = plan.niveaux[L];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [a, b, c, d] of rs) { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); }
+  const mur = (lv.pente ? 2.3 : lv.mur) / CASE_M;                    // la hauteur du mur du fond, en cases
+  return [x0 - (x0 <= 0.01 ? 0.65 : 0.30), y0 - mur - 0.35, x1 + (x1 >= plan.w - 0.01 ? 0.65 : 0.30), y1 + (y1 >= plan.d - 0.01 ? 0.60 : 0.45)];
+}
+/* Distance (cases) d'un point à la réunion de rectangles : 0 dedans. */
+export function homeDistToRects(rs, lx, ly) {
+  let best = Infinity;
+  for (const [x0, y0, x1, y1] of rs) best = Math.min(best, Math.hypot(Math.max(x0 - lx, 0, lx - x1), Math.max(y0 - ly, 0, ly - y1)));
+  return best;
+}
+
 /* Tout ce qui est plein à un niveau, en rectangles du plan : les murs
    extérieurs (la façade percée de sa porte au rez-de-chaussée), les cloisons
    moins leurs portes, les garde-corps, les pleins, le mobilier posé. */
@@ -354,12 +404,34 @@ export function homeInStair(plan, lx, ly) {
   const s = plan.escalier;
   return lx >= s.x0 && lx < s.x1 && ly >= s.yHaut && ly < s.yPied;
 }
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-17 (soir) — GRAVIR UN ESCALIER : LENT, ET MARCHE PAR MARCHE
+   ║ (« gravir les escaliers est trop rapide et peu réaliste » — Guillaume).
+   ╚════════════════════════════════════════════════════════════════════════
+   À la vitesse de la marche (5,2 cases du monde par seconde, soit 3 m/s dans
+   une maison à l'échelle ×2), la volée de 3 m se grimpait en une seconde, en
+   glissant. Deux changements : (1) sur la volée, la vitesse tombe à
+   `HOME_STAIR_SPEED` de la marche et on ne court plus — 2,3 s pour la volée,
+   comme quelqu'un qui monte, pas qui court ; (2) la hauteur des pieds n'est plus
+   une rampe mais un ESCALIER : elle monte d'une marche (`HOME_STAIR_TREADS`,
+   celles de la volée dessinée) à chaque pas, vite au milieu de la marche, à
+   plat au début et à la fin — le corps monte par à-coups, comme les jambes. */
+export const HOME_STAIR_SPEED = 0.36;
+export const HOME_STAIR_TREADS = 15;     // `rendre_meubles.py` : escalier, marches=15
+/* Le marcheur est-il SUR une volée (celle qu'on voit : la volée du bas au rez-de-chaussée, celle du haut à l'étage
+   une fois engagé depuis son pied) ? C'est ce qui le ralentit. */
+export function homeOnFlight(plan, L, st, lx, ly) {
+  if (L >= plan.niveaux.length - 1 || !homeInStair(plan, lx, ly)) return false;
+  return L === 0 || !!(st && st.volee === "haut");
+}
 /* La hauteur (m) des pieds de qui marche sur une volée : le rez-de-chaussée
    porte la volée du bas, l'étage celle du haut ; les combles n'ont que la trémie. */
 export function homeStairLift(plan, L, lx, ly) {
   if (L >= plan.niveaux.length - 1 || !homeInStair(plan, lx, ly)) return 0;
   const s = plan.escalier;
-  return STOREY_M * Math.max(0, Math.min(1, (s.yPied - ly) / (s.yPied - s.yHaut)));
+  const t = Math.max(0, Math.min(1, (s.yPied - ly) / (s.yPied - s.yHaut)));
+  const u = t * HOME_STAIR_TREADS, i = Math.floor(u + 1e-9), f = u - i;
+  return STOREY_M * Math.min(1, (i + f * f * (3 - 2 * f)) / HOME_STAIR_TREADS);
 }
 /* UN PAS SUR L'ESCALIER. `st` : { volee } (null, ou "haut" quand on gravit la
    volée de l'étage). Rend { st, aller } ; `aller` = { level, ly } quand il faut
@@ -373,26 +445,40 @@ export function homeStairLift(plan, L, lx, ly) {
    depuis K = 2) — un déclenchement à 0,30 de `yHaut` n'était jamais atteint
    avec la semelle d'alors (premier jet). */
 export const HOME_STAIR_TRIG = 0.45;
-export function homeStairStep(plan, L, st, prevLy, lx, ly) {
+/* ⚠️ 2026-10-17 (soir) — « bug escalier : on passe dessous et ça active l'ascension ».
+   L'escalier se déclenchait au premier contact avec son emprise, quel que soit le geste :
+   sur le palier de l'étage, côté nord, on se tient SOUS le haut de la volée que la caméra
+   dessine (le pied de la volée suivante est au sud, son haut 2,70 m au-dessus) et un pas
+   vers le sud suffisait à tomber sur la volée du bas — le personnage réapparaissait en
+   haut d'une volée, ce qui se voit comme une montée. Deux garde-fous :
+   (1) la volée ne s'engage que sur un geste DANS SON SENS (`dir` : le sens du pas ; dy < 0,
+       vers le nord, pour monter ; dy > 0, vers le sud, pour descendre) — jamais en glissant de côté ;
+   (2) la descente depuis le palier ne se déclenche qu'à `HOME_STAIR_DESC` DANS l'emprise,
+       pas à son bord — frôler la trémie en passant n'est plus l'emprunter.
+   `dir` absent = l'ancien comportement (les bancs qui appellent sans). */
+export const HOME_STAIR_DESC = 0.25;
+const versNord = (dir) => !dir || dir.dy < 0;
+const versSud = (dir) => !dir || dir.dy > 0;
+export function homeStairStep(plan, L, st, prevLy, lx, ly, dir) {
   const s = plan.escalier, N = plan.niveaux.length;
   const dedans = homeInStair(plan, lx, ly);
   const st2 = { volee: st && st.volee || null };
   if (L === 0) {
-    if (dedans && ly < s.yHaut + HOME_STAIR_TRIG) return { st: { volee: null }, aller: { level: 1, ly: s.yHaut - 0.3 } };
+    if (dedans && ly < s.yHaut + HOME_STAIR_TRIG && versNord(dir)) return { st: { volee: null }, aller: { level: 1, ly: s.yHaut - 0.3 } };
     return { st: { volee: null }, aller: null };
   }
   if (L === N - 1) {
-    if (dedans) return { st: { volee: "haut" }, aller: { level: L - 1, ly: s.yHaut + 0.6 } };
+    if (dedans && ly >= s.yHaut + HOME_STAIR_DESC && versSud(dir)) return { st: { volee: "haut" }, aller: { level: L - 1, ly: s.yHaut + 0.6 } };
     return { st: { volee: null }, aller: null };
   }
   if (st2.volee === "haut") {
     if (!dedans) return { st: { volee: null }, aller: null };
-    if (ly < s.yHaut + HOME_STAIR_TRIG) return { st: { volee: null }, aller: { level: L + 1, ly: s.yHaut - 0.05 } };
+    if (ly < s.yHaut + HOME_STAIR_TRIG && versNord(dir)) return { st: { volee: null }, aller: { level: L + 1, ly: s.yHaut - 0.05 } };
     return { st: st2, aller: null };
   }
   if (dedans) {
-    if (prevLy != null && prevLy >= s.yPied - 0.2) return { st: { volee: "haut" }, aller: null };
-    return { st: { volee: null }, aller: { level: L - 1, ly: s.yHaut + 0.6 } };
+    if (prevLy != null && prevLy >= s.yPied - 0.2 && versNord(dir)) return { st: { volee: "haut" }, aller: null };
+    if (ly >= s.yHaut + HOME_STAIR_DESC && prevLy != null && prevLy < s.yPied - 0.2 && versSud(dir)) return { st: { volee: null }, aller: { level: L - 1, ly: s.yHaut + 0.6 } };
   }
   return { st: st2, aller: null };
 }
@@ -405,6 +491,20 @@ export function homeSpawnLocal(facade, plan = PLAN_ETROITE) {
 export function homeNearExit(facade, lx, ly, plan = PLAN_ETROITE) {
   const c = (facade.porte[0] + facade.porte[1]) / 2;
   return Math.abs(lx - c) <= 0.6 && ly >= plan.d - 0.9;
+}
+/* ⚠️ 2026-10-17 (soir) — « bug lit, accessible depuis une autre salle » : la portée se
+   mesurait en LIGNE DROITE, cloison comprise — le dressing (au nord) touche la chambre à 5 cm du lit, et
+   l'invite « E : se coucher » s'y affichait derrière le mur (§4 : une condition de proximité doit mesurer ce que
+   l'action mesure — on se couche ou l'on ATTEINT le lit). Il faut donc être DANS LA PIÈCE du meuble : le point de
+   son emprise le plus proche de nous (rentré de 3 cm) doit y tomber, et c'est la pièce où l'on se tient. */
+export function homeNearFurnitureIn(plan, L, f, lx, ly, reach = 0.65) {
+  if (!homeNearFurniture(f, lx, ly, reach)) return false;
+  const me = homeRoomAt(plan, L, lx, ly);
+  if (!me) return false;
+  const [x0, y0, x1, y1] = homeFurnitureRect(f);
+  const px = Math.min(Math.max(lx, x0 + 0.03), x1 - 0.03), py = Math.min(Math.max(ly, y0 + 0.03), y1 - 0.03);
+  const it = homeRoomAt(plan, L, px, py);
+  return !!it && it.id === me.id;
 }
 export function homeNearFurniture(f, lx, ly, reach = 0.65) {
   const [x0, y0, x1, y1] = homeFurnitureRect(f);

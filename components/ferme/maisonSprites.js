@@ -297,10 +297,10 @@ export const MEUBLES = {
  "lavabo": {
   "S": {
    "ax": 3,
-   "ay": 72,
+   "ay": 61,
    "fd": 0.38,
    "fw": 0.56,
-   "h": 68,
+   "h": 57,
    "w": 37
   }
  },

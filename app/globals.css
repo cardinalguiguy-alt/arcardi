@@ -9202,6 +9202,9 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
    Un bandeau de papier en bas d'écran, au-dessus de la barre d'outils : il ne
    couvre jamais le centre, où l'on pose. */
 .ferme-deco-fab{ right:202px; }
+/* 2026-10-17 (soir) — le plan entier de la maison (touche P) : allumé, le bouton se lit enfoncé. */
+.ferme-plan-fab{ right:250px; }
+.ferme-plan-fab.on{ background:var(--f-paper-d); transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-deco-panel{
   /* ⚠️ EN COLONNE À DROITE, PAS EN BANDEAU (vu en jeu le 2026-10-16) : en bas
      d'un petit écran, le bandeau couvrait le séjour — l'endroit même où l'on pose.

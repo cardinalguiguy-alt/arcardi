@@ -36,7 +36,8 @@ import { installFakeDOM, loadFerme } from "./lib-canvas.mjs";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
 const mods = await loadFerme(ROOT, ["fermeConstants", "maison", "maisonArt", "maisonSprites"]);
-const { maison: H, maisonArt: MA, fermeConstants: C } = mods;
+const { maison: H, maisonArt: MA, fermeConstants: C, maisonSprites: MS } = mods;
+const MA_SPRITES = MS.MEUBLES;
 const P = H.PLAN_ETROITE;
 let ok = 0, ko = 0;
 function check(nom, cond, detail = "") {
@@ -156,12 +157,18 @@ check("rez-de-chaussée : le haut de la volée est atteignable (pieds sous le se
   check("arrivée à l'étage : pas de rebond", !r2.aller);
 }
 {
-  const r = H.homeStairStep(P, 1, { volee: null }, s.yHaut - 0.03, 0.45, s.yHaut + 0.02);
+  const dd = s.yHaut + H.HOME_STAIR_DESC + 0.02, SUD = { dx: 0, dy: 1 }, NORD = { dx: 0, dy: -1 }, COTE = { dx: 1, dy: 0 };
+  /* 2026-10-17 (soir) — « on passe dessous et ça active l'ascension » : frôler le bord nord de la trémie, ou y glisser
+     de côté, ou y entrer en remontant, n'est PAS prendre la volée. */
+  check("étage, le bord nord de la trémie frôlé (0,10 dedans) : on ne descend pas", !H.homeStairStep(P, 1, { volee: null }, s.yHaut + 0.06, 0.45, s.yHaut + 0.10, SUD).aller);
+  check("étage, entré de côté ou en remontant : on ne descend pas", !H.homeStairStep(P, 1, { volee: null }, dd - 0.04, 0.45, dd, COTE).aller && !H.homeStairStep(P, 1, { volee: null }, dd - 0.04, 0.45, dd, NORD).aller);
+  check("rez-de-chaussée, au haut de la volée : pas de montée en glissant de côté ni en redescendant", !H.homeStairStep(P, 0, { volee: null }, trig + 0.02, 0.45, trig - 0.03, COTE).aller && !H.homeStairStep(P, 0, { volee: null }, trig - 0.05, 0.45, trig - 0.03, SUD).aller);
+  const r = H.homeStairStep(P, 1, { volee: null }, dd - 0.04, 0.45, dd, SUD);
   check("étage, entré par le nord (le palier) : on descend", r.aller && r.aller.level === 0, JSON.stringify(r.aller));
   check("arrivée au rez-de-chaussée praticable", free(0, 0.45, r.aller.ly));
   const r2 = H.homeStairStep(P, 0, r.st, r.aller.ly, 0.45, r.aller.ly);
   check("arrivée au rez-de-chaussée : pas de rebond", !r2.aller);
-  check("étage : le bord nord de la volée est praticable (on peut y entrer)", free(1, 0.45, s.yHaut + 0.02));
+  check("étage : le bord nord de la volée est praticable (on peut y entrer)", free(1, 0.45, dd));
 }
 {
   const r = H.homeStairStep(P, 1, { volee: null }, s.yPied + 0.02, 0.45, s.yPied - 0.03);
@@ -171,14 +178,32 @@ check("rez-de-chaussée : le haut de la volée est atteignable (pieds sous le se
   check("arrivée aux combles praticable", free(2, 0.45, r2.aller.ly));
   const r3 = H.homeStairStep(P, 2, r2.st, r2.aller.ly, 0.45, r2.aller.ly);
   check("arrivée aux combles : pas de rebond", !r3.aller);
-  const r4 = H.homeStairStep(P, 2, { volee: null }, s.yHaut - 0.03, 0.45, s.yHaut + 0.02);
+  const r4 = H.homeStairStep(P, 2, { volee: null }, s.yHaut + H.HOME_STAIR_DESC - 0.02, 0.45, s.yHaut + H.HOME_STAIR_DESC + 0.02, { dx: 0, dy: 1 });
   check("combles : la trémie fait redescendre sur la volée de l'étage", r4.aller && r4.aller.level === 1 && r4.st.volee === "haut");
   check("arrivée sur la volée de l'étage praticable", free(1, 0.45, r4.aller.ly));
-  check("les combles : le bord nord de la trémie est praticable", free(2, 0.45, s.yHaut + 0.02));
+  check("les combles : le bord nord de la trémie est praticable", free(2, 0.45, s.yHaut + H.HOME_STAIR_DESC + 0.02));
   check("les combles : on ne tombe pas dans la trémie par le sud (garde-corps)", !free(2, 0.45, s.yPied + 0.05));
 }
 check("la hauteur sur la volée : 0 en bas, un étage en haut",
   Math.abs(H.homeStairLift(P, 0, 0.45, s.yPied - 1e-6)) < 0.01 && Math.abs(H.homeStairLift(P, 0, 0.45, s.yHaut) - H.STOREY_M) < 1e-9);
+{
+  /* 2026-10-17 (soir) — « gravir les escaliers est trop rapide et peu réaliste » : la hauteur monte MARCHE PAR MARCHE
+     (des plateaux, pas une rampe) et la volée se fait à `HOME_STAIR_SPEED` de la marche. */
+  const lift = (t) => H.homeStairLift(P, 0, 0.45, s.yPied - 1e-6 - (s.yPied - s.yHaut - 1e-6) * t);
+  let monte = true, prev = 0;
+  for (let k = 0; k <= 900; k++) { const v = lift(k / 900); if (v < prev - 1e-9) monte = false; prev = v; }
+  check("la hauteur ne redescend jamais en montant", monte);
+  // une marche = un temps à plat (début et fin de la marche) et une montée franche au milieu : la pente aux joints est faible, au milieu forte.
+  const e = 1e-4, pente = (t) => (lift(t + e) - lift(t - e)) / (2 * e), moy = H.STOREY_M;
+  let joints = 0, milieux = 0;
+  for (let i = 1; i < H.HOME_STAIR_TREADS; i++) { joints = Math.max(joints, pente(i / H.HOME_STAIR_TREADS) / moy); milieux = Math.max(milieux, 0); }
+  for (let i = 0; i < H.HOME_STAIR_TREADS; i++) milieux = Math.max(milieux, pente((i + 0.5) / H.HOME_STAIR_TREADS) / moy);
+  check("la hauteur monte MARCHE PAR MARCHE (pente aux joints ≪ pente au milieu d'une marche)", joints < 0.15 && milieux > 1.3, `joints ×${joints.toFixed(2)}, milieu ×${milieux.toFixed(2)} de la pente moyenne, ${H.HOME_STAIR_TREADS} marches`);
+  const tVolee = (s.yPied - s.yHaut) / (5.2 / H.HOME_K * H.HOME_STAIR_SPEED);
+  check("la volée prend entre 2 et 4 secondes", tVolee >= 2 && tVolee <= 4, `${tVolee.toFixed(2)} s à ${(5.2 * H.HOME_STAIR_SPEED).toFixed(2)} cases du monde par seconde`);
+  check("on est « sur la volée » au rez-de-chaussée, pas sur le palier ni dans la trémie des combles",
+    H.homeOnFlight(P, 0, { volee: null }, 0.45, 3.5) && !H.homeOnFlight(P, 0, { volee: null }, 0.45, 6) && !H.homeOnFlight(P, 2, { volee: "haut" }, 0.45, 3.5) && !H.homeOnFlight(P, 1, { volee: null }, 0.45, 3.5) && H.homeOnFlight(P, 1, { volee: "haut" }, 0.45, 3.5));
+}
 
 // ─── 5. le hasard ─────────────────────────────────────────────────────────
 /* Des marcheurs à BUT : chacun tire une pièce du niveau où il est (parfois le
@@ -217,7 +242,7 @@ for (const mk of ["n1", "n2"]) {
       if (H.homeBoxFree(sol, lx + dx / len * sp, ly)) lx += dx / len * sp;
       if (H.homeBoxFree(sol, lx, ly + dy / len * sp)) ly += dy / len * sp;
       if (!H.homeBoxFree(sol, lx, ly)) bad++;
-      const r = H.homeStairStep(P, L, st, prevLy, lx, ly);
+      const r = H.homeStairStep(P, L, st, prevLy, lx, ly, { dx: dx / len, dy: dy / len });   // 2026-10-17 : le sens du pas, comme le jeu
       st = r.st;
       if (r.aller) {
         if (r.aller.level > L) ups++; else downs++;
@@ -234,8 +259,8 @@ for (const mk of ["n1", "n2"]) {
       steps++;
     }
   }
-  // La trémie des combles ne compte pas : y entrer fait redescendre au même pas, on ne s'y tient jamais.
-  const total = P.niveaux.reduce((n, lv) => n + lv.pieces.length, 0) - 1;
+  // 2026-10-17 (soir) : la trémie des combles compte — on s'y tient 0,25 case (`HOME_STAIR_DESC`) avant de redescendre.
+  const total = P.niveaux.reduce((n, lv) => n + lv.pieces.length, 0);
   check(`${mk} : jamais la semelle dans un mur`, bad === 0, `${bad} sur ${steps} pas`);
   check(`${mk} : jamais coincé (un des huit pas reste toujours possible)`, trapped === 0, `${trapped} points coincés`);
   check(`${mk} : les trois niveaux, en montant et en descendant`, levels.size === 3 && ups > 0 && downs > 0, `${ups} montées, ${downs} descentes`);
@@ -416,6 +441,58 @@ console.log("\n=== 10. les équipements (cuisine, bains, cheminée, radiateurs) 
   check("un meuble posé sur un équipement : refusé, raison « equipement »", !v.ok && v.raison === "equipement", JSON.stringify(v));
   check("on ne marche pas à travers la baignoire", !H.homeBoxFree(H.homeSolids(P, 1, fac), 4.2, 0.4));
 }
+
+
+// ─── 11. le lit, le cadrage par pièce, la salle de bain (2026-10-17, soir) ──
+console.log("\n=== 11. le lit se tient DANS SA PIÈCE ; un cadre par pièce ; les bains agrandis ===");
+{
+  const facN = H.homeFacade({ model: "n2", variant: "simple" }, P);
+  const lit = H.HOME_DEPART.find((f) => /^lit/.test(f.sprite)), [bx0, by0, bx1, by1] = H.homeFurnitureRect(lit);
+  /* « Bug lit, accessible depuis une autre salle » : la portée se mesurait en ligne droite, cloison comprise. On balaie
+     TOUT le niveau : tout point praticable d'où l'invite s'affiche doit être dans la pièce du lit. */
+  let dedans = 0, travers = [], vus = 0;
+  for (let lx = 0.1; lx < P.w; lx += 0.05) for (let ly = 0.1; ly < P.d; ly += 0.05) {
+    if (!H.homeBoxFree(H.homeSolids(P, 1, facN), lx, ly)) continue;
+    vus++;
+    if (!H.homeNearFurnitureIn(P, 1, lit, lx, ly)) continue;
+    const pc = H.homeRoomAt(P, 1, lx, ly), pcLit = H.homeRoomAt(P, 1, (bx0 + bx1) / 2, (by0 + by1) / 2);
+    if (pc && pcLit && pc.id === pcLit.id) dedans++; else travers.push(lx.toFixed(2) + "," + ly.toFixed(2) + " " + (pc && pc.id));
+  }
+  check("l'invite du lit ne s'affiche que dans la pièce du lit", travers.length === 0 && dedans > 50, `${dedans} points dans la chambre, ${travers.length} à travers un mur (sur ${vus} praticables)`);
+  const ancien = []; 
+  for (let lx = 0.1; lx < P.w; lx += 0.05) for (let ly = 0.1; ly < P.d; ly += 0.05) {
+    if (H.homeBoxFree(H.homeSolids(P, 1, facN), lx, ly) && H.homeNearFurniture(lit, lx, ly) && !H.homeNearFurnitureIn(P, 1, lit, lx, ly)) ancien.push([lx, ly]);
+  }
+  check("falsification : l'ancienne portée en ligne droite, elle, atteignait le lit à travers la cloison", ancien.length > 0, `${ancien.length} points de l'ancienne portée refusés (dressing, palier)`);
+  check("du dressing, collé à la cloison, le lit n'est pas à portée ; de la chambre, il l'est",
+    !H.homeNearFurnitureIn(P, 1, lit, (bx0 + bx1) / 2, 5.20) && H.homeNearFurnitureIn(P, 1, lit, (bx0 + bx1) / 2, by1 + 0.3), `lit [${bx0.toFixed(2)}, ${by0.toFixed(2)}] — dressing y 5.20, chambre y ${(by1 + 0.3).toFixed(2)}`);
+
+  // chaque pièce de chaque niveau tombe dans un cadre, qui l'enveloppe, et que le niveau contient
+  let sansCadre = 0, trop = [];
+  for (let L = 0; L < P.niveaux.length; L++) for (const pc of P.niveaux[L].pieces) {
+    const key = H.homeCadreOf(P, L, pc.id), box = H.homeCadreBox(P, L, key);
+    for (const [x0, y0, x1, y1] of pc.rects) if (!(box[0] <= x0 && box[1] <= y0 && box[2] >= x1 && box[3] >= y1)) sansCadre++;
+    const ctr = pc.rects[0], at = H.homeCadreAt(P, L, (ctr[0] + ctr[2]) / 2, (ctr[1] + ctr[3]) / 2);
+    if (at !== key) trop.push(L + ":" + pc.id);
+    // le cadre tient dans la bande que le plan réserve à son niveau (HOME_LEVEL_H) — ni au-dessus ni au-dessous
+    if (box[1] * H.HOME_K < -HMAmargin(L) || box[3] > P.d + 0.7) trop.push("hors bande " + L + ":" + pc.id);
+  }
+  check("chaque pièce tombe dans un cadre qui l'enveloppe, murs du fond compris", sansCadre === 0 && trop.length === 0, trop.join(", ") || "toutes");
+  check("la cage d'escalier se cadre avec la pièce où elle s'ouvre (jamais seule, 0,9 case de large)",
+    H.homeCadreOf(P, 0, "cage") === H.homeCadreOf(P, 0, "entree") && H.homeCadreOf(P, 1, "cage") === H.homeCadreOf(P, 1, "palier") && H.homeCadreOf(P, 2, "cage") === H.homeCadreOf(P, 2, "combles"));
+  const bb = H.homeCadreBox(P, 1, "bains"), bw = (bb[2] - bb[0]), bh = (bb[3] - bb[1]);
+  check("les cadres des pièces sont serrés : celui de la chambre ne montre ni les bains ni la cuisine", H.homeCadreBox(P, 1, "chambre")[1] > 5.3 - 3.2 && bw < P.w + 1.6, `chambre commence à y ${H.homeCadreBox(P, 1, "chambre")[1].toFixed(2)} ; bains ${bw.toFixed(1)} × ${bh.toFixed(1)} cases (mur compris)`);
+
+  const aire = (id) => P.niveaux[1].pieces.find((p) => p.id === id).rects.reduce((a, [x0, y0, x1, y1]) => a + (x1 - x0) * (y1 - y0), 0);
+  check("la salle de bain est plus grande qu'avant (7,8 cases²) d'au moins 25 %", aire("bains") >= 7.84 * 1.25, `${aire("bains").toFixed(1)} cases² (${(aire("bains") * H.CASE_M * H.CASE_M).toFixed(0)} m²)`);
+  check("le dressing garde de quoi servir (≥ 5 cases²) et le couloir du palier reste franchissable", aire("dressing") >= 5 && P.niveaux[1].cloisons.find((c) => c.x === 2.0 && c.portes) !== undefined, `${aire("dressing").toFixed(1)} cases²`);
+  // fenêtre, miroir, prise des bains : à la hauteur du personnage (0,85 m à l'échelle des murs), pas à celle d'un adulte
+  const bn = P.niveaux[1].pieces.find((p) => p.id === "bains"), mi = P.niveaux[1].peints.find((q) => q.quoi === "miroir"), pr = P.niveaux[1].peints.find((q) => q.quoi === "prise");
+  check("les bains : appui de fenêtre, miroir et prise plus bas que ceux d'un adulte (0,90 m, 1,15 m, 1,25 m)", bn.fenetre.allege < 0.90 && mi.bas < 1.15 && pr.z < 1.25, `appui ${bn.fenetre.allege} m, miroir ${mi.bas}–${mi.haut} m, prise ${pr.z} m`);
+  const lav = MA_SPRITES.lavabo.S;
+  check("le lavabo est plus bas qu'un lavabo d'adulte (rendu rebasé : image plus basse que 68 px d'origine)", lav.h < 68, `${lav.h} px`);
+}
+function HMAmargin(L) { return 3.2 * H.HOME_K; }
 
 console.log(`\n${ok} OK, ${ko} ÉCHEC`);
 process.exit(ko ? 1 : 0);
