@@ -1,5 +1,35 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-18 — CHEZ SOI : LA PERSPECTIVE (COINS DE FAÇADE, CLOISONS EN VOLUME, LUMIÈRE DE PROFONDEUR, ÉVASEMENT À 0,17)
+
+Sa demande : « meilleure perspective impression 3D dans l'intérieur », puis « vérifie en jeu et juge », puis, sur le jugement, « fais 1, 2 et 3
+(coins de façade, cloisons en volume, lumière de profondeur), vérifie en jeu, puis montre-moi avant de toucher à l'évasement ».
+**Supabase : rien** (dessin cuit seulement ; aucun état, aucun champ réseau).
+- **Le jugement en jeu (avant)** : trois défauts cassaient la boîte. (1) **Les coins de façade** : la face intérieure des murs latéraux s'arrêtait au nu
+  INTÉRIEUR de la façade, le pilier d'angle se tient à son nu EXTÉRIEUR — 40 cm de vide entre les deux au-dessus de la coupe, et une arase qui s'arrêtait
+  trop tôt : le mur paraissait plié au coin. La façade coupée à 35 cm passait en plus PAR-DESSUS le pied du pilier (sa coupe allait de −EP_EXT à w + EP_EXT).
+  (2) **Les cloisons coupées** se lisaient comme un trait sombre : leur arase avait la couleur de celle des murs pleins (`paintWallTop`, brun presque noir), la
+  même que le vide et les portes ouvertes. (3) **Aucune lumière ne disait la profondeur** hors un dégradé unique sur toute la maison, « la lumière vient de la
+  façade » — faux pour la cuisine, dont les fenêtres sont au fond.
+- **Fait** (`maisonArt.js`, `maison.js` pour les angles) : (1) `paintSideFaces` court jusqu'à `d + EP_EXT`, l'arase a la largeur ÉVASÉE du mur (le bord extérieur
+  s'écarte plus) et coiffe le pilier ; `drawFacadeCut` s'arrête aux nus intérieurs ; le pilier prend la pierre de la façade vue de face (`PIERRE_FACE`), un pied
+  assombri. (2) `paintCutTop` : l'arase d'un mur COUPÉ est claire et cernée (un dessus, à 35 cm : le plus clair des quatre paliers de `studio.py`), la tranche un
+  ton plus bas avec sa plinthe ; les cloisons nord-sud ombrent le sol (12 cm à l'ouest, 30 cm à l'est : la lumière des meubles vient de la gauche) ; l'arase des
+  faces coupées passe du sombre au clair EN FONDU avec la coupe (jamais par un seuil) ; la façade coupée prend la même règle (pierre claire dessus, `PIERRE_FACE`
+  devant). L'arase des murs PLEINS reste sombre (elle touche le plafond). (3) Le pied des faces s'assombrit (0,22 → 0 sur 45 cm), leurs ANGLES aussi (0,20 sur
+  35 cm, `homeFaces` pose `coinW`/`coinE` : un bout de face n'est un angle que si la même pièce ne continue pas sur la ligne) ; les faces latérales s'assombrissent
+  vers le sol (0,30 → 0,10) et vers l'angle du fond ; le dégradé de la maison est remplacé par un dégradé PAR PIÈCE (sombre en s'éloignant de la façade si elle la
+  touche, de ses fenêtres du fond si elle en a ; les deux : le milieu ; aucun : un voile de 0,08 ; 0,16 au plus).
+- **L'évasement, même jour, sur maquette** : 0,11 / 0,17 / 0,24 côte à côte en jeu, meubles contre les murs de côté (`tools/out/maison-evasement-{chambre,cuisine,sejour}.png`) ;
+  **0,17 choisi** (« pose 0,17 »). Ce qui va avec : `HOME_FX0` −1 → −1,5 (l'arase extérieure du mur latéral tombe à 1,36 case du nu intérieur ; à −1 elle sortait de
+  l'image cuite), `HOME_OX` 2,0 → 1,5 × K (origine cuite à 0, la maison tient dans ses 8 cases), `homeCadreBox` montre 1,0 case de mur latéral au lieu de 0,65.
+  Les meubles ne s'évasent pas : un meuble haut contre un mur de côté s'en écarte un peu vers le haut — vu sur la maquette, accepté avec la valeur. Vu en jeu à 0,17 :
+  entrée, séjour, cuisine, chambre, bains, plan entier, mode déco ; les crans de cadrage par pièce n'ont pas changé ; aucune erreur à la console
+  (`tools/out/maison-evasement-017-{chambre,entree}.png`).
+- **Vérifié** (après l'évasement aussi) : `verify-maison` 162/162, `verify-strings`, `verify-docs`, `render-maison` ; **en jeu** (`app/audit-tmp`, 1440 × 900, 14 h ; rez-de-chaussée : plan
+  entier, entrée, séjour, cuisine ; étage : chambre, bains), aucune erreur de dessin à la console. Preuves : `tools/out/perspective-avant-apres-{rdc,sejour,facade}.png`,
+  `tools/out/perspective-apres-bains.png`. **Pas vu** : la nuit, les combles en jeu (vus au banc seulement), iPad, deux clients, le mode déco.
+
 ## 2026-10-17 (après-midi) — CHEZ SOI : LES COTES D'USAGE À L'ÉCHELLE DU PERSONNAGE (TOUTE LA MAISON), MARCHE RALENTIE
 
 Ses deux messages : « la tête du player est en dessous des plans de travail et objets (cuisine), pareil salle de bain, pour une mise à l'échelle

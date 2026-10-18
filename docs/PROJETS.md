@@ -239,6 +239,9 @@ cuisinière, lavabo, toilettes, baignoire ×½ en hauteur (Blender, `meubles.ECH
 échelle (`maison.ECHELLE_Z_SPRITES` ; tapis, tableau et escalier exceptés ; cheminée à ×0,65). Tout NOUVEAU meuble du catalogue (lot 2b) se rend à ×½ : l'ajouter aux
 deux listes (`verify-maison` §12 refuse l'oubli).
 
+**2026-10-18 — LA PERSPECTIVE, FAIT, à juger** (journal du README de la ferme) : coins de façade raccordés, cloisons coupées en volume (arase claire, ombre au
+sol), lumière de profondeur (pieds et angles des murs, dégradé par pièce), évasement 0,11 → 0,17 (choisi sur maquette en jeu).
+
 **Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
 1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une
    palette en bas montre le GARDE-MEUBLE (ce qu'on possède et qui n'est pas posé).

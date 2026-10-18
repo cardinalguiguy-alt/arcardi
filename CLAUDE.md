@@ -11,21 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-17 (après-midi) — CHEZ SOI : COTES D'USAGE À L'ÉCHELLE DU PERSONNAGE (TOUTE LA MAISON), MARCHE RALENTIE ; RIEN DE COMMITÉ
+### 2026-10-18 — CHEZ SOI : LA PERSPECTIVE ET L'ÉVASEMENT À 0,17 ; RIEN DE COMMITÉ
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-17 au README de la ferme). Sa demande : « la tête du player est en dessous des plans de travail et objets »
-(cuisine, bains, puis séjour, chambre, radiateurs) et « réduire un peu la vitesse dans la maison, pas sur les escaliers ». Faits : HAUTEURS d'usage ÷ `HOME_K` pour tous les
-sprites sauf tapis, tableau, escalier (`studio.ZK`, `meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES` ; cheminée à ×0,65) et pour ce qui est peint ou posé dessus
-(`maison.ECHELLE_USAGE`, `homeBedPillow`) ; marche ×0,75 (`homeSpeedMul`), escalier inchangé (1,87 cases/s). Vu en jeu (cuisine, bains, séjour, chambre, dormeur), vitesses
-mesurées ; `verify-maison` 162/162 (§12), `verify-strings`, `verify-densite` verts. **Supabase : rien.** **Pas vu** : iPad, deux clients, le mode déco avec les nouveaux gabarits,
-la sauvegarde réelle (`docs/A-JUGER.md`). Tout meuble NEUF du catalogue (2b) : l'ajouter aux deux listes d'échelle.
+**Intérieurs** (`docs/PROJETS.md` §6 ; récit : journal du 2026-10-18 au README de la ferme). Faits, jugés en jeu : les murs latéraux et leur arase vont jusqu'au nu
+EXTÉRIEUR de la façade (le coin ne plie plus) ; `paintCutTop` (l'arase d'un mur COUPÉ est claire, celle d'un mur plein reste sombre) ; pieds et angles des murs
+assombris (`homeFaces` : `coinW`/`coinE`), lumière PAR PIÈCE ; `HOME_FLARE` 0,11 → 0,17 choisi sur maquette, avec `HOME_FX0` −1,5, `HOME_OX` 1,5 × K et 1,0 case
+de mur latéral dans `homeCadreBox` (l'évasement, la marge cuite, l'origine et le cadrage vont ENSEMBLE). `verify-maison` 162/162, `verify-strings`, `verify-docs`
+verts. **Supabase : rien.** **Pas vu** : la nuit, les combles en jeu, iPad, deux clients.
+Meuble NEUF (2b) : aux deux listes d'échelle (`meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES`) ; Blender déterministe : ne commiter que les PNG changés au pixel.
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
-trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort. Le rendu Blender en ligne de commande (`Blender -b -P
-tools/blender/rendre_meubles.py`) est déterministe : n'en commiter que les PNG qui changent au pixel (comparer à HEAD, remettre les autres).
+trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
 ### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
 
-Avant : les deux blocs en tête de `docs/A-JUGER.md` (hauteurs et marche ; cadrage, escalier, lit, bains). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+Avant : le bloc en tête de `docs/A-JUGER.md` (perspective, évasement). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 

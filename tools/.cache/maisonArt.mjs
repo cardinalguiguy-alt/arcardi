@@ -450,6 +450,30 @@ export function paintWallTop(ctx, x, y, w, h) {
   }
 }
 
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-18 — « LES CLOISONS EN VOLUME » : L'ARASE D'UN MUR COUPÉ EST ÉCLAIRÉE.
+   ╚════════════════════════════════════════════════════════════════════════
+   Vu en jeu : une cloison coupée à 35 cm se lisait comme un trait sombre sur le
+   sol — son arase avait la couleur de celle des murs pleins (`paintWallTop`, un
+   brun presque noir), celle du vide autour de la maison et des portes ouvertes.
+   Or c'est un DESSUS, à 35 cm du sol de la pièce : dans la lumière des meubles
+   (`tools/blender/studio.py`, quatre paliers), le dessus est le plus clair (1),
+   la face vient après (0,88). Une arase claire et cernée, une tranche un ton plus
+   bas : le mur a une épaisseur et une hauteur. L'arase des murs PLEINS reste
+   sombre — elle touche le plafond, c'est la coupe sous lui, hors du jour.
+   `ext` : la pierre de la façade (même règle, plus grise). */
+export function paintCutTop(ctx, x, y, w, h, ext) {
+  const P = ext ? ["#b9a88c", "#d6c8ab", "#6e604e", "#9a8a72"] : ["#ded2bb", "#f1e9d6", "#7d6c58", "#b3a38b"];
+  rect(ctx, x, y, w, h, P[0]);
+  if (ext && h > 6) for (let k = 3; k < h - 2; k += 5) {
+    const dec = (Math.floor(k / 5) % 2) ? 6 : 0;
+    for (let i = x + dec; i < x + w - 1; i += 12) rect(ctx, i, y + k, 1, 3, P[3]);
+  }
+  if (w > 2) { rect(ctx, x, y, 1, h, P[3]); rect(ctx, x + w - 1, y, 1, h, P[3]); }
+  rect(ctx, x, y, w, 1, P[1]);
+  if (h > 2) rect(ctx, x, y + h - 1, w, 1, P[2]);
+}
+
 /* LA FLAQUE DE SOLEIL : la lumière d'une fenêtre de façade (au sud) posée sur
    le sol de la pièce, déportée vers l'est l'après-midi — un parallélogramme
    chaud, peint rangée par rangée. `force` 0 à 1 (l'heure la règlera). */
@@ -664,7 +688,11 @@ export function paintConduit(ctx, x0, x1, yFoot, hPx, tablette = 1.08, bas = 1.2
 // ─── la cuisson d'un niveau ──────────────────────────────────────────────
 /* Le repère des images cuites : le coin (HOME_FX0, HOME_FY0) du plan, en cases,
    est le pixel (0, 0). Assez de marge au nord pour les faces des murs du fond. */
-export const HOME_FX0 = -1.0, HOME_FY0 = -3.0;   // −1 en x : la place des murs latéraux évasés
+/* 2026-10-18 — −1 → −1,5 en x avec l'évasement à 0,17 (`HOME_FLARE`) : l'arase du mur latéral, à son bord extérieur, tombe à
+   1,36 case du nu intérieur (0,17 × 2,84 cases du centre × 2,11 cases de mur + 0,34 d'épaisseur) ; à −1 elle sortait de
+   l'image cuite (un canevas découpe en silence, noyau §4). `maison.HOME_OX` recule d'autant (l'origine reste sur une case
+   entière du monde, la maison tient dans ses 8 cases : `verify-maison` §1). */
+export const HOME_FX0 = -1.5, HOME_FY0 = -3.0;   // −1,5 en x : la place des murs latéraux évasés
 /* ╔════════════════════════════════════════════════════════════════════════
    ║ 2026-10-16 (soir) — LA PROFONDEUR : LES MURS ÉVASÉS (« une vraie idée de
    ║ profondeur, perspective plus lisible entre les murs et le sol » — Guillaume).
@@ -677,11 +705,18 @@ export const HOME_FX0 = -1.0, HOME_FY0 = -3.0;   // −1 en x : la place des mur
    le haut pour les rejoindre : une boîte ouverte sur l'avant. ⚠️ ÉVASÉS, ILS
    TOMBENT HORS DU SOL À L'ÉCRAN : ils ne cachent jamais ni meuble ni personne.
    Le sol, la collision, les meubles et les personnages ne bougent pas. */
-export const HOME_FLARE = 0.11;
+/* 2026-10-18 — 0,11 → 0,17, choisi par Guillaume sur maquette en jeu (0,11 / 0,17 / 0,24 côte à côte, meubles contre les
+   murs) : la pièce se creuse sans l'effet couloir de 0,24. ⚠️ Les meubles ne s'évasent pas : un meuble haut contre un mur de
+   côté s'en écarte un peu vers le haut (≈ 9 px à 1 m) — vu, accepté avec la valeur. */
+export const HOME_FLARE = 0.17;
 const flarePx = (lx, zPx, xc) => HOME_FLARE * (lx - xc) * zPx;
 export const homePx = (lx, ly) => [Math.round((lx - HOME_FX0) * MPX), Math.round((ly - HOME_FY0) * MPX)];
 export const HOME_VOID = "#15110e";
 export const HOME_CUT = pxOfM(0.35);          // la coupe des murs bas : 35 cm (19 px ; 10 à 32 px par case)
+/* 2026-10-18 — LA PIERRE DE LA FAÇADE VUE DE FACE (sa tranche coupée, le pilier d'angle) : un ton sous l'arase éclairée
+   (`paintCutTop`) — le dessus clair, la face plus sombre, c'est ce qui fait lire une épaisseur. À #a39178, à peine plus
+   sombre que l'arase, la façade coupée se lisait comme une bande plate (vu au banc, même jour). */
+const PIERRE_FACE = "#8c7a64";
 
 const SOLS = {
   parquet: paintParquet, ciment: paintCiment, tomettes: paintTomettes, carreaux: paintCabochons,
@@ -723,15 +758,38 @@ export function bakeHomeFloor(mk, plan, L, H) {
     const [x0, y0] = homePx(0, 0), [x1, y1] = homePx(plan.w, plan.d);
     const NL = pxOfM(0.26);
     for (let k = 0; k < NL; k++) { const al = 0.26 * (1 - k / NL) ** 1.6; ombre(x0 + k, y0, 1, y1 - y0, al); ombre(x1 - 1 - k, y0, 1, y1 - y0, al); }
-    // le fond de la pièce s'assombrit un peu : la lumière vient de la façade
-    for (let k = 0; k < y1 - y0; k++) { const t = 1 - k / (y1 - y0); if (t > 0.45) ombre(x0, y0 + k, x1 - x0, 1, 0.10 * (t - 0.45) / 0.55); }
+  }
+  /* 2026-10-18 — « LA LUMIÈRE DE PROFONDEUR », PIÈCE PAR PIÈCE (remplace un dégradé unique sur toute la maison, « la
+     lumière vient de la façade » — faux pour la cuisine, dont les fenêtres sont au fond) : chaque pièce s'assombrit en
+     s'éloignant du côté par où le jour entre — la façade (au sud : ses fenêtres, sa porte, et le côté ouvert de la
+     coupe) si elle la touche, ses fenêtres du fond (au nord) si elle en a. Les deux : le milieu, un peu. Aucun : un
+     voile égal. Jusqu'à 0,16 au plus loin. */
+  {
+    const faces = H.homeFaces(plan, L);
+    for (const p of lv.pieces) {
+      const bx0 = Math.min(...p.rects.map((r) => r[1])), bx1 = Math.max(...p.rects.map((r) => r[3]));
+      const sud = bx1 >= plan.d - 0.01;
+      const nord = faces.some((f) => f.room === p.id && (f.fenetres || []).length > 0);
+      const al = (t) => sud && nord ? 0.08 * 4 * t * (1 - t) : sud ? 0.16 * (1 - t) ** 1.4 : nord ? 0.16 * t ** 1.4 : 0.08;
+      for (const [rx0, ry0, rx1, ry1] of p.rects) {
+        const [a, b] = homePx(rx0, ry0), [cc, d] = homePx(rx1, ry1);
+        const [, B0] = homePx(0, bx0), [, B1] = homePx(0, bx1);
+        for (let yy = b; yy < d; yy += 2) ombre(a, yy, cc - a, Math.min(2, d - yy), al((yy - B0) / Math.max(1, B1 - B0)));
+      }
+    }
   }
   g.globalAlpha = 1;
   paintSideFaces(g, plan, L, H);
   for (const lw of H.homeLows(plan, L, null)) {
     if (lw.kind === "facade") continue;
     const [a, b] = homePx(lw.rect[0], lw.rect[1]), [cc, d] = homePx(lw.rect[2], lw.rect[3]);
-    g.globalAlpha = 0.20; rect(g, a - 1, b, 1, d - b, "#20160f"); rect(g, cc, b, 1, d - b, "#20160f");
+    if (lw.kind !== "mur") { g.globalAlpha = 0.20; rect(g, a - 1, b, 1, d - b, "#20160f"); rect(g, cc, b, 1, d - b, "#20160f"); continue; }
+    /* 2026-10-18 — « les cloisons en volume » : un mur coupé à 35 cm assombrit le sol de chaque côté ; c'est ce qui le
+       pose debout sur le sol au lieu d'un trait. Plus long à l'EST (30 cm) qu'à l'ouest (12 cm) : la lumière des meubles
+       vient de la gauche (`studio.py`, SUN_DIR), l'ombre portée d'un muret tombe à sa droite. */
+    const NW = pxOfM(0.12), NE = pxOfM(0.30);
+    for (let k = 0; k < NW; k++) ombre(a - 1 - k, b, 1, d - b, 0.24 * (1 - k / NW) ** 1.6);
+    for (let k = 0; k < NE; k++) ombre(cc + k, b, 1, d - b, 0.36 * (1 - k / NE) ** 1.4);
   }
   g.globalAlpha = 1;
   return c;
@@ -764,6 +822,20 @@ export function bakeHomeFace(mk, plan, L, f) {
     if (pb - pa > pxOfM(0.2)) glass.push(paintWallWindow(g, pa, Hh, pb - pa, piece.fenetre && piece.fenetre.allege, piece.fenetre && piece.fenetre.haut));
   }
   paintWallDetails(g, plan, L, f, Hh, wallPx);
+  /* 2026-10-18 — « LA LUMIÈRE DE PROFONDEUR » : le pied du mur s'assombrit (0,22 contre la plinthe, rien à 45 cm), et
+     ses ANGLES aussi (0,20 sur 35 cm, `f.coinW`/`f.coinE` de `homeFaces`) — l'ombre qu'une pièce garde dans ses coins,
+     qui dit où le mur du fond rencontre les murs de côté. Le verre des fenêtres se peint par-dessus, à chaque image. */
+  {
+    const NB = pxOfM(0.45), NA = pxOfM(0.35);
+    g.fillStyle = "#20160f";
+    for (let k = 0; k < NB; k++) { g.globalAlpha = 0.22 * (1 - k / NB) ** 1.5; g.fillRect(0, Hh - 1 - k, W, 1); }
+    for (let k = 0; k < NA; k++) {
+      g.globalAlpha = 0.20 * (1 - k / NA) ** 1.5;
+      if (f.coinW) g.fillRect(k, capPx, 1, Hh - capPx);
+      if (f.coinE) g.fillRect(W - 1 - k, capPx, 1, Hh - capPx);
+    }
+    g.globalAlpha = 1;
+  }
   paintWallTop(g, 0, 0, W, capPx);
   /* 2026-10-17 — LA FACE ÉVASÉE, CUITE UNE FOIS. Une face pleine se dessinait rangée par
      rangée à chaque image (l'évasement, `HOME_FLARE`) : à 64 px par case, ~150 `drawImage`
@@ -819,8 +891,11 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
 export function drawLowWall(ctx, x0, y0, x1, y1, ext) {
   const [a, b] = homePx(x0, y0), [c, d] = homePx(x1, y1);
   const w = Math.max(1, c - a);
-  paintWallTop(ctx, a, b - HOME_CUT, w, d - b);
-  rect(ctx, a, d - HOME_CUT, w, HOME_CUT, ext ? "#8f7d68" : "#d9cfb9");
+  // 2026-10-18 : l'arase claire (`paintCutTop`), la tranche un ton plus bas, sa plinthe, et un trait d'ombre à son pied.
+  paintCutTop(ctx, a, b - HOME_CUT, w, d - b, ext);
+  rect(ctx, a, d - HOME_CUT, w, HOME_CUT, ext ? PIERRE_FACE : "#c8bba2");
+  rect(ctx, a, d - HOME_CUT, w, 1, ext ? "#8a7a64" : "#9c8e77");
+  rect(ctx, a, d - pxOfM(0.12), w, pxOfM(0.12), PLINTHE.fond);
   rect(ctx, a, d - 1, w, 1, "#5e5244");
 }
 /* UN GARDE-CORPS à claire-voie (90 cm) : une main courante de noyer posée sur
@@ -853,19 +928,22 @@ export function drawFacadeCut(ctx, plan, lw, ciel) {
   const seg = (a, b) => {
     const [pa, pb] = homePx(a, y0), [pc, pd] = homePx(b, y1);
     if (pc - pa <= 0) return;
-    paintWallTop(ctx, pa, pb - HOME_CUT, pc - pa, pd - pb);
-    rect(ctx, pa, pd - HOME_CUT, pc - pa, HOME_CUT, "#a39178");
+    paintCutTop(ctx, pa, pb - HOME_CUT, pc - pa, pd - pb, true);   // 2026-10-18 : l'arase de pierre éclairée
+    rect(ctx, pa, pd - HOME_CUT, pc - pa, HOME_CUT, PIERRE_FACE);
     rect(ctx, pa, pd - 1, pc - pa, 1, "#5e5244");
   };
+  /* ⚠️ 2026-10-18 — la coupe s'arrête aux NUS INTÉRIEURS des murs latéraux : leurs blocs d'angle (de −EP_EXT à 0, de w à
+     w + EP_EXT) appartiennent aux murs DEBOUT ; coupée à 35 cm par-dessus, la façade mangeait le pied du pilier d'angle. */
+  cur = Math.max(x0, 0);
   for (const [a, b] of trous) { seg(cur, a); cur = b; }
-  seg(cur, x1);
+  seg(cur, Math.min(x1, plan.w));
   for (const [a, b] of lw.fenetres) {
     const [pa, pb] = homePx(a, y0), [pc, pd] = homePx(b, y1);
     rect(ctx, pa, pb - HOME_CUT, pc - pa, pd - pb, "#cfc3ab");
     rect(ctx, pa, pb - HOME_CUT, pc - pa, 1, "#e9e1cf");
     const c = (k, s) => Math.round(255 * Math.min(1, ciel[k] * s));
     rect(ctx, pa, pb - HOME_CUT + 9, pc - pa, 2, `rgb(${c(0, 0.62)},${c(1, 0.78)},${c(2, 0.92)})`);
-    rect(ctx, pa, pd - HOME_CUT, pc - pa, HOME_CUT, "#b8a68a");
+    rect(ctx, pa, pd - HOME_CUT, pc - pa, HOME_CUT, "#9c8a71");
     // 2026-10-17 — l'APPUI côté pièce : une tablette de chêne ciré qui déborde du mur
     rect(ctx, pa - 5, pb - HOME_CUT - 5, pc - pa + 10, 6, "#a8794a");
     rect(ctx, pa - 5, pb - HOME_CUT - 5, pc - pa + 10, 1, "#c99c68");
@@ -972,7 +1050,12 @@ export function homeDrawItems(plan, L, o) {
       }
       if (top > 0) {
         const a = px + Math.round(flarePx(f.x0, v, xc)), b = px + bake.W + Math.round(flarePx(f.x1, v, xc));
-        paintWallTop(ctx, a, py - v - bake.capPx, b - a, bake.capPx);
+        /* 2026-10-18 : coupée, l'arase est claire (`paintCutTop`) ; PENDANT la coupe (le mur descend ou remonte en
+           fondu), le clair se mêle au sombre selon la hauteur — sinon l'arase changerait de couleur d'un coup à
+           l'arrivée en haut (noyau §4 : une transition qui se voit se fait par une durée, jamais par un seuil). */
+        const k = Math.max(0, Math.min(1, (vis - HOME_CUT) / Math.max(1, bake.wallPx - HOME_CUT)));
+        if (k > 0) paintWallTop(ctx, a, py - v - bake.capPx, b - a, bake.capPx);
+        if (k < 1) { ctx.globalAlpha = 1 - k; paintCutTop(ctx, a, py - v - bake.capPx, b - a, bake.capPx, f.ext); ctx.globalAlpha = 1; }
       }
     } });
   }
@@ -1030,22 +1113,34 @@ export function homeDrawItems(plan, L, o) {
    intérieure du mur ouest se voit à gauche du sol, celle du mur est à droite :
    chaque colonne de pixels y est UNE HAUTEUR du mur (la plinthe contre le sol,
    la corniche au bord extérieur), et le long de la colonne court la longueur du
-   mur — le papier de la pièce qui le borde, tronçon par tronçon. Puis l'arase. */
+   mur — le papier de la pièce qui le borde, tronçon par tronçon. Puis l'arase.
+   ⚠️ 2026-10-18 — « LES COINS DE FAÇADE » (vu en jeu : le mur latéral paraissait
+   plié au coin) : la face courait jusqu'au NU INTÉRIEUR de la façade (y = d), et le
+   pilier d'angle se tient à son nu EXTÉRIEUR (d + EP_EXT) ; au-dessus de la façade
+   coupée, les 40 cm de face entre les deux manquaient — un coin de vide entre le
+   mur et son pilier, et une arase qui s'arrêtait 40 cm trop tôt. La face et l'arase
+   vont maintenant jusqu'au nu extérieur (le bas, sous la coupe de 35 cm, est
+   recouvert par la façade coupée), et l'arase a la largeur ÉVASÉE du mur (son bord
+   extérieur s'écarte plus que l'intérieur), celle du pilier qu'elle coiffe.
+   2026-10-18 — « LA LUMIÈRE DE PROFONDEUR » : la face s'assombrit vers le sol (le
+   pied d'un mur reçoit moins de jour que son haut) et vers l'angle du fond. */
 export function paintSideFaces(g, plan, L, H) {
-  const lv = plan.niveaux[L], xc = plan.w / 2;
+  const lv = plan.niveaux[L], xc = plan.w / 2, e = H.EP_EXT, yEnd = plan.d + e;
   const hPx = lv.pente ? pxOfM(1.0) : pxOfM(lv.mur);
-  const capPx = Math.round(0.34 * MPX);
   for (const cote of ["W", "E"]) {
-    const xw = cote === "W" ? 0 : plan.w, sg = cote === "W" ? -1 : 1;
+    const xw = cote === "W" ? 0 : plan.w, xo = cote === "W" ? -e : plan.w + e;
     const L0 = Math.abs(flarePx(xw, hPx, xc));
     const [bx] = homePx(xw, 0);
+    // l'arase : le dessus du mur (de xw à xo) à sa pleine hauteur, évasé comme lui
+    const ai = bx + Math.round(flarePx(xw, hPx, xc)), ao = homePx(xo, 0)[0] + Math.round(flarePx(xo, hPx, xc));
     // les tronçons : la pièce qui borde le mur, tous les 5 cm
-    for (let y = 0; y < plan.d; y += 0.05) {
-      const pc = H.homeRoomAt(plan, L, cote === "W" ? 0.05 : plan.w - 0.05, y + 0.025);
+    for (let y = 0; y < yEnd - 1e-6; y += 0.05) {
+      const pc = H.homeRoomAt(plan, L, cote === "W" ? 0.05 : plan.w - 0.05, Math.min(y + 0.025, plan.d - 0.025));
       const deco = pc ? pc.murs : { papier: "platre", lambris: null };
       const papier = PAPIERS[deco.papier] || PAPIERS.platre;
       const lam = deco.lambris === "faience" ? "faience" : deco.lambris ? (LAMBRIS[deco.lambris] || LAMBRIS.sauge) : null;
-      const [, py0] = homePx(xw, y), [, py1] = homePx(xw, y + 0.05);
+      const [, py0] = homePx(xw, y), [, py1] = homePx(xw, Math.min(yEnd, y + 0.05));
+      if (py1 <= py0) continue;
       for (let c = 0; c < L0; c++) {
         const zc = Math.min(hPx - 1, (c + 0.5) / (HOME_FLARE * Math.abs(xw - xc)));
         let col;
@@ -1062,16 +1157,16 @@ export function paintSideFaces(g, plan, L, H) {
           rect(g, x, yy - z, 1, 1, cc);
         }
       }
-      // l'ombre de l'angle : la face est un peu plus sombre que le mur du fond (elle reçoit la lumière de biais)
-      g.globalAlpha = 0.16;
+      /* L'OMBRE : la face reçoit le jour de biais (0,10 en haut), son pied moins encore (0,30 contre la plinthe),
+         et l'angle du fond s'enfonce (jusqu'à +0,14 sur les 70 premiers cm). */
+      const coin = y < 0.6 ? 0.14 * (1 - y / 0.6) ** 1.5 : 0;
       for (let c = 0; c < L0; c++) {
         const zc = Math.round((c + 0.5) / (HOME_FLARE * Math.abs(xw - xc)));
+        g.globalAlpha = Math.min(0.5, 0.10 + 0.20 * (1 - Math.min(1, zc / hPx)) ** 2 + coin);
         rect(g, cote === "W" ? bx - 1 - c : bx + c, py0 - zc, 1, py1 - py0, "#20160f");
       }
       g.globalAlpha = 1;
-      // l'arase, au sommet évasé
-      const ax = cote === "W" ? bx - Math.round(L0) - capPx : bx + Math.round(L0);
-      paintWallTop(g, ax, py0 - hPx, capPx, py1 - py0);
+      paintWallTop(g, Math.min(ai, ao), py0 - hPx, Math.abs(ao - ai), py1 - py0);
     }
   }
 }
@@ -1082,9 +1177,16 @@ export function drawCornerPillar(ctx, plan, lw, L) {
   const hPx = lv.pente ? pxOfM(1.0) : pxOfM(lv.mur);
   const [x0, , x1, y1] = lw.rect;
   const [pa] = homePx(x0, 0), [pb, py] = homePx(x1, y1);
+  /* 2026-10-18 — la pierre de la tranche, comme celle de la façade coupée (`drawFacadeCut`, `PIERRE_FACE`) : c'est le même
+     mur vu du même côté. Son pied s'assombrit (le jour d'en haut), son bord extérieur est un trait, et l'arase évasée
+     (`paintSideFaces`) la coiffe désormais sans vide entre les deux. */
+  const out = x0 < 0 ? "a" : "b";
   for (let z = 0; z < hPx; z++) {
     const a = pa + Math.round(flarePx(x0, z, xc)), b = pb + Math.round(flarePx(x1, z, xc));
-    rect(ctx, a, py - 1 - z, b - a, 1, z > hPx - 6 ? "#6b5a4d" : "#8f7d68");
+    rect(ctx, a, py - 1 - z, b - a, 1, PIERRE_FACE);
+    if (z < pxOfM(0.5)) { ctx.globalAlpha = 0.26 * (1 - z / pxOfM(0.5)) ** 1.5; rect(ctx, a, py - 1 - z, b - a, 1, "#20160f"); ctx.globalAlpha = 1; }
+    rect(ctx, out === "a" ? a : b - 1, py - 1 - z, 1, 1, "#5e5244");
+    rect(ctx, out === "a" ? b - 1 : a, py - 1 - z, 1, 1, "#bfae92");
   }
 }
 

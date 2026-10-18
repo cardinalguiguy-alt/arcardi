@@ -6,6 +6,15 @@
 
 ---
 
+### À juger — CHEZ SOI : LA PERSPECTIVE ET L'ÉVASEMENT À 0,17 (2026-10-18)
+
+Le lot (coins de façade, cloisons en volume, lumière de profondeur) t'allait sur images ; l'évasement 0,17 est choisi sur maquette. À voir en jouant :
+- **Les murs de côté plus larges** : la boîte se creuse ; à la longue, gênant ? Les meubles hauts contre un mur de côté (bibliothèque) s'en écartent un peu
+  vers le haut (ils ne s'évasent pas) : ça se remarque en jouant ?
+- **La façade coupée en pierre claire** (au lieu des briques sombres) : le devant reste-t-il assez « cadré » ? Revenir aux briques : une ligne.
+- **La lumière de profondeur** (0,16 au plus sur le sol) : assez marquée ?
+Pas vu : la nuit, les combles en jeu, iPad, deux clients.
+
 ### À juger — CHEZ SOI : LES HAUTEURS D'USAGE ET LA MARCHE (2026-10-17, après-midi)
 
 Entre chez toi, va à la cuisine puis à la salle de bain (étage), et colle-toi au plan, à l'évier, au lavabo, à la baignoire.

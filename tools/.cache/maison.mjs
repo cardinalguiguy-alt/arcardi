@@ -79,7 +79,7 @@ export const HOME_LEVEL_H = 14 * HOME_K;  // par niveau : 14 cases du plan (9 de
    et −3 cases du plan) TOMBE SUR UNE CASE ENTIÈRE DU MONDE : posées au cran 2
    ou 4, elles tombent alors sur des pixels d'écran entiers — à 1,5, l'origine
    arrivait à 57,6 px au cran 4. */
-export const HOME_OX = 2.0 * HOME_K;   // 2026-10-16 (soir) : 1,6 → 2,0 avec la marge des murs évasés (`maisonArt.HOME_FX0` −1)
+export const HOME_OX = 1.5 * HOME_K;   // 2026-10-16 (soir) : 1,6 → 2,0 avec la marge des murs évasés (`maisonArt.HOME_FX0` −1) ; 2026-10-18 : 2,0 → 1,5 avec FX0 à −1,5 (évasement 0,17) — l'origine cuite tombe à 0, la maison tient dans HOME_SLOT_W
 export const HOME_OY = 4.0 * HOME_K;
 export const homeSlotOf = (x) => Math.floor(x / HOME_SLOT_W);
 export const homeLevelOf = (y) => Math.floor(y / HOME_LEVEL_H);
@@ -374,14 +374,15 @@ export function homeCadreRects(plan, L, key) {
 }
 /* L'ENVELOPPE d'un cadre, en cases du plan : de quoi voir ses murs entiers — la
    face du fond monte de la hauteur du mur (2,11 cases), les murs latéraux
-   évasés débordent de 0,6 case, la coupe du devant et les pieds du personnage
-   demandent un peu de marge. Rend [x0, y0, x1, y1]. */
+   évasés débordent (1,0 case montrée depuis l'évasement à 0,17 du 2026-10-18 :
+   0,65 à 0,11 — la face entière, l'arase à demi), la coupe du devant et les pieds
+   du personnage demandent un peu de marge. Rend [x0, y0, x1, y1]. */
 export function homeCadreBox(plan, L, key) {
   const rs = homeCadreRects(plan, L, key), lv = plan.niveaux[L];
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [a, b, c, d] of rs) { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); }
   const mur = (lv.pente ? 2.3 : lv.mur) / CASE_M;                    // la hauteur du mur du fond, en cases
-  return [x0 - (x0 <= 0.01 ? 0.65 : 0.30), y0 - mur - 0.35, x1 + (x1 >= plan.w - 0.01 ? 0.65 : 0.30), y1 + (y1 >= plan.d - 0.01 ? 0.60 : 0.45)];
+  return [x0 - (x0 <= 0.01 ? 1.0 : 0.30), y0 - mur - 0.35, x1 + (x1 >= plan.w - 0.01 ? 1.0 : 0.30), y1 + (y1 >= plan.d - 0.01 ? 0.60 : 0.45)];
 }
 /* Distance (cases) d'un point à la réunion de rectangles : 0 dedans. */
 export function homeDistToRects(rs, lx, ly) {
@@ -604,6 +605,13 @@ export function homeFaces(plan, L) {
     out.splice(i, 1);
   }
   out.forEach((f, i) => { f.id = L + ":" + i; f.y = Math.round(f.y * 1000) / 1000; });
+  /* 2026-10-18 — LES ANGLES d'une face (dessin seulement : l'ombre d'angle de `maisonArt.bakeHomeFace`). Un bout de face
+     est un angle de la pièce, sauf quand la même pièce continue sur la même ligne (le tronçon voisin ne diffère que par
+     la pièce au NORD : une cloison qui arrive de l'autre côté du mur n'est pas un angle pour la pièce d'ici). */
+  for (const f of out) {
+    const suite = (x) => out.some((g) => g !== f && Math.abs(g.y - f.y) < 1e-6 && g.room === f.room && (Math.abs(g.x1 - x) < 1e-6 || Math.abs(g.x0 - x) < 1e-6));
+    f.coinW = !suite(f.x0); f.coinE = !suite(f.x1);
+  }
   faceMemo.set(key, out);
   return out;
 }
