@@ -11,20 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-18 — CHEZ SOI : LA PERSPECTIVE ET L'ÉVASEMENT À 0,17 ; RIEN DE COMMITÉ
+### 2026-10-18 — CHEZ SOI : LOT 2b (CATALOGUE, CARTONS), APPLIQUES, TUYAU DU POÊLE, DORMEUR ; PERSPECTIVE À 0,17 ; RIEN DE COMMITÉ
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récit : journal du 2026-10-18 au README de la ferme). Faits, jugés en jeu : les murs latéraux et leur arase vont jusqu'au nu
-EXTÉRIEUR de la façade (le coin ne plie plus) ; `paintCutTop` (l'arase d'un mur COUPÉ est claire, celle d'un mur plein reste sombre) ; pieds et angles des murs
-assombris (`homeFaces` : `coinW`/`coinE`), lumière PAR PIÈCE ; `HOME_FLARE` 0,11 → 0,17 choisi sur maquette, avec `HOME_FX0` −1,5, `HOME_OX` 1,5 × K et 1,0 case
-de mur latéral dans `homeCadreBox` (l'évasement, la marge cuite, l'origine et le cadrage vont ENSEMBLE). `verify-maison` 162/162, `verify-strings`, `verify-docs`
-verts. **Supabase : rien.** **Pas vu** : la nuit, les combles en jeu, iPad, deux clients.
-Meuble NEUF (2b) : aux deux listes d'échelle (`meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES`) ; Blender déterministe : ne commiter que les PNG changés au pixel.
+**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-18 au README de la ferme). Faits, vus en jeu : perspective (coins de façade,
+cloisons coupées claires, lumière par pièce, `HOME_FLARE` 0,17 avec `HOME_FX0` −1,5, `HOME_OX` 1,5 × K et `homeCadreBox` qui VONT ENSEMBLE) ; les
+meubles restent droits (essayé évasés : ils tombent) ; appliques murales au lieu de l'ampoule pendante, tuyau du poêle mené au mur ; dormeur selon
+l'orientation du lit, yeux clos après 1 à 7 s ; lot 2b : catalogue au sol de l'entrée, commande payée par la caisse, carton livré le lendemain devant
+la porte, rentré, déballé (champ neuf `c` : lu par `homeCartons`). `verify-maison` 177/177 et 4 autres bancs verts. **Supabase : rien.** **Pas vu** : deux clients, iPad, une vraie nuit qui livre.
+Meuble NEUF : aux deux listes d'échelle (`meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES`) puis au catalogue ; Blender : ne commiter que les PNG changés au pixel.
 ⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
 trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
 
-### ⏭️ ACTION SUIVANTE — LOT 2b : LE CATALOGUE (UN OBJET DANS L'ENTRÉE) ET LES CARTONS LIVRÉS LE LENDEMAIN (`docs/PROJETS.md` §6)
+### ⏭️ ACTION SUIVANTE — LOT 2c : LES LUMIÈRES À ALLUMER (LAMPES, POÊLE, APPLIQUES), LES OBJETS DE MUR, LA REVENTE (`docs/PROJETS.md` §6)
 
-Avant : le bloc en tête de `docs/A-JUGER.md` (perspective, évasement). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+Avant : les blocs en tête de `docs/A-JUGER.md` (catalogue et cartons ; perspective). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -82,7 +82,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; à venir : catalogue, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; à venir : lumières, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
@@ -249,6 +249,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UNE TAILLE SE LIT CONTRE SES VOISINES : AGRANDIR LES VOISINS RAPETISSE CE QUI N'A PAS BOUGÉ
 - UN PERSONNAGE CHIBI A LA HAUTEUR D'UN ADULTE ET LA CARRURE DE DEUX : CONTRE DES COTES RÉELLES, IL PARAÎT GÉANT
 - UNE COTE D'USAGE SE COMPARE AU PERSONNAGE, PAS À SON ANCIENNE VALEUR : ×2 SUR LES EMPRISES SANS ÷2 SUR LES HAUTEURS LAISSE LE PERSONNAGE SOUS LE PLAN DE TRAVAIL
+- DANS UNE VUE EN COUPE, CE QUI S'ACCROCHE À UNE SURFACE QU'ON NE VOIT PAS FLOTTE
 - UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE HAUT
 - UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER
 - UNE CONDITION DE PROXIMITÉ DOIT MESURER CE QUE L'ACTION MESURE, PAS UNE APPROXIMATION QUI SUPPOSE QU'ON PEUT S'EN APPROCHER

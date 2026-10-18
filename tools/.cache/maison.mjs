@@ -325,10 +325,21 @@ export function homeFixes(plan, L, facade) {
   return out;
 }
 
-/* Où se pose la tête du dormeur : sur l'oreiller de gauche (le lit a la tête au nord). */
+/* Où se pose la tête du dormeur, et dans quel sens il est couché (`rot`, en quarts de tour : de combien tourner la pose de face,
+   la tête en haut, pour qu'elle pointe vers la tête de lit).
+   ⚠️ 2026-10-18 — « le lit pivoté n'a pas sa propre animation de sommeil » (Guillaume) : l'oreiller était toujours au NORD, sur la
+   tête d'un lit `S`. Un meuble FAIT FACE à son orientation (`o`) : `S` a la tête de lit au nord, `E` à l'ouest, `W` à l'est, `N` au
+   sud (vus sur les sprites rendus : les oreillers y sont). On se couche sur l'oreiller du nord ou de l'ouest — le premier des deux. */
 export function homeBedPillow(f) {
-  const [x0, y0, x1] = homeFurnitureRect(f);
-  return { lx: x0 + (x1 - x0) * 0.3, ly: y0 + 0.30, z: 0.58 * homeZk(f.sprite) };   // 2026-10-17 : le matelas descend avec le lit (×½)
+  const [x0, y0, x1, y1] = homeFurnitureRect(f), z = 0.58 * homeZk(f.sprite);   // 2026-10-17 : le matelas descend avec le lit (×½)
+  /* Le point rendu est le MENTON (la pose de face coupée à 11 px, les cheveux 10 px plus loin, vers la tête de lit). `E`/`W` :
+     0,36 case de la tête de lit, les cheveux touchent l'oreiller sans mordre le montant. `N` : la tête de lit est DEVANT, sa face
+     cache le bas de l'oreiller ; les cheveux s'arrêtent au bord de l'oreiller qu'on voit (rangée 96 du sprite, 35 px au-dessus de
+     son pied), d'où 0,62 case — à 0,30 la tête tombait sur le panneau de bois (vu en jeu). */
+  if (f.o === "E") return { lx: x0 + 0.36, ly: y0 + (y1 - y0) * 0.3, z, rot: -1 };
+  if (f.o === "W") return { lx: x1 - 0.36, ly: y0 + (y1 - y0) * 0.3, z, rot: 1 };
+  if (f.o === "N") return { lx: x0 + (x1 - x0) * 0.3, ly: y1 - 0.62, z, rot: 2 };
+  return { lx: x0 + (x1 - x0) * 0.3, ly: y0 + 0.30, z, rot: 0 };
 }
 
 // ─── la géométrie d'un niveau ────────────────────────────────────────────
@@ -672,7 +683,7 @@ export const HOME_DECOR_PRIX = { papier: 1500, lambris: 1000, sol: 2500 };
 export const HOME_PLAN_V = 3;   // 3 (2026-10-17, le soir) : les équipements entrent dans le plan
 export function homeDepart() {
   let k = 1;
-  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, k, pv: HOME_PLAN_V };
+  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, c: [], k, pv: HOME_PLAN_V };   // 2026-10-18 : `c`, les cartons (lot 2b)
 }
 /* La maison d'un joueur, telle quelle (jamais modifiée ici). */
 export function homeOf(homes, id) {
@@ -921,5 +932,99 @@ export function resolveHomeGift(home) {
   for (const s of base) home.g.push({ u: home.k++, s });
   return { ok: true, n: base.length };
 }
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ LOT 2b (2026-10-18) — LE CATALOGUE ET LES CARTONS (docs/PROJETS.md §6, lot 2,
+   ║ réponses 5, 6 et 8 de Guillaume).
+   ╚════════════════════════════════════════════════════════════════════════
+   Le catalogue est un OBJET chez soi : glissé sous la porte, il attend sur le sol
+   de l'entrée ; E le feuillette. Des pages par pièce, l'aperçu et les coloris ;
+   une édition par saison (une seule à ce jour : la même offre, le titre suit la
+   saison). Commander débite la caisse commune (l'hôte arbitre, décision 3) et
+   met un CARTON en route ; il est livré LE LENDEMAIN MATIN (`d` = jour de la
+   commande + 1, le jour de jeu partagé `day`) DEVANT LA PORTE, dans la rue. Quand
+   le propriétaire rentre, les cartons entrent avec lui (`i`) : ils attendent dans
+   l'entrée, E en déballe un → le garde-meuble. Prix à l'échelle de la garde-robe
+   (chapeaux et tenues de 1 200 à 14 000 or) : une plante ≈ un chapeau, un canapé
+   huit fois plus (décision 8).
+   ⚠️ CHAMP NEUF `c` (noyau §4 : « un résolveur qui écrit un champ neuf doit être
+   livré dans le même geste que sa déclaration et sa migration ») : déclaré dans
+   `homeDepart`, ABSENT d'une sauvegarde d'avant = aucun carton — tout lecteur
+   passe par `homeCartons`, jamais `h.c` nu. Forme : { u, s, d, i? } — u : le futur
+   identifiant du meuble ; s : son sprite ; d : le jour de livraison ; i : entré. */
+export const HOME_CATALOGUE = [
+  { id: "canape", page: "sejour", prix: 12000, coloris: ["canape", "canape_canard"] },
+  { id: "fauteuil", page: "sejour", prix: 6500, coloris: ["fauteuil", "fauteuil_vert"] },
+  { id: "table_basse", page: "sejour", prix: 3500, coloris: ["table_basse"] },
+  { id: "tapis", page: "sejour", prix: 4000, coloris: ["tapis", "tapis_bleu"] },
+  { id: "bibliotheque", page: "sejour", prix: 7500, coloris: ["bibliotheque"] },
+  { id: "lampadaire", page: "sejour", prix: 4500, coloris: ["lampadaire", "lampadaire_moutarde"] },
+  { id: "poele", page: "sejour", prix: 9000, coloris: ["poele"] },
+  { id: "lit", page: "chambre", prix: 11000, coloris: ["lit"] },
+  { id: "gueridon", page: "chambre", prix: 2800, coloris: ["gueridon"] },
+  { id: "portemanteau", page: "entree", prix: 2200, coloris: ["portemanteau"] },
+  { id: "plante_verte", page: "entree", prix: 1500, coloris: ["plante_verte"] },
+];
+export const HOME_CATALOGUE_PAGES = ["sejour", "chambre", "entree"];
+export const HOME_CARTONS_MAX = 8;                 // en route + livrés, par maison : l'entrée n'en tient pas plus
+export const homeCartons = (h) => (h && Array.isArray(h.c) ? h.c : []);
+export const homeCatalogueOf = (s) => HOME_CATALOGUE.find((e) => e.coloris.includes(s)) || null;
+/* COMMANDER : `req` = { s } (un coloris du catalogue). Rend { ok, prix } ; l'appelant (l'hôte) débite la caisse. */
+export function resolveHomeOrder(home, req, day) {
+  const s = String(req.s || ""), e = homeCatalogueOf(s);
+  if (!e || !MEUBLES[s]) return { ok: false, raison: "catalogue" };
+  if (homeCartons(home).length >= HOME_CARTONS_MAX) return { ok: false, raison: "cartons" };
+  if (!Array.isArray(home.c)) home.c = [];
+  home.c.push({ u: home.k++, s, d: (day | 0) + 1 });
+  return { ok: true, prix: e.prix };
+}
+/* DÉBALLER : `req` = { u }. Le carton doit être livré ; le meuble part au garde-meuble. */
+export function resolveHomeUnbox(home, req, day) {
+  const u = req.u | 0, c = homeCartons(home).find((x) => x.u === u);
+  if (!c) return { ok: false, raison: "inconnu" };
+  if (c.d > (day | 0)) return { ok: false, raison: "enRoute" };
+  home.c = homeCartons(home).filter((x) => x.u !== u);
+  home.g.push({ u, s: c.s });
+  return { ok: true, s: c.s };
+}
+/* RENTRER LES CARTONS : ceux qui attendaient devant la porte entrent avec le propriétaire. Rend { ok, n }. */
+export function resolveHomeCartonsIn(home, day) {
+  let n = 0;
+  for (const c of homeCartons(home)) if (c.d <= (day | 0) && !c.i) { c.i = 1; n++; }
+  return { ok: n > 0, n };
+}
+/* OÙ ILS SONT DANS L'ENTRÉE (cases du plan) : le catalogue au sol à côté de la porte d'entrée (du côté où il y a la place, dans
+   l'entrée), les cartons en deux colonnes le long du mur ouest, au nord de la porte et au sud du pied de l'escalier (le passage
+   de la volée à la porte reste libre : 1,2 case à l'est d'eux). Dessin seulement : ils ne bloquent personne. */
+export const HOME_CARTON_C = 0.36;                 // le côté d'un carton (43 cm)
+export function homeCataloguePos(plan, facade) {
+  const [a, b] = (facade && facade.porte) || [plan.w * 0.2, plan.w * 0.2 + 0.8];
+  const entree = plan.niveaux[0].pieces.find((p) => p.id === "entree"), x1 = entree ? entree.rects[0][2] : plan.w;
+  const lx = b + 0.62 <= x1 - 0.08 ? b + 0.22 : Math.max(0.1, a - 0.62);
+  // ⚠️ à 1,3 case de la façade (vu en jeu : à 0,62 la façade coupée à 35 cm en cachait le bas, et l'invite « sortir » passait devant)
+  return { lx, ly: plan.d - 1.3, w: 0.36, h: 0.46 };
+}
+export function homeCartonSpots(plan) {
+  const out = [];
+  // ⚠️ au nord du catalogue (vu en jeu : la première rangée, à 7,35, le touchait)
+  for (const y of [7.05, 6.6, 6.15, 5.7]) for (const x of [0.12, 0.56]) out.push({ lx: x, ly: y });
+  return out;
+}
+export function homeNearCatalogue(plan, facade, lx, ly) {
+  const c = homeCataloguePos(plan, facade);
+  return Math.hypot(lx - (c.lx + c.w / 2), ly - (c.ly + c.h / 2)) < 0.75;
+}
+/* Le carton livré le plus proche, à portée de main (0,75 case du centre), ou null. */
+export function homeCartonNear(home, plan, day, lx, ly) {
+  const spots = homeCartonSpots(plan), pr = homeCartons(home).filter((c) => c.d <= (day | 0));
+  let best = null, bd = 0.75;
+  pr.forEach((c, i) => {
+    const p = spots[i];
+    if (!p) return;
+    const dd = Math.hypot(lx - (p.lx + HOME_CARTON_C / 2), ly - (p.ly + HOME_CARTON_C / 2));
+    if (dd < bd) { bd = dd; best = c; }
+  });
+  return best;
+}
+
 /* Une copie profonde (l'hôte travaille sur une copie, la diffuse, puis la garde). */
 export const homeClone = (h) => JSON.parse(JSON.stringify(h));

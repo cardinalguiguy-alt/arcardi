@@ -61,6 +61,26 @@ function installHelpers() {
   window.__hookRaw = (i) => { let h = (window.__fg || window.__fgFind()).memoizedState; for (let j = 0; j < i; j++) h = h.next; return h.memoizedState; };
   window.__sharedIdx = () => { let h = (window.__fg || window.__fgFind()).memoizedState, i = 0; while (h) { const v = h.memoizedState; if (v && v.current && typeof v.current === "object" && "seed" in v.current && "star" in v.current) return i; i++; h = h.next; } return 310; };
   window.__hook = (i) => window.__hookRaw(i - 310 + window.__sharedIdx());
+  // 2026-10-18 — CHEZ SOI, MEUBLÉE : entre dans la maison du slot 0 et y pose un mobilier de test (contre les murs de côté).
+  window.__homeMeubles = [
+    { u: 1, s: "lit", o: "S", n: 1, x: 53, y: 107 }, { u: 2, s: "plante_verte", o: "S", n: 0, x: 88, y: 93 },
+    { u: 3, s: "canape", o: "W", n: 0, x: 86, y: 116 }, { u: 4, s: "bibliotheque", o: "E", n: 0, x: 45, y: 92 },
+    { u: 5, s: "tapis", o: "E", n: 0, x: 56, y: 112 }, { u: 6, s: "table_basse", o: "E", n: 0, x: 66, y: 124 },
+    { u: 7, s: "fauteuil", o: "E", n: 0, x: 46, y: 140 }, { u: 8, s: "lampadaire", o: "S", n: 0, x: 90, y: 164 },
+    { u: 9, s: "bibliotheque", o: "E", n: 1, x: 0, y: 118 }, { u: 10, s: "bibliotheque", o: "W", n: 1, x: 94, y: 118 },
+    { u: 11, s: "poele", o: "S", n: 1, x: 10, y: 108 }, { u: 12, s: "fauteuil", o: "N", n: 1, x: 70, y: 160 },
+    { u: 13, s: "portemanteau", o: "E", n: 0, x: 0, y: 140 }, { u: 14, s: "gueridon", o: "S", n: 0, x: 90, y: 100 },
+  ];
+  window.__home = async (meubles) => {
+    await window.__ensureJoined(); await window.__sleep(1000);
+    window.__hook(306).current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "home", slot: 0 };
+    await window.__sleep(4000);
+    const m = window.__hook(307).current, sh = window.__hook(310).current;
+    sh.homes = sh.homes || {};
+    if (meubles) sh.homes[m.id] = { m: meubles, g: [], d: {}, k: 99, pv: 3 };
+    return m.zone;
+  };
+  window.__at = async (x, y, name, ms = 2000) => { const m = window.__hook(307).current; m.x = x; m.y = y; await window.__sleep(ms); return name ? window.__cap(name, false) : null; };
 }
 
 export default function AuditTmpPage() {

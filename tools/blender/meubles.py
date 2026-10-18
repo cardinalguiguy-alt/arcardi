@@ -369,8 +369,8 @@ def lampadaire(abat="lin", metal="laiton", allume=False):
 # ─── 7. LE POÊLE À BOIS ──────────────────────────────────────────────────
 def poele(email="fonte", allume=True):
     """0,55 × 0,40 m de fonte (0,45 au premier jet : la profondeur se triche, voir
-    l'en-tête), porte vitrée, tuyau qui monte puis rentre dans le mur (25 cm
-    derrière), une bouilloire émaillée dessus."""
+    l'en-tête), porte vitrée, l'amorce du tuyau (le jeu le monte au plafond), une
+    bouilloire émaillée dessus."""
     W, D = 0.55, 0.40
     r = root("poele")
     Fo = _m(f"email_{email}", *METAL.get(email, METAL["fonte"]))
@@ -397,7 +397,11 @@ def poele(email="fonte", allume=True):
     box("vitre", 0.12, -0.02, 0.24, 0.31, 0.01, 0.32, vitre, r, outline=False)
     box("poignee", 0.47, -0.04, 0.38, 0.04, 0.03, 0.06, La, r, outline=False)
     box("cendrier", 0.10, -0.012, 0.12, 0.35, 0.01, 0.06, Fo, r, outline=False)
-    tube("tuyau", [(W / 2, 0.24, 0.76), (W / 2, 0.24, 1.72), (W / 2, 0.30, 1.80), (W / 2, 0.70, 1.80)], 0.065, Fo, r)
+    # ⚠️ 2026-10-18 — LE TUYAU N'EST PLUS QU'UNE AMORCE (0,76 → 1,10 m, avant ×ZK). Il montait puis rentrait dans un mur à 0,70 m
+    # derrière la façade du poêle : un sprite ne sait pas où est le mur — posé contre lui, le coude le traversait ; au milieu de la
+    # pièce, il finissait en l'air. Le jeu le PROLONGE jusqu'au plafond, à la verticale, coupé avec les murs de la pièce
+    # (`maisonArt.drawFlue`, qui lit cette amorce sur l'image : le haut opaque du sprite).
+    tube("tuyau", [(W / 2, 0.24, 0.76), (W / 2, 0.24, 1.10)], 0.065, Fo, r)
     ellipsoide("bouilloire", 0.15, 0.22, 0.83, 0.10, 0.075, 0.08, _m("email_rouge", "#b23a2a", 0.6), r, outline=True, seg=16)
     cyl("couvercle", 0.15, 0.22, 0.90, 0.035, 0.03, _m("email_rouge", "#b23a2a", 0.6), r, verts=10, aplat=0.7, outline=False)
     box("bec", 0.24, 0.21, 0.82, 0.07, 0.025, 0.025, _m("email_rouge", "#b23a2a", 0.6), r, outline=False)

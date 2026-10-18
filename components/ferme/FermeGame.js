@@ -1113,6 +1113,49 @@ const STAR_FIND_MS = 5200;
    CLAUDE.md), comme les six du réveil de la reine. */
 const STAR_MISSION_MS = 6000;
 
+/* 2026-10-18 — LE DORMEUR FERME LES YEUX (« au bout de une à 7 secondes » — Guillaume). La tête du dormeur est le haut de la pose de
+   face (16 × 11) ; ses yeux y sont deux traits sombres d'un pixel de large et deux de haut, entre deux pixels de peau (lu sur les
+   deux silhouettes, 2026-10-18). Ici, la même tête les yeux CLOS : les traits repeints en peau, et une paupière de deux pixels sur
+   leur rangée basse, tournée vers l'extérieur du visage. Détecté sur l'image, pas écrit en dur : une coiffure ou un teint
+   nouveaux (docs/PROJETS.md §2) suivent sans retouche. Gardé par feuille (une WeakMap : la feuille partie, la tête aussi). */
+const SLEEP_EYES = new WeakMap();
+function sleeperHeadClosed(sheet) {
+  if (SLEEP_EYES.has(sheet)) return SLEEP_EYES.get(sheet);
+  let out = null;
+  try {
+    const c = document.createElement("canvas"); c.width = 16; c.height = 11;
+    const g = c.getContext("2d"); g.drawImage(sheet, 0, 0, 16, 11, 0, 0, 16, 11);
+    const im = g.getImageData(0, 0, 16, 11), d = im.data;
+    const at = (x, y) => (y * 16 + x) * 4;
+    const skin = (i) => d[i + 3] > 200 && d[i] > 150 && d[i] > d[i + 1] && d[i + 1] > d[i + 2];
+    const dark = (i) => d[i + 3] > 200 && d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 60;
+    const eyes = new Map();   // colonne → { haut, bas, peau, oeil }
+    for (let y = 2; y < 10; y++) for (let x = 1; x < 15; x++) {
+      const i = at(x, y);
+      if (!dark(i) || !skin(at(x - 1, y)) || !skin(at(x + 1, y))) continue;
+      const e = eyes.get(x) || { bas: y, peau: at(x - 1, y), oeil: [d[i], d[i + 1], d[i + 2]] };
+      e.bas = y; eyes.set(x, e);
+    }
+    if (eyes.size) {
+      for (let y = 2; y < 10; y++) for (const [x, e] of eyes) {
+        const i = at(x, y);
+        if (dark(i) && skin(at(x - 1, y)) && skin(at(x + 1, y))) for (let k = 0; k < 3; k++) d[i + k] = d[e.peau + k];
+      }
+      for (const [x, e] of eyes) for (const xx of [x, x < 8 ? x - 1 : x + 1]) {
+        const i = at(xx, e.bas);
+        for (let k = 0; k < 3; k++) d[i + k] = e.oeil[k];
+      }
+      g.putImageData(im, 0, 0);
+      out = c;
+    }
+  } catch (e) { out = null; }
+  SLEEP_EYES.set(sheet, out);
+  return out;
+}
+/* Quand chacun s'est endormi (vu par CE client), et après combien il ferme les yeux : 1 à 7 s, tiré à l'endormissement. Rien
+   sur le réseau : c'est un détail de dessin, chaque client tire le sien (noyau §3 : ce qui peut se déduire ne se diffuse pas). */
+const SLEEP_SEEN = new Map();
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden, onChangeFarm }) {
   const L = fstr(lang);
 
@@ -1269,6 +1312,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      pour une tenue, c'est un chapeau qu'on porte dans le menu et pas dans le
      monde. */
   const [boutiqueOpen, setBoutiqueOpen] = useState(null);
+  // 2026-10-18 (lot 2b) — le catalogue de la maison, feuilleté dans l'entrée : { page, pick } (pick : le coloris regardé) ou null
+  const [catalogOpen, setCatalogOpen] = useState(null);
   /* 2026-10-16 — LA TEINTE DE PEAU (voir `skinSet` dans hostHandleReq). `skinPick` : le choix en cours à l'écran de création ; `pendingSkinRef` : le
      choix à envoyer dès que l'hôte connaît mon fermier (renvoyé tant que la garde-robe partagée ne le porte pas) ; `skinInvite` : l'invite faite
      une fois aux personnages d'avant cette fonction. */
@@ -5391,6 +5436,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostFlushOut(out, f, null);
       return;
     }
+    if (req.kind === "devHomeDeliver") {
+      /* 2026-10-18 (lot 2b) — les cartons en route du demandeur, livrés MAINTENANT (devant sa porte) : la commande se teste sans
+         attendre le lendemain. Rien n'est donné — ce qui est livré a été payé. Même famille que devHomeGift. */
+      const s2 = sharedRef.current;
+      if (!s2.homes) s2.homes = {};
+      const h = HM.homeClone(HM.homeOf(s2.homes, f.id));
+      let n = 0;
+      for (const c of HM.homeCartons(h)) if (c.d > (s.day | 0)) { c.d = s.day | 0; n++; }
+      s2.homes[f.id] = h;
+      out.home = { id: f.id, h };
+      dirtyRef.current = true;
+      broadcastChat("🛠️", L.devHomeDeliverChat(f.name, n));
+      hostFlushOut(out, f, null);
+      return;
+    }
     if (req.kind === "devHomeGift") {
       /* 2026-10-16 (lot 2a) — un exemplaire de chaque meuble au garde-meuble du
          demandeur (le catalogue est le lot 2b). Même famille que devMoney. */
@@ -6059,7 +6119,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           dirtyRef.current = true;
         }
       }
-    } else if (req.kind === "homePlace" || req.kind === "homeStore" || req.kind === "homeDecor") {
+    } else if (req.kind === "homePlace" || req.kind === "homeStore" || req.kind === "homeDecor" || req.kind === "homeOrder" || req.kind === "homeUnbox" || req.kind === "homeCartonsIn") {
       /* ═══ 2026-10-16 (lot 2a) — LA MAISON, ARBITRÉE PAR L'HÔTE ═══
          Le joueur ne touche qu'à SA maison (sa parcelle doit être une étroite).
          Les règles sont dans `maison.js` (pures, `verify-maison` §7) ; ici on
@@ -6072,15 +6132,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const h = HM.homeClone(HM.homeOf(s2.homes, f.id));
         const P = HM.PLAN_ETROITE, fac = homeFacadeOfSlot(slotF);
         let r;
+        const day = s.day | 0;
         if (req.kind === "homePlace") r = HM.resolveHomePlace(h, req, P, fac);
         else if (req.kind === "homeStore") r = HM.resolveHomeStore(h, req);
-        else {
+        else if (req.kind === "homeUnbox") r = HM.resolveHomeUnbox(h, req, day);
+        else if (req.kind === "homeCartonsIn") r = HM.resolveHomeCartonsIn(h, day);
+        else if (req.kind === "homeOrder") {
+          /* 2026-10-18 (lot 2b) — COMMANDER AU CATALOGUE : la caisse commune paie, le carton part (livré demain matin). */
+          r = HM.resolveHomeOrder(h, req, day);
+          if (r.ok && s.money < r.prix) r = { ok: false, raison: "or" };
+          if (r.ok) { s.money -= r.prix; out.state = shareState(); out.toast = { id: f.id, key: "homeOrdered", n: req.s }; }
+        } else {
           r = HM.resolveHomeDecor(h, req, P);
           if (r.ok && s.money < r.prix) r = { ok: false, raison: "or" };
           if (r.ok) { s.money -= r.prix; out.state = shareState(); }
         }
-        if (r.ok) { s2.homes[f.id] = h; dirtyRef.current = true; }
-        else out.toast = { id: f.id, key: "homeRefus", n: r.raison };
+        if (r.ok) { s2.homes[f.id] = h; dirtyRef.current = true; if (req.kind === "homeUnbox") out.toast = { id: f.id, key: "homeUnboxed", n: r.s }; }
+        else if (req.kind !== "homeCartonsIn") out.toast = { id: f.id, key: "homeRefus", n: r.raison };
         out.home = { id: f.id, h: s2.homes[f.id] || HM.homeOf(s2.homes, f.id) };
       }
     } else if (req.kind === "skinSet") {
@@ -9858,7 +9926,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ZIP 427 — Maison Garfield et fontaine à vœux.
     if (key === "boutiqueNoGold") return L.boutiqueNoGold;
     if (key === "skinNoMore") return L.skinNoMore;
-    if (key === "homeRefus") return L.homeRefus(n);   // 2026-10-16 (lot 2a) : pourquoi une pose ou un décor est refusé
+    if (key === "homeRefus") return L.homeRefus(n);
+    if (key === "homeOrdered") return L.homeOrdered(L.homeMeubleName(n));   // 2026-10-18 (lot 2b)
+    if (key === "homeUnboxed") return L.homeUnboxed(L.homeMeubleName(n));   // 2026-10-16 (lot 2a) : pourquoi une pose ou un décor est refusé
     if (key === "boutiqueBought") {
       const t = n || {};
       const it = (C.wardrobeCatalog(t.slot) || [])[(t.idx | 0) - 1];
@@ -17771,6 +17841,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         homeCamRef.current = null; homeDimRef.current = null; homeFocusRef.current = { slot: -1, level: -1, key: null }; homePlanViewRef.current = false; setHomePlanView(false);   // 2026-10-17 : une visite repart de la pièce où l'on entre
         sendPos();
         pushToast(L.homeEnterToast);
+        /* 2026-10-18 (lot 2b) — les cartons livrés devant la porte entrent avec leur propriétaire (une `req`, seulement s'il y en a). */
+        if (zt.slot === homeSlotOfId(me.id) && HM.homeCartons(HM.homeOf(sharedRef.current.homes, me.id)).some((c) => c.d <= (sharedRef.current.day | 0) && !c.i)) sendReq({ kind: "homeCartonsIn" });
       } else if (zt.dest === "townFromHome") {
         m.zone = "town";
         const slot0 = HM.homeSlotOf(C.footX(m.x)), h0 = C.TOWN_HOUSES[slot0];
@@ -26368,6 +26440,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            en px monde — l'image a ~12 px de fond de chaque côté (mesuré). */
         const baseL = cxW - (cw / 2 - 12) * k, baseR = cxW + (cw / 2 - 12) * k;
         if (!o.ruin) queueHouseTufts(hsn, baseL, baseR, byW, doorWX, houseE);
+        /* 2026-10-18 (lot 2b) — LES CARTONS LIVRÉS, DEVANT LA PORTE : ce que le propriétaire a commandé hier attend sur le trottoir,
+           à droite de la porte, jusqu'à ce qu'il rentre (ils entrent avec lui, `homeCartonsIn`). Deux au sol, deux par-dessus ; tout
+           se lit dans la maison partagée (`homes`), rien ne circule de plus (§3). */
+        const homesS = sharedRef.current.homes;
+        const dehors = !o.ruin && hsn.ownerId && homesS && homesS[hsn.ownerId] ? HM.homeCartons(homesS[hsn.ownerId]).filter((c) => c.d <= houseDay && !c.i) : [];
+        if (dehors.length) {
+          // sur le perron, contre la porte (vu en jeu : à 0,75 case au sud, ils tombaient sur la ligne de la clôture)
+          const cy = footWY + 0.35 * T;
+          pushE(cy, houseE, () => {
+            dehors.slice(0, 4).forEach((c, i) => {
+              const x = Math.round(doorWX + 12 + (i % 2) * 11), y = Math.round(cy - (i >= 2 ? 8 : 0) - (i % 2) * 1);
+              HMA.drawCarton(ctx, x, y, 10, 5, 7, c.u, i < 2);
+            });
+          });
+        }
         pushE(footWY, houseE, () => {
           drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
           const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY });
@@ -28653,17 +28740,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (pl.slot !== cam.slot || pl.level !== lvl) continue;
         here.push({ p, pl });
       }
-      /* LA NUIT : l'ampoule nue de la pièce où quelqu'un se tient s'allume
-         (la maison est vide au départ, aucune lampe). Son verre et son halo
-         passent par la couche de lumière de la ville (`lumiere.js`). */
+      /* LA NUIT : les appliques de la pièce où quelqu'un se tient s'allument (2026-10-18 : elles remplacent l'ampoule nue qui
+         pendait d'un plafond invisible — `maisonArt.homeAppliques`). Leur verre et leur halo passent par la couche de lumière
+         de la ville (`lumiere.js`), posés à LEUR place sur le mur du fond. */
       const night = LUM.nightFromSky(sky);
-      const roomsLit = new Map();
+      const roomsLit = new Set();
       if (night > 0.08) {
         for (const pl of [ft, ...here.map((h) => h.pl)]) {
           const rm = HM.homeRoomAt(P, lvl, pl.lx, pl.ly);
-          if (!rm || rm.id === "cage" || roomsLit.has(rm.id)) continue;
-          const [x0, y0, x1, y1] = rm.rects.reduce((a, r) => ((r[2] - r[0]) * (r[3] - r[1]) > (a[2] - a[0]) * (a[3] - a[1]) ? r : a));
-          roomsLit.set(rm.id, { lx: (x0 + x1) / 2, ly: (y0 + y1) / 2, allume: true });
+          if (rm && rm.id !== "cage") roomsLit.add(rm.id);
         }
       }
       // Les meubles de CETTE maison à ce niveau — moins celui qu'on tient en main (lot 2a).
@@ -28673,7 +28758,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // se dessinent comme les meubles ; ils ne sont pas dans `meubles` (le lit, la pose, le pointeur ne les voient pas).
       const items = HMA.homeDrawItems(bk.plan, lvl, {
         H: HM, faces: bk.faces, cutPx: (f) => cutMap.get(f.id), lows: HM.homeLows(P, lvl, fac),
-        meubles: HM.homeFixes(P, lvl, fac).concat(meubles), meta: HOME_MEUBLES, img: homeImg, ciel: sky, ampoules: [...roomsLit.values()],
+        meubles: HM.homeFixes(P, lvl, fac).concat(meubles), meta: HOME_MEUBLES, img: homeImg, ciel: sky, allumees: roomsLit,
+        // 2026-10-18 (lot 2b) — le catalogue au sol de l'entrée, les cartons livrés à côté
+        catalogue: lvl === 0 ? HM.homeCataloguePos(P, fac) : null,
+        cartons: lvl === 0 ? HM.homeCartons(home).filter((c) => c.d <= (sharedRef.current.day | 0)).slice(0, HM.HOME_CARTONS_MAX).map((c, i) => ({ ...HM.homeCartonSpots(P)[i], k: c.u })) : [],
+        // 2026-10-18 — la hauteur visible des murs d'une pièce (le tuyau du poêle se coupe avec eux)
+        roomCut: (id) => bk.faces.reduce((mx, { f, bake }) => (f.room === id ? Math.max(mx, Math.min(bake.wallPx, cutMap.get(f.id) == null ? bake.wallPx : cutMap.get(f.id))) : mx), 0) || 1e9,
         mk: (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; },   // 2026-10-17 : le verre évasé, cuit par ciel
         // La volée du haut s'efface (fondu) quand on se tient derrière elle, sur le palier.
         voleeAlpha: homeVoleeAlpha(lvl, ft, dt),
@@ -28690,7 +28780,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const wpt = HM.homeToWorld(cam.slot, lvl, pw.lx, pw.ly);
         const sheet = sprites.getChar(p.gender, p.outfit, false, false, false, false, false, false, wardrobeLookOf(p.id) || p.look || null);
         const hx = Math.round(wpt.x * T) - 8, hy = Math.round(wpt.y * T - pw.z / HM.CASE_M * T * HM.HOME_K) - 10;
-        ctx.drawImage(sheet, 0, 0, 16, 11, hx, hy, 16, 11);
+        /* 2026-10-18 — LE LIT PIVOTÉ : la tête se tourne vers la tête de lit (`pw.rot` quarts de tour autour du point de
+           l'oreiller — des quarts EXACTS, le pixel reste net). Les « Zzz » restent droits. */
+        let ss = SLEEP_SEEN.get(p.id);
+        if (!ss) SLEEP_SEEN.set(p.id, ss = { t0: now, d: 1000 + Math.random() * 6000 });
+        const clos = now - ss.t0 >= ss.d ? sleeperHeadClosed(sheet) : null;
+        const src = clos || sheet;
+        if (pw.rot) {
+          ctx.save(); ctx.translate(hx + 8, hy + 10); ctx.rotate(pw.rot * Math.PI / 2);
+          ctx.drawImage(src, 0, 0, 16, 11, -8, -10, 16, 11);
+          ctx.restore();
+        } else ctx.drawImage(src, 0, 0, 16, 11, hx, hy, 16, 11);
         const zt = (now / 900) % 1;
         ctx.save();
         ctx.font = "bold 7px monospace"; ctx.globalAlpha = 1 - zt;
@@ -28700,12 +28800,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       };
       for (const { p, pl } of here) {
         if (p.sleeping) { draws.push({ y: bed ? HM.homeFurnitureRect(bed)[3] + 0.01 : pl.ly, fn: () => drawSleeper(p) }); continue; }
+        SLEEP_SEEN.delete(p.id);   // réveillé : le prochain endormissement retire son délai
         const rz = rzOf(pl);
         draws.push({ y: pl.ly, fn: () => { ctx.save(); ctx.translate(0, -rz); drawRemotePets(p, dt); drawCharacter(p, false); ctx.restore(); } });
       }
       if (ft.level !== lvl) { /* le mode déco regarde un autre niveau : on ne s'y dessine pas */ }
       else if (m.sleeping) draws.push({ y: bed ? HM.homeFurnitureRect(bed)[3] + 0.01 : ft.ly, fn: () => drawSleeper(m) });
       else {
+        SLEEP_SEEN.delete(m.id);
         const myRz = rzOf(ft);
         draws.push({ y: ft.ly, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); drawSelf(m); ctx.restore(); } });
       }
@@ -28714,15 +28816,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const d of draws) { try { d.fn(); } catch (e) { world(); console.error("[FERME] home draw ignoré", e); } }
       flushNameTags();
       world();
-      // La lumière : le jour d'une pièce (un peu sous le dehors), la nuit des ampoules.
+      // La lumière : le jour d'une pièce (un peu sous le dehors), la nuit des appliques.
       {
         if (!lightRendererRef.current) lightRendererRef.current = LUM.makeLightRenderer((w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; });
         const amb = [sky[0] * 0.90, sky[1] * 0.88, sky[2] * 0.86];
         const lights = [], heads = [];
-        for (const b of roomsLit.values()) {
-          const wpt = HM.homeToWorld(cam.slot, lvl, b.lx, b.ly);
-          lights.push({ x: wpt.x * T, y: wpt.y * T, r: 3.2 * HM.HOME_K, c: "lamp", k: 1 });   // 2026-10-17 : les rayons suivent la pièce (×K)
-          heads.push({ x: wpt.x * T + 0.25, y: wpt.y * T - HMA.pxOfM(2.0) * AS, r: 3 * HM.HOME_K, k: 1 });
+        /* 2026-10-18 — une lumière par APPLIQUE allumée, posée sur le mur entre la tulipe et le sol (elle éclaire le mur autour
+           d'elle et le sol à son pied), son verre à la tulipe ; les deux glissent de l'évasement du mur (`homeFlarePx`). */
+        for (const { f, bake } of bk.faces) {
+          if (!roomsLit.has(f.room) || (cutMap.get(f.id) ?? bake.wallPx) < bake.wallPx - 0.5) continue;
+          const aps = HMA.homeAppliques(bk.plan, lvl, f);
+          for (const ap of aps) {
+            const zp = HMA.pxOfM(ap.z), dx = HMA.homeFlarePx(bk.plan, ap.lx, zp) * AS;
+            const wpt = HM.homeToWorld(cam.slot, lvl, ap.lx, f.y);
+            lights.push({ x: wpt.x * T + dx, y: wpt.y * T - zp * AS * 0.45, r: (aps.length > 1 ? 2.6 : 3.2) * HM.HOME_K, c: "lamp", k: 1 });
+            heads.push({ x: wpt.x * T + dx + 0.25, y: wpt.y * T - (zp + 6) * AS, r: 1.2 * HM.HOME_K, k: 0.9 });
+          }
         }
         lightRendererRef.current.draw(ctx, { zm, Rx: -CX, Ry: -CY, W: canvas.width, H: canvas.height },
           { sky: amb, night: Math.max(night, 0.7), lights, heads, occluders: [], glows: [], screenGlows: [] });
@@ -28777,7 +28886,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // ---- lvl'invite : la porte (sortir), le lit (se coucher).
       let cpk = null;
       if (!m.sleeping && !deco) {
+        const mine = cam.slot === homeSlotOfId(me.id);
         if (lvl === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) cpk = "homeExit";
+        else if (lvl === 0 && mine && HM.homeCartonNear(home, P, sharedRef.current.day | 0, ft.lx, ft.ly)) cpk = "homeUnbox";   // 2026-10-18 (lot 2b)
+        else if (lvl === 0 && mine && HM.homeNearCatalogue(P, fac, ft.lx, ft.ly)) cpk = "homeCatalog";
         else if (bed && HM.homeNearFurnitureIn(P, lvl, bed, ft.lx, ft.ly)) cpk = energyRef.current >= C.MAX_ENERGY ? "homeBedFull" : "homeBed";   // 2026-10-17 : dans la pièce du lit, pas à travers la cloison
       }
       setPromptKeyThrottled(cpk);
@@ -38378,6 +38490,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (m0 && m0.zone === "home") {
       const P = HM.PLAN_ETROITE, ft = HM.homeFootLocal(m0.x, m0.y), fac = homeFacadeOfSlot(ft.slot);
       if (ft.level === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) { leaveHome(); return; }
+      // 2026-10-18 (lot 2b) — chez soi : déballer un carton livré, feuilleter le catalogue
+      if (ft.level === 0 && ft.slot === homeSlotOfId(me.id)) {
+        const hh = homeOfSlot(ft.slot), cb = HM.homeCartonNear(hh, P, sharedRef.current.day | 0, ft.lx, ft.ly);
+        if (cb) { sendReq({ kind: "homeUnbox", u: cb.u }); return; }
+        if (HM.homeNearCatalogue(P, fac, ft.lx, ft.ly)) { setCatalogOpen({ page: "sejour", pick: null }); return; }
+      }
       const bed = homeMeublesOfSlot(ft.slot, ft.level).find((f) => /^lit/.test(f.sprite));   // lot 2a : le lit est où on l'a posé
       if (bed && HM.homeNearFurnitureIn(P, ft.level, bed, ft.lx, ft.ly)) { startSleep(); return; }   // 2026-10-17 : dans la pièce du lit
       return;
@@ -39695,7 +39813,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -44045,7 +44163,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <button onClick={homeHandStore}>📦 {L.homeDecoStore}</button>
                 </div>
               )}
-              <span className="ferme-deco-gold">🪙 {gold}</span>
+              <span className="ferme-deco-gold"><GoldIco sprites={spritesReady ? spritesRef.current : null} /> {gold}</span>
               <button className="ferme-btn" onClick={homeDecoToggle}>{L.homeDecoDone}</button>
             </div>
             {homeDecoUi.tab === "meubles" ? (
@@ -44068,7 +44186,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{L.homeLevelName(HM.PLAN_ETROITE.niveaux[room.n].cle)} · {L.homeRoomName(room.id)}</div>
                 {["papier", "lambris", "sol"].map((quoi) => (
                   <div key={quoi} className="ferme-deco-row">
-                    <span className="ferme-deco-row-label">{L.homeDecorKind(quoi)}<br /><small>{HM.HOME_DECOR_PRIX[quoi]} 🪙</small></span>
+                    <span className="ferme-deco-row-label">{L.homeDecorKind(quoi)}<br /><small>{HM.HOME_DECOR_PRIX[quoi]} <GoldIco sprites={spritesReady ? spritesRef.current : null} /></small></span>
                     {HM.HOME_DECOR[quoi].map((val) => {
                       const on = curOf(quoi) === val;
                       return (
@@ -44085,6 +44203,65 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </div>
             )}
             <div className="ferme-deco-help">{homeDecoUi.tab === "meubles" ? L.homeDecoHelp : L.homeDecoHelpMurs}</div>
+          </div>
+        );
+      })()}
+      {/* ═══ 2026-10-18 (lot 2b) — LE CATALOGUE DE LA MAISON ═══
+          Il n'écrit rien : « Commander » envoie une requête, l'hôte débite la caisse et met le carton en route (§3). Les
+          pages sont des pièces, chaque article montre ses coloris ; l'édition porte le nom de la saison. */}
+      {catalogOpen && (() => {
+        const h = HM.homeOf(sharedRef.current.homes, me.id);
+        const gold = sharedRef.current.money | 0, day = sharedRef.current.day | 0;
+        const cartons = HM.homeCartons(h), enRoute = cartons.filter((c) => c.d > day).length, plein = cartons.length >= HM.HOME_CARTONS_MAX;
+        const page = catalogOpen.page;
+        const items = HM.HOME_CATALOGUE.filter((e) => e.page === page);
+        const pick = catalogOpen.pick && HM.homeCatalogueOf(catalogOpen.pick) ? catalogOpen.pick : items[0] && items[0].coloris[0];
+        const ent = pick ? HM.homeCatalogueOf(pick) : null;
+        const img = (sp) => HM.homeSpriteUrl(sp + "_" + (HM.homeOrients(sp)[0] || "S"));
+        return (
+          <div className="ferme-modal open" onClick={() => setCatalogOpen(null)}>
+            <div className="panel ferme-modal-panel ferme-catalog" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setCatalogOpen(null)}>✕</button>
+              <h2>📖 {L.homeCatalogTitle}</h2>
+              <div className="ferme-hint">{L.homeCatalogEdition(L.seasonName(E.seasonOf().key))} — <GoldIco sprites={spritesReady ? spritesRef.current : null} /> {gold}</div>
+              <div className="ferme-deco-seg" style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+                {HM.HOME_CATALOGUE_PAGES.map((pg) => (
+                  <button key={pg} className={pg === page ? "on" : ""} onClick={() => setCatalogOpen({ page: pg, pick: null })}>{L.homeCatalogPage(pg)}</button>
+                ))}
+              </div>
+              <div className="ferme-catalog-body">
+                <div className="ferme-deco-garde ferme-catalog-grid">
+                  {items.map((e) => {
+                    const sp = e.coloris.includes(pick) ? pick : e.coloris[0];
+                    return (
+                      <button key={e.id} className={"ferme-deco-item" + (ent === e ? " on" : "")} onClick={() => setCatalogOpen({ page, pick: sp })}>
+                        <img src={img(sp)} alt="" />
+                        <span>{L.homeMeubleName(e.coloris[0])}<br /><b>{e.prix} <GoldIco sprites={spritesReady ? spritesRef.current : null} /></b></span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {ent && (
+                  <div className="ferme-catalog-fiche">
+                    <div className="ferme-catalog-apercu"><img src={img(pick)} alt="" /></div>
+                    <b>{L.homeMeubleName(pick)}</b>
+                    {ent.coloris.length > 1 && (
+                      <div className="ferme-catalog-coloris">
+                        {ent.coloris.map((sp) => (
+                          <button key={sp} className={"ferme-deco-sw" + (sp === pick ? " on" : "")} onClick={() => setCatalogOpen({ page, pick: sp })} title={L.homeMeubleName(sp)}>
+                            <img src={img(sp)} alt="" /><span>{L.homeMeubleName(sp)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="ferme-catalog-prix">{ent.prix} <GoldIco sprites={spritesReady ? spritesRef.current : null} /></div>
+                    <button className="ferme-btn" disabled={gold < ent.prix || plein} onClick={() => sendReq({ kind: "homeOrder", s: pick })}>{L.homeCatalogOrder}</button>
+                    <div className="ferme-hint">{plein ? L.homeCatalogFull : L.homeCatalogDelivery}</div>
+                  </div>
+                )}
+              </div>
+              <div className="ferme-hint">{L.homeCatalogCartons(enRoute, cartons.length - enRoute)}</div>
+            </div>
           </div>
         );
       })()}
@@ -44487,6 +44664,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-hint">{L.devHomeHint}</div>
                 <div className="ferme-dev-grid">
                   <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devHomeGift" })}>{L.devHomeGiftBtn}</button>
+                  <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devHomeDeliver" })}>{L.devHomeDeliverBtn}</button>
                 </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devMoneySection}</div>
                 <div className="ferme-dev-hint">{L.devMoneyHint}</div>
@@ -45048,6 +45226,13 @@ function Sprite({ img, w = 32, h = 32, sx, sy }) {
     g.drawImage(img, 0, 0, sw, sh, 0, 0, sw, sh);
   }, [img, sx, sy]);
   return <canvas ref={ref} style={{ width: w, height: h, imageRendering: "pixelated" }} />;
+}
+
+/* 2026-10-18 — L'ICÔNE DE L'OR dans un texte de panneau (mode déco, catalogue) : la pièce d'or du HUD (`icons.gold`), pas l'émoji 🪙 —
+   rendu en pièce d'ARGENT selon les systèmes (« l'icône pour l'or doit montrer de l'or » — Guillaume). Alignée sur la ligne du texte. */
+function GoldIco({ sprites, size = 14 }) {
+  if (!sprites || !sprites.icons || !sprites.icons.gold) return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: "#e3b33a", verticalAlign: "-2px" }} />;   // les sprites pas encore prêts
+  return <span style={{ display: "inline-block", verticalAlign: "-2px", lineHeight: 0 }}><Sprite img={sprites.icons.gold} w={size} h={size} /></span>;
 }
 
 /* Zip 237: pixel-themed button. Renders an optional pixel icon sprite next to

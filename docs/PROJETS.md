@@ -239,6 +239,10 @@ cuisinière, lavabo, toilettes, baignoire ×½ en hauteur (Blender, `meubles.ECH
 échelle (`maison.ECHELLE_Z_SPRITES` ; tapis, tableau et escalier exceptés ; cheminée à ×0,65). Tout NOUVEAU meuble du catalogue (lot 2b) se rend à ×½ : l'ajouter aux
 deux listes (`verify-maison` §12 refuse l'oubli).
 
+**2026-10-18 (suite) — LOT 2b FAIT, à juger** (journal du README de la ferme) : le catalogue au sol de l'entrée, onze articles en trois pages,
+commande payée par la caisse, carton livré le lendemain devant la porte, rentré avec son propriétaire, déballé au garde-meuble. Avec : les
+appliques murales à la place de l'ampoule pendante, le tuyau du poêle mené au mur, le dormeur dans un lit pivoté qui ferme les yeux. **Prochain : 2c**
+(lumières à allumer — lampes, poêle, appliques —, objets de mur, revente).
 **2026-10-18 — LA PERSPECTIVE, FAIT, à juger** (journal du README de la ferme) : coins de façade raccordés, cloisons coupées en volume (arase claire, ombre au
 sol), lumière de profondeur (pieds et angles des murs, dégradé par pièce), évasement 0,11 → 0,17 (choisi sur maquette en jeu).
 
@@ -259,7 +263,7 @@ sol), lumière de profondeur (pieds et angles des murs, dégradé par pièce), �
 les cartons · 2c lumières, objets de mur, revente · 2d Colette (rideaux, teinture).
 **2a FAIT le 2026-10-16 (nuit)** — journal du README de la ferme. Décidé en l'écrivant : l'aimant des murs (le geste reste au quart de case),
 les murs du fond tous relevés en mode déco, le panneau en colonne à droite, le menu développeur « Garnir le garde-meuble » en attendant 2b.
-**Prochain : 2b, le catalogue et les cartons.** **Rien de tout l'état ne demande de migration** : la maison
+**2b fait le 2026-10-18.** **Rien de tout l'état ne demande de migration** : la maison
 de chacun (meubles posés, garde-meuble, décor des pièces, cartons) vit dans le JSON de `ferme_saves`, une `req` par geste (jamais pendant un
 glisser), l'hôte arbitre l'or. ⚠️ Piège prévisible : « un résolveur qui écrit un champ neuf doit être livré dans le même geste que sa
 déclaration et sa migration » (§4) — ici la déclaration et la lecture d'une sauvegarde ancienne (champ absent = maison de départ).

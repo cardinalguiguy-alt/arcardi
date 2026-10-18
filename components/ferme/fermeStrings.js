@@ -3494,6 +3494,18 @@ export const FERME_STR = {
     // 2026-10-16 — l'intérieur des maisons (docs/PROJETS.md §6, lot 1)
     promptTownHome: "E : entrer chez soi",
     promptHomeExit: "E : sortir dans la rue",
+    // 2026-10-18 (lot 2b) — le catalogue et les cartons
+    promptHomeCatalog: "E : feuilleter le catalogue",
+    promptHomeUnbox: "E : déballer le carton",
+    homeCatalogTitle: "Catalogue Maison",
+    homeCatalogEdition: (saison) => `Édition de ${saison} — livré demain matin, devant ta porte`,
+    homeCatalogPage: (p) => ({ sejour: "Séjour", chambre: "Chambre", entree: "Entrée" })[p],
+    homeCatalogOrder: "Commander",
+    homeCatalogDelivery: "La caisse commune paie. Le carton arrive demain matin.",
+    homeCatalogFull: "L'entrée déborde de cartons : déballe d'abord ceux qui sont là.",
+    homeCatalogCartons: (enRoute, livres) => `📦 En route : ${enRoute} · Livrés : ${livres}`,
+    homeOrdered: (nom) => `📦 ${nom} : commandé. Livraison demain matin, devant la porte.`,
+    homeUnboxed: (nom) => `📦 ${nom} : déballé, il t'attend au garde-meuble (B).`,
     promptHomeBed: "E : se coucher",
     promptHomeBedFull: "Le lit (pas fatigué)",
     homeEnterToast: "🏠 Chez soi. La maison est vide — pour l'instant.",
@@ -3515,7 +3527,7 @@ export const FERME_STR = {
     homeDecoHelp: "Clic : prendre / poser · R ou clic droit : tourner · Suppr : ranger au garde-meuble · Échap : lâcher, puis sortir",
     homeDecoHelpMurs: "Chaque changement se paie avec la caisse commune et se voit aussitôt.",
     homeDecoNotMine: "On ne décore que chez soi.",
-    homeRefus: (r) => ({ sprite: "Ce meuble ne se pose pas ici.", niveau: "Ce niveau n'existe pas.", grille: "Position invalide.", dehors: "Hors de la pièce.", escalier: "Pas dans l'escalier.", mur: "Il touche un mur.", meuble: "Un autre meuble est déjà là.", porte: "Devant une porte : il faut pouvoir passer.", passage: "Il couperait le passage : une pièce ne serait plus accessible.", inconnu: "Ce meuble n'est plus là.", catalogue: "Hors catalogue.", piece: "Pas dans cette pièce.", deja: "C'est déjà le cas.", or: "Pas assez d'or dans la caisse.", equipement: "Il y a déjà un équipement de la maison ici." })[r],
+    homeRefus: (r) => ({ sprite: "Ce meuble ne se pose pas ici.", niveau: "Ce niveau n'existe pas.", grille: "Position invalide.", dehors: "Hors de la pièce.", escalier: "Pas dans l'escalier.", mur: "Il touche un mur.", meuble: "Un autre meuble est déjà là.", porte: "Devant une porte : il faut pouvoir passer.", passage: "Il couperait le passage : une pièce ne serait plus accessible.", inconnu: "Ce meuble n'est plus là.", catalogue: "Hors catalogue.", piece: "Pas dans cette pièce.", deja: "C'est déjà le cas.", or: "Pas assez d'or dans la caisse.", equipement: "Il y a déjà un équipement de la maison ici.", cartons: "L'entrée déborde de cartons : déballe d'abord ceux qui sont là.", enRoute: "Ce carton est encore en route." })[r],
     homeDecorKind: (q) => ({ papier: "Papier", lambris: "Lambris", sol: "Sol" })[q],
     homeDecorName: (q, v) => (q === "papier" ? { platre: "Plâtre", rayures: "Rayures", fleurs: "Fleurettes", toile_bleue: "Toile bleue", vert_anglais: "Vert anglais", damas: "Damas", pois: "Pois" }[v]
       : q === "lambris" ? { "": "Aucun", creme: "Crème", sauge: "Sauge", bleu: "Bleu", bois: "Bois", faience: "Faïence" }[v]
@@ -3528,6 +3540,8 @@ export const FERME_STR = {
     devHomeSection: "Maison",
     devHomeHint: "Un exemplaire de chaque meuble au garde-meuble (en attendant le catalogue, lot 2b).",
     devHomeGiftBtn: "Garnir le garde-meuble",
+    devHomeDeliverBtn: "Livrer les cartons maintenant",
+    devHomeDeliverChat: (n, k) => `${n} : ${k} carton(s) livré(s) devant la porte (menu développeur).`,
     devHomeGiftChat: (n, k) => `${n} reçoit ${k} meubles au garde-meuble (menu développeur).`,
     homeLevelName: (k) => ({ rdc: "Rez-de-chaussée", etage: "Étage", combles: "Combles" })[k],
     homeRoomName: (k) => ({ cage: "Escalier", entree: "Entrée", sejour: "Séjour", cuisine: "Cuisine", palier: "Palier", bains: "Salle de bains", dressing: "Dressing", chambre: "Chambre", combles: "Sous les toits" })[k],
@@ -5979,6 +5993,18 @@ export const FERME_STR = {
     // 2026-10-16 — house interiors (docs/PROJETS.md §6, lot 1)
     promptTownHome: "E: go inside",
     promptHomeExit: "E: step out into the street",
+    // 2026-10-18 (lot 2b) — the catalogue and the boxes
+    promptHomeCatalog: "E: browse the catalogue",
+    promptHomeUnbox: "E: unpack the box",
+    homeCatalogTitle: "Home Catalogue",
+    homeCatalogEdition: (season) => `${season[0].toUpperCase() + season.slice(1)} edition — delivered tomorrow morning, at your door`,
+    homeCatalogPage: (p) => ({ sejour: "Living room", chambre: "Bedroom", entree: "Hallway" })[p],
+    homeCatalogOrder: "Order",
+    homeCatalogDelivery: "The shared purse pays. The box arrives tomorrow morning.",
+    homeCatalogFull: "The hallway is full of boxes: unpack the ones already here first.",
+    homeCatalogCartons: (onTheWay, delivered) => `📦 On the way: ${onTheWay} · Delivered: ${delivered}`,
+    homeOrdered: (name) => `📦 ${name}: ordered. Delivery tomorrow morning, at the door.`,
+    homeUnboxed: (name) => `📦 ${name}: unpacked — it's waiting in your storage (B).`,
     promptHomeBed: "E: go to bed",
     promptHomeBedFull: "Your bed (not tired)",
     homeEnterToast: "🏠 Home. The house is empty — for now.",
@@ -6000,7 +6026,7 @@ export const FERME_STR = {
     homeDecoHelp: "Click: pick up / put down · R or right-click: rotate · Delete: send to storage · Esc: drop, then exit",
     homeDecoHelpMurs: "Each change is paid from the shared purse and shows at once.",
     homeDecoNotMine: "You can only decorate your own home.",
-    homeRefus: (r) => ({ sprite: "This piece can't go here.", niveau: "That floor doesn't exist.", grille: "Invalid position.", dehors: "Outside the room.", escalier: "Not on the stairs.", mur: "It touches a wall.", meuble: "Another piece is already there.", porte: "In front of a door: people need to get through.", passage: "It would block the way: a room would be cut off.", inconnu: "That piece is gone.", catalogue: "Not in the catalogue.", piece: "Not in this room.", deja: "Already the case.", or: "Not enough gold in the purse.", equipement: "A fixture of the house is already there." })[r],
+    homeRefus: (r) => ({ sprite: "This piece can't go here.", niveau: "That floor doesn't exist.", grille: "Invalid position.", dehors: "Outside the room.", escalier: "Not on the stairs.", mur: "It touches a wall.", meuble: "Another piece is already there.", porte: "In front of a door: people need to get through.", passage: "It would block the way: a room would be cut off.", inconnu: "That piece is gone.", catalogue: "Not in the catalogue.", piece: "Not in this room.", deja: "Already the case.", or: "Not enough gold in the purse.", equipement: "A fixture of the house is already there.", cartons: "The hallway is full of boxes: unpack the ones already here first.", enRoute: "That box is still on its way." })[r],
     homeDecorKind: (q) => ({ papier: "Wallpaper", lambris: "Panelling", sol: "Floor" })[q],
     homeDecorName: (q, v) => (q === "papier" ? { platre: "Plaster", rayures: "Stripes", fleurs: "Sprigs", toile_bleue: "Blue toile", vert_anglais: "British green", damas: "Damask", pois: "Polka dots" }[v]
       : q === "lambris" ? { "": "None", creme: "Cream", sauge: "Sage", bleu: "Blue", bois: "Wood", faience: "Tiles" }[v]
@@ -6012,6 +6038,8 @@ export const FERME_STR = {
     devHomeSection: "Home",
     devHomeHint: "One of each piece of furniture into storage (until the catalogue, lot 2b).",
     devHomeGiftBtn: "Fill the storage",
+    devHomeDeliverBtn: "Deliver the boxes now",
+    devHomeDeliverChat: (n, k) => `${n}: ${k} box(es) delivered at the door (dev menu).`,
     devHomeGiftChat: (n, k) => `${n} gets ${k} pieces of furniture in storage (dev menu).`,
     homeLevelName: (k) => ({ rdc: "Ground floor", etage: "First floor", combles: "Attic" })[k],
     homeRoomName: (k) => ({ cage: "Staircase", entree: "Hallway", sejour: "Living room", cuisine: "Kitchen", palier: "Landing", bains: "Bathroom", dressing: "Dressing room", chambre: "Bedroom", combles: "Under the roof" })[k],

@@ -879,6 +879,7 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
     if (!libre(X, 0.08)) X = a - 0.12;
     if (libre(X, 0.08)) paintInterrupteur(g, px(X), Hh);
   }
+  for (const ap of homeAppliques(plan, L, f)) paintApplique(g, px(ap.lx), Hh, ap.z, false);   // 2026-10-18 : éteinte, cuite
   if (PIECES_SANS_PRISE_AUTO.has(f.room) || f.x1 - f.x0 < 0.9) return;
   const caches = [...(lv.fixes || []).filter((x) => surFace(x.ly)).map((x) => [x.lx, x.lx + 1.6]),
                   ...peints.filter((p) => p.x0 != null).map((p) => [p.x0, p.x1])];
@@ -958,21 +959,129 @@ export function drawFacadeCut(ctx, plan, lw, ciel) {
     rect(ctx, pa + 8, pb - 5, pc - pa - 16, 1, "#5e4426");
   }
 }
-/* L'AMPOULE NUE de la maison d'origine (aucune lampe au départ) : un fil qui
-   tombe du plafond au milieu de la pièce, une douille, l'ampoule — allumée,
-   un verre blanc chaud. (px, pyFloor) : le point du sol à la verticale. */
-export function drawBulb(ctx, px, pyFloor, allume, plafondPx = WALL_PX) {
-  // 2026-10-17 (64 px) : le cache-piton au plafond, le fil torsadé, la douille de laiton, la poire de verre.
-  const top = pyFloor - plafondPx, bas = pyFloor - pxOfM(2.05);
-  rect(ctx, px - 2, top, 5, 2, "#d8cdb4");
-  for (let y = top + 2; y < bas; y++) rect(ctx, px + ((y >> 1) & 1), y, 1, 1, "#2a2420");
-  rect(ctx, px - 1, bas, 4, 4, "#8a6a32");
-  rect(ctx, px - 1, bas, 1, 4, "#b8924a");
-  const v = allume ? ["#fff4cf", "#fffbe9", "#ffe9a8"] : ["#cfc8b4", "#e2dccb", "#b9b19c"];
-  rect(ctx, px - 2, bas + 4, 6, 5, v[0]);
-  rect(ctx, px - 1, bas + 9, 4, 2, v[0]);
-  rect(ctx, px - 1, bas + 5, 1, 2, v[1]);
-  rect(ctx, px, bas + 11, 2, 1, v[2]);
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-18 — L'APPLIQUE MURALE REMPLACE L'AMPOULE PENDANTE.
+   ╚════════════════════════════════════════════════════════════════════════
+   Guillaume : « attention aux lumières pendantes qui n'ont pas de cohérence dans
+   cette perspective […] peut-être mettre des lumières qui ne viendraient pas des
+   plafonds ? ». L'ampoule nue tombait d'un plafond qu'on ne voit jamais (la vue
+   est en coupe), au milieu de la pièce, son fil droit devant des murs qui
+   s'évasent : une ligne qui flotte. L'applique est PEINTE SUR LE MUR DU FOND :
+   elle s'évase avec lui, se coupe avec lui, et la lumière vient d'où on la voit.
+   Une par face de pièce (hors cage d'escalier), au milieu de la plus grande
+   portion libre (ni porte, ni fenêtre, ni hotte, étagère, miroir, trumeau) ; DEUX
+   de part et d'autre d'un trumeau de cheminée. À 1,30 m : au-dessus de la tête du
+   personnage (0,85 m à l'échelle des murs), sous la corniche. Éteinte, elle est
+   cuite dans la face ; allumée (la nuit, la pièce où quelqu'un se tient), sa
+   tulipe se repeint par-dessus à chaque image, et le jeu pose sa lumière à SA
+   place (`FermeGame.drawHomeFrame`). */
+export const APPLIQUE_Z = 1.30;
+const applMemo = new Map();
+export function homeAppliques(plan, L, f) {
+  const key = plan.taille + "|" + L + "|" + f.id;
+  if (applMemo.has(key)) return applMemo.get(key);
+  const lv = plan.niveaux[L], out = [];
+  if (f.room && f.room !== "cage" && f.x1 - f.x0 >= 0.3) {
+    const surFace = (y) => Math.abs(y - f.y) < 0.06;
+    const peints = (lv.peints || []).filter((p) => surFace(p.y) && p.x0 != null && p.x1 > f.x0 && p.x0 < f.x1);
+    // les marges sont celles du CENTRE de l'applique (9 px de large, 0,07 case de demi-largeur) : le chambranle d'une porte
+    // déborde de 4 px, d'où 0,13. ⚠️ L'entrée n'a que 0,35 case de mur à gauche de sa porte : à 0,10 + une portion d'au moins
+    // 0,16, elle restait sans lumière (`verify-maison` §13) ; l'applique y surmonte l'interrupteur, ce qui est sa place.
+    const bouche = [...(f.portes || []).map(([a, b]) => [a - 0.13, b + 0.13]), ...(f.fenetres || []).map(([a, b]) => [a - 0.12, b + 0.12]),
+                    ...peints.map((p) => [p.x0 - 0.10, p.x1 + 0.10])].sort((p, q) => p[0] - q[0]);
+    const libres = [];
+    let cur = f.x0 + 0.12;
+    for (const [a, b] of bouche) { if (a > cur) libres.push([cur, a]); cur = Math.max(cur, b); }
+    if (f.x1 - 0.12 > cur) libres.push([cur, f.x1 - 0.12]);
+    const ok = libres.filter(([a, b]) => b - a > 0.02);
+    const tru = peints.find((p) => p.quoi === "conduit");
+    if (tru) {
+      const g = ok.filter(([, b]) => b <= tru.x0).pop(), d = ok.find(([a]) => a >= tru.x1);
+      if (g) out.push({ lx: Math.max((g[0] + g[1]) / 2, tru.x0 - 0.35), z: APPLIQUE_Z });
+      if (d) out.push({ lx: Math.min((d[0] + d[1]) / 2, tru.x1 + 0.35), z: APPLIQUE_Z });
+    } else if (ok.length) {
+      const [a, b] = ok.reduce((m, r) => (r[1] - r[0] > m[1] - m[0] ? r : m));
+      out.push({ lx: (a + b) / 2, z: APPLIQUE_Z });
+    }
+  }
+  if (applMemo.size > 200) applMemo.clear();
+  applMemo.set(key, out);
+  return out;
+}
+/* Le décalage d'évasement d'un point du mur (lx, à zPx au-dessus du pied) : celui des faces cuites (`bakeHomeFace`) — une
+   rangée s'y étire de flare(x0) à flare(x1), donc le point lx glisse exactement de flare(lx). */
+export const homeFlarePx = (plan, lx, zPx) => flarePx(lx, zPx, plan.w / 2);
+/* L'applique, centrée en cx, le pied du mur en yFoot. Platine et bras de laiton, tulipe d'opaline tournée vers le haut. */
+export function paintApplique(ctx, cx, yFoot, z, allume) {
+  const y = yFoot - pxOfM(z);
+  rect(ctx, cx - 2, y + 2, 4, 7, "#8a6a32");                       // la platine
+  rect(ctx, cx - 1, y + 3, 2, 5, "#c9a24a");
+  rect(ctx, cx - 1, y + 3, 1, 1, "#f0d488");
+  rect(ctx, cx, y - 1, 1, 4, "#9a7638");                           // le bras
+  const v = allume ? ["#ffe9a8", "#fff6d6", "#fffdf2", "#e8c878"] : ["#d9cfba", "#ebe4d4", "#f7f2e8", "#b8ab92"];
+  rect(ctx, cx - 3, y - 4, 7, 3, v[0]);                           // la tulipe : étroite en bas…
+  rect(ctx, cx - 4, y - 8, 9, 4, v[1]);                           // …évasée en haut
+  rect(ctx, cx - 4, y - 8, 9, 1, v[2]);                           // le bord
+  rect(ctx, cx - 3, y - 4, 1, 3, v[3]);
+  rect(ctx, cx + 4, y - 7, 1, 3, v[3]);
+  rect(ctx, cx - 1, y - 2, 3, 1, "#8a6a32");                       // la bague
+}
+/* LE TUYAU DU POÊLE, prolongé de son amorce (le sprite, `meubles.py` : 1,10 m × ZK) jusqu'au MUR DU FOND de sa pièce.
+   ⚠️ 2026-10-18 — PAS AU PLAFOND (premier jet, vu en jeu) : le plafond ne se voit jamais, le tuyau finissait sur une rosace en
+   l'air, 12 px sous la corniche (la projection place le plafond d'un point devant le mur plus bas que le haut du mur) — le défaut
+   de l'ampoule pendante. Il monte à `TUYAU_Z`, puis file au nord jusqu'au mur : une course nord-sud se projette À LA VERTICALE,
+   le tuyau reste donc une seule ligne droite qui finit SUR le mur, dans une rosace qu'on voit. Murs de la pièce descendus : il se
+   coupe à leur hauteur (sa section sombre au bout). (cx, py) : le pied de son axe ; yMur : le pied du mur du fond (px) ; z0Px :
+   le haut de l'amorce ; visPx : la hauteur visible des murs de la pièce. */
+export const TUYAU_Z = 1.75;   // sous la corniche, au-dessus des portes (2,04 m de vantail, peint plus bas que la corniche)
+export function drawFlue(ctx, cx, py, yMur, z0Px, visPx) {
+  const zT = pxOfM(TUYAU_Z), yCoude = py - zT, yEntree = yMur - zT;
+  const coupe = visPx < zT - 0.5, yHaut = coupe ? py - Math.max(z0Px, visPx) : yEntree;
+  const C = ["#1a1716", "#3b3532", "#4c4541", "#363130", "#2b2725", "#221f1e", "#171413"];
+  for (let y = py - z0Px + 2; y > yHaut; y--) for (let i = 0; i < 7; i++) rect(ctx, cx - 3 + i, y, 1, 1, C[i]);
+  for (let z = z0Px + pxOfM(0.5); py - z > Math.max(yHaut + 4, yCoude + 4); z += pxOfM(0.5)) { rect(ctx, cx - 4, py - z, 9, 2, "#2e2a28"); rect(ctx, cx - 4, py - z, 9, 1, "#57504b"); }   // les emboîtures
+  if (coupe) { rect(ctx, cx - 3, yHaut, 7, 2, "#0d0b0a"); rect(ctx, cx - 3, yHaut + 2, 7, 1, "#5a524c"); return; }   // coupé : la section
+  if (yCoude - yEntree > 6) { rect(ctx, cx - 4, yCoude - 1, 9, 3, "#2e2a28"); rect(ctx, cx - 4, yCoude - 1, 9, 1, "#57504b"); }   // le coude
+  // la rosace, sur le mur : un anneau de tôle plus clair que le tuyau (vu de face, il se détache du papier), le trou sombre
+  rect(ctx, cx - 6, yEntree - 4, 13, 9, "#57504a"); rect(ctx, cx - 5, yEntree - 3, 11, 7, "#7a716a");
+  rect(ctx, cx - 6, yEntree - 4, 13, 1, "#9a918a"); rect(ctx, cx - 6, yEntree + 4, 13, 1, "#3a3430");
+  for (let i = 0; i < 7; i++) rect(ctx, cx - 3 + i, yEntree - 2, 1, 5, C[i]);
+}
+
+/* LOT 2b (2026-10-18) — LE CARTON DE LIVRAISON, vu comme les meubles (le dessus et la face sud, `studio.py`) : du kraft, le
+   ruban adhésif en croix sur le dessus et qui descend sur la face, l'étiquette. (x, yFoot) : le coin sud-ouest au sol ; w, d,
+   h en px. `k` varie la teinte d'un carton à l'autre (pas deux kraft identiques côte à côte). En px des images cuites. */
+export function drawCarton(ctx, x, yFoot, w, d, h, k = 0, ombre = true) {
+  const kr = [["#c99d62", "#a77c45", "#8c6538"], ["#c2955a", "#a0763f", "#866034"], ["#cfa66c", "#ad844c", "#91693c"]][k % 3];
+  if (ombre) paintContactShadow(ctx, x, yFoot - d, w, d, 0.24);
+  rect(ctx, x, yFoot - h - d, w, d, kr[0]);                       // le dessus
+  rect(ctx, x, yFoot - h, w, h, kr[1]);                           // la face sud
+  rect(ctx, x, yFoot - h - 1, w, 1, kr[2]);                       // l'arête
+  const tw = w >= 20 ? 4 : 2, t = Math.round(w / 2) - tw / 2;
+  rect(ctx, x + t, yFoot - h - d, tw, d, "#e2c592");               // le ruban, sur le dessus…
+  rect(ctx, x + t, yFoot - h, tw, Math.min(h, 7), "#d6b57c");      // …qui descend sur la face
+  if (w >= 20) {                                                   // l'étiquette (dans la maison ; dans la rue, le carton fait 10 px)
+    rect(ctx, x + 3, yFoot - h + Math.round(h / 2) - 2, 8, 5, "#f2ede2");
+    rect(ctx, x + 4, yFoot - h + Math.round(h / 2) - 1, 6, 1, "#6e6458");
+    rect(ctx, x + 4, yFoot - h + Math.round(h / 2) + 1, 4, 1, "#9a8f80");
+  }
+  rect(ctx, x, yFoot - h - d, 1, d + h, "#6e4f2c"); rect(ctx, x + w - 1, yFoot - h - d, 1, d + h, "#6e4f2c");
+  rect(ctx, x, yFoot - h - d, w, 1, "#6e4f2c"); rect(ctx, x, yFoot - 1, w, 1, "#5e4426");
+}
+/* LE CATALOGUE, posé à plat sur le sol de l'entrée (glissé sous la porte) : une couverture crème, un bandeau de titre, la photo
+   d'un canapé, la tranche des pages. (x, y) : son coin nord-ouest ; w, h en px. */
+export function drawCatalogue(ctx, x, y, w, h) {
+  paintContactShadow(ctx, x, y, w, h, 0.18);
+  rect(ctx, x, y + h, w, 2, "#f4efe2");                           // la tranche des pages
+  rect(ctx, x, y + h + 1, w, 1, "#c9c0ad");
+  rect(ctx, x, y, w, h, "#efe6d2");
+  rect(ctx, x, y + 2, w, 6, "#9b3b2c");                           // le bandeau du titre
+  rect(ctx, x + 3, y + 4, w - 10, 1, "#f3d9a8");
+  rect(ctx, x + 3, y + 10, w - 6, h - 16, "#7d9aa0");             // la photo : un salon…
+  rect(ctx, x + 6, y + h - 13, w - 12, 5, "#5d7b5c");             // …et son canapé
+  rect(ctx, x + 6, y + h - 16, w - 12, 3, "#6f8f6c");
+  rect(ctx, x + 3, y + h - 5, w - 14, 1, "#8a7f6c");
+  rect(ctx, x, y, w, 1, "#fbf7ee"); rect(ctx, x + w - 1, y, 1, h, "#c9bfa9");
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════
@@ -990,7 +1099,10 @@ export function drawBulb(ctx, px, pyFloor, allume, plafondPx = WALL_PX) {
      meubles   [{ sprite, o, lx, ly }] posés à CE niveau
      img(nom)  l'image d'un sprite (ou null tant qu'elle charge)
      ciel      [r, g, b] le ciel de l'image (le verre des fenêtres)
-     ampoules  [{ lx, ly, allume }]
+     allumees  Set des pièces dont les appliques brillent (2026-10-18 : remplace `ampoules`)
+     roomCut(id) la hauteur VISIBLE des murs d'une pièce, en px (le tuyau du poêle s'y coupe)
+     catalogue  { lx, ly, w, h } (cases) : le catalogue au sol de l'entrée, ou rien (lot 2b)
+     cartons    [{ lx, ly, k }] les cartons livrés, dans l'entrée (lot 2b)
    }
    ⚠️ LA VOLÉE se trie à son bout NORD (`yHaut`) : qui marche dessus a les pieds
    plus au sud, il est donc dessiné après elle ; qui se tient sur le palier,
@@ -1048,6 +1160,10 @@ export function homeDrawItems(plan, L, o) {
         const z = bake.H - (g[1] + g[3] / 2), d = Math.round(flarePx(f.x0 + g[0] / MPX, z, xc));
         paintGlass(ctx, [px + g[0] + d, py - bake.H + g[1], g[2], g[3]], o.ciel);
       }
+      if (top === 0 && o.allumees && o.allumees.has(f.room)) for (const ap of homeAppliques(plan, L, f)) {
+        const zp = pxOfM(ap.z);
+        paintApplique(ctx, px + Math.round((ap.lx - f.x0) * MPX + flarePx(ap.lx, zp, xc)), py, ap.z, true);
+      }
       if (top > 0) {
         const a = px + Math.round(flarePx(f.x0, v, xc)), b = px + bake.W + Math.round(flarePx(f.x1, v, xc));
         /* 2026-10-18 : coupée, l'arase est claire (`paintCutTop`) ; PENDANT la coupe (le mur descend ou remonte en
@@ -1082,8 +1198,31 @@ export function homeDrawItems(plan, L, o) {
       if (!im) return;
       const [sx, sy] = homePx(m.lx, m.ly);
       if (!plat) paintContactShadow(ctx, sx, sy, Math.round(meta.fw / CASE_M * MPX), Math.round(fd * MPX), 0.22);
+      /* ⚠️ 2026-10-18 — LES MEUBLES RESTENT DROITS, ESSAYÉ ET VU EN JEU : redessinés rangée par rangée avec l'évasement des faces
+         (la face avant de 0 à h, le dessus à h), ils suivaient bien le mur — et une bibliothèque contre un mur de côté devenait un
+         parallélogramme qui tombe, le tuyau du poêle se couchait. Un mur qui s'évase se lit comme de la profondeur ; un objet qui
+         penche se lit comme un objet qui tombe. L'écart (≈ 9 px à 1 m contre un mur de côté, à 0,17) est le prix accepté. */
       ctx.drawImage(im, px - meta.ax, py - meta.ay);
+      if (/^poele/.test(m.sprite)) {
+        // 2026-10-18 — l'axe du tuyau : à mi-largeur, 0,24 m derrière la façade du poêle (`meubles.poele`), selon son orientation
+        const [x0, y0] = [m.lx, m.ly], fw = meta.fw / CASE_M, k = 0.24 / CASE_M;
+        const [cx, cy] = m.o === "E" ? [x0 + fw - k, y0 + fd / 2] : m.o === "W" ? [x0 + k, y0 + fd / 2] : m.o === "N" ? [x0 + fw / 2, y0 + k] : [x0 + fw / 2, y0 + fd - k];
+        const lv = plan.niveaux[L], plafond = pxOfM(lv.pente ? 2.3 : lv.mur);
+        const pc = H.homeRoomAt(plan, L, cx, cy), vis = pc && o.roomCut ? Math.min(plafond, o.roomCut(pc.id)) : plafond;
+        // le mur du fond : la face de sa pièce qui passe au-dessus de lui (sinon le mur nord de la maison)
+        const fm = pc && o.faces.map(({ f }) => f).filter((f) => f.room === pc.id && cx >= f.x0 && cx <= f.x1 && f.y <= cy).sort((p, q) => q.y - p.y)[0];
+        const [fx, fy] = homePx(cx, cy), [, ym] = homePx(cx, fm ? fm.y : 0);
+        drawFlue(ctx, fx, fy, ym, pxOfM(1.10 * H.homeZk(m.sprite)), Math.max(HOME_CUT, vis));
+      }
     } });
+  }
+  if (o.catalogue) {
+    const c = o.catalogue, [x, y] = homePx(c.lx, c.ly), [x2, y2] = homePx(c.lx + c.w, c.ly + c.h);
+    out.push({ key: -1e6 + c.ly + 0.5, draw: (ctx) => drawCatalogue(ctx, x, y, x2 - x, y2 - y) });   // à plat : sous tout le reste, comme un tapis
+  }
+  for (const cb of o.cartons || []) {
+    const C2 = o.H.HOME_CARTON_C, [x, y0] = homePx(cb.lx, cb.ly), [x2, yS] = homePx(cb.lx + C2, cb.ly + C2);
+    out.push({ key: cb.ly + C2, draw: (ctx) => drawCarton(ctx, x, yS, x2 - x, yS - y0, pxOfM(0.30), cb.k) });
   }
   if (L < plan.niveaux.length - 1) {
     const s = plan.escalier, meta = o.meta.escalier && o.meta.escalier.S;
@@ -1101,10 +1240,6 @@ export function homeDrawItems(plan, L, o) {
         ctx.globalAlpha = 1;
       } });
     }
-  }
-  for (const b of o.ampoules || []) {
-    const [px, py] = homePx(b.lx, b.ly);
-    out.push({ key: b.ly, draw: (ctx) => drawBulb(ctx, px, py, b.allume, pxOfM(plan.niveaux[L].pente ? 2.3 : plan.niveaux[L].mur)) });
   }
   return out;
 }

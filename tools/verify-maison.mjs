@@ -549,5 +549,88 @@ console.log("\n=== 11. le lit se tient DANS SA PIÈCE ; un cadre par pièce ; le
 }
 function HMAmargin(L) { return 3.2 * H.HOME_K; }
 
+// ── 13. 2026-10-18 — LE DORMEUR DANS UN LIT PIVOTÉ, LES APPLIQUES, LE POÊLE (« le lit pivoté n'a pas sa propre animation de
+//       sommeil » ; « des lumières qui ne viendraient pas des plafonds » — Guillaume).
+console.log("\n=== 13. le lit pivoté, les appliques, le poêle ===");
+{
+  // la tête est sur l'oreiller, du côté de la tête de lit (vu sur les sprites : S nord, E ouest, W est, N sud), et tournée vers elle
+  const cas = { S: [0, (r, p) => p.ly - r[1] < 0.4], E: [-1, (r, p) => p.lx - r[0] < 0.45], W: [1, (r, p) => r[2] - p.lx < 0.45], N: [2, (r, p) => r[3] - p.ly < 0.7] };
+  const faux = Object.entries(cas).filter(([o, [rot, pres]]) => {
+    const f = { sprite: "lit", o, lx: 1.0, ly: 5.5 }, r = H.homeFurnitureRect(f), p = H.homeBedPillow(f);
+    return p.rot !== rot || !pres(r, p) || p.lx <= r[0] || p.lx >= r[2] || p.ly <= r[1] || p.ly >= r[3];
+  }).map(([o]) => o);
+  check("le dormeur se couche du côté de la tête de lit, la tête tournée vers elle, dans les quatre orientations", faux.length === 0, faux.join(", ") || "S, E, W, N");
+  // une applique (au moins) par pièce éclairable, à l'écart des portes, des fenêtres et de ce qui est peint au mur ; plus d'ampoule pendante
+  const sans = [], serres = [];
+  P.niveaux.forEach((lv, L) => {
+    const faces = H.homeFaces(P, L);
+    for (const pc of lv.pieces) {
+      if (pc.id === "cage") continue;
+      const aps = faces.filter((f) => f.room === pc.id).flatMap((f) => MA.homeAppliques(P, L, f).map((a) => ({ a, f })));
+      if (!aps.length) sans.push(L + ":" + pc.id);
+      for (const { a, f } of aps) {
+        const bouche = [...(f.portes || []), ...(f.fenetres || []), ...(lv.peints || []).filter((q) => Math.abs(q.y - f.y) < 0.06 && q.x0 != null).map((q) => [q.x0, q.x1])];
+        if (a.lx < f.x0 + 0.1 || a.lx > f.x1 - 0.1 || bouche.some(([x0, x1]) => a.lx > x0 - 0.06 && a.lx < x1 + 0.06)) serres.push(L + ":" + pc.id + "@" + a.lx.toFixed(2));
+      }
+    }
+  });
+  check("chaque pièce (hors cage) a son applique sur un mur du fond", sans.length === 0, sans.join(", ") || "toutes");
+  check("aucune applique ne mord une porte, une fenêtre, la hotte, le miroir ou le trumeau", serres.length === 0, serres.join(", ") || "toutes à l'écart");
+  check("l'applique est au-dessus de la tête du personnage, sous la corniche", MA.APPLIQUE_Z > H.HOME_PERSO_M + 0.2 && MA.APPLIQUE_Z < 2.3, `${MA.APPLIQUE_Z} m`);
+  check("plus aucune ampoule ne pend d'un plafond (le dessin `drawBulb` a disparu)", typeof MA.drawBulb === "undefined");
+  // le tuyau du poêle : une amorce dans le sprite, le reste dessiné jusqu'au mur — l'image ne monte plus au-dessus de son amorce
+  const pS = MA_SPRITES.poele.S, haut = (pS.ay - pS.fd / H.CASE_M * MA.MPX) / MA.MPX * H.CASE_M;   // la hauteur montrée par l'image, en m
+  check("le poêle n'apporte qu'une amorce de tuyau (le jeu le mène au mur) ; le tuyau rentre sous la corniche",
+    haut < 0.75 && MA.TUYAU_Z < 2.3 && MA.TUYAU_Z > 1.10 * H.homeZk("poele"), `image ${haut.toFixed(2)} m de haut, entrée au mur à ${MA.TUYAU_Z} m`);
+}
+
+// ── 14. 2026-10-18 — LOT 2b : LE CATALOGUE ET LES CARTONS (docs/PROJETS.md §6, réponses 5, 6, 8).
+console.log("\n=== 14. le catalogue et les cartons ===");
+{
+  const cat = H.HOME_CATALOGUE;
+  const absents = cat.flatMap((e) => e.coloris.filter((sp) => !MA_SPRITES[sp]));
+  check("chaque coloris du catalogue a son sprite rendu", absents.length === 0, absents.join(", ") || `${cat.length} articles, ${cat.reduce((n, e) => n + e.coloris.length, 0)} coloris`);
+  const interdits = cat.flatMap((e) => e.coloris).filter((sp) => sp === "escalier" || /_allume$/.test(sp) || H.homeFixe(sp) || H.homeWallItem(sp) || sp === "plante_morte");
+  check("ni l'escalier, ni un équipement, ni un objet de mur, ni une version allumée, ni la plante morte ne se commandent", interdits.length === 0, interdits.join(", ") || "aucun");
+  const prix = cat.map((e) => e.prix), plante = cat.find((e) => e.id === "plante_verte").prix, canape = cat.find((e) => e.id === "canape").prix;
+  check("prix à l'échelle de la garde-robe (1 200 à 14 000) ; une plante ≈ un chapeau, un canapé 5 à 10 fois plus (décision 8)",
+    prix.every((x) => x >= 1200 && x <= 14000) && canape / plante >= 5 && canape / plante <= 10, `${Math.min(...prix)}–${Math.max(...prix)} or, canapé/plante ${(canape / plante).toFixed(1)}`);
+  check("chaque page du catalogue a des articles, chaque article une page connue", H.HOME_CATALOGUE_PAGES.every((pg) => cat.some((e) => e.page === pg)) && cat.every((e) => H.HOME_CATALOGUE_PAGES.includes(e.page)));
+  // le parcours : commander (jour 3) → livré le jour 4, pas avant ; déballer → garde-meuble ; rentrer les cartons
+  const h = H.homeDepart();
+  check("la maison de départ déclare ses cartons (champ neuf `c`, vide) ; une sauvegarde d'avant (sans `c`) n'en a aucun",
+    Array.isArray(h.c) && h.c.length === 0 && H.homeCartons({ m: [], g: [], d: {} }).length === 0);
+  const r1 = H.resolveHomeOrder(h, { s: "canape_canard" }, 3), c = h.c[0];
+  const r2 = H.resolveHomeUnbox(h, { u: c.u }, 3);
+  const rIn0 = H.resolveHomeCartonsIn(h, 3);
+  const rIn1 = H.resolveHomeCartonsIn(h, 4);
+  const r3 = H.resolveHomeUnbox(h, { u: c.u }, 4);
+  check("commandé le jour 3 : livré le 4 (pas avant), il entre avec son propriétaire, déballé il va au garde-meuble",
+    r1.ok && r1.prix === 12000 && c.d === 4 && !r2.ok && r2.raison === "enRoute" && !rIn0.ok && rIn1.ok && rIn1.n === 1 && r3.ok && h.g.some((x) => x.u === c.u && x.s === "canape_canard") && h.c.length === 0,
+    `prix ${r1.prix}, livraison jour ${c.d}, refus avant : ${r2.raison}`);
+  const h2 = H.homeDepart();
+  for (let i = 0; i < H.HOME_CARTONS_MAX; i++) H.resolveHomeOrder(h2, { s: "plante_verte" }, 1);
+  const rFull = H.resolveHomeOrder(h2, { s: "plante_verte" }, 1), rBad = H.resolveHomeOrder(h2, { s: "escalier" }, 1);
+  check(`pas plus de ${H.HOME_CARTONS_MAX} cartons par maison ; hors catalogue refusé`, !rFull.ok && rFull.raison === "cartons" && !rBad.ok, `${rFull.raison}, ${rBad.raison}`);
+  check("chaque commande prend un identifiant neuf (deux cartons ne se confondent pas)", new Set(h2.c.map((x) => x.u)).size === h2.c.length);
+  // les places : le catalogue et les cartons dans l'entrée, hors de la zone de la porte, hors de la volée, et sans se chevaucher
+  const ent = P.niveaux[0].pieces.find((pc) => pc.id === "entree").rects[0];
+  const dans = (x, y, w, d) => x >= ent[0] && x + w <= ent[2] && y >= ent[1] && y + d <= ent[3];
+  const mauvais = [], etroites = Object.keys(C.TOWN_HOUSE_MODELS).filter((k) => /^n/i.test(k));
+  if (!etroites.length) mauvais.push("aucun modèle d'étroite lu (n1, n2…) : le contrôle ne mesurerait rien");
+  for (const model of etroites) {
+    const v = Object.keys(C.TOWN_HOUSE_MODELS[model].variants)[0], fac = H.homeFacade({ model, variant: v });
+    const ca = H.homeCataloguePos(P, fac), sp = H.homeCartonSpots(P), K2 = H.HOME_CARTON_C;
+    if (!dans(ca.lx, ca.ly, ca.w, ca.h)) mauvais.push(model + " catalogue hors de l'entrée");
+    if (H.homeNearExit(fac, ca.lx + ca.w / 2, ca.ly - 0.3)) mauvais.push(model + " catalogue dans la zone de la porte");
+    for (const p of sp) {
+      if (!dans(p.lx, p.ly, K2, K2)) mauvais.push(model + " carton hors de l'entrée");
+      if (p.ly < P.escalier.yPied + 0.3) mauvais.push(model + " carton au pied de la volée");
+      if (p.lx < ca.lx + ca.w && p.lx + K2 > ca.lx && p.ly < ca.ly + ca.h && p.ly + K2 > ca.ly) mauvais.push(model + " carton sur le catalogue");
+    }
+  }
+  check("le catalogue et les cartons tiennent dans l'entrée, hors de la porte et du pied de la volée, sans se chevaucher", mauvais.length === 0, mauvais.slice(0, 4).join(" ; ") || etroites.join(", "));
+}
+
 console.log(`\n${ok} OK, ${ko} ÉCHEC`);
 process.exit(ko ? 1 : 0);

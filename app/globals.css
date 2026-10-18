@@ -9236,3 +9236,13 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
 .ferme-deco-sw canvas{ width:66px; height:42px; image-rendering:pixelated; border-radius:3px; }
 .ferme-deco-sw span{ font-size:10px; }
 .ferme-deco-help{ margin-top:6px; font-size:11px; opacity:.75; }
+/* 2026-10-18 (lot 2b) — le catalogue de la maison : la grille à gauche, la fiche de l'article à droite (l'une sous l'autre sur téléphone). */
+.ferme-catalog{ max-width:min(760px, calc(100vw - 32px)); }
+.ferme-catalog-body{ display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+.ferme-catalog-grid{ flex:1 1 300px; }
+.ferme-catalog-fiche{ flex:0 1 220px; display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px; border:2px solid var(--f-paper-d); border-radius:8px; background:#fffaf0; }
+.ferme-catalog-apercu{ width:200px; height:150px; display:flex; align-items:flex-end; justify-content:center; background:linear-gradient(#efe6d2, #e0d3b8); border-radius:6px; }
+.ferme-catalog-apercu img{ height:124px; width:auto; max-width:190px; object-fit:contain; image-rendering:pixelated; margin-bottom:10px; }
+.ferme-catalog-coloris{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.ferme-catalog-coloris img{ height:32px; image-rendering:pixelated; }
+.ferme-catalog-prix{ font-weight:700; font-size:16px; }

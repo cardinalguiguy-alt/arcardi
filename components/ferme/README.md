@@ -1,5 +1,41 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-18 (suite) — CHEZ SOI : LE LOT 2b (CATALOGUE ET CARTONS), LES OBJETS DANS LA PERSPECTIVE, LES APPLIQUES, LE DORMEUR
+
+Ses messages : « poursuis. sans négliger l'examen critique de la perspective d'intérieur, les objets. aussi, le lit pivoté n'a pas sa propre
+animation de sommeil » ; « le dormeur doit fermer les yeux au bout de une à 7 secondes » ; « attention aux lumières pendantes qui n'ont pas de
+cohérence dans cette perspective […] peut-être mettre des lumières qui ne viendraient pas des plafonds ? ». **Supabase : rien** (le champ neuf
+`c` vit dans le JSON de `ferme_saves`, comme toute la maison).
+- **Le dormeur** : `homeBedPillow` rend l'oreiller du côté de la tête de lit selon l'orientation (S nord, E ouest, W est, N sud — lus sur les
+  sprites) et `rot` ; la tête tourne de quarts de tour exacts (`drawSleeper`). Il ferme les yeux après 1 à 7 s tirés à l'endormissement
+  (`sleeperHeadClosed` : les yeux DÉTECTÉS sur l'image — deux traits sombres entre deux peaux —, repeints en peau, paupière de deux pixels ;
+  `SLEEP_SEEN` par client, rien sur le réseau). Vu en jeu dans les quatre orientations, yeux ouverts → clos → rouverts au réveil.
+- **L'examen des objets (en jeu, 0,17)** : les murs, fenêtres et portes s'évasent, les meubles non. Essayé : redessiner chaque sprite rangée par
+  rangée avec l'évasement des faces — une bibliothèque contre un mur de côté devient un parallélogramme qui tombe. **Retiré** : les meubles
+  restent droits (leçon au point de dessin, `homeDrawItems`). Deux vrais défauts corrigés : l'ampoule pendante et le tuyau du poêle.
+- **Les appliques** (`maisonArt.homeAppliques`, `paintApplique`, `APPLIQUE_Z` 1,30 m) remplacent l'ampoule nue : peintes sur le mur du fond de
+  chaque pièce (hors cage), au milieu de la plus grande portion libre, deux de part et d'autre d'un trumeau ; éteintes cuites dans la face,
+  allumées repeintes à chaque image ; la lumière se pose à LEUR place, évasée avec le mur (`homeFlarePx`). `drawBulb` a disparu.
+- **Le poêle** : son tuyau n'est plus qu'une amorce dans le sprite (`meubles.poele`, Blender : seuls les 4 PNG du poêle changent au pixel, les 54
+  autres remis tels quels) ; le jeu le mène à 1,75 m (`TUYAU_Z`) puis au mur du fond de sa pièce — une seule ligne verticale qui finit sur une
+  rosace — et le coupe avec les murs de la pièce (`roomCut`). Le premier jet allait au plafond : il finissait en l'air (piège neuf, `docs/PIEGES.md`).
+- **Lot 2b** (`maison.js` : `HOME_CATALOGUE`, `resolveHomeOrder`/`Unbox`/`CartonsIn`, `homeCataloguePos`, `homeCartonSpots` ; `maisonArt.drawCatalogue`,
+  `drawCarton` ; FermeGame : hôte, invite E, panneau `catalogOpen`, cartons dans la rue) : le catalogue est posé au sol de l'entrée, E l'ouvre —
+  trois pages (séjour, chambre, entrée), onze articles, quinze coloris, prix 1 500 à 12 000 or ; « Commander » : la caisse commune paie, le carton
+  est livré le LENDEMAIN (jour partagé `day` + 1) devant la porte, dans la rue ; il entre avec son propriétaire (`homeCartonsIn`, une `req` à
+  l'entrée s'il y en a), attend dans l'entrée, E le déballe → garde-meuble. 8 cartons au plus par maison. Menu développeur : « Livrer les cartons
+  maintenant ». Décidé en l'écrivant : pas de collision pour les cartons ni le catalogue (dessin seulement) ; l'édition porte le nom de la saison,
+  l'offre est la même toute l'année.
+- **L'icône de l'or** (même jour, « l'icône pour l'or doit montrer de l'or, pas une pièce d'argent ») : dans les panneaux du mode déco et du catalogue,
+  la pièce d'or du HUD (`icons.gold`, composant `GoldIco`) remplace l'émoji 🪙, rendu en pièce d'argent selon les systèmes. Restent en 🪙 : deux
+  lignes de discussion (vœu de la fontaine, Gourmandin), du texte pur où une image ne passe pas.
+- **Vérifié** : `verify-maison` 177/177 (§13 le lit pivoté, les appliques, le poêle ; §14 le catalogue et les cartons, dont le parcours jour 3 → 4 et
+  le champ absent d'une sauvegarde ancienne), `verify-strings`, `verify-docs`, `verify-densite`, `verify-lumiere`, `render-maison` ; **en jeu** (`app/audit-tmp`,
+  1440 × 900) : commande de deux canapés (24 000 or débités, livraison au jour 2), livraison forcée, les cartons devant la porte dans la rue, rentrés
+  avec moi, déballés au garde-meuble ; le catalogue feuilleté ; les appliques de nuit (chambre, séjour) ; le tuyau dans la chambre et coupé au plan ;
+  aucune erreur à la console. **Pas vu** : deux clients (une commande d'invité), iPad, une vraie nuit de jeu qui livre (seulement le menu développeur),
+  les combles avec une applique allumée.
+
 ## 2026-10-18 — CHEZ SOI : LA PERSPECTIVE (COINS DE FAÇADE, CLOISONS EN VOLUME, LUMIÈRE DE PROFONDEUR, ÉVASEMENT À 0,17)
 
 Sa demande : « meilleure perspective impression 3D dans l'intérieur », puis « vérifie en jeu et juge », puis, sur le jugement, « fais 1, 2 et 3

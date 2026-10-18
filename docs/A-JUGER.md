@@ -6,6 +6,21 @@
 
 ---
 
+### À juger — CHEZ SOI : LE CATALOGUE, LES CARTONS, LES APPLIQUES, LE DORMEUR (2026-10-18, suite)
+
+Entre chez toi : le catalogue est par terre dans l'entrée (E). Commande, puis menu développeur → « Livrer les cartons maintenant » (ou attends le
+lendemain), sors : les cartons sont devant ta porte ; rentre, E sur un carton.
+- **Le catalogue** : trois pages, onze articles, les coloris, les prix (plante 1 500, canapé 12 000) — l'offre te va ? Des articles manquent (une
+  commode, une table de repas, des chaises, une armoire, un bureau…) : lesquels d'abord (Blender) ?
+- **Les cartons** : livrés le lendemain devant la porte, rentrés avec toi, déballés un par un — le geste te plaît ? 8 au plus. On les traverse (pas
+  de collision) : gênant ?
+- **Les appliques** à la place de l'ampoule pendante (une par mur du fond, deux autour de la cheminée), allumées la nuit dans la pièce où l'on est.
+  Assez de lumière ? Le style (laiton et tulipe d'opaline) ?
+- **Le poêle** : son tuyau rentre dans le mur du fond à 1,75 m ; posé au milieu d'une pièce, il passe au-dessus de ce qui est entre lui et le mur.
+- **Le dormeur** : la tête suit l'orientation du lit, les yeux se ferment après 1 à 7 s.
+- **Les meubles restent droits** quand les murs s'évasent (essayé l'inverse : ils avaient l'air de tomber). D'accord ?
+Pas vu : deux clients, iPad, une vraie nuit qui livre.
+
 ### À juger — CHEZ SOI : LA PERSPECTIVE ET L'ÉVASEMENT À 0,17 (2026-10-18)
 
 Le lot (coins de façade, cloisons en volume, lumière de profondeur) t'allait sur images ; l'évasement 0,17 est choisi sur maquette. À voir en jouant :

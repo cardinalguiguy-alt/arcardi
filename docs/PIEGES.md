@@ -118,6 +118,14 @@ dépôt.
   (hotte, étagère, trumeau) et ce qui se pose sur le meuble (la tête du dormeur sur le matelas) suivent, sinon ils flottent. ⚠️ Une division uniforme écrase ce qui est
   large et bas par nature : la cheminée à ×0,5 devenait une auge (0,65 retenu) — *regarder chaque meuble avant/après, pas la règle*. ⚠️ Le K de Blender (Python) et celui du jeu sont deux
   écritures de la même grandeur : `verify-maison` §12 les recoupe.
+- ⚠️⚠️ **DANS UNE VUE EN COUPE, CE QUI S'ACCROCHE À UNE SURFACE QU'ON NE VOIT PAS FLOTTE** (2026-10-18, les intérieurs). La maison se
+  regarde en coupe : ni plafond, ni mur de devant. L'ampoule nue pendait d'un plafond absent, au milieu de la pièce ; le premier tuyau de
+  poêle prolongé montait jusqu'au « plafond » — qui, projeté au-dessus d'un point devant le mur, tombe 12 px sous la corniche : deux objets
+  qui finissent en l'air. Guillaume : « des lumières qui ne viendraient pas des plafonds ». *Tout ce qui s'attache doit s'attacher à une
+  surface DESSINÉE* : l'applique au mur du fond (elle s'évase et se coupe avec lui), le tuyau qui file au nord jusqu'au mur — une course
+  nord-sud se projette à la verticale, il reste une seule ligne qui finit sur une rosace visible. Et ce qui s'attache au mur se coupe avec
+  lui (le tuyau d'une pièce aux murs descendus s'arrête à leur hauteur). Corollaire, essayé le même jour : un MEUBLE redessiné avec
+  l'évasement des murs se lit comme un meuble qui tombe — la profondeur se porte par les surfaces, les objets restent droits.
 - ⚠️⚠️ **UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE
   HAUT** (2026-09-02). Le jour où les cinq maires ont eu cinq tailles, le tampon du bureau s'est
   retrouvé à 64 cm de l'épaule d'une femme dont le bras en fait 56 — et une cinématique inverse
