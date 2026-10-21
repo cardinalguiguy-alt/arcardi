@@ -2126,6 +2126,12 @@ export const RESIDENT_TASK_BY_THEME = {
        roster à porter ce drapeau, rien de plus n'a changé ailleurs. Voir
        E.isShopDay et la note de CARLA_WORK_DAYS. */export const CARLA_RID = 30;
 export const CARLA_MIN_ARTISANS = 4;   // résidents à skill requis pour qu'elle daigne venir
+/* 2026-10-21 — FROUFROU, LE COIFFEUR (salon, lot 3). Ses décisions : il arrive par le train comme Carla, à la même porte (quatre
+   artisans), on lui propose d'emménager (`skill: "hairdresser"`) ; il HABITE AU-DESSUS DU SALON — `townHome` : une fois résident il
+   descend en ville et n'en revient plus, se promène, tient le salon aux heures d'ouverture, rentre chez lui la nuit. Extravagant
+   comme elle (look "froufrou", garderobeArt.js), exubérant mais jamais déplacé. Surnom affiché seul ; nom civil Gérald Pinson,
+   jamais montré. */
+export const FROUFROU_RID = 31;
 /* ⚠️ LES JOURS DE SERVICE SONT DÉRIVÉS DU NUMÉRO DE JOUR, comme le cours du
    marché et le jour d'orage : `CARLA_WORK_DAYS.includes(day % 7)`. Aucun état,
    aucun message, aucune migration — et les deux joueurs d'un salon lisent
@@ -2259,6 +2265,8 @@ export const VISITOR_ROSTER = [
      `minArtisans` reste : elle ne se dérange toujours pas pour un champ de
      patates. */
   { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS, noKick: true, weeklyShift: CARLA_WORK_DAYS },
+  // 2026-10-21 — Froufrou : voir FROUFROU_RID. `townHome` est lu par `updateTownTrips` (FermeGame.js) et nulle part ailleurs.
+  { rid: FROUFROU_RID, name: "Froufrou", gender: "m", outfit: 0, overalls: false, cap: false, theme: "style", job: "make every head in the valley shine", look: "froufrou", skill: "hairdresser", minArtisans: CARLA_MIN_ARTISANS, noKick: true, townHome: true },
 ];
 // Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).
@@ -2340,7 +2348,7 @@ export const ARTISAN_DRAW_SCALE_OVERRIDE = { sucrerie: 1 };
 // Zip 427 : `stylist` (Carla) rejoint `voyager` du côté `null` — son lieu de
 // travail est la boutique de Valley Town, pas un atelier de ferme à acheter.
 // Voir la note de son entrée dans VISITOR_ROSTER.
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null, sugarworker: "sucrerie", stylist: null };
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null, sugarworker: "sucrerie", stylist: null, hairdresser: null };   // 2026-10-21 : Froufrou travaille au salon de la ville
 // Cadences de production (ms réelles) et valeurs de vente (or).
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
@@ -2641,6 +2649,7 @@ export const RESIDENT_AFFINITIES = {
   25: { allies: [TRISTAN_RID], enemies: [16] },             // René : ami avec Tristan, en froid avec Rosalie
   26: { allies: [JEROME_RID] },                             // Ingrid : amie avec Jérôme
   16: { enemies: [25] },                                    // Rosalie : en froid avec René
+  [FROUFROU_RID]: { allies: [CARLA_RID] },                  // 2026-10-21 — Froufrou et Carla : la mode et la coiffure s'adorent
 };
 // Renvoie { allies: [rid...], enemies: [rid...] } pour un résident donné, en
 // fusionnant les relations déclarées dans les deux sens (ex. si A liste B en
@@ -7907,6 +7916,7 @@ export const DEV_TELEPORTS = [
      ne sont pas recopiées ici : déplacer la place ne doit pas laisser un
      téléporteur pointé sur l'herbe. */
   { key: "townBoutique",  zone: "town" },  // zip 427 : la Haute-Ville, devant la Maison Garfield (le seul quartier qu'on n'atteint qu'en montant)
+  { key: "townSalon",     zone: "town" },  // 2026-10-21 : devant le salon de coiffure (Froufrou)
   { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
   { key: "townPark",      zone: "town" },  // 2026-10-12 : le skatepark de l'ancienne place (son entrée est) — le park n'y est que posé (menu dev) ou au printemps
   { key: "townPlaceEast", zone: "town" },  // 2026-10-12 : l'allée de l'est de l'ancienne place, d'où l'on regarde le chantier (la place est fermée)
@@ -8575,6 +8585,7 @@ export const TOWN_ACTS = {
   pray:     { ms: [8000, 16000] },              // le parvis de l'église
   // D11 — l'inauguration : la foule rassemblée, tournée vers la cale.
   watch:    { ms: [15000, 15000] },
+  home:     { ms: [3600000, 3600000] },        // 2026-10-21 — Froufrou chez lui, au-dessus du salon : invisible, jusqu'au changement de programme
   /* ZIP 428 — LES SIX QUARTIERS QUI N'AVAIENT AUCUNE ACTIVITÉ. Voir la longue
      note de E.townSpots : 33 des 48 blocs ouverts de la ville n'avaient aucun
      endroit de vie, et un quart des endroits existants étaient des tombes.
@@ -8776,7 +8787,79 @@ export const CHAR_SKIN_TONES = [
 export function playerLook(wr) {
   if (!wr) return null;
   const s = wr.skin | 0, tag = s > 0 && s < CHAR_SKIN_TONES.length ? "~" + s : "";
-  return ((wr.worn ? wardrobeLook(wr.worn) : null) || "") + tag || null;
+  return ((wr.worn ? wardrobeLook(wr.worn) : null) || "") + tag + hairLook(wr.hair) || null;
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-10-21 — LE SALON DE COIFFURE : COUPES, COULEURS, BARBES.
+   ───────────────────────────────────────────────────────────────────────────
+   Ses choix : coupe + couleur + barbe ; des catégories Femmes / Hommes (plus les « Folies »), mais chacun prend ce qu'il veut ; trois coupes
+   extravagantes (macarons géants, tresses jusqu'au sol, mulet) — sur les côtés ou vers le bas : le cadre de 16 × 24 n'a qu'un pixel au-dessus
+   de la tête. L'état vit dans la garde-robe du joueur (`wardrobe[id].hair` = { c, d, b }, ABSENT = la tête d'avant) et voyage dans la chaîne
+   `look` sous la forme `^` + coupe + couleur + barbe, un caractère base 36 chacun (`hairLook`, seule fabrique ; `lookHair`, coiffureArt.js,
+   seule lecture). Indice 0 partout = « d'origine » : la coupe du genre, la couleur tirée de la tenue d'arrivée, pas de barbe. Aucune migration. */
+export const HAIR_CUTS = [
+  null,                                                                                 // 0 : la coupe d'origine (longs / court selon le genre)
+  { id: "long",     cat: "f", name: "Longs lissés",        nameEn: "Long and sleek" },  // = la coupe d'origine de la fermière
+  { id: "bob",      cat: "f", name: "Carré",               nameEn: "Bob" },
+  { id: "ponytail", cat: "f", name: "Queue de cheval",     nameEn: "Ponytail" },
+  { id: "bun",      cat: "f", name: "Chignon",             nameEn: "Bun" },
+  { id: "short",    cat: "m", name: "Court",               nameEn: "Short" },           // = la coupe d'origine du fermier
+  { id: "buzz",     cat: "m", name: "Rasé",                nameEn: "Buzz cut" },
+  { id: "curly",    cat: "m", name: "Boucles",             nameEn: "Curls" },
+  { id: "side",     cat: "m", name: "Raie sur le côté",    nameEn: "Side part" },
+  { id: "macarons", cat: "x", name: "Macarons géants",     nameEn: "Giant buns" },
+  { id: "braids",   cat: "x", name: "Tresses jusqu'au sol",nameEn: "Floor-length braids" },
+  { id: "mullet",   cat: "x", name: "Mulet",               nameEn: "Mullet" },
+];
+// les couleurs : les huit d'origine (`CHAR_HAIR_COLORS`, fermeArt.js — mêmes valeurs, dans le même ordre) puis quatre teintures de fantaisie
+export const HAIR_DYES = [
+  null,
+  { id: "chestnut", name: "Châtain",        nameEn: "Chestnut",     col: "#5a3a1e" },
+  { id: "black",    name: "Noir",           nameEn: "Black",        col: "#2a2a2a" },
+  { id: "ginger",   name: "Roux",           nameEn: "Ginger",       col: "#c8862a" },
+  { id: "auburn",   name: "Auburn",         nameEn: "Auburn",       col: "#8a3020" },
+  { id: "blond",    name: "Blond",          nameEn: "Blond",        col: "#d4b03a" },
+  { id: "plum",     name: "Prune",          nameEn: "Plum",         col: "#4a3468" },
+  { id: "copper",   name: "Cuivré",         nameEn: "Copper",       col: "#743a12" },
+  { id: "silver",   name: "Argent",         nameEn: "Silver",       col: "#b0b0b8" },
+  { id: "platinum", name: "Platine",        nameEn: "Platinum",     col: "#e6dcc0" },
+  { id: "candy",    name: "Rose bonbon",    nameEn: "Candy pink",   col: "#e27aa8" },
+  { id: "electric", name: "Bleu électrique",nameEn: "Electric blue",col: "#3f6fe0" },
+  { id: "mint",     name: "Vert menthe",    nameEn: "Mint green",   col: "#56c49c" },
+];
+export const BEARDS = [
+  null,
+  { id: "moustache", name: "Moustache",      nameEn: "Moustache" },
+  { id: "goatee",    name: "Bouc",           nameEn: "Goatee" },
+  { id: "short",     name: "Barbe courte",   nameEn: "Short beard" },
+  { id: "full",      name: "Barbe fournie",  nameEn: "Full beard" },
+];
+// La séance : un prix unique, coupe, couleur et barbe comprises (sa réponse : « cher, 5000 »). Rien n'est facturé si rien ne change.
+export const SALON_PRICE = 5000;
+/* LES ÉTAPES DU SALON (lot 3), sur le modèle de `garfieldStage` : un local NEUTRE tant que Froufrou n'habite pas la vallée, des TRAVAUX
+   ses SALON_WORKS_DAYS premiers jours (depuis `sinceDay`), puis OUVERT de SALON_OPEN_MIN à SALON_CLOSE_MIN (heure du jeu), fermé un jour
+   de jeu sur sept (`SALON_CLOSED_DAY`, sa réponse : « un jour de jeu sur sept » ; décalé du marché, reste 0, et des jours de Carla, 3 et 4).
+   Une pure fonction du jour et de l'heure : la touche E, l'invite, le tableau des nouvelles et Froufrou lui-même la lisent, rien ne circule. */
+export const SALON_WORKS_DAYS = 2;
+export const SALON_CLOSED_DAY = 6;
+export const SALON_OPEN_MIN = 9 * 60, SALON_CLOSE_MIN = 19 * 60;
+export const FROUFROU_HOME_MIN = 21 * 60, FROUFROU_WAKE_MIN = 8 * 60;   // il rentre chez lui à 21 h, ressort à 8 h
+export function salonStage(resident, sinceDay, day, min) {
+  if (!resident) return "neutre";
+  if (typeof sinceDay === "number" && day < sinceDay + SALON_WORKS_DAYS) return "travaux";
+  if ((day | 0) % 7 === SALON_CLOSED_DAY) return "relache";
+  return min >= SALON_OPEN_MIN && min < SALON_CLOSE_MIN ? "ouvert" : "ferme";
+}
+// les jours avant la prochaine journée d'ouverture (0 : aujourd'hui)
+export function salonDaysToOpen(sinceDay, day) {
+  for (let k = 0; k < 7 + SALON_WORKS_DAYS; k++) if (salonStage(true, sinceDay, day + k, SALON_OPEN_MIN) === "ouvert") return k;
+  return 0;
+}
+export function hairLook(h) {
+  if (!h) return "";
+  const c = (n, max) => { n = n | 0; return (n > 0 && n < max ? n : 0).toString(36); };
+  const s = c(h.c, HAIR_CUTS.length) + c(h.d, HAIR_DYES.length) + c(h.b, BEARDS.length);
+  return s === "000" ? "" : "^" + s;
 }
 // Léo tient la caisse, et il en fait des tonnes : le prix affiché est le prix
 // payé, mais il l'annonce toujours avec une flatterie (voir leoUpsellLines).

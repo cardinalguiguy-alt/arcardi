@@ -874,11 +874,7 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
     else if (p.quoi === "miroir") paintMiroir(g, px(p.x0), px(p.x1), Hh, p.bas, p.haut);
     else if (p.quoi === "conduit") paintConduit(g, px(p.x0), px(p.x1), Hh, wallPx, p.tablette, p.bas, p.haut);
   }
-  for (const [a, b] of f.portes || []) {
-    let X = b + 0.12;
-    if (!libre(X, 0.08)) X = a - 0.12;
-    if (libre(X, 0.08)) paintInterrupteur(g, px(X), Hh);
-  }
+  for (const X of homeInterrupteurs(plan, L, f)) paintInterrupteur(g, px(X), Hh);
   for (const ap of homeAppliques(plan, L, f)) paintApplique(g, px(ap.lx), Hh, ap.z, false);   // 2026-10-18 : éteinte, cuite
   if (PIECES_SANS_PRISE_AUTO.has(f.room) || f.x1 - f.x0 < 0.9) return;
   const caches = [...(lv.fixes || []).filter((x) => surFace(x.ly)).map((x) => [x.lx, x.lx + 1.6]),
@@ -886,6 +882,12 @@ function paintWallDetails(g, plan, L, f, Hh, wallPx) {
   const cands = [f.x0 + 0.35, ...(f.x1 - f.x0 > 2.4 ? [f.x1 - 0.35] : [])];
   for (const X of cands) if (libre(X, 0.18) && !caches.some(([a, b]) => X > a - 0.1 && X < b + 0.1)) paintPrise(g, px(X), Hh);
 }
+
+/* 2026-10-21 (lot 2c) — LES INTERRUPTEURS d'une face (x du plan) : posés par `maison.homeFaces` (`f.inters`), qui connaît
+   toutes les pièces — un à côté de chaque porte du mur, et une pièce qui n'en a aucun (le séjour, la cuisine, les bains…
+   dont la porte est dans un mur coupé) reçoit le sien sur son mur du fond, au plus près de sa porte. Le dessin, la
+   portée de E (`maison.homeSwitchNear`) et la pose d'un tableau (`maison.homeCanHang`) lisent la même liste. */
+export const homeInterrupteurs = (plan, L, f) => f.inters || [];
 
 // ─── les dessins de chaque image (dans le repère des images cuites) ──────
 /* UN MUR BAS (nord-sud, coupé à 35 cm) : son arase, et sa tranche sud. */
@@ -1103,7 +1105,11 @@ export function drawCatalogue(ctx, x, y, w, h) {
      roomCut(id) la hauteur VISIBLE des murs d'une pièce, en px (le tuyau du poêle s'y coupe)
      catalogue  { lx, ly, w, h } (cases) : le catalogue au sol de l'entrée, ou rien (lot 2b)
      cartons    [{ lx, ly, k }] les cartons livrés, dans l'entrée (lot 2b)
+     ombresMur(f) [{ c, x, y, a }] les ombres portées sur la face f, cuites (`ombresMaison.js`, 2026-10-18), ou rien
+     murals    [{ s, fid, lx, z, w, h }] les objets de mur (2026-10-21, lot 2c) : la face, le bord gauche (cases), le bas (m),
+               la taille (px) ; muralImg(s, w, h) leur image peinte (`paintMural`) ; tmin la minute du jour (l'horloge)
    }
+   Un meuble peut porter `feu` (0 à 1, lot 2c) : la cheminée ou le poêle allumé (`<sprite>_allume`).
    ⚠️ LA VOLÉE se trie à son bout NORD (`yHaut`) : qui marche dessus a les pieds
    plus au sud, il est donc dessiné après elle ; qui se tient sur le palier,
    au nord, passe derrière son haut — c'est ce que voit la caméra. */
@@ -1160,6 +1166,27 @@ export function homeDrawItems(plan, L, o) {
         const z = bake.H - (g[1] + g[3] / 2), d = Math.round(flarePx(f.x0 + g[0] / MPX, z, xc));
         paintGlass(ctx, [px + g[0] + d, py - bake.H + g[1], g[2], g[3]], o.ciel);
       }
+      /* 2026-10-18 — L'OMBRE PORTÉE SUR LE MUR (`ombresMaison.js`) : ce qui se tient devant lui. Cuite à sa place évasée ;
+         le mur à demi descendu n'en montre que ses rangées encore debout (les mêmes rangées, aux mêmes places). */
+      if (o.ombresMur) for (const s of o.ombresMur(f)) {
+        const y0 = top === 0 ? s.y : Math.max(s.y, py - v), k = y0 - s.y;
+        if (k >= s.c.height) continue;
+        if (s.a < 1) ctx.globalAlpha = s.a;
+        if (k === 0) ctx.drawImage(s.c, s.x, s.y);
+        else ctx.drawImage(s.c, 0, k, s.c.width, s.c.height - k, s.x, y0, s.c.width, s.c.height - k);
+        ctx.globalAlpha = 1;
+      }
+      /* 2026-10-21 (lot 2c) — LES OBJETS DE MUR accrochés à cette face (`o.murals`), peints une fois (`o.muralImg`, avec leur
+         ombre), posés à leur place évasée (le glissement de leur milieu, comme l'applique) ; l'horloge a ses aiguilles. Mur
+         coupé : on ne les voit pas, comme l'applique. */
+      if (top === 0 && o.murals) for (const mu of o.murals) {
+        if (mu.fid !== f.id) continue;
+        const im = o.muralImg && o.muralImg(mu.s, mu.w, mu.h);
+        if (!im) continue;
+        const zb = pxOfM(mu.z), X = px + Math.round((mu.lx - f.x0) * MPX + flarePx(mu.lx + mu.w / 2 / MPX, zb + mu.h / 2, xc)), Y = py - zb - mu.h;
+        ctx.drawImage(im, X, Y);
+        if (/^horloge/.test(mu.s) && o.tmin != null) paintClockHands(ctx, X, Y, mu.w, o.tmin);
+      }
       if (top === 0 && o.allumees && o.allumees.has(f.room)) for (const ap of homeAppliques(plan, L, f)) {
         const zp = pxOfM(ap.z);
         paintApplique(ctx, px + Math.round((ap.lx - f.x0) * MPX + flarePx(ap.lx, zp, xc)), py, ap.z, true);
@@ -1202,7 +1229,14 @@ export function homeDrawItems(plan, L, o) {
          (la face avant de 0 à h, le dessus à h), ils suivaient bien le mur — et une bibliothèque contre un mur de côté devenait un
          parallélogramme qui tombe, le tuyau du poêle se couchait. Un mur qui s'évase se lit comme de la profondeur ; un objet qui
          penche se lit comme un objet qui tombe. L'écart (≈ 9 px à 1 m contre un mur de côté, à 0,17) est le prix accepté. */
-      ctx.drawImage(im, px - meta.ax, py - meta.ay);
+      /* 2026-10-21 (lot 2c) — LE FEU (`m.feu`, `maison.homeFireLevel`) : en flammes, la version allumée ; aux braises, elle
+         s'efface par-dessus l'éteinte (un fondu, jamais un seuil : noyau §4). Sa lumière et son vacillement sont au jeu. */
+      const feu = m.feu > 0 ? o.img(m.sprite + "_allume_" + m.o) : null;
+      if (feu && m.feu >= 1) ctx.drawImage(feu, px - meta.ax, py - meta.ay);
+      else {
+        ctx.drawImage(im, px - meta.ax, py - meta.ay);
+        if (feu) { ctx.globalAlpha = Math.min(1, m.feu / 0.35) * 0.8; ctx.drawImage(feu, px - meta.ax, py - meta.ay); ctx.globalAlpha = 1; }
+      }
       if (/^poele/.test(m.sprite)) {
         // 2026-10-18 — l'axe du tuyau : à mi-largeur, 0,24 m derrière la façade du poêle (`meubles.poele`), selon son orientation
         const [x0, y0] = [m.lx, m.ly], fw = meta.fw / CASE_M, k = 0.24 / CASE_M;
@@ -1325,3 +1359,154 @@ export function drawCornerPillar(ctx, plan, lw, L) {
   }
 }
 
+
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-21 (lot 2c) — LES OBJETS DE MUR (`maison.HOME_MURAUX`) : trois tableaux, un miroir, une horloge.
+   ╚════════════════════════════════════════════════════════════════════════
+   Vus DE FACE sur le mur du fond, ils se peignent au canevas comme le miroir des bains et le trumeau — pas de Blender : un
+   cadre se lit de face, sans volume à rendre. ⚠️ LES TOILES SONT PROVISOIRES : les définitives viendront d'images Gemini
+   (réponse de Guillaume, 2026-10-21 ; prompts dans `refs/lot-gemini/F-tableaux-maison.md`). `toile` (une image, facultative) prend
+   alors la place de la peinture du cadre — le cadre, lui, reste peint ici. (x, y) : le coin haut-gauche du cadre ; w, h :
+   sa taille en px des images cuites (`pxOfM` des cotes du catalogue). L'horloge a ses aiguilles à part
+   (`paintClockHands`, à chaque image : elles donnent l'heure du jeu). */
+const OR = ["#5e4416", "#9c7a2e", "#c9a24a", "#ecd17a", "#7a5a1e"];   // le cadre doré : ombre, corps, clair, éclat, lèvre
+function paintCadreDore(ctx, x, y, w, h, t = 3) {
+  rect(ctx, x, y, w, h, OR[0]);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, OR[1]);
+  rect(ctx, x + 1, y + 1, w - 2, 1, OR[3]); rect(ctx, x + 1, y + 1, 1, h - 2, OR[2]);
+  rect(ctx, x + 1, y + h - 2, w - 2, 1, OR[4]); rect(ctx, x + w - 2, y + 1, 1, h - 2, OR[4]);
+  for (let k = 3; k < w - 3; k += 4) rect(ctx, x + k, y + 1, 1, 1, OR[2]);              // le rang de perles du haut
+  rect(ctx, x + t - 1, y + t - 1, w - 2 * t + 2, h - 2 * t + 2, OR[0]);                // la lèvre sombre autour de la toile
+  return [x + t, y + t, w - 2 * t, h - 2 * t];
+}
+function toilePaysage(ctx, X, Y, W, H, r) {
+  const hor = Math.round(H * 0.52);
+  for (let j = 0; j < hor; j++) { const t = j / hor; rect(ctx, X, Y + j, W, 1, t < 0.35 ? "#86aed0" : t < 0.7 ? "#a9c4d8" : "#d6e0d6"); }
+  for (let k = 0; k < 3; k++) { const cx = X + 3 + Math.round(r() * (W - 10)), cy = Y + 1 + Math.round(r() * (hor * 0.4)); rect(ctx, cx, cy, 5, 1, "#eef3f2"); rect(ctx, cx + 1, cy - 1, 3, 1, "#f7faf8"); }
+  for (let i = 0; i < W; i++) {                                                             // les collines bleutées au loin…
+    const hh = Math.round(2 + 2 * Math.sin(i * 0.33 + 1.2) + Math.sin(i * 0.9));
+    rect(ctx, X + i, Y + hor - hh, 1, hh, "#7e9c94");
+  }
+  for (let j = hor; j < H; j++) rect(ctx, X, Y + j, W, 1, j < hor + 2 ? "#9db35e" : j % 2 ? "#87a04c" : "#8fa853");   // …les prés
+  for (let k = 0; k < W * 1.4; k++) rect(ctx, X + Math.round(r() * (W - 1)), Y + hor + 2 + Math.round(r() * (H - hor - 3)), 1, 1, r() < 0.5 ? "#6f8a3c" : "#b9c46e");
+  for (let j = 0; j < H - hor; j++) rect(ctx, X + Math.round(W * 0.42 + j * 0.9), Y + hor + j, 2, 1, "#d4b77c");   // le chemin
+  const hx = X + Math.round(W * 0.2), hy = Y + hor - 1;                                     // la ferme : mur blanc, toit rouge
+  rect(ctx, hx, hy - 3, 6, 4, "#efe8d8"); rect(ctx, hx + 6, hy - 3, 1, 4, "#cfc6b2");
+  rect(ctx, hx - 1, hy - 5, 8, 2, "#a8432e"); rect(ctx, hx, hy - 6, 6, 1, "#c45a3c");
+  rect(ctx, hx + 2, hy - 1, 1, 2, "#5a4636");
+  const tx = X + Math.round(W * 0.74);                                                      // le peuplier
+  rect(ctx, tx + 1, Y + hor - 1, 1, 4, "#5a4030");
+  for (let j = 0; j < 9; j++) { const ww = j < 2 ? 1 : j < 7 ? 3 : 2; rect(ctx, tx + 1 - (ww >> 1), Y + hor - 10 + j, ww, 1, j % 3 ? "#3f6a3a" : "#4f7d44"); }
+}
+function toileNature(ctx, X, Y, W, H, r) {
+  for (let j = 0; j < H; j++) rect(ctx, X, Y + j, W, 1, j < H * 0.3 ? "#2c2018" : j < H * 0.62 ? "#352619" : "#2e2117");
+  rect(ctx, X + Math.round(W * 0.55), Y + 2, Math.round(W * 0.35), Math.round(H * 0.4), "#3e2d1f");   // la lueur du fond, à droite
+  const ty = Y + Math.round(H * 0.68);                                                     // la table : le plateau, son chant
+  rect(ctx, X, ty, W, H - (ty - Y), "#5d3f26"); rect(ctx, X, ty, W, 1, "#8a6440"); rect(ctx, X, ty + 3, W, 1, "#3f2a19");
+  const jx = X + 2;                                                                         // le pichet d'étain
+  rect(ctx, jx, ty - 9, 5, 9, "#8d8f8a"); rect(ctx, jx + 1, ty - 9, 1, 8, "#c4c6c0"); rect(ctx, jx + 4, ty - 8, 1, 7, "#5f625e");
+  rect(ctx, jx, ty - 10, 6, 1, "#a7aaa4"); rect(ctx, jx + 5, ty - 7, 2, 1, "#6f726d"); rect(ctx, jx + 6, ty - 7, 1, 3, "#6f726d");
+  const bx = X + Math.round(W * 0.38), bw = Math.round(W * 0.55);                          // la coupe de faïence
+  rect(ctx, bx + 1, ty - 2, bw - 2, 2, "#e8e3d6"); rect(ctx, bx, ty - 3, bw, 1, "#f5f1e6"); rect(ctx, bx + 2, ty - 1, bw - 4, 1, "#3e6a8a");
+  const fruits = [["#b8322a", "#e06a52"], ["#d98a2a", "#f2b65a"], ["#8aa53a", "#c3d36a"], ["#b8322a", "#e06a52"]];
+  fruits.forEach(([c, l], i) => { const fx = bx + 1 + i * 3, fy = ty - 6 - (i % 2); rect(ctx, fx, fy, 3, 3, c); rect(ctx, fx, fy, 1, 1, l); });
+  for (let k = 0; k < 5; k++) rect(ctx, bx + bw - 3 + (k % 2), ty - 6 + k, 2, 1, k % 2 ? "#5a2e5e" : "#7a4280");   // la grappe qui pend
+  void r;
+}
+function toilePortrait(ctx, X, Y, W, H, r) {
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {                                 // le fond, sombre au bord (vignetage)
+    const d = Math.hypot((i - W / 2) / W, (j - H * 0.4) / H);
+    rect(ctx, X + i, Y + j, 1, 1, d > 0.45 ? "#26261c" : d > 0.32 ? "#33331f" : "#40402a");
+  }
+  const cx = X + Math.round(W / 2), fy = Y + Math.round(H * 0.22), fw = Math.max(6, Math.round(W * 0.42)), fh = Math.round(H * 0.34);
+  const sy = fy + fh + 2;                                                                    // les épaules, l'habit sombre, le col blanc
+  for (let j = 0; sy + j < Y + H; j++) { const ww = Math.min(W, fw + 4 + j * 2); rect(ctx, cx - (ww >> 1), sy + j, ww, 1, j < 1 ? "#2a3550" : "#1f2840"); }
+  rect(ctx, cx - 3, sy, 6, 2, "#ece6d6"); rect(ctx, cx - 1, sy + 2, 2, 2, "#d9d2c0");
+  rect(ctx, cx - 2, fy + fh - 1, 4, 3, "#c99474");                                          // le cou
+  for (let j = 0; j < fh; j++) {                                                            // le visage, ovale
+    const t = (j + 0.5) / fh, ww = Math.round(fw * Math.sqrt(1 - (2 * t - 1) ** 2 * 0.7));
+    rect(ctx, cx - (ww >> 1), fy + j, ww, 1, "#e0b08a");
+    rect(ctx, cx + (ww >> 1) - 1, fy + j, 1, 1, "#c48f6c");
+  }
+  rect(ctx, cx - (fw >> 1) - 1, fy - 2, fw + 2, 3, "#3a2618");                             // les cheveux
+  rect(ctx, cx - (fw >> 1) - 1, fy, 1, Math.round(fh * 0.6), "#3a2618"); rect(ctx, cx + (fw >> 1), fy, 1, Math.round(fh * 0.6), "#3a2618");
+  rect(ctx, cx - (fw >> 1), fy - 2, 3, 1, "#5a3a24");
+  rect(ctx, cx - 2, fy + Math.round(fh * 0.42), 1, 1, "#2a1c14"); rect(ctx, cx + 1, fy + Math.round(fh * 0.42), 1, 1, "#2a1c14");   // les yeux
+  rect(ctx, cx - 3, fy + Math.round(fh * 0.62), 1, 1, "#e49a84"); rect(ctx, cx + 2, fy + Math.round(fh * 0.62), 1, 1, "#e49a84");   // les joues
+  rect(ctx, cx - 1, fy + Math.round(fh * 0.78), 2, 1, "#a8564a");                          // la bouche
+  void r;
+}
+function paintMiroirMural(ctx, x, y, w, h) {
+  const R = Math.floor(w / 2);
+  const larg = (j) => (j >= R ? w : Math.round(2 * Math.sqrt(Math.max(0, R * R - (R - j - 0.5) ** 2))));   // le haut en plein cintre
+  for (let j = 0; j < h; j++) {
+    const lw = larg(j), x0 = x + Math.round((w - lw) / 2);
+    rect(ctx, x0, y + j, lw, 1, OR[1]);
+    if (lw > 2) { rect(ctx, x0, y + j, 1, 1, j < R ? OR[3] : OR[2]); rect(ctx, x0 + lw - 1, y + j, 1, 1, OR[4]); }
+  }
+  rect(ctx, x + 1, y + h - 1, w - 2, 1, OR[4]); rect(ctx, x + Math.round(w / 2) - 1, y, 2, 1, OR[3]);
+  for (let j = 2; j < h - 2; j++) {                                                         // le verre (2 px de cadre)
+    const lw = Math.max(0, larg(j - 1) - 4), x0 = x + Math.round((w - lw) / 2);
+    const t = j / h;
+    rect(ctx, x0, y + j, lw, 1, t < 0.4 ? "#c3d1d6" : t < 0.75 ? "#b0c0c6" : "#9fb0b7");
+  }
+  for (const o of [0.28, 0.6]) for (let k = 0; k < 7; k++) rect(ctx, x + Math.round(w * o) + 3 - k, y + Math.round(h * 0.25) + k * 2, 2, 2, "#e1eaec");
+  rect(ctx, x + 3, y + h - 6, w - 6, 1, "#c8a77a");                                         // le reflet chaud de la pièce, en bas
+}
+function paintHorloge(ctx, x, y, w) {
+  const R = w / 2, cx = x + R, cy = y + R;
+  for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+    const d = Math.hypot(i + 0.5 - R, j + 0.5 - R);
+    if (d > R) continue;
+    const c = d > R - 1 ? "#3e2a18" : d > R - 2.6 ? ((i < R && j < R) ? "#8a6036" : "#6b4a2e") : d > R - 3.2 ? "#d6ccb4" : "#f4eedf";
+    rect(ctx, x + i, y + j, 1, 1, c);
+  }
+  for (let k = 0; k < 12; k++) {                                                            // les douze heures
+    const a = k * Math.PI / 6, rr = R - 4.2;
+    rect(ctx, Math.round(cx + Math.sin(a) * rr - 0.5), Math.round(cy - Math.cos(a) * rr - 0.5), 1, 1, k % 3 ? "#9a8f7c" : "#2e2620");
+  }
+}
+/* LES AIGUILLES de l'horloge (à chaque image) : `tmin`, la minute du jour du jeu. (x, y, w) : le cadre de l'horloge. */
+export function paintClockHands(ctx, x, y, w, tmin) {
+  const R = w / 2, cx = x + R, cy = y + R;
+  const hand = (a, len, c) => { for (let k = 0; k <= len; k += 0.5) rect(ctx, Math.round(cx + Math.sin(a) * k - 0.5), Math.round(cy - Math.cos(a) * k - 0.5), 1, 1, c); };
+  const m = ((tmin % 1440) + 1440) % 1440;
+  hand((m % 60) / 60 * 2 * Math.PI, R - 4.5, "#2e2620");
+  hand(((m / 60) % 12) / 12 * 2 * Math.PI, R - 6.5, "#2e2620");
+  rect(ctx, Math.round(cx) - 1, Math.round(cy) - 1, 2, 2, "#b8903e");
+}
+/* L'OBJET DE MUR ENTIER (cadre et toile, ou miroir, ou cadran), avec son ombre portée sur le mur (1 px à droite et dessous :
+   il se lit accroché, pas peint sur le papier). */
+export function paintMural(ctx, s, x, y, w, h, toile = null) {
+  const r = (() => { let k = 0; return () => h32(s.length * 31 + w, h, k++); })();
+  ctx.globalAlpha = 0.28;
+  if (/^horloge/.test(s)) {   // l'ombre d'un cadran est ronde (vue au banc : un carré gris derrière l'horloge)
+    for (let j = 0; j < w; j++) { const hw = Math.round(Math.sqrt(Math.max(0, (w / 2) ** 2 - (j + 0.5 - w / 2) ** 2))); rect(ctx, x + 1 + Math.round(w / 2) - hw, y + 2 + j, 2 * hw, 1, "#20160f"); }
+    ctx.globalAlpha = 1;
+    paintHorloge(ctx, x, y, w);
+    return;
+  }
+  if (/^miroir_mural/.test(s)) {   // l'ombre suit le plein cintre
+    const R = Math.floor(w / 2);
+    for (let j = 0; j < h; j++) { const lw = j >= R ? w : Math.round(2 * Math.sqrt(Math.max(0, R * R - (R - j - 0.5) ** 2))); rect(ctx, x + 1 + Math.round((w - lw) / 2), y + 2 + j, lw, 1, "#20160f"); }
+    ctx.globalAlpha = 1;
+    paintMiroirMural(ctx, x, y, w, h);
+    return;
+  }
+  rect(ctx, x + 1, y + 2, w, h, "#20160f"); ctx.globalAlpha = 1;
+  const [X, Y, W, H] = paintCadreDore(ctx, x, y, w, h, w >= 30 ? 3 : 2);
+  if (toile) { ctx.drawImage(toile, X, Y, W, H); return; }
+  if (/paysage/.test(s)) toilePaysage(ctx, X, Y, W, H, r);
+  else if (/nature/.test(s)) toileNature(ctx, X, Y, W, H, r);
+  else toilePortrait(ctx, X, Y, W, H, r);
+  ctx.globalAlpha = 0.18; rect(ctx, X, Y, W, 1, "#000"); rect(ctx, X, Y, 1, H, "#000"); ctx.globalAlpha = 1;   // le cadre ombre la toile
+}
+/* L'IMAGE D'UN OBJET DE MUR, peinte une fois : son cadre de `w` × `h` px et la marge de son ombre (1 px à droite, 2 dessous). */
+export function bakeMural(mk, s, w, h, toile = null) {
+  const c = mk(w + 1, h + 2), g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  paintMural(g, s, 0, 0, w, h, toile);
+  return c;
+}
+/* La taille peinte d'un objet de mur (px des images cuites), depuis ses cotes en mètres (`maison.HOME_MURAUX`). */
+export const muralPx = (sp) => [pxOfM(sp.w), pxOfM(sp.h)];

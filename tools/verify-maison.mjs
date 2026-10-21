@@ -22,6 +22,8 @@
    8. Chaque chose a son nom, dans les deux langues.
    9. (2026-10-17) Les maisons écrites sur le plan de 7 cases sont recalées sur
       celui de 9 sans rien perdre (`migrateHome`).
+   15. (2026-10-21, lot 2c) Les interrupteurs, les lampes, le feu, les objets de
+      mur, la revente, les vitres et la fumée vues de la rue.
    ⚠️ 2026-10-17 — LE PLAN EST EN CASES DU PLAN, LA CARTE EN CASES DU MONDE
    (`HOME_K` = 2) : le calage (§2) et le pas des marcheurs (§5) passent par K.
 
@@ -588,10 +590,10 @@ console.log("\n=== 13. le lit pivoté, les appliques, le poêle ===");
 console.log("\n=== 14. le catalogue et les cartons ===");
 {
   const cat = H.HOME_CATALOGUE;
-  const absents = cat.flatMap((e) => e.coloris.filter((sp) => !MA_SPRITES[sp]));
-  check("chaque coloris du catalogue a son sprite rendu", absents.length === 0, absents.join(", ") || `${cat.length} articles, ${cat.reduce((n, e) => n + e.coloris.length, 0)} coloris`);
-  const interdits = cat.flatMap((e) => e.coloris).filter((sp) => sp === "escalier" || /_allume$/.test(sp) || H.homeFixe(sp) || H.homeWallItem(sp) || sp === "plante_morte");
-  check("ni l'escalier, ni un équipement, ni un objet de mur, ni une version allumée, ni la plante morte ne se commandent", interdits.length === 0, interdits.join(", ") || "aucun");
+  const absents = cat.flatMap((e) => e.coloris.filter((sp) => !MA_SPRITES[sp] && !H.HOME_MURAUX[sp]));   // 2026-10-21 : un objet de mur se peint (`maisonArt.paintMural`)
+  check("chaque coloris du catalogue a son sprite rendu (ou, objet de mur, sa peinture)", absents.length === 0, absents.join(", ") || `${cat.length} articles, ${cat.reduce((n, e) => n + e.coloris.length, 0)} coloris`);
+  const interdits = cat.flatMap((e) => e.coloris).filter((sp) => sp === "escalier" || /_allume$/.test(sp) || H.homeFixe(sp) || (H.homeWallItem(sp) && !H.HOME_MURAUX[sp]) || sp === "plante_morte");
+  check("ni l'escalier, ni un équipement, ni le tableau provisoire de Blender, ni une version allumée, ni la plante morte ne se commandent", interdits.length === 0, interdits.join(", ") || "aucun");
   const prix = cat.map((e) => e.prix), plante = cat.find((e) => e.id === "plante_verte").prix, canape = cat.find((e) => e.id === "canape").prix;
   check("prix à l'échelle de la garde-robe (1 200 à 14 000) ; une plante ≈ un chapeau, un canapé 5 à 10 fois plus (décision 8)",
     prix.every((x) => x >= 1200 && x <= 14000) && canape / plante >= 5 && canape / plante <= 10, `${Math.min(...prix)}–${Math.max(...prix)} or, canapé/plante ${(canape / plante).toFixed(1)}`);
@@ -630,6 +632,123 @@ console.log("\n=== 14. le catalogue et les cartons ===");
     }
   }
   check("le catalogue et les cartons tiennent dans l'entrée, hors de la porte et du pied de la volée, sans se chevaucher", mauvais.length === 0, mauvais.slice(0, 4).join(" ; ") || etroites.join(", "));
+}
+
+// ── 15. 2026-10-21 — LOT 2c : LES INTERRUPTEURS, LES LAMPES, LE FEU, LES OBJETS DE MUR, LA REVENTE, VU DE LA RUE.
+console.log("\n=== 15. lot 2c : lumières, feu, objets de mur, revente ===");
+{
+  // les interrupteurs : un par pièce (hors cage), sur une face de la pièce, hors des ouvertures et du miroir, du trumeau, des prises
+  const sans = [], mal = [];
+  P.niveaux.forEach((lv, L) => {
+    const faces = H.homeFaces(P, L);
+    for (const pc of lv.pieces) {
+      if (pc.id === "cage") continue;
+      const xs = faces.filter((f) => f.room === pc.id).flatMap((f) => MA.homeInterrupteurs(P, L, f).map((X) => ({ X, f })));
+      if (!xs.length) sans.push(L + ":" + pc.id);
+      for (const { X, f } of xs) {
+        const bouche = [...(f.portes || []), ...(f.fenetres || []), ...(lv.peints || []).filter((q) => Math.abs(q.y - f.y) < 0.06 && q.x0 != null && q.quoi !== "hotte" && q.quoi !== "etagere").map((q) => [q.x0, q.x1])];
+        if (X < f.x0 + 0.06 || X > f.x1 - 0.06 || bouche.some(([a, b]) => X > a - 0.06 && X < b + 0.06)) mal.push(L + ":" + pc.id + "@" + X);
+      }
+    }
+  });
+  check("chaque pièce (hors cage) a son interrupteur, sur l'un de ses murs du fond", sans.length === 0, sans.join(", ") || "toutes");
+  check("aucun interrupteur sur une porte, une fenêtre, le miroir des bains ou le trumeau", mal.length === 0, mal.join(", ") || "tous à l'écart");
+  // E à portée : devant l'interrupteur du séjour, oui ; au milieu du séjour, non ; dans l'entrée, c'est celui de l'entrée
+  const fs0 = H.homeFaces(P, 0), fSej = fs0.find((f) => f.room === "sejour" && f.inters.length), Xs = fSej.inters[0];
+  const pres = H.homeSwitchNear(P, 0, Xs, fSej.y + 0.35), loin = H.homeSwitchNear(P, 0, 3.6, 7.5);
+  check("l'interrupteur se prend à moins de 0,8 case, et seulement celui de la pièce où l'on est", pres && pres.piece === "sejour" && !loin, `séjour à ${Xs}`);
+  // l'état : une pièce jamais touchée suit la règle d'avant ; la main l'emporte ; une lampe suit sa pièce tant qu'on ne l'a pas touchée
+  const h = H.homeDepart();
+  const avant = [H.homeRoomOn(h, 0, "sejour", true), H.homeRoomOn(h, 0, "sejour", false)];
+  H.resolveHomeSwitch(h, { n: 0, piece: "sejour", v: 0 }, P);
+  const eteinte = H.homeRoomOn(h, 0, "sejour", true);
+  const rCage = H.resolveHomeSwitch(h, { n: 0, piece: "cage", v: 1 }, P);
+  check("pièce jamais touchée : allumée la nuit quand on y est (comme avant) ; éteinte à la main, elle le reste ; la cage n'a pas d'interrupteur",
+    avant[0] && !avant[1] && !eteinte && !rCage.ok && h.l["0:sejour"] === 0);
+  h.m.push({ u: 50, s: "lampadaire", o: "S", n: 0, x: 60, y: 120 });
+  const suit = [H.homeLampOn(h.m.at(-1), true), H.homeLampOn(h.m.at(-1), false)];
+  H.resolveHomeLamp(h, { u: 50, v: 1 });
+  const rNon = H.resolveHomeLamp(h, { u: 1, v: 1 });   // le lit n'est pas une lampe
+  check("une lampe jamais touchée suit sa pièce ; allumée à la main, elle brille pièce éteinte ; un lit ne s'allume pas",
+    suit[0] && !suit[1] && H.homeLampOn(h.m.at(-1), false) && !rNon.ok);
+  // le feu : 4 h de flammes, 45 min de braises, puis rien ; la cheminée est au rez-de-chaussée seulement ; la fumée suit le plus fort
+  const t0 = H.homeGameMin(3, 20 * 60);
+  H.resolveHomeFire(h, { k: "cheminee", n: 0, v: 1 }, P, t0);
+  const lv = [0, 239, 240 + 20, 240 + 45, 600].map((d) => H.homeFireLevel(h.fe["0:cheminee"], t0 + d));
+  const rEt = H.resolveHomeFire(h, { k: "cheminee", n: 1, v: 1 }, P, t0);
+  check("le feu : flammes 4 h de jeu, braises 45 min qui baissent, puis éteint ; pas de cheminée à l'étage",
+    lv[0] === 1 && lv[1] === 1 && lv[2] > 0 && lv[2] < 0.35 && lv[3] === 0 && lv[4] === 0 && !rEt.ok, lv.map((x) => x.toFixed(2)).join(" → "));
+  check("la fumée du toit suit le feu de la maison (`homeFireOf`)", H.homeFireOf(h, t0 + 10) === 1 && H.homeFireOf(h, t0 + 600) === 0 && H.homeFireOf(H.homeDepart(), t0) === 0);
+  h.m.push({ u: 51, s: "poele", o: "S", n: 1, x: 10, y: 108 });
+  H.resolveHomeFire(h, { u: 51, v: 1 }, P, t0);
+  H.resolveHomeStore(h, { u: 51 });
+  check("un poêle rangé oublie son feu, une lampe rangée sa main (le garde-meuble ne garde que u et s)", h.g.some((x) => x.u === 51 && x.f === undefined && Object.keys(x).length === 2));
+  // une sauvegarde d'avant (sans l, fe, w, a, f) : rien d'allumé à la main, aucun feu, rien au mur, et tout se lit sans planter
+  const vieille = { m: [{ u: 1, s: "lit", o: "S", n: 1, x: 53, y: 107 }], g: [], d: {}, k: 9, pv: 3 };
+  check("une maison d'avant le lot 2c se lit : aucune pièce touchée, aucun feu, aucun objet de mur",
+    H.homeMurals(vieille).length === 0 && Object.keys(H.homeSwitches(vieille)).length === 0 && H.homeFireOf(vieille, t0) === 0 && H.homeRoomOn(vieille, 0, "sejour", true));
+  const hd = H.homeDepart();
+  check("la maison de départ déclare les champs neufs (`w`, `l`, `fe`)", Array.isArray(hd.w) && hd.l && hd.fe && !hd.w.length);
+  // les objets de mur : toutes les hauteurs finissent sous l'applique, au-dessus de la plinthe, et tiennent sous les combles
+  const hauts = Object.entries(H.HOME_MURAUX).filter(([s2]) => s2 !== "horloge").map(([s2, sp]) => [s2, sp.z, sp.z + sp.h]);
+  check("tableaux et miroir : sous l'applique (elle commence à 1,10 m), au-dessus d'un dossier de canapé",
+    hauts.every(([, z, zh]) => zh <= MA.APPLIQUE_Z - 0.20 && z >= 0.45), hauts.map(([s2, z, zh]) => `${s2} ${z}–${zh.toFixed(2)}`).join(", "));
+  check("sous les combles (mur d'appui de 1 m), chaque objet descend pour tenir", Object.keys(H.HOME_MURAUX).every((s2) => { const z = H.homeMuralZ(P, 2, s2); return z != null && z + H.HOME_MURAUX[s2].h <= P.niveaux[2].mur; }));
+  // la pose : le séjour en prend deux (entre l'interrupteur et le trumeau, à droite du trumeau), refuse l'interrupteur, le trumeau,
+  // la superposition ; la cage refuse ; un objet de mur n'entre jamais dans la marche ni dans les meubles
+  const hm = H.homeDepart();
+  hm.g.push({ u: 60, s: "tableau_paysage" }, { u: 61, s: "tableau_portrait" }, { u: 62, s: "horloge" }, { u: 63, s: "tableau_nature" });
+  const y91 = Math.round(fSej.y * H.HOME_Q);
+  const r1 = H.resolveHomeHang(hm, { u: 60, n: 0, x: 50, y: y91 }, P);
+  const r2 = H.resolveHomeHang(hm, { u: 61, n: 0, x: 92, y: y91 }, P);
+  const rSur = H.resolveHomeHang(hm, { u: 63, n: 0, x: 52, y: y91 }, P);
+  const rTru = H.resolveHomeHang(hm, { u: 63, n: 0, x: 66, y: y91 }, P);
+  const rInt = H.resolveHomeHang(hm, { u: 63, n: 0, x: 46, y: y91 }, P);
+  const rApp = H.resolveHomeHang(hm, { u: 62, n: 0, x: 84, y: y91 }, P);   // l'horloge monte jusqu'à l'applique de droite (4,37)
+  const rRien = H.resolveHomeHang(hm, { u: 63, n: 0, x: 50, y: y91 + 7 }, P);   // pas de mur à cette profondeur
+  check("au séjour : le paysage et le portrait s'accrochent ; refusés : sur un autre cadre, sur le trumeau, sur l'interrupteur, l'horloge sur l'applique, hors d'un mur",
+    r1.ok && r2.ok && rSur.raison === "mural" && rTru.raison === "equipement" && rInt.raison === "interrupteur" && rApp.raison === "applique" && rRien.raison === "mur",
+    [r1, r2, rSur, rTru, rInt, rApp, rRien].map((r) => (r.ok ? "ok" : r.raison)).join(", "));
+  const fen = H.homeFaces(P, 0).find((f) => f.fenetres && f.fenetres.length);
+  const rFen = H.resolveHomeHang(hm, { u: 63, n: 0, x: Math.round((fen.fenetres[0][0] + 0.05) * H.HOME_Q), y: Math.round(fen.y * H.HOME_Q) }, P);
+  check("pas sur une fenêtre", !rFen.ok && rFen.raison === "ouverture", rFen.raison);
+  check("accrochés, ils quittent le garde-meuble pour `w`, jamais `m` (la marche et la pose des meubles ne les voient pas)",
+    hm.w.length === 2 && !hm.m.some((x) => H.homeWallItem(x.s)) && !hm.g.some((x) => x.u === 60 || x.u === 61));
+  const snap = H.homeSnapWall(P, 0, "tableau_paysage", 2.8, fSej.y - 0.7);
+    // (le bord gauche est stocké au vingtième de case : le centre tombe au quart à un demi-vingtième près)
+  const q4 = (snap.x / H.HOME_Q + H.HOME_MURAUX.tableau_paysage.w / H.CASE_M / 2) * 4;
+  check("le pointeur sur le mur du séjour donne une place sur sa face, le centre au quart de case", snap && snap.y === y91 && Math.abs(q4 - Math.round(q4)) <= 0.1 + 1e-9, snap && `x ${snap.x}, y ${snap.y}`);
+  H.resolveHomeStore(hm, { u: 60 });
+  check("un objet de mur se décroche au garde-meuble", hm.w.length === 1 && hm.g.some((x) => x.u === 60 && x.s === "tableau_paysage"));
+  // la revente : la moitié (arrondie à 50), la plante morte se jette, le lit offert ne se vend pas, et il faut être au garde-meuble
+  const hv = H.homeDepart();
+  hv.g.push({ u: 70, s: "canape_canard" }, { u: 71, s: "horloge" });
+  H.resolveHomeStore(hv, { u: 2 });
+  H.resolveHomeStore(hv, { u: 1 });
+  const v1 = H.resolveHomeSell(hv, { u: 70 }), v2 = H.resolveHomeSell(hv, { u: 71 }), v3 = H.resolveHomeSell(hv, { u: 2 }), v4 = H.resolveHomeSell(hv, { u: 1 }), v5 = H.resolveHomeSell(hv, { u: 99 });
+  check("revente : canapé 6 000 (la moitié de 12 000), horloge 2 100 ; plante morte jetée pour 0 ; le lit offert refusé ; un objet absent refusé",
+    v1.prix === 6000 && v2.prix === 2100 && v3.ok && v3.prix === 0 && !v4.ok && v4.raison === "depart" && !v5.ok && hv.g.some((x) => x.u === 1) && !hv.g.some((x) => x.u === 70),
+    `${v1.prix}, ${v2.prix}, ${v3.prix}, ${v4.raison}`);
+  check("toutes les reventes du catalogue sont à la moitié, arrondies à 50 or", H.HOME_CATALOGUE.every((e) => H.homeSellPrice({ u: 999, s: e.coloris[0] }) === Math.round(e.prix / 2 / 50) * 50));
+  // vu de la rue : chaque vitre d'étroite tombe dans une pièce ; une pièce brille par ses appliques, une lampe ou le feu
+  const vitres = [];
+  for (const [model, m] of Object.entries(C.TOWN_HOUSE_MODELS)) {
+    if (m.size !== "narrow") continue;
+    for (const variant of Object.keys(m.variants)) {
+      if (variant === "ruine") continue;
+      for (const w of C.townPaintedWins(model, variant)) { if (w.lamp || w.ghost) continue; const r = H.homeWindowRoom({ model, variant }, w); vitres.push(r ? r.L + ":" + r.piece : model + "/" + variant + " sans pièce"); }
+    }
+  }
+  const perdues = vitres.filter((v) => /sans/.test(v));
+  check("chaque vitre de façade d'une étroite donne sur une pièce (la rue l'allume avec elle)", perdues.length === 0 && vitres.length > 0, perdues.slice(0, 3).join(", ") || [...new Set(vitres)].join(", "));
+  const hr = H.homeDepart();
+  hr.l = { "0:sejour": 0 };
+  const sombre = H.homeRoomShines(P, hr, 0, "sejour", true, t0);
+  hr.m.push({ u: 80, s: "lampadaire", o: "S", n: 0, x: 90, y: 164, a: 1 });
+  const lampe = H.homeRoomShines(P, hr, 0, "sejour", false, t0);
+  const hr2 = H.homeDepart(); hr2.l = { "0:sejour": 0 }; H.resolveHomeFire(hr2, { k: "cheminee", n: 0, v: 1 }, P, t0);
+  check("vu de la rue : séjour éteint à la main = vitre noire ; une lampe allumée ou le feu la rallument",
+    !sombre && lampe && H.homeRoomShines(P, hr2, 0, "sejour", false, t0 + 30) && !H.homeRoomShines(P, hr2, 0, "chambre", false, t0 + 30));
 }
 
 console.log(`\n${ok} OK, ${ko} ÉCHEC`);

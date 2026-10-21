@@ -58,6 +58,7 @@
    ========================================================================== */
 import * as C from "./fermeConstants";
 import { MEUBLES } from "./maisonSprites";
+import { homeAppliques, APPLIQUE_Z } from "./maisonArt";   // 2026-10-21 (lot 2c) : un tableau ne se pose pas sur une applique (`homeCanHang`)
 
 export const CASE_M = 1.183;          // une case DU PLAN
 export const HOME_K = 2;              // 2026-10-17 : cases du MONDE par case du PLAN (voir l'en-tête)
@@ -249,6 +250,17 @@ export const homeHasInterior = (hsn) => !!hsn && !hsn.model && !!homePlanOf(C.to
    à l'échelle de sa porte (`C.townDoorScale`). Une vitre est au rez-de-chaussée
    si la façade la marque `g` ; au-dessus, l'étage ou les combles selon sa
    hauteur dans l'image (sous les lucarnes, y ≥ 380 px de référence). */
+/* Une vitre de la façade peinte, dans le plan : { lvl, a, b } (son niveau, ses bords en x du plan) ou null. Sortie de
+   `homeFacade` le 2026-10-21 (lot 2c) : la rue s'en sert aussi, pour allumer la vitre de la pièce allumée (`homeWindowRoom`). */
+function facadeWinSpan(m, w, plan) {
+  if (w.lamp || w.ghost) return null;
+  const k = C.townDoorScale(m) / C.TILE;                      // cases par px de référence
+  const doorX = (m.door - m.wall[0]) * k - EP_EXT;            // l'axe de la porte, en x du plan
+  const lvl = w.g ? 0 : w.y >= 380 ? 1 : 2;
+  if (lvl >= plan.niveaux.length) return null;
+  const a = Math.max(0.12, doorX + (w.x - m.door) * k), b = Math.min(plan.w - 0.12, doorX + (w.x + w.w - m.door) * k);
+  return b - a < 0.2 ? null : { lvl, a, b };
+}
 export function homeFacade(look, plan = PLAN_ETROITE) {
   const m = C.TOWN_HOUSE_MODELS[look && look.model];
   const out = { porte: [plan.w * 0.2, plan.w * 0.2 + 0.8], fenetres: plan.niveaux.map(() => []) };
@@ -258,14 +270,11 @@ export function homeFacade(look, plan = PLAN_ETROITE) {
   out.porte = [doorX - 0.4, doorX + 0.4];
   const vwins = (m.variants[look.variant] && m.variants[look.variant].wins) || m.wins;
   for (const w of vwins) {
-    if (w.lamp || w.ghost) continue;
     if (w.only && !w.only.includes(look.variant)) continue;
-    const lvl = w.g ? 0 : w.y >= 380 ? 1 : 2;
-    if (lvl >= plan.niveaux.length) continue;
-    const a = Math.max(0.12, doorX + (w.x - m.door) * k), b = Math.min(plan.w - 0.12, doorX + (w.x + w.w - m.door) * k);
-    if (b - a < 0.2) continue;
-    if (lvl === 0 && a < out.porte[1] + 0.1 && b > out.porte[0] - 0.1) continue;
-    out.fenetres[lvl].push([a, b]);
+    const sp = facadeWinSpan(m, w, plan);
+    if (!sp) continue;
+    if (sp.lvl === 0 && sp.a < out.porte[1] + 0.1 && sp.b > out.porte[0] - 0.1) continue;
+    out.fenetres[sp.lvl].push([sp.a, sp.b]);
   }
   for (const f of out.fenetres) f.sort((p, q) => p[0] - q[0]);
   return out;
@@ -623,8 +632,53 @@ export function homeFaces(plan, L) {
     const suite = (x) => out.some((g) => g !== f && Math.abs(g.y - f.y) < 1e-6 && g.room === f.room && (Math.abs(g.x1 - x) < 1e-6 || Math.abs(g.x0 - x) < 1e-6));
     f.coinW = !suite(f.x0); f.coinE = !suite(f.x1);
   }
+  homeInterrupteursPose(plan, L, out);
   faceMemo.set(key, out);
   return out;
+}
+/* 2026-10-21 (lot 2c) — LES INTERRUPTEURS (`f.inters`, x du plan, à 0,60 m : `maisonArt.paintInterrupteur`). Jusqu'ici, un à
+   côté de chaque porte d'un mur du fond, et rien d'autre : seules l'entrée et la chambre en avaient un — la porte du séjour,
+   de la cuisine, des bains, du dressing est dans un mur COUPÉ (nord-sud, ou la face avant de la pièce), qu'on ne voit pas.
+   E sur l'interrupteur allume la pièce (réponse de Guillaume, 2026-10-21) : chaque pièce en reçoit donc un. Celle qui n'en
+   a pas l'a sur son mur du fond, au plus près de sa porte (ou du haut de l'escalier, pour les combles), écarté de ce qui
+   occupe déjà le mur à sa hauteur : fenêtres, miroir, trumeau, prises. */
+const INTER_EVITE = (p) => p.quoi === "miroir" || p.quoi === "conduit" || p.quoi === "prise";
+function homeInterrupteursPose(plan, L, faces) {
+  const lv = plan.niveaux[L];
+  const libreFace = (f, X, marge) => X > f.x0 + 0.06 && X < f.x1 - 0.06 && ![...(f.portes || []), ...(f.fenetres || [])].some(([a, b]) => X > a - marge && X < b + marge);
+  for (const f of faces) {
+    f.inters = [];
+    for (const [a, b] of f.portes || []) {
+      let X = b + 0.12;
+      if (!libreFace(f, X, 0.08)) X = a - 0.12;
+      if (libreFace(f, X, 0.08)) f.inters.push(X);
+    }
+  }
+  const dans = (pc, x, y) => pc.rects.some(([x0, y0, x1, y1]) => x >= x0 && x < x1 && y >= y0 && y < y1);
+  for (const pc of lv.pieces) {
+    if (pc.id === "cage" || faces.some((f) => f.room === pc.id && f.inters.length)) continue;
+    const fs = faces.filter((f) => f.room === pc.id);
+    if (!fs.length) continue;
+    // les entrées de la pièce : les portes de ses cloisons (le milieu du passage), sinon le haut de l'escalier
+    const ent = [];
+    for (const c of lv.cloisons) for (const [a, b] of c.portes || []) {
+      const m = (a + b) / 2;
+      if (c.x != null && (dans(pc, c.x - 0.1, m) || dans(pc, c.x + 0.1, m))) ent.push([c.x, m]);
+      if (c.y != null && (dans(pc, m, c.y - 0.1) || dans(pc, m, c.y + 0.1))) ent.push([m, c.y]);
+    }
+    if (!ent.length && plan.escalier) ent.push([plan.escalier.x1, plan.escalier.yHaut]);
+    const f = fs.reduce((m, g) => (g.x1 - g.x0 > m.x1 - m.x0 ? g : m));
+    const [ex] = ent.reduce((m, e) => (Math.hypot(e[0] - (f.x0 + f.x1) / 2, e[1] - f.y) < Math.hypot(m[0] - (f.x0 + f.x1) / 2, m[1] - f.y) ? e : m));
+    const peints = (lv.peints || []).filter((p) => INTER_EVITE(p) && Math.abs(p.y - f.y) < 0.06);
+    const pris = (X) => !libreFace(f, X, 0.1) || peints.some((p) => (p.x != null ? Math.abs(X - p.x) < 0.14 : X > p.x0 - 0.1 && X < p.x1 + 0.1));
+    const X0 = Math.max(f.x0 + 0.15, Math.min(f.x1 - 0.15, ex));
+    for (let k = 0; k <= 60; k++) {
+      const X = X0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.05;
+      if (X < f.x0 + 0.15 || X > f.x1 - 0.15 || pris(X)) continue;
+      f.inters.push(Math.round(X * 100) / 100);
+      break;
+    }
+  }
 }
 /* LES MURS BAS (coupés à 35 cm) : les murs nord-sud, les garde-corps, la
    façade. `key` de tri : leur bord sud. */
@@ -683,7 +737,8 @@ export const HOME_DECOR_PRIX = { papier: 1500, lambris: 1000, sol: 2500 };
 export const HOME_PLAN_V = 3;   // 3 (2026-10-17, le soir) : les équipements entrent dans le plan
 export function homeDepart() {
   let k = 1;
-  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, c: [], k, pv: HOME_PLAN_V };   // 2026-10-18 : `c`, les cartons (lot 2b)
+  return { m: HOME_DEPART.map((f) => ({ u: k++, s: f.sprite, o: f.o, n: f.niveau, x: Math.round(f.lx * HOME_Q), y: Math.round(f.ly * HOME_Q) })), g: [], d: {}, c: [], k, pv: HOME_PLAN_V,
+    w: [], l: {}, fe: {} };   // 2026-10-18 : `c`, les cartons (lot 2b) ; 2026-10-21 (lot 2c) : `w` les objets de mur, `l` les interrupteurs, `fe` les feux
 }
 /* La maison d'un joueur, telle quelle (jamais modifiée ici). */
 export function homeOf(homes, id) {
@@ -741,11 +796,12 @@ export function homeItemRect(it) {
   return [x, y, x + fw, y + fd];
 }
 export const homeFlat = (s) => /^tapis/.test(s);
-export const homeWallItem = (s) => /^tableau/.test(s);   // les objets de mur : lot 2c (jamais posés au sol)
+export const homeWallItem = (s) => /^(tableau|miroir_mural|horloge)/.test(s);   // les objets de mur (lot 2c) : jamais au sol, voir `HOME_MURAUX`
 export const homeOrients = (s) => ["S", "E", "N", "W"].filter((o) => MEUBLES[s] && MEUBLES[s][o]);
 /* Les meubles d'un niveau, au format de `homeDrawItems` / `homeSolids`. */
 export function homeMeublesAt(home, L) {
-  return home.m.filter((it) => it.n === L).map((it) => ({ id: it.s, u: it.u, sprite: it.s, o: it.o, niveau: it.n, lx: homeItemLx(it), ly: homeItemLy(it) }));
+  // 2026-10-21 (lot 2c) : `a` (la lampe à la main) et `f` (l'heure de jeu où le poêle a été allumé) suivent le meuble
+  return home.m.filter((it) => it.n === L).map((it) => ({ id: it.s, u: it.u, sprite: it.s, o: it.o, niveau: it.n, lx: homeItemLx(it), ly: homeItemLy(it), a: it.a, f: it.f }));
 }
 /* Le décor d'une pièce : celui que le joueur a choisi, sinon celui du plan. */
 export function homeRoomDecor(home, plan, L, pieceId) {
@@ -904,9 +960,12 @@ export function resolveHomePlace(home, req, plan, facade) {
 /* RANGER au garde-meuble. */
 export function resolveHomeStore(home, req) {
   const u = req.u | 0, it = home.m.find((x) => x.u === u);
+  // 2026-10-21 (lot 2c) — un objet de mur se décroche de la même façon (il vit dans `w`, pas dans `m`)
+  const mu = !it && homeMurals(home).find((x) => x.u === u);
+  if (mu) { home.w = homeMurals(home).filter((x) => x.u !== u); home.g.push({ u, s: mu.s }); return { ok: true }; }
   if (!it) return { ok: false, raison: "inconnu" };
   home.m = home.m.filter((x) => x.u !== u);
-  home.g.push({ u, s: it.s });
+  home.g.push({ u, s: it.s });   // ⚠️ seuls u et s : la lampe rangée oublie son interrupteur (`a`), le poêle son feu (`f`)
   return { ok: true };
 }
 /* CHANGER le papier, le lambris ou le sol d'une pièce : `req` = { n, piece, quoi, val }.
@@ -928,7 +987,8 @@ export function resolveHomeDecor(home, req, plan) {
 /* Le menu développeur : un exemplaire de chaque meuble au garde-meuble (le
    catalogue est le lot 2b). Jamais l'escalier, qui vient avec la maison. */
 export function resolveHomeGift(home) {
-  const base = Object.keys(MEUBLES).filter((s) => s !== "escalier" && !/_allume$/.test(s) && !homeWallItem(s) && !homeFixe(s));
+  const base = Object.keys(MEUBLES).filter((s) => s !== "escalier" && !/_allume$/.test(s) && !homeWallItem(s) && !homeFixe(s))
+    .concat(Object.keys(HOME_MURAUX));   // 2026-10-21 (lot 2c) : les objets de mur aussi
   for (const s of base) home.g.push({ u: home.k++, s });
   return { ok: true, n: base.length };
 }
@@ -963,15 +1023,21 @@ export const HOME_CATALOGUE = [
   { id: "gueridon", page: "chambre", prix: 2800, coloris: ["gueridon"] },
   { id: "portemanteau", page: "entree", prix: 2200, coloris: ["portemanteau"] },
   { id: "plante_verte", page: "entree", prix: 1500, coloris: ["plante_verte"] },
+  // 2026-10-21 (lot 2c) — LES OBJETS DE MUR (`HOME_MURAUX`) : leur page à eux
+  { id: "tableau_paysage", page: "murs", prix: 4800, coloris: ["tableau_paysage"] },
+  { id: "tableau_nature", page: "murs", prix: 3900, coloris: ["tableau_nature"] },
+  { id: "tableau_portrait", page: "murs", prix: 5600, coloris: ["tableau_portrait"] },
+  { id: "miroir_mural", page: "murs", prix: 3400, coloris: ["miroir_mural"] },
+  { id: "horloge", page: "murs", prix: 4200, coloris: ["horloge"] },
 ];
-export const HOME_CATALOGUE_PAGES = ["sejour", "chambre", "entree"];
+export const HOME_CATALOGUE_PAGES = ["sejour", "chambre", "entree", "murs"];
 export const HOME_CARTONS_MAX = 8;                 // en route + livrés, par maison : l'entrée n'en tient pas plus
 export const homeCartons = (h) => (h && Array.isArray(h.c) ? h.c : []);
 export const homeCatalogueOf = (s) => HOME_CATALOGUE.find((e) => e.coloris.includes(s)) || null;
 /* COMMANDER : `req` = { s } (un coloris du catalogue). Rend { ok, prix } ; l'appelant (l'hôte) débite la caisse. */
 export function resolveHomeOrder(home, req, day) {
   const s = String(req.s || ""), e = homeCatalogueOf(s);
-  if (!e || !MEUBLES[s]) return { ok: false, raison: "catalogue" };
+  if (!e || !(MEUBLES[s] || HOME_MURAUX[s])) return { ok: false, raison: "catalogue" };
   if (homeCartons(home).length >= HOME_CARTONS_MAX) return { ok: false, raison: "cartons" };
   if (!Array.isArray(home.c)) home.c = [];
   home.c.push({ u: home.k++, s, d: (day | 0) + 1 });
@@ -1023,6 +1089,250 @@ export function homeCartonNear(home, plan, day, lx, ly) {
     const dd = Math.hypot(lx - (p.lx + HOME_CARTON_C / 2), ly - (p.ly + HOME_CARTON_C / 2));
     if (dd < bd) { bd = dd; best = c; }
   });
+  return best;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ LOT 2c (2026-10-21) — LES LUMIÈRES, LE FEU, LES OBJETS DE MUR, LA REVENTE
+   ║ (docs/PROJETS.md §6 ; les quatre réponses de Guillaume, toutes sur la recommandation).
+   ╚════════════════════════════════════════════════════════════════════════
+   1. LES LUMIÈRES SONT MANUELLES ET GARDÉES : E à l'interrupteur d'une pièce (`f.inters`, un par pièce) allume ses
+      appliques ; E sur un lampadaire ou un guéridon allume la lampe. Ça reste allumé quand on sort — la nuit, la fenêtre
+      de la pièce s'allume vue de la rue. ⚠️ UNE PIÈCE JAMAIS TOUCHÉE (pas de clé dans `l`) garde la règle d'avant : ses
+      appliques s'allument d'elles-mêmes la nuit tant que quelqu'un s'y tient (« pour qu'on ne découvre pas la maison dans
+      le noir ») ; le premier E la fait passer à la main, pour toujours. Une lampe jamais touchée (`a` absent) suit les
+      appliques de sa pièce, comme avant.
+   2. LE FEU (la cheminée du séjour, un poêle posé) : E l'allume ; il flambe `HOME_FEU_MIN` minutes de jeu, passe aux
+      braises `HOME_BRAISES_MIN` minutes, puis s'éteint ; E le relance (ou l'éteint, s'il flambe). On garde l'HEURE DE
+      JEU où il a été allumé (`homeGameMin` : jour × 1440 + minute du jour, le temps partagé) — jamais une durée qui
+      tourne : chacun la relit contre sa propre heure de jeu (noyau §3, « une pendule se diffuse comme un état »).
+      La fumée sur le toit, vue de la rue, suit ce feu-là (`homeFireOf`).
+   3. LES OBJETS DE MUR (`HOME_MURAUX`) : trois tableaux, un miroir, une horloge à l'heure du jeu. Posés sur un MUR DU
+      FOND (une face, `homeFaces`), au quart de case, à LEUR hauteur (celle du personnage de 0,85 m, `HOME_PERSO_M`) ;
+      jamais sur une porte, une fenêtre, une applique, un interrupteur, la hotte, l'étagère, le miroir des bains ou le
+      trumeau, ni sur un autre objet de mur. Ils vivent dans `w` (pas dans `m`) : la marche, la pose des meubles, les
+      ombres et le pointeur des meubles ne les voient jamais.
+   4. LA REVENTE, depuis le garde-meuble : la MOITIÉ du prix du catalogue revient à la caisse commune (qui avait payé).
+      Le mobilier de départ ne se revend pas — le lit offert revendu 5 500 or serait de l'or gratuit ; la plante morte
+      se jette (0 or).
+   ⚠️ CHAMPS NEUFS `w`, `l`, `fe` (sur la maison) et `a`, `f` (sur un meuble posé) — noyau §4 : déclarés dans
+   `homeDepart`, ABSENTS d'une sauvegarde d'avant = rien d'accroché, aucune pièce touchée, aucun feu ; tout lecteur passe
+   par `homeMurals`, `homeSwitches`, `homeFires`, jamais par le champ nu. */
+export const HOME_MURAUX = {
+  // w, h : la taille du cadre (m) ; z : le bas du cadre au-dessus du sol (m). Les tableaux CENTRÉS AU REGARD du personnage
+  // (0,8 m ; il en mesure 0,85) et au-dessus du dossier d'un canapé (0,45 m, `ECHELLE_Z_SPRITES`) ; le miroir à son visage ;
+  // l'horloge plus haut, à la hauteur de l'applique (1,30 m). ⚠️ VU EN JEU (2026-10-21) : à 0,80 m de bas, le paysage montait à
+  // 1,24 m et mordait l'applique (1,13 à 1,45 m) — il ne restait AUCUNE place au mur du séjour. Tous finissent sous 1,10 m :
+  // ils se glissent sous une applique, comme dans une vraie pièce.
+  tableau_paysage: { w: 0.62, h: 0.44, z: 0.62 },
+  tableau_nature: { w: 0.42, h: 0.52, z: 0.56 },
+  tableau_portrait: { w: 0.40, h: 0.54, z: 0.54 },
+  miroir_mural: { w: 0.40, h: 0.60, z: 0.48 },
+  horloge: { w: 0.32, h: 0.32, z: 1.12 },
+};
+export const homeMurals = (h) => (h && Array.isArray(h.w) ? h.w : []);
+/* La hauteur du bas d'un objet de mur à CE niveau : sous les combles, le mur du fond n'est qu'un mur d'appui (`mur` : 1,0 m)
+   avant la pente — l'objet descend pour tenir dessous (jamais sous 0,30 m : alors il ne s'y accroche pas). */
+export function homeMuralZ(plan, L, s) {
+  const sp = HOME_MURAUX[s], lv = plan.niveaux[L];
+  if (!sp || !lv) return null;
+  const z = lv.pente ? Math.min(sp.z, lv.mur - sp.h - 0.06) : sp.z;
+  return z >= 0.30 ? z : null;
+}
+/* OÙ L'OBJET TENU S'ACCROCHERAIT, sous le pointeur (lx, ly : le point du SOL sous la souris, en cases du plan). Un mur se
+   peint au-dessus de son pied : un point du mur à la hauteur z se voit là où serait le sol à `f.y − z` (la projection monte
+   d'une case par case de hauteur, `maisonArt`). On prend la face dont le CENTRE de l'objet est le plus près du pointeur
+   (jusqu'à une case devant son pied : on peut viser le sol au pied du mur). Rend { x, y } en vingtièmes de case
+   (x : le bord gauche du cadre, son CENTRE est au quart de case ; y : le pied de la face), ou null. */
+export function homeSnapWall(plan, L, s, lx, ly) {
+  const sp = HOME_MURAUX[s], z = homeMuralZ(plan, L, s);
+  if (!sp || z == null) return null;
+  const w = sp.w / CASE_M, zc = (z + sp.h / 2) / CASE_M;
+  let best = null, bd = Infinity;
+  for (const f of homeFaces(plan, L)) {
+    if (!f.room || f.room === "cage" || lx < f.x0 - 0.1 || lx > f.x1 + 0.1) continue;
+    const yv = f.y - zc;
+    if (ly < f.y - (plan.niveaux[L].pente ? 1.2 : 2.3) || ly > f.y + 1.0) continue;
+    const d = Math.abs(ly - yv);
+    if (d < bd) { bd = d; best = f; }
+  }
+  if (!best) return null;
+  let cx = Math.round(lx * 4) / 4;
+  cx = Math.max(best.x0 + w / 2 + 0.06, Math.min(best.x1 - w / 2 - 0.06, cx));
+  return { x: Math.round((cx - w / 2) * HOME_Q), y: Math.round(best.y * HOME_Q) };
+}
+/* Le cadre d'un objet de mur, en cases du plan le long de sa face : [x0, x1], et sa face (ou null si plus aucune ne le porte). */
+export function homeMuralSpan(plan, it) {
+  const sp = HOME_MURAUX[it.s];
+  if (!sp) return null;
+  const x0 = it.x / HOME_Q, x1 = x0 + sp.w / CASE_M, y = it.y / HOME_Q;
+  const f = homeFaces(plan, it.n).find((g) => Math.abs(g.y - y) < 0.03 && x0 >= g.x0 - 1e-6 && x1 <= g.x1 + 1e-6) || null;
+  return { x0, x1, f };
+}
+/* LA RÈGLE DE POSE D'UN OBJET DE MUR (l'hôte la tient ; le mode déco la montre, vert ou rouge). `cand` : { s, n, x, y }. */
+export function homeCanHang(plan, home, cand, ignoreU = null) {
+  if (!HOME_MURAUX[cand.s]) return { ok: false, raison: "catalogue" };
+  if (!plan.niveaux[cand.n]) return { ok: false, raison: "mur" };
+  if (homeMuralZ(plan, cand.n, cand.s) == null) return { ok: false, raison: "hauteur" };
+  const sp = homeMuralSpan(plan, cand);
+  if (!sp || !sp.f || !sp.f.room || sp.f.room === "cage") return { ok: false, raison: "mur" };
+  const { x0, x1, f } = sp, lv = plan.niveaux[cand.n];
+  if (x0 < f.x0 + 0.05 || x1 > f.x1 - 0.05) return { ok: false, raison: "mur" };
+  const coupe = (a, b, m) => x1 > a - m && x0 < b + m;
+  if ([...(f.portes || []), ...(f.fenetres || [])].some(([a, b]) => coupe(a, b, 0.06))) return { ok: false, raison: "ouverture" };
+  const peints = (lv.peints || []).filter((p) => Math.abs(p.y - f.y) < 0.06 && p.x0 != null);
+  if (peints.some((p) => coupe(p.x0, p.x1, 0.04))) return { ok: false, raison: "equipement" };
+  // l'applique (platine et tulipe, de APPLIQUE_Z − 0,17 à + 0,15 m) : seulement si l'objet monte jusqu'à elle
+  const z = homeMuralZ(plan, cand.n, cand.s), zh = z + HOME_MURAUX[cand.s].h;
+  if (zh > APPLIQUE_Z - 0.20 && z < APPLIQUE_Z + 0.18 && homeAppliques(plan, cand.n, f).some((ap) => coupe(ap.lx, ap.lx, 0.10))) return { ok: false, raison: "applique" };
+  if ((f.inters || []).some((X) => coupe(X, X, 0.08))) return { ok: false, raison: "interrupteur" };
+  for (const o of homeMurals(home)) {
+    if (o.u === ignoreU || o.n !== cand.n || o.y !== cand.y) continue;
+    const q = homeMuralSpan(plan, o);
+    if (q && coupe(q.x0, q.x1, 0.04)) return { ok: false, raison: "mural" };
+  }
+  return { ok: true };
+}
+/* ACCROCHER ou DÉPLACER un objet de mur : `req` = { u, n, x, y }. Il vient du garde-meuble ou d'un mur. */
+export function resolveHomeHang(home, req, plan) {
+  const u = req.u | 0;
+  const posed = homeMurals(home).find((it) => it.u === u), stored = home.g.find((it) => it.u === u);
+  if (!posed && !stored) return { ok: false, raison: "inconnu" };
+  const cand = { u, s: (posed || stored).s, n: req.n | 0, x: req.x | 0, y: req.y | 0 };
+  if (!homeWallItem(cand.s)) return { ok: false, raison: "catalogue" };
+  const v = homeCanHang(plan, home, cand, u);
+  if (!v.ok) return v;
+  if (posed) Object.assign(posed, { n: cand.n, x: cand.x, y: cand.y });
+  else { home.g = home.g.filter((it) => it.u !== u); if (!Array.isArray(home.w)) home.w = []; home.w.push(cand); }
+  return { ok: true };
+}
+
+// ─── les lumières ───
+export const HOME_LAMPE = /^(lampadaire|gueridon)/;
+export const homeSwitches = (h) => (h && h.l && typeof h.l === "object" ? h.l : {});
+/* La pièce est-elle allumée ? `auto` : la règle d'avant, pour une pièce jamais touchée (la nuit, quelqu'un s'y tient). */
+export function homeRoomOn(h, L, piece, auto) {
+  const v = homeSwitches(h)[L + ":" + piece];
+  return v === 1 ? true : v === 0 ? false : !!auto;
+}
+/* Une lampe posée : allumée à la main (`a` = 1), éteinte à la main (0), sinon comme les appliques de sa pièce. */
+export const homeLampOn = (it, roomOn) => (it.a === 1 ? true : it.a === 0 ? false : !!roomOn);
+/* L'INTERRUPTEUR : `req` = { n, piece, v } — la pièce et l'état VOULU (pas « bascule » : deux E rapprochés, ou une réponse
+   lente de l'hôte, ne s'annulent pas). */
+export function resolveHomeSwitch(home, req, plan) {
+  const L = req.n | 0, lv = plan.niveaux[L], pc = lv && lv.pieces.find((p) => p.id === req.piece);
+  if (!pc || pc.id === "cage") return { ok: false, raison: "piece" };
+  if (!home.l || typeof home.l !== "object") home.l = {};
+  home.l[L + ":" + pc.id] = req.v ? 1 : 0;
+  return { ok: true };
+}
+/* LA LAMPE : `req` = { u, v }. */
+export function resolveHomeLamp(home, req) {
+  const it = home.m.find((x) => x.u === (req.u | 0));
+  if (!it || !HOME_LAMPE.test(it.s)) return { ok: false, raison: "inconnu" };
+  it.a = req.v ? 1 : 0;
+  return { ok: true };
+}
+
+// ─── le feu ───
+export const HOME_FEU_MIN = 240;        // quatre heures de jeu de flammes (3 min 12 s réelles : un jour de jeu dure 16 min)
+export const HOME_BRAISES_MIN = 45;     // puis les braises
+export const homeGameMin = (day, tmin) => (day | 0) * 1440 + tmin;
+export const homeFires = (h) => (h && h.fe && typeof h.fe === "object" ? h.fe : {});
+/* La force du feu : 1 en flammes, de 0,35 à 0 en braises, 0 éteint. `start` : l'heure de jeu de l'allumage. */
+export function homeFireLevel(start, now) {
+  if (!(start > 0)) return 0;
+  const e = now - start;
+  if (e < HOME_FEU_MIN) return 1;
+  if (e < HOME_FEU_MIN + HOME_BRAISES_MIN) return 0.35 * (1 - (e - HOME_FEU_MIN) / HOME_BRAISES_MIN);
+  return 0;
+}
+/* Le feu de la cheminée d'un niveau (s'il y en a une) : la clé de `fe`. */
+export const homeHearthKey = (L) => L + ":cheminee";
+export const homeHasHearth = (plan, L) => !!(plan.niveaux[L] && (plan.niveaux[L].fixes || []).some((x) => /^cheminee/.test(x.sprite)));
+/* Le feu le plus fort de la maison, à cette heure (la fumée du toit, vue de la rue). */
+export function homeFireOf(h, now) {
+  let best = 0;
+  for (const t of Object.values(homeFires(h))) best = Math.max(best, homeFireLevel(t, now));
+  for (const it of h && Array.isArray(h.m) ? h.m : []) if (/^poele/.test(it.s)) best = Math.max(best, homeFireLevel(it.f, now));
+  return best;
+}
+/* ALLUMER ou ÉTEINDRE : `req` = { k: "cheminee", n } ou { u } (un poêle), et `v` voulu ; `now` : l'heure de jeu de l'hôte. */
+export function resolveHomeFire(home, req, plan, now) {
+  if (req.k === "cheminee") {
+    const L = req.n | 0;
+    if (!homeHasHearth(plan, L)) return { ok: false, raison: "inconnu" };
+    if (!home.fe || typeof home.fe !== "object") home.fe = {};
+    if (req.v) home.fe[homeHearthKey(L)] = now; else delete home.fe[homeHearthKey(L)];
+    return { ok: true };
+  }
+  const it = home.m.find((x) => x.u === (req.u | 0));
+  if (!it || !/^poele/.test(it.s)) return { ok: false, raison: "inconnu" };
+  if (req.v) it.f = now; else delete it.f;
+  return { ok: true };
+}
+
+// ─── vu de la rue ───
+/* LA PIÈCE DERRIÈRE UNE VITRE DE LA FAÇADE (une fenêtre de `C.townPaintedWins`) : { L, piece } ou null. */
+export function homeWindowRoom(look, w, plan = PLAN_ETROITE) {
+  const m = C.TOWN_HOUSE_MODELS[look && look.model];
+  const sp = m && facadeWinSpan(m, w, plan);
+  const pc = sp && homeRoomAt(plan, sp.lvl, (sp.a + sp.b) / 2, plan.d - 0.2);
+  return pc && pc.id !== "cage" ? { L: sp.lvl, piece: pc.id } : null;
+}
+/* UNE PIÈCE QUI BRILLE, vue de la rue : ses appliques (`homeRoomOn`, `auto` : quelqu'un s'y tient la nuit), une lampe allumée,
+   ou un feu (la cheminée, un poêle) dans la pièce. `now` : l'heure de jeu (`homeGameMin`). */
+export function homeRoomShines(plan, home, L, piece, auto, now) {
+  const on = homeRoomOn(home, L, piece, auto);
+  if (on) return true;
+  const ici = (sprite, lx, ly, o = "S") => { const r = homeFurnitureRect({ sprite, o, lx, ly }), pc = homeRoomAt(plan, L, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2); return !!pc && pc.id === piece; };
+  for (const it of home && Array.isArray(home.m) ? home.m : []) {
+    if (it.n !== L) continue;
+    const lx = homeItemLx(it), ly = homeItemLy(it);
+    if (HOME_LAMPE.test(it.s) && homeLampOn(it, on) && ici(it.s, lx, ly, it.o)) return true;
+    if (/^poele/.test(it.s) && homeFireLevel(it.f, now) > 0 && ici(it.s, lx, ly, it.o)) return true;
+  }
+  const ch = homeHasHearth(plan, L) && homeFireLevel(homeFires(home)[homeHearthKey(L)], now) > 0;
+  if (ch) { const f = homeFixes(plan, L, null).find((x) => /^cheminee/.test(x.sprite)); if (f && ici(f.sprite, f.lx, f.ly)) return true; }
+  return false;
+}
+
+// ─── la revente ───
+/* Le prix de revente d'un objet du garde-meuble : la moitié du catalogue (arrondie à 50 or), 0 s'il se jette, null s'il
+   ne se vend pas (le lit de départ). ⚠️ LE MOBILIER DE DÉPART se reconnaît à son identifiant : `homeDepart` les numérote
+   de 1 à `HOME_DEPART.length` avant tout le reste (`k` commence après eux). */
+export function homeSellPrice(it) {
+  if (!it) return null;
+  const depart = (it.u | 0) >= 1 && (it.u | 0) <= HOME_DEPART.length;
+  if (/^plante_morte/.test(it.s)) return 0;
+  if (depart) return null;
+  const e = homeCatalogueOf(it.s);
+  return e ? Math.round(e.prix / 2 / 50) * 50 : 0;
+}
+/* VENDRE (ou jeter) : `req` = { u }. Rend { ok, prix } ; l'appelant (l'hôte) crédite la caisse. */
+export function resolveHomeSell(home, req) {
+  const u = req.u | 0, it = home.g.find((x) => x.u === u);
+  if (!it) return { ok: false, raison: "inconnu" };
+  const prix = homeSellPrice(it);
+  if (prix == null) return { ok: false, raison: "depart" };
+  home.g = home.g.filter((x) => x.u !== u);
+  return { ok: true, prix, s: it.s };
+}
+
+// ─── ce qu'on actionne avec E ───
+/* L'INTERRUPTEUR à portée : celui d'une face de la pièce où l'on se tient, à moins de 0,8 case (le mur se tient à
+   ~0,3 case du personnage qui s'y adosse). Rend { piece } ou null. */
+export function homeSwitchNear(plan, L, lx, ly) {
+  const me = homeRoomAt(plan, L, lx, ly);
+  if (!me || me.id === "cage") return null;
+  let best = null, bd = 0.8;
+  for (const f of homeFaces(plan, L)) {
+    if (f.room !== me.id) continue;
+    for (const X of f.inters || []) {
+      const d = Math.hypot(lx - X, ly - f.y);
+      if (d < bd) { bd = d; best = { piece: me.id, d }; }
+    }
+  }
   return best;
 }
 

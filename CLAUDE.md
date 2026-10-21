@@ -11,20 +11,19 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-18 — CHEZ SOI : LOT 2b (CATALOGUE, CARTONS), APPLIQUES, TUYAU DU POÊLE, DORMEUR ; PERSPECTIVE À 0,17 ; RIEN DE COMMITÉ
+### 2026-10-21 — CHEZ SOI, LOT 2c (LUMIÈRES, FEU, OBJETS DE MUR, REVENTE) ; RIEN DE COMMITÉ depuis le 2026-10-18 (ombres, Garfield, salon, Froufrou)
 
-**Intérieurs** (`docs/PROJETS.md` §6 ; récits : journaux du 2026-10-18 au README de la ferme). Faits, vus en jeu : perspective (coins de façade,
-cloisons coupées claires, lumière par pièce, `HOME_FLARE` 0,17 avec `HOME_FX0` −1,5, `HOME_OX` 1,5 × K et `homeCadreBox` qui VONT ENSEMBLE) ; les
-meubles restent droits (essayé évasés : ils tombent) ; appliques murales au lieu de l'ampoule pendante, tuyau du poêle mené au mur ; dormeur selon
-l'orientation du lit, yeux clos après 1 à 7 s ; lot 2b : catalogue au sol de l'entrée, commande payée par la caisse, carton livré le lendemain devant
-la porte, rentré, déballé (champ neuf `c` : lu par `homeCartons`). `verify-maison` 177/177 et 4 autres bancs verts. **Supabase : rien.** **Pas vu** : deux clients, iPad, une vraie nuit qui livre.
-Meuble NEUF : aux deux listes d'échelle (`meubles.ECHELLE_Z`, `maison.ECHELLE_Z_SPRITES`) puis au catalogue ; Blender : ne commiter que les PNG changés au pixel.
-⚠️ `app/audit-tmp`, `app/audit-duo`, `app/audit-riders`, `app/api/audit-cap` : **à supprimer avant déploiement**. Pas corrigés (anciens) : potence de la
-trottinette en haut de paroi ; `f.injuredUntil | 0` ; `C.G_SOIL` ; `TOWN_SPEED_MULT` mort.
+Interrupteur par pièce (`f.inters`, manuel et gardé, `l`), lampes à la main (`a`), feu de cheminée et de poêle (`fe`, `f` : heure de jeu,
+4 h + braises), objets de mur (`HOME_MURAUX`, `w`, toiles provisoires), revente à moitié prix, vitres et fumée vues de la rue. Vu en jeu,
+`verify-maison` 198/198. **Supabase : rien.** Pas vu : vente confirmée, combles, deux clients, iPad.
+⚠️ `.panel` plafonne à 480 px : un panneau plus large lève `max-width` ET `width`. ⚠️ Le harnais `app/audit-tmp` vise des crochets React par NUMÉRO :
+tout `useState` ajouté au composant les décale (passer par une ref, comme `sellAsk` dans `homeDecoRef`). ⚠️ Ses captures (`__cap`) partent dans le
+dossier d'une ancienne session (`app/api/audit-cap`). ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — LOT 2c : LES LUMIÈRES À ALLUMER (LAMPES, POÊLE, APPLIQUES), LES OBJETS DE MUR, LA REVENTE (`docs/PROJETS.md` §6)
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE LOT 2c, PUIS LE LOT 2d (Colette : rideaux, teinture des tissus — `docs/PROJETS.md` §6)
 
-Avant : les blocs en tête de `docs/A-JUGER.md` (catalogue et cartons ; perspective). Puis le test iPad dès Xcode à jour (`docs/PROJETS.md` §3).
+D'abord ses verdicts (`docs/A-JUGER.md`, bloc 2c) et la taille des toiles Gemini (`refs/lot-gemini/F-tableaux-maison.md`). Restes du salon, à
+proposer sans les faire d'office : la façade selon l'étape, rejouer la visite de Froufrou et « proposer d'emménager » (bloc Froufrou).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -82,8 +81,8 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; à venir : lumières, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
-| Catalogue Maison Garfield, création du personnage (teinte de peau, coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; ombres portées : `components/ferme/ombresMaison.js` ; interrupteurs, lampes, feu, objets de mur, revente : section « LOT 2c » de `maison.js`, `homeUseTarget` ; à venir : Colette, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Garde-robe** (cabine Garfield, vêtements : `components/ferme/garderobeArt.js`, `render-garderobe` ; coupes du salon : `components/ferme/coiffureArt.js`, `render-coiffure`), création du personnage (coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 
 
@@ -132,12 +131,11 @@ tribunal** en est la troisième. **`candyluge`** est une descente 3D solo en thr
 - **« caveman on »** inverse le contrat : exécuter, vite et bien, sans questions ni
   préambule. « caveman off » rétablit. Accuser réception en une ligne.
 - ⚠️⚠️ **FIN DE LIVRAISON : METTRE CE FICHIER À JOUR FAIT PARTIE DE LA LIVRAISON, ÇA NE SE
-  PROPOSE PAS** (ordre de Guillaume au 449 : « à toujours opérer quand tu finis un delivery »).
-  La formulation d'avant disait « sur demande », et c'est ce qui a fait proposer au lieu de faire.
-  ⚠️ **Dans cet ordre** : (1) réécrire le bloc **⏭️ REPRISE** en tête — il se REMPLACE, il ne
+  PROPOSE PAS** (ordre de Guillaume au 449 : « à toujours opérer quand tu finis un delivery »). ⚠️ **Dans cet ordre** : (1) réécrire le bloc **⏭️ REPRISE** en tête — il se REMPLACE, il ne
   s'empile pas, et il désigne UNE action suivante ; (2) faire la passe d'élagage (§14, `docs/ENTRETIEN.md`) **avant**
   d'ajouter quoi que ce soit ; (3) n'inscrire que la **LEÇON** d'un défaut, jamais son histoire —
-  celle-ci va en commentaire de code avec le n° de zip, ou dans le README du module concerné.
+  celle-ci va en commentaire de code avec le n° de zip, ou dans le README du module concerné ; (4) un ajout MAJEUR (ce qu'un joueur
+  remarque) = une ligne en bas de `components/ferme/nouveautes.js` (rubrique « Nouveautés » du menu dev, FR et EN).
   **Commits et push restent à
   Guillaume** (GitHub Desktop). **Dire si une manipulation Supabase est nécessaire — et le dire
   aussi quand elle ne l'est pas.**

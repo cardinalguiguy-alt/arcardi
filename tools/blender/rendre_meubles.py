@@ -39,7 +39,10 @@ TRAVAUX = [
     ("lampadaire", "_allume", ("S",), dict(allume=True)),
     ("lampadaire", "_moutarde", ("S",), dict(abat="moutarde")),
     ("lampadaire", "_moutarde_allume", ("S",), dict(abat="moutarde", allume=True)),
-    ("poele", "", ("S", "E", "N", "W"), {}),
+    # 2026-10-21 (lot 2c) — le poêle ÉTEINT par défaut (il était rendu allumé : `meubles.poele` a `allume=True` par défaut), et son
+    # feu à part : E l'allume, il brûle quatre heures de jeu (`maison.homeFireLevel`).
+    ("poele", "", ("S", "E", "N", "W"), dict(allume=False)),
+    ("poele", "_allume", ("S", "E", "N", "W"), dict(allume=True)),
     ("plante_morte", "", ("S",), {}),
     ("plante_verte", "", ("S",), {}),
     ("gueridon", "", ("S",), {}),
@@ -70,7 +73,17 @@ TRAVAUX = [
 def main():
     os.makedirs(SORTIE, exist_ok=True)
     meta, erreurs = {}, []
+    # 2026-10-21 — `RENDRE=poele,poele_allume` (variable d'environnement) : ne refaire que ces meubles-là, les autres gardent
+    # leur image et leur ancre du dernier `maisonSprites.js` (tout refaire prend plusieurs minutes et réécrit des images
+    # que personne n'a touchées).
+    seuls = [x for x in os.environ.get("RENDRE", "").split(",") if x]
+    if seuls:
+        with open(MODULE) as f:
+            txt = f.read()
+        meta = json.loads(txt[txt.index("{"):txt.rindex("}") + 1])
     for nom, var, ors, kw in TRAVAUX:
+        if seuls and nom + var not in seuls:
+            continue
         try:
             meta[nom + var] = meubles.rendre(nom, getattr(meubles, nom), SORTIE, orients=ors, suffixe=var, **kw)
             print("✓", nom + var, ",".join(ors))

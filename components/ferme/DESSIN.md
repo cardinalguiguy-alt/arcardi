@@ -214,6 +214,10 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   le pixel dont le VOISIN (dessous, droite : l'ombre ; dessus, gauche : la lumière) sort de la forme : il existe
   à tous les caps et à toutes les positions.
 
+- ⚠️⚠️ **UN DRAPÉ SE DESSINE EN TROIS ZONES LARGES ET EN MOTIFS DE DEUX PIXELS** (les vêtements de la Maison Garfield, 2026-10-21). Cinq tons
+  répartis en colonnes sur une rangée de 8 à 14 pixels font un CODE-BARRES ; un motif qui alterne pixel par pixel (côtes, tulle, plumes, maille)
+  fait du POIVRE. Ce qui marche : un bord éclairé, la base, l'ombre, le dernier pixel au creux ; les plis comme des segments (creux + arête
+  claire, un seul cran) ; les motifs par paires de pixels ou un tous les quatre. `garderobeArt.js`, `tools/render-garderobe.mjs`.
 ---
 
 ## AUDIT 2026-09-12 — DEUX LEÇONS PAYÉES SUR LES ÉTOILES COMPAGNES

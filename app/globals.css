@@ -7517,6 +7517,12 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-dev-cat:first-of-type{ margin-top:6px; padding-top:0; border-top:none; }
 .ferme-dev-cat-title{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:.6; margin-bottom:5px; }
 .ferme-dev-hint{ font-size:11px; opacity:.6; margin-bottom:7px; line-height:1.35; }
+/* 2026-10-21 — la rubrique « Nouveautés » (repliable) : une ligne par ajout, la date en tête de ligne */
+.ferme-dev-news summary{ cursor:pointer; opacity:.85; }
+.ferme-dev-news-list{ margin:0 0 6px; padding-left:18px; font-size:12px; line-height:1.4; }
+.ferme-dev-news-list li{ margin-bottom:5px; }
+.ferme-dev-news-date{ display:inline-block; min-width:52px; margin-right:6px; font-size:11px; opacity:.6; }
+.ferme-dev-news-voir{ font-size:11px; opacity:.6; }
 .ferme-dev-row{ display:flex; align-items:center; gap:8px; padding:3px 0; font-size:12px; }
 .ferme-dev-row .info{ flex:1; min-width:0; }
 .ferme-dev-row .info b{ display:block; font-size:12px; font-weight:600; }
@@ -9227,6 +9233,11 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
 .ferme-deco-item.on{ border-color:var(--f-gold); background:#fff3cf; }
 .ferme-deco-item img{ height:48px; image-rendering:pixelated; object-fit:contain; max-width:76px; }
 .ferme-deco-item span{ font-size:11px; text-align:center; line-height:1.15; }
+/* 2026-10-21 (lot 2c) — la revente, sous l'objet du garde-meuble : discrète, puis dorée quand elle attend sa confirmation */
+.ferme-deco-cell{ display:flex; flex-direction:column; align-items:stretch; gap:2px; }
+.ferme-deco-sell{ font-size:10px; padding:1px 4px; border:1px solid var(--f-paper-d); background:transparent; color:var(--f-wood); cursor:pointer; border-radius:3px; }
+.ferme-deco-sell:hover{ border-color:var(--f-wood); }
+.ferme-deco-sell.ask{ background:var(--f-gold); color:#2a1c10; border-color:var(--f-gold); font-weight:700; }
 .ferme-deco-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:4px 0; }
 .ferme-deco-row-label{ width:100%; font-weight:700; }
 .ferme-deco-sw{ display:flex; flex-direction:column; align-items:center; padding:3px; border:2px solid var(--f-paper-d); border-radius:6px; background:#fffaf0;
@@ -9246,3 +9257,39 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
 .ferme-catalog-coloris{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
 .ferme-catalog-coloris img{ height:32px; image-rendering:pixelated; }
 .ferme-catalog-prix{ font-weight:700; font-size:16px; }
+/* 2026-10-21 — LA CABINE D'ESSAYAGE DE LA MAISON GARFIELD : le miroir doré (le style des miroirs peints de la façade du salon : arche
+   Art déco), le personnage au pixel entier (×7), une grille de bustes. L'ombre au sol est en PALIERS de pixels, pas un dégradé (FIX-003). */
+/* Deux bornes à lever : `.panel` plafonne à 480 px (max-width) et `.ferme-modal-panel` fixe 560 px (width). */
+.ferme-modal-panel.ferme-fit{ width:min(820px, 94vw); max-width:none; }
+.ferme-fit-carla{ display:flex; align-items:center; gap:8px; margin:6px 0 8px; font-size:13px; }
+.ferme-fit-carla canvas{ flex:0 0 auto; }
+.ferme-fit-tabs{ align-self:flex-start; margin-bottom:10px; flex-wrap:wrap; }
+.ferme-fit-body{ display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+.ferme-fit-cabine{ flex:0 0 196px; display:flex; flex-direction:column; align-items:center; gap:6px; margin:0 auto; }
+.ferme-fit-miroir{ display:block; width:176px; height:228px; padding:7px; border:0; cursor:pointer; border-radius:88px 88px 10px 10px;
+  background:linear-gradient(135deg, #f6e19a 0%, #c9952f 30%, #f3d27a 52%, #9c6d1e 78%, #e8c25e 100%);
+  box-shadow:0 3px 0 var(--f-wood-d), inset 0 0 0 2px #7a531a; }
+.ferme-fit-verre{ position:relative; display:flex; align-items:flex-end; justify-content:center; width:100%; height:100%; overflow:hidden;
+  border-radius:82px 82px 6px 6px; box-shadow:inset 0 0 0 2px #6d4a16;
+  background:radial-gradient(ellipse at 50% 28%, #fdf9f2 0%, #ebe2d4 55%, #d2c6b4 100%); }
+.ferme-fit-verre::after{ content:""; position:absolute; top:-10%; left:-12%; width:22%; height:130%; transform:rotate(18deg);
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent); pointer-events:none; }
+.ferme-fit-verre canvas{ position:relative; margin-bottom:16px; }
+.ferme-fit-sol{ position:absolute; bottom:12px; left:50%; width:70px; height:15px; margin-left:-35px; background:rgba(70,48,24,0.28);
+  clip-path:polygon(14px 0, 56px 0, 56px 5px, 70px 5px, 70px 10px, 56px 10px, 56px 15px, 14px 15px, 14px 10px, 0 10px, 0 5px, 14px 5px); }
+.ferme-fit-tourner{ display:flex; gap:8px; }
+.ferme-fit-essai{ display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center; font-size:12px; max-width:196px; }
+.ferme-fit-essai-btns{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.ferme-fit-rayon{ flex:1 1 300px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.ferme-fit-grid{ display:flex; flex-wrap:wrap; gap:6px; }
+.ferme-fit-item{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; width:84px; min-height:118px;
+  padding:5px 3px 4px; border:2px solid var(--f-paper-d); border-radius:8px; background:#fffaf0; cursor:pointer; font:inherit; color:inherit; }
+.ferme-fit-item:hover{ border-color:var(--f-wood); }
+.ferme-fit-item.on{ border-color:var(--f-gold); background:#fff3cf; box-shadow:0 2px 0 var(--f-wood-d); }
+.ferme-fit-item canvas{ image-rendering:pixelated; }
+.ferme-fit-nom{ font-size:11px; line-height:1.15; text-align:center; }
+.ferme-fit-prix{ font-size:11px; font-weight:700; }
+.ferme-fit-porte{ position:absolute; top:3px; right:4px; font-size:12px; font-weight:700; color:#3d6b3a; }
+.ferme-fit-pastille{ display:inline-block; width:10px; height:10px; margin-right:4px; border-radius:3px; border:1px solid rgba(0,0,0,0.35); vertical-align:-1px; }
+.ferme-fit-fiche{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:8px 10px; border:2px solid var(--f-paper-d); border-radius:8px; background:#fffaf0; }
+.ferme-fit-tarif{ font-weight:700; font-size:16px; }

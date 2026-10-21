@@ -352,6 +352,11 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   (0,42 s) ; la liste relue (diffusion, sauvegarde) garde `hits` ; **§8 la boule portée** garde sa taille, roulée elle peut grossir, la bascule fige la base de l'hôte.
   `tools/render-bonhomme.mjs` : la planche des chapeaux (trois tailles de tête × cinq chapeaux, puis le dégel) — `tools/out/bonhomme-chapeaux*.png` ; ⚠️ elle se JUGE à l'œil,
   elle ne mesure rien (un chapeau qui flotte n'est pas un nombre).
+- **`tools/render-coiffure.mjs` (2026-10-21)** : les 11 coupes du salon (`components/ferme/coiffureArt.js`) × 2 genres × 3 vues au pas, les 12 couleurs, les 4 barbes,
+  et les coupes sous trois chapeaux et sous les cols — `tools/out/coiffure-*.png`. ⚠️ Se juge à l'œil.
+- **`tools/render-garderobe.mjs` (2026-10-21)** : les 14 vêtements de la Maison Garfield (`components/ferme/garderobeArt.js`) dans leurs trois vues et au pas,
+  sur la fermière et le fermier, puis sous les huit couleurs — `tools/out/garderobe-planche.png`, `garderobe-couleurs.png` (`SORTIE=nom` change le préfixe).
+  Passe par `S.charFrame` (une image seule à l'origine : le faux canevas ignore le `translate` de la feuille). ⚠️ Elle se JUGE à l'œil, elle ne mesure rien.
 - **`tools/render-lapins.mjs` (2026-10-05)** : quatre robes × vingt poses sur de l'herbe, à côté d'un chat et d'une fermière (l'échelle se juge contre ses voisins) —
   `tools/out/lapins-planche.png` ; mesure : le lapin assis ≤ 85 % du chat assis (cernes retirés). Les mêmes bornes sont tenues par `verify-faune` § 7.
 - **`tools/verify-patin.mjs` — 78 contrôles, 78/78 (2026-10-06 : §11 le FREINAGE BRUT — C tenue, plus court que le freinage à contresens, jamais en arrière, `hard` au-dessus de `STOP_MIN_V`, code `stop` — et la VRILLE QUI S'EMBALLE — un V de plus passe au niveau suivant sans saut d'angle, retombe sur un tour entier, des V avant le départ comptés, au plus trois niveaux, le niveau dans le code ; falsifié : le frein affaibli, l'arrondi au tour entier).**

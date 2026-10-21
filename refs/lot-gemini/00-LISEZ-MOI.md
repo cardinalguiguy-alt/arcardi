@@ -11,6 +11,7 @@ une image par cran de zoom, poser à 1 px d'image = 1 px d'écran, juger EN JEU 
 | `C-objets-vt.md` (reste) | marché, fontaine, mobilier, terrasse, herbes hautes, massifs, roseaux, arbustes, pierres, quai | ~34 images | P2 |
 | `D-batiments-vt.md` | maisons larges (renvoie à `refs/prompts-maisons.md`), gare, café, restaurant, intérieurs | 9 images + séance de conception | P3 |
 | `E-ferme-vf.md` | chêne de la ferme en 5 états (P1), cultures, vergers, icônes (pixel art) | ~15 planches | P3 (arbres : P1) |
+| `F-tableaux-maison.md` | **les toiles des trois tableaux de la maison** (lot 2c des intérieurs, 2026-10-21) — à trancher d'abord : leur taille (28 × 18 px de toile) | 3 toiles | P2 |
 
 **Dans ce dossier, déjà prêts** : `sols-ref/` (les 9 tuiles de sol de VT du jeu, agrandies, en 1 × 1 et 2 × 2) `arbres-ref/` (les 15
 essences × 3 saisons du jeu, une image par arbre, 768 × 1024) et `objets-ref/` (six découpes propres de la planche 3 pour C0 : objets séparés, fond magenta). Générés depuis le code du jeu par un script jetable : je peux les régénérer.

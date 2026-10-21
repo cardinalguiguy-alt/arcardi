@@ -1,5 +1,163 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-21 (suite) — CHEZ SOI, LOT 2c : LES INTERRUPTEURS, LES LAMPES, LE FEU, LES OBJETS DE MUR, LA REVENTE
+
+Ses réponses (toutes sur la recommandation) : lumières **manuelles et gardées** ; le feu **s'allume avec E et dure** ; **quatre sortes
+d'objets de mur** (trois tableaux, un miroir, une horloge), toiles définitives par **Gemini** ; revente **à moitié prix, le mobilier de
+départ invendable**. **Supabase : rien** (tout vit dans le JSON de `ferme_saves`, `shared.homes`).
+- **L'état** (`maison.js`, section « LOT 2c ») : champs neufs `w` (objets de mur), `l` (interrupteurs, `"n:pièce"` → 0/1), `fe` (feu de
+  la cheminée, l'heure de jeu de l'allumage), et sur un meuble posé `a` (lampe à la main), `f` (poêle allumé). Déclarés dans `homeDepart`,
+  lus par `homeMurals` / `homeSwitches` / `homeFires` : une maison d'avant se lit sans eux (banc §15). Résolveurs `resolveHomeHang`,
+  `resolveHomeSwitch`, `resolveHomeLamp`, `resolveHomeFire`, `resolveHomeSell` ; l'hôte les arbitre (`homeHang`, `homeSwitch`, `homeLamp`,
+  `homeFire`, `homeSell`), le client les applique en optimiste sauf la vente (l'or est à l'hôte).
+- **Les interrupteurs** : seules l'entrée et la chambre en avaient (une porte dans un mur du fond). `homeFaces` en pose maintenant un par
+  pièce (`f.inters`) — à défaut de porte au mur du fond, au plus près de la porte de la pièce. Le dessin, la portée de E et la pose d'un
+  tableau lisent la même liste. Une pièce JAMAIS touchée garde la règle d'avant (la nuit, allumée tant qu'on y est).
+- **E** (`homeUseTarget`, FermeGame.js) : interrupteur, lampe, feu ou lit — LE PLUS PROCHE ; l'invite et la touche font le même calcul.
+- **Le feu** : 4 h de jeu de flammes (3 min 12 s réelles), 45 min de braises qui s'effacent en fondu, puis rien ; daté à l'heure de jeu
+  (`homeGameMin`). Lumière `torch` qui vacille ; ombres portées depuis le foyer (`ombresMaison`, `FEU_Z`). Le poêle est désormais rendu
+  ÉTEINT, sa version allumée à part (`poele_allume`, Blender ; `RENDRE=` pour ne refaire que lui).
+- **Les objets de mur** (`HOME_MURAUX`) : peints au canevas (`maisonArt.paintMural`, cadre doré, toile provisoire), posés au mode déco sur
+  un mur du fond, centre au quart de case (`homeSnapWall`, `homeCanHang`). ⚠️ Vu en jeu : à leur première hauteur, ils mordaient les
+  appliques et AUCUN ne tenait au mur du séjour ; tous finissent maintenant sous 1,10 m (sous l'applique), l'horloge seule monte à sa
+  hauteur. Le séjour en prend deux (entre l'interrupteur et le trumeau, à droite du trumeau).
+- **La revente** : bouton sous chaque objet du garde-meuble, deux clics (le second confirme) ; « Jeter » pour la plante morte.
+- **Vu de la rue** : chez un joueur (pas un résident), chaque vitre suit la pièce derrière elle (`homeWindowRoom`, `homeRoomShines`) et la
+  fumée du toit suit son feu (`homeFireOf`) — plus l'horaire automatique.
+- Vu en jeu (`/audit-tmp`, 1024 × 768, une maison au format d'avant) : interrupteur du séjour éteint puis rallumé, guéridon et lampadaire à
+  la main, feu de la cheminée, paysage et portrait accrochés au séjour (refus lus : applique, équipement, mur), vignettes du garde-meuble et
+  boutons de vente, une vitre allumée du rez-de-chaussée vue de la rue la nuit. Bancs : `verify-maison` 198/198 (§15 neuf, 21 contrôles),
+  `render-maison` (`maison-2c.png`, `maison-muraux.png`), `verify-strings`, `verify-densite`, `verify-docs`.
+  Puis, après les retouches : le poêle de la chambre allumé (porte rougeoyante, lueur au sol) et l'horloge accrochée entre les appliques.
+- **Pas vu** : la vente confirmée, les combles, deux clients, iPad. Les toiles Gemini :
+  prompts proposés dans `refs/lot-gemini/F-tableaux-maison.md`, à trancher d'abord leur taille (28 × 18 px de toile).
+
+## 2026-10-21 (fin de nuit) — LE SALON, LOT 3 : FROUFROU ARRIVE, S'INSTALLE AU-DESSUS DU SALON, ET LA PORTE S'OUVRE
+
+Ses réponses : par le train comme Carla, à la même porte (4 artisans) ; extravagant (« fuchsia et léopard ») ; il HABITE AU-DESSUS DU SALON et se
+promène en ville ; les autres résidents parlent un peu de lui ; ouvert tous les jours sauf un jour de jeu sur sept. **Supabase : rien** (tout vit
+dans la station et la garde-robe, déjà sauvegardées).
+- **Roster** (`fermeConstants.js`) : `FROUFROU_RID` = 31, `skill: "hairdresser"` (pas d'atelier : `SKILL_BUILDING.hairdresser = null`), `minArtisans`,
+  `noKick`, et `townHome` — lu par `townHomeSchedule` (FermeGame.js), seul : il descend du train à son installation et n'en remonte jamais. Allié de Carla.
+  Ses répliques de visiteur à la ferme (`froufrouVisitLines`). Les étiquettes de métier gagnent styliste, coiffeur, boulangère, sucrier (le repli
+  `|| sk` affichait l'anglais).
+- **Son programme** (une pure fonction du jour et de l'heure, `C.salonStage`) : chez lui de 21 h à 8 h (act `home` : invisible, hors rencontres),
+  à la vitrine du salon aux heures d'ouverture (`shopDuty`, comme Carla), en promenade le reste du temps (goût : vitrines, fontaine, fleurs, kiosque).
+  Un changement de mode interrompt l'activité en cours. ⚠️ Corrigé en route : un résident DÉJÀ sur sa destination ne recevait aucun chemin et
+  restait planté sans activité ; il commence désormais l'activité sur place (`townDecideDestination`).
+- **Le salon** : `salonStage` — neutre (sans lui), travaux (2 jours depuis `sinceDay`), relâche (`day % 7 === 6`, décalé du marché et de Carla),
+  fermé hors 9 h – 19 h, ouvert. La porte dit pourquoi elle reste close (quatre toasts), l'invite suit l'étape, le tableau des nouvelles aussi.
+- **Il parle** : ses bulles en ville sont celles du salon ; les autres résidents, une bulle sur quatre, parlent de lui (`froufrouGossip`, six phrases,
+  graine partagée) dès qu'il a emménagé. Son portrait en tête du salon. Arrêt « 💈 le salon de coiffure » au menu dev (téléportation).
+- **Son allure** : `paintFroufrou` (garderobeArt.js) — veste de velours fuchsia, revers de satin noir, foulard léopard, lunettes roses, houppe argentée,
+  pantalon noir, souliers vernis ; planche `coiffure-froufrou.png` (à côté de Carla et Léo).
+- Vu en jeu (installé à la main) : il descend du train, rejoint la vitrine à 10 h, la porte ouvre « Chez Froufrou » ; à 22 h il rentre et disparaît,
+  la porte dit « Froufrou dort au-dessus du salon ». Test hors jeu : 12/12 (porte des 4 artisans, étapes, relâche, horaires, fiche, alliance).
+  Bancs : `no-undef`, bundle, `verify-strings` (1 443 clés), `verify-syntax`, `verify-maison` 177/177, `verify-vallee`, `verify-collision`, `verify-compo`.
+- **Pas fait / pas vu** : sa VISITE à la ferme et le bouton « proposer d'emménager » (le mécanisme est celui de Carla, pas rejoué en jeu) ; les
+  ragots vus à l'écran ; la façade selon l'étape (vitrines blanchies pendant les travaux) ; deux clients ; iPad.
+
+## 2026-10-21 (nuit) — LE SALON, LOT 2 : LE MIROIR ET LA SÉANCE ; LA RUBRIQUE « NOUVEAUTÉS » DU MENU DÉVELOPPEUR
+
+**Supabase : rien** (la coiffure vit dans `wardrobe[id].hair`, déjà sauvegardé et diffusé avec la garde-robe).
+- **Le salon « Chez Froufrou »** : la cabine de la Maison Garfield reprise (miroir à quatre vues, grille de bustes, mêmes classes) ; rayons Femmes,
+  Hommes, Folies (catégories, pas interdits), Couleur, Barbe ; la tête se compose localement (`salonTry`), puis UNE `req` au fauteuil
+  (`salonSet` : coupe, couleur, barbe), que l'hôte vérifie et facture `C.SALON_PRICE` (5 000 or, caisse commune) ; rien n'est débité si la tête
+  ne change pas. Répliques de Froufrou en tête (huit, FR/EN, tirées du temps comme celles de Carla) ; toasts `salonDone` / `salonNoGold`.
+- **Accès** : menu développeur → « Salon de coiffure » → « Ouvrir le salon (essai) ». La PORTE dit toujours « ouverture prochaine » : elle
+  s'ouvrira avec l'arrivée de Froufrou (lot 3 : il s'installe, travaux, puis ouverture — sa décision).
+- **Nouveautés** (sa demande, en cours de route) : `components/ferme/nouveautes.js` — les ajouts majeurs, du plus ancien au plus récent (18 depuis
+  le 2026-09-27), une phrase et « où le voir » chacun, en français et en anglais ; rubrique repliable en tête du menu développeur.
+  ⚠️ À tenir en fin de livraison : un ajout majeur = une ligne en bas du fichier.
+- Vu en jeu (1280 × 800) : mulet bleu électrique et barbe fournie composés, payés (12 000 → 7 000 or), portés dans le monde ; au retour « C'est déjà
+  ta tête », aucun second débit. La rubrique : 18 lignes, dates FR. Bancs : `no-undef`, bundle, `verify-strings` (1 434 clés), `verify-syntax`,
+  `verify-maison` 177/177, `verify-vallee`, `render-coiffure`, `render-garderobe`.
+- **Pas fait** : Froufrou lui-même (son personnage, son arrivée, les travaux, sa présence au salon) ; pas vu à deux clients ni sur iPad.
+
+## 2026-10-21 (soir) — LE SALON DE COIFFURE, LOT 1 : LES COUPES, LES COULEURS, LES BARBES (le dessin)
+
+Ses choix : un nouveau résident au salon, exubérant et théâtral (« chérie », « ma princesse », « Votre Majesté »), jamais rien d'inapproprié
+(le jeu s'adresse aussi à des jeunes) ; surnom affiché « Froufrou », nom civil Gérald Pinson jamais montré directement ; coupe + couleur + barbe ;
+des catégories Femmes / Hommes mais tout le monde peut tout prendre, plus des « Folies » (macarons géants, tresses jusqu'au sol, mulet) ;
+5 000 or la séance ; ouverture après une installation, comme Carla ; RIEN à la création du personnage. Découpé en trois lots : 1 le dessin
+(celui-ci), 2 le salon (miroir, séance, requête à l'hôte), 3 Froufrou (arrivée, travaux, répliques). **Supabase : rien.**
+- **Catalogue** (`fermeConstants.js`) : `HAIR_CUTS` (11 : Longs lissés, Carré, Queue de cheval, Chignon ; Court, Rasé, Boucles, Raie sur le côté ;
+  Macarons géants, Tresses jusqu'au sol, Mulet), `HAIR_DYES` (les 8 couleurs d'origine + platine, rose bonbon, bleu électrique, vert menthe),
+  `BEARDS` (moustache, bouc, barbe courte, barbe fournie). État : `wardrobe[id].hair = { c, d, b }`, absent = la tête d'avant ; dans la chaîne
+  `look` : `^` + trois caractères base 36 (`C.hairLook` fabrique, `lookHair` relit). `parseWardrobeLook` coupe désormais à `~` OU `^`.
+- **Dessin** : `components/ferme/coiffureArt.js` (pur) — une rangée par lettre de ton par direction, reflet en haut à gauche, motifs par paires
+  (boucles, croisements de tresse), mèches longues au pas. Les coupes d'ORIGINE (« Longs lissés », « Court ») restent les rectangles de
+  `drawCharFrame` au pixel près : un joueur qui ne va pas au salon ne change pas. Ce qui retombe sur les épaules (tresses, mulet, barbe fournie)
+  repasse devant les vêtements (`hairOver`, appelé par `garderobeArt.js`).
+- Le miroir de la Maison Garfield garde la coiffure du joueur.
+- Banc : `render-coiffure` (`coiffure-planche.png` : 11 coupes × 2 genres × 3 vues au pas ; `coiffure-couleurs.png`, `coiffure-barbes.png`,
+  `coiffure-chapeaux.png` : sous trois chapeaux et sous les cols). Vu en jeu (état posé à la main : macarons rose bonbon, au miroir et dans le monde).
+- **Pas fait** : le salon lui-même (lot 2) et Froufrou (lot 3) — aujourd'hui rien ne permet de changer de tête en jeu, sauf le menu à venir.
+
+## 2026-10-21 (suite) — LES VÊTEMENTS DE LA MAISON GARFIELD REDESSINÉS
+
+Son message, en voyant la cabine : « les vêtements doivent être bien détaillés, moins comme des blocs, plus réalistes et beaux ». Ses choix (sur
+recommandation) : la grille actuelle de 16 × 24 repeinte (pas de personnages plus définis), les 14 articles, qui suivent le pas, une planche à juger.
+**Supabase : rien** (la chaîne `look` est inchangée ; seul le dessin change).
+- **`components/ferme/garderobeArt.js`** (nouveau, pur) remplace les aplats du zip 427 dans `drawCharFrame` : une couche par vêtement, une lettre
+  de ton par pixel ; le DRAPÉ éclaire chaque rangée en trois zones (bord gauche clair, base, ombre à droite — lumière en haut à gauche), les plis
+  sont des segments (un creux, son arête claire), l'ourlet est plus sombre ; les rampes glissent la teinte (chaud en montant, froid en descendant).
+- Robe du soir : décolleté, ceinture et broche, trois plis, reflet de satin, ourlet recollé au sol quand le corps descend ; dos boutonné à nœud.
+  Cape : col montant, fermoir d'or, doublure de soie dorée à l'ouverture, pend derrière de profil et s'envole au pas. Tailleur : revers, chemise,
+  cravate, pochette, boutons, manchettes, pantalon à pli ou jupe. Poncho : laine à filets crème et bande ocre à losanges, plis des épaules, frange
+  continue qui suit le pas. Tutu : corsage pailleté, bras nus, tulle festonné qui rebondit, collants et chaussons. Chapeaux, écharpes : béret
+  penché, capeline de paille tressée à ruban, haut-de-forme de soie, bonnet côtelé à pompon, diadème à pierre ; soie nouée, boa en touffes,
+  étole à fermoir, grosse maille à deux tours et pan à franges. Les cheveux longs retombent sur le col.
+- **Changements de couleur, à juger** : chaque tenue a sa couleur propre sans teinte (avant : toutes en `#3a3550`) — robe saphir, cape lie-de-vin,
+  tailleur anthracite, poncho terre cuite, tutu rose ; la capeline garde sa paille et c'est son RUBAN qui prend la teinte (avant : toute la paille).
+- Banc : `render-garderobe` (planche trois vues × pas, et les couleurs) ; `tools/out/garderobe-avant-apres.png` compose l'ancien et le nouveau
+  (la planche « avant » est `garderobe-avant-planche.png`, tirée avant le changement). Vu en jeu : la cabine et la cape portée en marchant.
+  `no-undef`, bundle, `verify-syntax`, `verify-strings`, `verify-noms`, `verify-maison` (177/177), `render-assise`, `render-patin` : verts.
+- **Pas fait** : les habits de BASE des fermiers restent en aplats (hors périmètre, sa réponse) ; la pose assise, la nage, la combinaison de
+  patin et le cheval ne portent toujours pas la garde-robe (comme avant). Pas vu : deux clients, iPad.
+
+## 2026-10-21 — LA MAISON GARFIELD DEVIENT UNE CABINE D'ESSAYAGE
+
+Sa demande : « meilleure présentation du catalogue Maison Garfield » (`docs/PROJETS.md` §1). Ses choix, tous sur recommandation : cabine avec
+miroir, essais COMBINÉS payés à la pièce, vignettes = son propre buste qui porte l'article, présentation seule (pas d'article neuf).
+**Supabase : rien** (aucun champ neuf ; mêmes `req` qu'avant : `wardrobeBuy`, `wardrobeWear`, `skinSet`).
+- **Le miroir** (à gauche) : le personnage du joueur au pixel entier (×7), dessiné avec la chaîne `look` CANDIDATE (`C.playerLook`, la seule
+  fabrique) ; un clic sur le miroir ou ↺ ↻ le fait tourner d'un quart (face, profil droit, dos, profil gauche — le gauche est le droit en miroir,
+  comme `drawCharacter`). Cadre doré en arche, comme les miroirs peints de la façade du salon ; ombre au sol en paliers (FIX-003).
+- **L'essai** (`fitTry`, local) : chaque rayon garde ce qu'on y essaie, tout s'empile sur le miroir ; sous le miroir, ce qu'il faudrait acheter
+  pour porter l'essai et son total, « Porter l'ensemble » quand tout est déjà acquis, « Ma tenue » pour revenir à ce qu'on porte. Rien ne part sur
+  le réseau avant un achat. Le teint s'essaie aussi (onglet Teint) et se confirme par « Prendre ce teint » — avant, une pastille cliquée
+  consommait l'un des deux changements sans aperçu.
+- **La grille** : buste (rangées 0 à 16 de la face) pour chapeaux, écharpes et teint ; personnage entier pour tenues et couleurs (la robe et le
+  tutu descendent sous la taille) ; ✓ sur ce qu'on porte, prix ou « Acquis ». **La fiche** : nom, prix, la flatterie de Léo, Acheter / Porter /
+  Retirer. Carla reste en tête, sa réplique tirée du temps.
+- **Le cache** : `S.getCharFitting` (fermeArt.js) garde les feuilles ESSAYÉES à part, 48 au plus — feuilleter ne fait plus grossir `S.chars`
+  (jamais vidé), et WebKit sur iPad plafonne les canevas. `Sprite` prend `ox`/`oy`/`flip` (une autre rangée de la feuille, en miroir).
+- Vu en jeu (`audit-tmp`, fermière) à 1280 × 800, 768 × 1024 et 390 × 800 : essai chapeau + robe, achat de la robe (or débité par l'hôte, portée
+  aussitôt), couleurs, teint ; quatre vues du miroir distinctes. Bancs : `verify-strings`, `verify-syntax`, `verify-maison` (177/177) verts ;
+  `no-undef` et le bundle esbuild : 0 erreur.
+- **Pas vu** : à deux clients (rien de neuf sur le réseau), un vrai iPad, l'anglais à l'écran (les clés sont appariées au banc).
+
+## 2026-10-18 (soir) — CHEZ SOI : LES OMBRES PORTÉES DES MEUBLES ET LES LAMPES ALLUMÉES
+
+Son message : « les objets ont l'air de stickers donne leur du volume de manière cohérente. les lampes, les objets posés contre les murs etc ».
+Ses choix sur quatre leviers proposés : les ombres portées seules (pas le relief des objets de mur, pas de modelé Blender, pas de flanc visible),
+le halo des lampes tout de suite, une seule livraison. **Supabase : rien** (dessin seulement, rien sur le réseau).
+- **`components/ferme/ombresMaison.js`** (pur, partagé par le jeu et `render-maison`) : par pièce, ses SOURCES — le jour ses fenêtres (façade et
+  mur du fond, trois points le long de la baie : ombres douces), la nuit, si elle est allumée, ses appliques et ses lampes (deux points) — et ses
+  MEUBLES vus par la lumière : l'emprise extrudée à la silhouette du sprite (rangées tassées de h + p à h). Un point du sol ou du MUR DU FOND
+  (pris à sa place évasée) est dans l'ombre si le segment vers la source traverse un meuble ; densité pondérée (Lambert, distance pour une
+  lampe), quatre paliers, blocs de 2 × 2 (le pixel du personnage). Résultat : la plante et le lampadaire posent leur silhouette sur le lambris
+  derrière eux le jour ; la nuit, le canapé et le fauteuil jettent leur ombre loin de la lampe.
+- **Le jeu** (`drawHomeFrame`, `homeShadows`, `homeAlpha`) : un masque par pièce et par mode, gardé en cache (meubles, fenêtres, lampes) ; au plus
+  UNE pièce calculée par image (13 à 21 ms au banc par pièce meublée) ; le sol sous tout ce qui se trie, le mur dans la face (`ombresMur` de
+  `homeDrawItems`, rangées coupées avec le mur). Le jour s'efface quand la nuit vient (le fondu des lampes de `lumiere.js`).
+- **Les lampes** : dans une pièce allumée la nuit (celle où l'on est, comme les appliques), lampadaire et guéridon prennent leur sprite allumé,
+  posent leur lumière et leur verre dans la couche de lumière, et servent de source aux ombres. L'interrupteur (E) reste au lot 2c.
+- Banc : `render-maison` → `maison-ombres.png` (séjour témoin, sans / avec, jour / nuit). Vu en jeu (`audit-tmp`, maison meublée) à 15 h et 23 h.
+- **Pas fait** : les personnages n'ont pas d'ombre dirigée (leur ombre au pied reste) ; les murs de côté et les cloisons nord-sud ne reçoivent pas
+  d'ombre ; les objets de mur restent peints à plat.
+
 ## 2026-10-18 (suite) — CHEZ SOI : LE LOT 2b (CATALOGUE ET CARTONS), LES OBJETS DANS LA PERSPECTIVE, LES APPLIQUES, LE DORMEUR
 
 Ses messages : « poursuis. sans négliger l'examen critique de la perspective d'intérieur, les objets. aussi, le lit pivoté n'a pas sa propre

@@ -1,0 +1,50 @@
+/* ╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   ║ nouveautes.js — LES AJOUTS MAJEURS, DANS L'ORDRE CHRONOLOGIQUE (rubrique « Nouveautés » du menu développeur).
+   ╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume (2026-10-21) : « une rubrique au menu dev qui présente au joueur les derniers ajouts dans l'ordre chrono. Les
+   ajouts majeurs ». Du plus ANCIEN au plus RÉCENT ; une ligne = une chose qu'un joueur remarque en jouant (pas un correctif, pas un
+   réglage). `voir` : où le trouver. Les deux langues ici, ensemble (un ajout se raconte une fois).
+   ⚠️ À TENIR EN FIN DE LIVRAISON : un ajout majeur livré = une ligne de plus, en bas. Le récit complet reste au journal du README de la
+   ferme ; ici, une phrase. */
+export const NOUVEAUTES = [
+  { date: "2026-09-27", fr: { t: "Valley Town redessinée", s: "Rues courbes, monuments sur leurs places, maisons peintes, grand escalier de l'église.", voir: "En ville" },
+    en: { t: "Valley Town redrawn", s: "Curving streets, monuments on their squares, painted houses, the church's grand staircase.", voir: "In town" } },
+  { date: "2026-09-27", fr: { t: "La Maison Garfield", s: "Carla et Léo ouvrent leur boutique de mode en Haute-Ville, après deux jours de travaux.", voir: "Haute-Ville, en haut des marches" },
+    en: { t: "Maison Garfield", s: "Carla and Leo open their fashion shop in Upper Town, after two days of works.", voir: "Upper Town, top of the stairs" } },
+  { date: "2026-09-28", fr: { t: "La neige en ville", s: "Elle tient sur les toits, les rues et les arbres ; les façades s'éclairent la nuit.", voir: "L'hiver" },
+    en: { t: "Snow in town", s: "It settles on roofs, streets and trees; façades light up at night.", voir: "In winter" } },
+  { date: "2026-09-29", fr: { t: "Pluie, flaques et météo par lieu", s: "L'eau coule au caniveau, les cheminées fument, le jour se lève et se couche selon la saison.", voir: "Partout" },
+    en: { t: "Rain, puddles and local weather", s: "Water runs in the gutters, chimneys smoke, sunrise and sunset follow the season.", voir: "Everywhere" } },
+  { date: "2026-09-30", fr: { t: "L'automne", s: "Les feuilles tombent par bouquets et tapissent le sol.", voir: "L'automne" },
+    en: { t: "Autumn", s: "Leaves fall in clusters and carpet the ground.", voir: "In autumn" } },
+  { date: "2026-10-03", fr: { t: "Le plan illustré de Valley Town", s: "La carte ouverte devient un vrai plan de ville, toits et repères compris.", voir: "Touche M en ville" },
+    en: { t: "The illustrated map of Valley Town", s: "The open map becomes a real town plan, roofs and landmarks included.", voir: "M key in town" } },
+  { date: "2026-10-05", fr: { t: "Patins et lac gelé", s: "On loue des patins, on glisse sur le lac quand il gèle, on construit des bonhommes de neige.", voir: "L'hiver, au lac" },
+    en: { t: "Skates and the frozen lake", s: "Rent skates, glide on the lake when it freezes, build snowmen.", voir: "In winter, at the lake" } },
+  { date: "2026-10-05", fr: { t: "La patinoire et sa course", s: "Une patinoire sur la place, une course à quatre et un contre-la-montre contre son fantôme.", voir: "L'hiver, sur la place" },
+    en: { t: "The rink and its race", s: "A rink on the square, a four-skater race and a time trial against your ghost.", voir: "In winter, on the square" } },
+  { date: "2026-10-05", fr: { t: "Les ombres suivent le soleil", s: "Leur direction et leur longueur changent avec l'heure, la saison et le ciel.", voir: "Partout, de jour" },
+    en: { t: "Shadows follow the sun", s: "Their direction and length change with the hour, the season and the sky.", voir: "Everywhere, by day" } },
+  { date: "2026-10-06", fr: { t: "Figures de patin et surfaceuse", s: "Vrilles, axels, freinage, la glace qui s'use et la machine qui la lisse.", voir: "La patinoire" },
+    en: { t: "Skating tricks and the ice resurfacer", s: "Spins, axels, hard stops, ice that wears down and the machine that smooths it.", voir: "The rink" } },
+  { date: "2026-10-11", fr: { t: "Le skatepark du printemps", s: "Skate, BMX, trottinette et rollers à louer, des rampes, des glisses et des figures.", voir: "Le printemps, sur la place" },
+    en: { t: "The spring skatepark", s: "Skateboard, BMX, scooter and rollerblades for rent, ramps, grinds and tricks.", voir: "In spring, on the square" } },
+  { date: "2026-10-12", fr: { t: "Le chantier de la place", s: "Une équipe démonte la patinoire et monte le park en trois heures, sons compris.", voir: "Le premier lundi du printemps, 14 h" },
+    en: { t: "The square's building site", s: "A crew takes down the rink and builds the park in three hours, with sound.", voir: "First Monday of spring, 2 pm" } },
+  { date: "2026-10-15", fr: { t: "Figures avancées au park", s: "Saut chargé, variantes, spins jusqu'au 720 et handplant en rollers.", voir: "Le skatepark" },
+    en: { t: "Advanced park tricks", s: "Charged jump, variants, spins up to 720 and rollerblade handplants.", voir: "The skatepark" } },
+  { date: "2026-10-16", fr: { t: "La teinte de peau", s: "Huit teintes au choix à la création, deux changements ensuite.", voir: "Création du personnage" },
+    en: { t: "Skin tone", s: "Eight tones to choose from at creation, two changes afterwards.", voir: "Character creation" } },
+  { date: "2026-10-16", fr: { t: "Chez soi", s: "On entre dans sa maison, on dort dans son lit, on meuble et on décore pièce par pièce.", voir: "Ta porte en ville (E), puis B" },
+    en: { t: "At home", s: "Step into your house, sleep in your bed, furnish and decorate room by room.", voir: "Your door in town (E), then B" } },
+  { date: "2026-10-18", fr: { t: "Le catalogue de meubles", s: "On commande, les cartons arrivent le lendemain devant la porte ; lampes et ombres la nuit.", voir: "Le catalogue, dans l'entrée" },
+    en: { t: "The furniture catalogue", s: "Order, and the boxes arrive at your door the next day; lamps and shadows at night.", voir: "The catalogue, in the hall" } },
+  { date: "2026-10-21", fr: { t: "La cabine d'essayage Garfield", s: "On essaie avant d'acheter, devant un miroir ; les vêtements sont redessinés en détail.", voir: "Maison Garfield" },
+    en: { t: "The Garfield fitting room", s: "Try before you buy, in front of a mirror; the clothes are redrawn in detail.", voir: "Maison Garfield" } },
+  { date: "2026-10-21", fr: { t: "Chez Froufrou, le salon de coiffure", s: "Onze coupes, douze couleurs, quatre barbes, 5 000 or la séance.", voir: "Haute-Ville, à côté de la Maison Garfield" },
+    en: { t: "Froufrou's, the hair salon", s: "Eleven cuts, twelve colours, four beards, 5,000 gold a session.", voir: "Upper Town, next to Maison Garfield" } },
+  { date: "2026-10-21", fr: { t: "Froufrou s'installe en ville", s: "Le coiffeur arrive par le train quand la ferme compte quatre artisans, habite au-dessus du salon et flâne en ville.", voir: "Le train, puis la Haute-Ville" },
+    en: { t: "Froufrou moves to town", s: "The hairdresser arrives by train once the farm has four artisans, lives above the salon and strolls around town.", voir: "The train, then Upper Town" } },
+  { date: "2026-10-21", fr: { t: "Lumières, feu et tableaux chez soi", s: "Interrupteurs, lampes et feu de cheminée à allumer (E), vus de la rue ; tableaux, miroir et horloge au mur ; revente à moitié prix.", voir: "Chez soi : E, puis B et le catalogue « Aux murs »" },
+    en: { t: "Lights, fire and paintings at home", s: "Light switches, lamps and a fireplace to light (E), seen from the street; paintings, a mirror and a clock on the walls; resale at half price.", voir: "At home: E, then B and the \"On the walls\" catalogue page" } },
+];

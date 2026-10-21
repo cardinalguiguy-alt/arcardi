@@ -6,6 +6,72 @@
 
 ---
 
+### À juger — CHEZ SOI, LOT 2c : LUMIÈRES, FEU, OBJETS DE MUR, REVENTE (2026-10-21, suite)
+
+Entre chez toi la nuit (`maison-2c.png`, `maison-muraux.png`), menu développeur → « Garnir le garde-meuble », puis B.
+- **L'interrupteur** : un par pièce, près de la porte (ou au mur du fond, au plus près d'elle). Une pièce jamais touchée s'allume encore seule
+  la nuit quand tu y entres ; le premier E la passe à la main. Bien ainsi, ou tout à la main dès le départ ?
+- **Le feu** : 4 h de jeu de flammes (3 min réelles), puis 45 min de braises. Trop court pour une soirée ? (`HOME_FEU_MIN`.) Le halo vacille.
+- **Les objets de mur** : sous les appliques (bas à 0,5–0,6 m, haut sous 1,10 m), l'horloge plus haut. Le séjour n'en prend que deux. Les
+  toiles provisoires te vont en attendant Gemini ? Faut-il des cadres plus grands (moins de places) ? — prompts : `refs/lot-gemini/F-tableaux-maison.md`.
+- **La revente** : la moitié du catalogue, arrondie à 50 ; deux clics ; le lit offert sans bouton, la plante morte « Jeter ».
+- **Vu de la rue** : ta vitre suit la pièce (appliques, lampe, feu) — une maison vide et éteinte est noire, là où l'horaire l'allumait le soir.
+Pas vu : la vente confirmée, les combles, deux clients, iPad.
+
+### À juger — FROUFROU (2026-10-21, fin de nuit — salon, lot 3)
+
+`tools/out/coiffure-froufrou.png`, puis en jeu : une ferme à 4 artisans, le train, « proposer d'emménager » ; menu dev → « 💈 le salon de coiffure ».
+- **Son allure** fuchsia et léopard à côté de Carla : assez extravagant ? trop ?
+- **Son programme** : la vitrine de 9 h à 19 h, la promenade, chez lui de 21 h à 8 h, relâche un jour sur sept — le rythme te va ?
+- **Ses répliques** (visite, salon, emménagement) et les **ragots** des autres (une bulle sur quatre) : le ton, la fréquence.
+- **Pas fait** : la façade ne change pas selon l'étape (vitrines blanchies pendant les travaux ?) — à faire ?
+Pas vu : sa visite à la ferme rejouée en jeu, deux clients, iPad.
+
+### À juger — LE SALON EN JEU ET LA RUBRIQUE « NOUVEAUTÉS » (2026-10-21, nuit)
+
+Menu développeur → « Ouvrir le salon (essai) ». Compose une tête, prends place au fauteuil (5 000 or).
+- **Le salon** : les rayons Femmes / Hommes / Folies / Couleur / Barbe, le résumé « Coupe · Couleur · Barbe », le prix unique — clair ?
+- **Froufrou** : ses huit répliques (le ton : exubérant, tendre, jamais déplacé) — à garder, à pousser, à calmer ?
+- **Nouveautés** (en tête du menu, repliée) : la sélection des 18 ajouts, l'ordre (du plus ancien au plus récent), « où le voir » — juste ?
+Pas vu : deux clients, iPad.
+
+### À juger — LES COUPES, LES COULEURS ET LES BARBES DU SALON (2026-10-21, soir — lot 1, sur planche)
+
+`tools/out/coiffure-planche.png` (11 coupes, fermière et fermier, face / dos / profil au pas), `coiffure-couleurs.png`, `coiffure-barbes.png`, `coiffure-chapeaux.png`.
+- **Les coupes** : lesquelles sont à reprendre ? (la queue de cheval de profil, le chignon de face, le mulet de profil sont les plus fragiles) ; les Folies assez folles ?
+- **Les couleurs** : les 4 de fantaisie (platine, rose bonbon, bleu électrique, vert menthe) — d'autres ?
+- **Les barbes** : la barbe fournie trop lourde en noir ?
+- **Les coupes d'origine** restent en aplats (pour ne changer personne) : les repeindre aussi, au risque de changer la tête de tous ?
+Pas vu : le salon (lot 2), deux clients, iPad.
+
+### À juger — LES VÊTEMENTS REDESSINÉS (2026-10-21, suite)
+
+`tools/out/garderobe-avant-apres.png` (à gauche l'ancien, à droite le nouveau : face, face au pas, dos, profil), puis en jeu dans la cabine.
+- **Le niveau de détail** à 16 × 24 : plis, reflets, matières — assez « réaliste » ? Un article qui reste trop « bloc » (le poncho ? le tutu ?) ?
+- **Les couleurs propres** sans teinte (robe saphir, cape lie-de-vin, tailleur anthracite, poncho terre cuite, tutu rose) et la capeline dont seul le ruban se teint.
+- **Le mouvement** : la jupe et la cape qui balancent, la frange, le tulle qui rebondit — assez ? trop ?
+- Si le cadre de 16 × 24 reste trop court pour toi, la suite est de passer les personnages en 32 × 48 : un très gros chantier, à cadrer à part.
+Pas vu : deux clients, iPad.
+
+### À juger — LA CABINE D'ESSAYAGE DE LA MAISON GARFIELD (2026-10-21)
+
+En ville, Maison Garfield (E à la porte). Essaie un chapeau, puis une tenue, une couleur : tout s'empile dans le miroir.
+- **Le miroir** : la taille du personnage (×7), le cadre doré, le clic qui le fait tourner — lisible ? Une petite animation (il marche sur place) ?
+- **L'essai combiné** : la ligne « À acheter pour porter cet essai… » et son total, « Porter l'ensemble », « Ma tenue » — clair ?
+- **Les vignettes** : ton buste pour chapeaux, écharpes, teint ; toi en entier pour tenues et couleurs. Assez grandes ?
+- **Le teint** s'essaie maintenant avant d'être pris (« Prendre ce teint ») : d'accord ?
+- **Carla en tête, Léo à la caisse** (sa flatterie à côté du prix) : à garder, à animer ?
+Pas vu : deux clients, un vrai iPad, l'anglais à l'écran.
+
+### À juger — CHEZ SOI : LES OMBRES PORTÉES ET LES LAMPES (2026-10-18, soir)
+
+Entre chez toi, meuble le séjour, regarde à 15 h puis la nuit (`maison-ombres.png` : sans / avec, jour / nuit).
+- **Le jour** : l'ombre part des fenêtres (douce, elle monte sur le mur derrière la plante, le lampadaire, la bibliothèque). Assez marquée (0,46) ?
+- **La nuit** : la pièce où tu es allume ses appliques ET ses lampes (lampadaire, guéridon) ; les ombres partent d'elles. Plus franches (0,52) : trop ?
+- **Une pièce meublée** apparaît sans ombre pendant une image ou deux en y entrant (une pièce calculée par image) : ça se voit ?
+- **Pas fait** : ombre dirigée des personnages, ombres sur les murs de côté, relief des objets de mur — à demander si les meubles ont pris du volume et pas eux.
+Pas vu : iPad (le coût du calcul), deux clients.
+
 ### À juger — CHEZ SOI : LE CATALOGUE, LES CARTONS, LES APPLIQUES, LE DORMEUR (2026-10-18, suite)
 
 Entre chez toi : le catalogue est par terre dans l'entrée (E). Commande, puis menu développeur → « Livrer les cartons maintenant » (ou attends le
@@ -194,6 +260,9 @@ seul souci est le niveau de détail. ») Un seul verdict, deux familles — et *
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Petites dettes repérées, pas corrigées** (sorties du bloc REPRISE du noyau le 2026-10-21) : la potence de la trottinette en haut de paroi
+  (bloc skatepark ci-dessus) ; `f.injuredUntil | 0` (`resolveStarCandy`, piège « x | 0 sur un horodatage », `docs/PIEGES.md`) ; l'avertissement
+  `C.G_SOIL` (`docs/VERIFICATION.md`) ; `TOWN_SPEED_MULT`, constante morte.
 - **Le 2026-10-06 (suite)** — verdicts du soir dans le bloc en tête ; **reste à juger** : le marché hors hiver (place vide, caillebotis sombre sur l'herbe d'été : traités aux futures séances,
   `docs/PROJETS.md` §4), **l'ombre au saut** (le corps monte, l'ombre reste au sol ; elle ne rétrécit pas avec la hauteur : voulu ? — « quelques bugs » d'ombre à venir de lui), **le lac du
   sud** (il gèle depuis la rive 12,9 % de l'hiver ; message de gel et dégel étiré : **à voir en jeu**, menu dev « ⛸️ Lac gelé » pour le décor mais il ne déclenche pas le message).

@@ -16,6 +16,8 @@
       celles de leur façade.
    2. LE TÉMOIN (`maison-temoin-planche.png`) — le rez-de-chaussée meublé :
       ambiance A de jour, la même la nuit (lampes, poêle, lune), ambiance B.
+   3. LES OMBRES (`maison-ombres.png`, 2026-10-18). 4. LE LOT 2c (`maison-2c.png`, `maison-muraux.png`, 2026-10-21) : les
+      objets de mur accrochés, la nuit appliques allumées puis éteintes à l'interrupteur, les cinq objets peints.
       ⚠️ La nuit est ici un passage sur les pixels (le faux canevas n'a pas de
       mode de composition) ; le jeu passe par sa couche de lumière.
 
@@ -37,8 +39,8 @@ const OUT = path.join(ROOT, "tools", "out");
 const SPR = path.join(ROOT, "public", "maison");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "maisonArt", "maison", "maisonSprites"]);
-const A = mods.fermeArt, MA = mods.maisonArt, H = mods.maison, C = mods.fermeConstants;
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "maisonArt", "maison", "maisonSprites", "ombresMaison"]);
+const A = mods.fermeArt, MA = mods.maisonArt, H = mods.maison, C = mods.fermeConstants, OM = mods.ombresMaison;
 const META = mods.maisonSprites.MEUBLES;
 const S = A.buildSprites();
 const { MPX, CASE_M } = MA;
@@ -56,6 +58,43 @@ function img(nom) {
     images.set(nom, c);
   }
   return images.get(nom);
+}
+/* 2026-10-18 — l'alpha d'un sprite (les ombres portées, `ombresMaison.js`). */
+const alphas = new Map();
+function alphaOf(nom) {
+  if (!alphas.has(nom)) {
+    const c = img(nom);
+    if (!c) { alphas.set(nom, null); return null; }
+    const a = new Uint8Array(c.width * c.height);
+    for (let i = 0; i < a.length; i++) a[i] = c.px[i * 4 + 3];
+    alphas.set(nom, { w: c.width, h: c.height, a });
+  }
+  return alphas.get(nom);
+}
+/* LES OMBRES PORTÉES D'UN NIVEAU, comme le jeu les calcule (`ombresMaison.js`) : pièce par pièce, de jour par ses fenêtres,
+   de nuit par ses appliques et ses lampes (toutes les pièces allumées, au banc). Rend les canevas du sol, ceux des murs par
+   face, et les sources de nuit (pour la passe de lumière du banc). `o.ombres === false` : sans (l'« avant »). */
+function ombresDe(plan, L, facade, faces, meubles, nuit, appliques = true) {
+  const ff = faces.map(({ f }) => f), fl = faces.map(({ f, bake }) => ({ f, wallPx: bake.wallPx }));
+  const occAll = meubles.map((m) => OM.homeOccluder(m, META, alphaOf)).filter(Boolean);
+  const sols = [], murs = new Map(), sources = [];
+  for (const room of plan.niveaux[L].pieces) {
+    const occs = occAll.filter((oc) => {
+      const pc = H.homeRoomAt(plan, L, (oc.x0 + oc.x1) / 2 / MPX + MA.HOME_FX0, (oc.y0 + oc.y1) / 2 / MPX + MA.HOME_FY0);
+      return pc && pc.id === room.id;
+    });
+    const lampes = nuit ? occs.filter((oc) => OM.lampeDe(oc.sprite)).map((occ) => ({ occ, lampe: OM.lampeDe(occ.sprite) })) : [];
+    const lights = OM.homeRoomLights(plan, L, room, facade, ff, nuit ? "nuit" : "jour", lampes, appliques);   // 2026-10-21 : l'interrupteur (lot 2c)
+    if (nuit) for (const lt of lights) {
+      const [x, y, z] = lt.pts[0];
+      sources.push({ x: x + 3, y: y - z * 0.45, r: lt.r, k: lt.self ? 0.9 : 0.6, c: [255, 196, 120] });
+    }
+    const r = OM.homeShadowRoom(plan, L, room, occs, lights, fl);
+    const force = nuit ? OM.OMBRE_NUIT : OM.OMBRE_JOUR;
+    if (r.sol) sols.push({ c: OM.maskCanvas(mk, r.sol, force), x: r.sol.x, y: r.sol.y });
+    for (const { fid, m } of r.murs) murs.set(fid, [...(murs.get(fid) || []), { c: OM.maskCanvas(mk, m, force), x: m.x, y: m.y, a: 1 }]);
+  }
+  return { sols, murs, sources };
 }
 const CHAR = S.getChar("f", 1, false, false, false, false, false, false, null);
 
@@ -82,9 +121,19 @@ function compose(plan, L, look, o = {}) {
   // 2026-10-17 : les équipements de la maison (la nuit, la cheminée est allumée)
   const fixes = H.homeFixes(plan, L, facade).map((f) => (o.nuit && f.sprite === "cheminee" ? { ...f, sprite: "cheminee_allume" } : f));
   const meubles = fixes.concat(o.meubles || H.HOME_DEPART.filter((m) => m.niveau === L));
+  const om = o.ombres === false ? null : ombresDe(plan, L, facade, faces, meubles.map((m) => ({ ...m, sprite: m.sprite.replace(/_allume$/, "") })), !!o.nuit, o.appliques !== false);
+  if (om) for (const s of om.sols) g.drawImage(s.c, s.x, s.y);
   const items = MA.homeDrawItems(plan, L, {
     H, faces, cutPx: (f) => (f.ext || !o.perso || f.room === (H.homeRoomAt(plan, L, o.perso[0], o.perso[1]) || {}).id ? 1e9 : 0), lows: H.homeLows(plan, L, facade),
     meubles, meta: META, img, ciel, ampoules: o.ampoules || [], mk,
+    ombresMur: om ? (f) => om.murs.get(f.id) || [] : null,
+    allumees: o.nuit && o.appliques !== false ? new Set(plan.niveaux[L].pieces.map((p) => p.id)) : null,
+    // 2026-10-21 (lot 2c) — les objets de mur, peints comme au jeu (`bakeMural`) ; l'horloge à `o.tmin`
+    murals: (o.murals || []).map((it) => {
+      const sp = H.HOME_MURAUX[it.s], span = H.homeMuralSpan(plan, it), [w, h] = MA.muralPx(sp);
+      return { s: it.s, fid: span.f.id, lx: span.x0, z: H.homeMuralZ(plan, L, it.s), w, h };
+    }),
+    muralImg: (s2, w, h) => MA.bakeMural(mk, s2, w, h), tmin: o.tmin ?? 1170,
   });
   if (o.perso) {
     const [lx, ly] = o.perso;
@@ -98,7 +147,7 @@ function compose(plan, L, look, o = {}) {
   }
   items.sort((a, b) => a.key - b.key);
   for (const it of items) it.draw(g);
-  if (o.nuit) nuit(cv, W, Hh, o.lumieres || []);
+  if (o.nuit) nuit(cv, W, Hh, [...(o.lumieres || []), ...(om ? om.sources : [])]);
   return cv;
 }
 
@@ -165,7 +214,7 @@ const decoB = { entree: { sol: ["ciment", "bleu"], murs: { papier: "toile_bleue"
                 sejour: { sol: ["parquet", "noyer"], murs: { papier: "vert_anglais", lambris: "bois" } },
                 cage: { sol: ["ciment", "bleu"], murs: { papier: "toile_bleue", lambris: "bleu" } } };
 const swap = (list, map) => list.map((m) => (map[m.sprite] ? { ...m, sprite: map[m.sprite] } : m));
-function temoin(deco, nuitOn, swaps) {
+function temoin(deco, nuitOn, swaps, plus = {}) {
   const plan = avecDeco(P, 0, deco);
   let meubles = swap(SEJOUR_A, swaps);
   if (nuitOn) meubles = swap(meubles, { lampadaire: "lampadaire_allume", gueridon: "gueridon_allume", lampadaire_moutarde: "lampadaire_moutarde_allume" });
@@ -173,12 +222,11 @@ function temoin(deco, nuitOn, swaps) {
   // le tapis est à plat : dessiné sous tout, avant la liste
   const lum = [];
   if (nuitOn) {
-    const L1 = MA.homePx(2.32 + 0.17, 4.62 + 0.34 - 1.48 / CASE_M); lum.push({ x: L1[0], y: L1[1], r: 2.6 * MPX, k: 1.0, c: [255, 196, 120] });
+    // 2026-10-18 : le lampadaire, le guéridon et les appliques viennent des sources des ombres (`ombresDe`)
     const L2 = MA.homePx(3.0 + 0.57, 4.55 + 0.2 - 0.2 / CASE_M); lum.push({ x: L2[0], y: L2[1], r: 2.2 * MPX, k: 0.85, c: [255, 140, 60] });   // le feu
-    const L3 = MA.homePx(2.3 + 0.15, 7.35 + 0.39 - 0.8 / CASE_M); lum.push({ x: L3[0], y: L3[1], r: 1.6 * MPX, k: 0.8, c: [255, 190, 110] });
     const L4 = MA.homePx(4.0, 8.6); lum.push({ x: L4[0], y: L4[1], r: 1.6 * MPX, k: 0.35, c: [150, 175, 230] });
   }
-  return compose(plan, 0, { model: "n2", variant: "simple" }, { meubles: [tapis, ...meubles].map((m) => ({ ...m, niveau: 0 })), nuit: nuitOn, lumieres: lum, perso: [3.9, 6.95] });
+  return compose(plan, 0, { model: "n2", variant: "simple" }, { meubles: [tapis, ...meubles].map((m) => ({ ...m, niveau: 0 })), nuit: nuitOn, lumieres: lum, perso: [3.9, 6.95], ...plus });
 }
 planche("maison-temoin-planche.png", [
   compose(P, 0, { model: "n2", variant: "simple" }, { perso: [3.3, 5.3 + DY] }),
@@ -186,3 +234,41 @@ planche("maison-temoin-planche.png", [
   temoin(decoA, true, {}),
   temoin(decoB, false, { canape: "canape_canard", fauteuil: "fauteuil_vert", tapis: "tapis_bleu", lampadaire: "lampadaire_moutarde" }),
 ]);
+
+// 3. LES OMBRES PORTÉES (2026-10-18, `ombresMaison.js`) — le séjour témoin, sans puis avec : de jour, de nuit. Recadré
+// sur le séjour et agrandi ×2 (une ombre de quatre paliers ne se juge pas à 1:1).
+{
+  const [x0, y0] = MA.homePx(2.0, 3.4), [x1, y1] = MA.homePx(5.3, 9.5);
+  const crop = (cv) => {
+    const out = makeCanvas(x1 - x0, y1 - y0);
+    out.ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    return out;
+  };
+  planche("maison-ombres.png", [
+    crop(temoin(decoA, false, {}, { ombres: false })), crop(temoin(decoA, false, {})),
+    crop(temoin(decoA, true, {}, { ombres: false })), crop(temoin(decoA, true, {})),
+  ], 2);
+}
+
+// 4. LE LOT 2c (2026-10-21) — LES OBJETS DE MUR, L'INTERRUPTEUR, LE FEU. Le séjour témoin avec le paysage et le portrait accrochés
+// là où ils tiennent (`maison.homeCanHang` : entre l'interrupteur et le trumeau, à droite du trumeau) : de jour ; la nuit appliques allumées ; la nuit appliques ÉTEINTES (le lampadaire et le guéridon allumés à la main, le feu).
+// Recadré et ×2 comme les ombres. Puis les cinq objets, à 1:1 et ×4 (`maison-muraux.png`).
+{
+  const MURS = [{ u: 1, s: "tableau_paysage", n: 0, x: 50, y: 91 }, { u: 2, s: "tableau_portrait", n: 0, x: 92, y: 91 }];
+  const v = MURS.map((it) => H.homeCanHang(P, { m: [], g: [], w: MURS }, it, it.u));
+  console.log("  pose des objets du témoin :", v.map((r) => (r.ok ? "ok" : r.raison)).join(", "));
+  const [x0, y0] = MA.homePx(2.0, 3.4), [x1, y1] = MA.homePx(5.3, 9.5);
+  const crop = (cv) => {
+    const out = makeCanvas(x1 - x0, y1 - y0);
+    out.ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    return out;
+  };
+  planche("maison-2c.png", [
+    crop(temoin(decoA, false, {}, { murals: MURS })),
+    crop(temoin(decoA, true, {}, { murals: MURS })),
+    crop(temoin(decoA, true, {}, { murals: MURS, appliques: false })),
+  ], 2);
+  const objs = Object.entries(H.HOME_MURAUX).map(([s2, sp]) => { const [w, h] = MA.muralPx(sp); return MA.bakeMural(mk, s2, w, h); });
+  const fond = objs.map((c) => { const b = makeCanvas(c.width + 8, 48); b.ctx.fillStyle = "#e8dcc4"; b.ctx.fillRect(0, 0, b.width, 48); b.ctx.drawImage(c, 4, 4); return b; });
+  planche("maison-muraux.png", fond, 4);
+}

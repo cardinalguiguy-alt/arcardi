@@ -7,32 +7,18 @@
 
 ---
 
-## 1. Le catalogue de la Maison Garfield : mieux le présenter (court terme)
+## 1. Le catalogue de la Maison Garfield : mieux le présenter — FAIT le 2026-10-21, à juger
 
-**Demande (2026-10-06)** : « amélioration de la présentation du catalogue Maison Garfield ». Aucune décision de forme n'est prise.
-
-**Ce qui existe** (la vitrine de Carla, `boutiqueOpen` dans FermeGame.js — `node tools/doc-index.mjs components/ferme/FermeGame.js boutique`) :
-- un panneau modal : le titre, l'or de la caisse commune, **Carla puis Léo** (leur portrait et une réplique tirée du temps, `L.carlaShopLines` /
-  `L.leoUpsellLines`), **quatre onglets** (chapeau, écharpe, tenue, teinte), une ligne « Rien », puis **une ligne par article** : nom, prix,
-  bouton Acheter / Porter / Retirer ;
-- les catalogues : `WARDROBE_HATS` (5), `WARDROBE_SCARVES` (4), `WARDROBE_OUTFITS` (5), `WARDROBE_TINTS` (8) dans fermeConstants.js ;
-- **aucune vignette** (seules les teintes ont une pastille de couleur), **aucun aperçu sur le personnage**, une liste verticale par onglet.
-
-**Pistes, à soumettre par questions (rien n'est choisi)** : un aperçu du personnage qui essaie l'article avant achat ; des vignettes ; une grille
-plutôt qu'une liste ; ce qu'on porte mis en évidence ; un classement par prix.
-
-**Contraintes** : (1) ⚠️ **la vitrine ne débite rien** — elle affiche et envoie une `req`, l'hôte arbitre ; l'or, ce qu'on possède et ce qu'on
-porte viennent TOUJOURS de `sharedRef`, jamais d'une copie locale (commentaire ZIP 427 du panneau) ; (2) la tenue est UNE chaîne
-`"w<chapeau><écharpe><tenue><teinte>"` (`wardrobeLook`, fermeConstants.js ; relue par `parseLookWardrobe`, fermeArt.js) : **un aperçu se fait en
-dessinant `getChar(…, look)` avec la chaîne candidate, sans rien envoyer** ; (3) textes FR et EN (`fermeStrings.js`, `verify-strings`) ;
-(4) tactile : le panneau doit se lire et se toucher sur iPad (voir §3). ⚠️ La teinte d'un vêtement ne touche pas la peau (`WARDROBE_TINTS`) : un
-aperçu qui teinterait la feuille entière peindrait le visage.
-
-**Lien** : l'aperçu servira aussi à la création du personnage (§2).
+La cabine d'essayage (miroir, essais combinés, bustes) : récit en tête du README de la ferme, jugement dans `docs/A-JUGER.md`. Reste ouvert : de
+nouveaux articles (chacun se dessine dans toutes les poses : marche, assis, nage, combinaison de patin, cheval) ; le déménagement de la garde-robe
+au dressing (§6, lot 6) — la vitrine resterait le lieu où l'on ACHÈTE.
 
 ---
 
 ## 2. Création du personnage : teinte de peau et coiffure (décidé, à coder plus tard)
+
+**2026-10-21 — LA COUPE PASSE PAR LE SALON, PAS PAR LA CRÉATION** (sa réponse : « salon seulement ») : les coupes, couleurs et barbes sont dessinées
+(`coiffureArt.js`, journal du README de la ferme) ; le salon et son coiffeur (Froufrou) suivent en deux lots.
 
 **FAIT le 2026-10-16 (teinte seulement, la coupe reste à faire)** : 8 teintes (`C.CHAR_SKIN_TONES`), choix gratuit à la création, puis `C.SKIN_CHANGES_MAX` = 2
 changements, arbitrés par l'hôte (`skinSet`, FermeGame.js) ; état dans `wardrobe[id].skin` / `.skinChanges` (absent = jamais choisi) ; voyage dans `look`
@@ -158,7 +144,7 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
 
 ---
 
-## 6. Les intérieurs des maisons des joueurs (lots 0, 1 et 2a FAITS — à juger en jeu ; 2b, 2c, 2d à faire)
+## 6. Les intérieurs des maisons des joueurs (lots 0, 1, 2a, 2b, 2c FAITS — à juger en jeu ; 2d à faire)
 
 > Demande de Guillaume, 2026-10-16 : « designer l'intérieur des maisons. accès règlementé : sur invitation pour les maisons des autres,
 > et accès libre pour sa maison. […] très poussé. Je veux des plans cohérents avec la taille des maisons, et une ambiance personnalisable.
@@ -243,9 +229,15 @@ deux listes (`verify-maison` §12 refuse l'oubli).
 commande payée par la caisse, carton livré le lendemain devant la porte, rentré avec son propriétaire, déballé au garde-meuble. Avec : les
 appliques murales à la place de l'ampoule pendante, le tuyau du poêle mené au mur, le dormeur dans un lit pivoté qui ferme les yeux. **Prochain : 2c**
 (lumières à allumer — lampes, poêle, appliques —, objets de mur, revente).
+**2026-10-18 (soir) — LES OMBRES PORTÉES, FAIT, à juger** (journal du README de la ferme) : `ombresMaison.js` — fenêtres le jour, appliques et lampes
+la nuit ; les lampes s'allument avec la pièce (l'interrupteur reste au 2c).
 **2026-10-18 — LA PERSPECTIVE, FAIT, à juger** (journal du README de la ferme) : coins de façade raccordés, cloisons coupées en volume (arase claire, ombre au
 sol), lumière de profondeur (pieds et angles des murs, dégradé par pièce), évasement 0,11 → 0,17 (choisi sur maquette en jeu).
 
+**2026-10-21 — LOT 2c FAIT, à juger** (journal du README de la ferme) : interrupteur par pièce (manuel et gardé ; une pièce jamais touchée
+s'allume seule la nuit), lampes à la main, feu de cheminée et de poêle (4 h de jeu, braises), objets de mur (trois tableaux, miroir, horloge ;
+toiles Gemini à venir : `refs/lot-gemini/F-tableaux-maison.md`), revente à moitié prix, vitres et fumée vues de la rue. **Prochain : 2d**
+(Colette : rideaux, teinture).
 **Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
 1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une
    palette en bas montre le GARDE-MEUBLE (ce qu'on possède et qui n'est pas posé).

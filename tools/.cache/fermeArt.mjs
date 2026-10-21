@@ -35,6 +35,8 @@ import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
 import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater, drawWaterSwellBand, contourMargin } from "./eau.mjs";
 import { townNoise, seasonOf } from "./fermeEngine.mjs";
 import { buildFaunaSprites } from "./fauneArt.mjs";
+import { paintWardrobe, paintFroufrou } from "./garderobeArt.mjs";
+import { lookHair, paintHair, paintBeard } from "./coiffureArt.mjs";   // 2026-10-21 — le salon de coiffure   // 2026-10-21 — les vêtements de la Maison Garfield
 import * as PT from "./patin.mjs";   // 2026-10-05 (fin quater) : les couleurs et les lames du matériel de patin (pur)
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures.mjs";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis.mjs";
@@ -18815,7 +18817,12 @@ export function buildSprites() {
   }
   function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
-    const hair = sugarWorker ? MARTIAL_HAIR : HAIR_COLORS[outfit % HAIR_COLORS.length];
+    /* 2026-10-21 — LE SALON : `hl` (coupe, couleur, barbe) se lit dans la chaîne `look` ; absent = la tête d'avant. `legacy` : la coupe
+       d'origine dessinée ci-dessous au pixel près ("f" longs, "m" court), ou null quand c'est une coupe du catalogue (`coiffureArt.js`). */
+    const hl = sugarWorker ? null : lookHair(look);
+    const cutId = hl && hl.c ? C.HAIR_CUTS[hl.c].id : null;
+    const legacy = !cutId ? gender : cutId === "long" ? "f" : cutId === "short" ? "m" : null;
+    const hair = sugarWorker ? MARTIAL_HAIR : hl && hl.d ? C.HAIR_DYES[hl.d].col : HAIR_COLORS[outfit % HAIR_COLORS.length];
     const tone = !sugarWorker && lookSkin(look) ? C.CHAR_SKIN_TONES[lookSkin(look)] : null;
     const skin = sugarWorker ? MARTIAL_SKIN : tone ? tone.main : SKIN;
     const skinD = sugarWorker ? MARTIAL_SKIN_D : tone ? tone.shade : SKIN_D;
@@ -18846,14 +18853,15 @@ export function buildSprites() {
     }
     P(g, x + 4, 2 + bob, 8, 8, skin);
     P(g, x + 4, 9 + bob, 8, 1, skinD);
-    if (gender === "f") {
+    if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step });
+    else if (legacy === "f") {
       P(g, x + 3, 1 + bob, 10, 3, hair);
       P(g, x + 3, 3 + bob, 2, 8, hair); P(g, x + 11, 3 + bob, 2, 8, hair);
       P(g, x + 3, 10 + bob, 2, 3, hair); P(g, x + 11, 10 + bob, 2, 3, hair);
       if (dir === 1) P(g, x + 4, 3 + bob, 8, 6, hair);
       else P(g, x + 4, 1 + bob, 8, 2, hair);
       P(g, x + 12, 4 + bob, 1, 2, "#e85a8a");
-    } else {
+    } else if (legacy === "m") {
       P(g, x + 3, 1 + bob, 10, 3, hair);
       P(g, x + 3, 3 + bob, 1, 3, hair); P(g, x + 12, 3 + bob, 1, 3, hair);
       if (dir === 1) P(g, x + 4, 3 + bob, 8, 4, hair);
@@ -18868,10 +18876,11 @@ export function buildSprites() {
       P(g, x + 6, 8 + bob, 4, 1, mouth);
       if (gender === "f") { P(g, x + 5, 7 + bob, 1, 1, "#eeddaa"); P(g, x + 10, 7 + bob, 1, 1, "#f0a8a0"); }
     } else if (dir === 2) {
-      P(g, x + 4, 3 + bob, 5, 5, hair);
+      if (legacy) P(g, x + 4, 3 + bob, 5, 5, hair);
       P(g, x + 10, 5 + bob, 1, 2, "#3a2a1e");
       P(g, x + 11, 7 + bob, 1, 1, mouth);
     }
+    if (hl && hl.b) paintBeard(g, P, x, { beard: hl.b, col: hair, dir, bob });
     // Casquette de Soan (chantier 2026-07, révisée : "le chapeau doit être
     // son skin, vraiment faire partie de sa tête, et tourner avec lui quand
     // il marche") : avant, un simple emoji 🧢 flottant, dessiné par-dessus
@@ -19118,6 +19127,8 @@ export function buildSprites() {
     // portée devant lui qui lui masque le bas de la figure — c'est elle qui
     // dit sa fonction en un coup d'œil, à 16 pixels de haut. Overlay sur le
     // skin masculin, mêmes coordonnées de base que Carla ci-dessus.
+    // 2026-10-21 — Froufrou, le coiffeur (`garderobeArt.js`) : fuchsia et léopard, sur le fermier de base.
+    if (look === "froufrou" && !beeSuit) paintFroufrou(g, P, x, { dir, step, bob, skin });
     if (look === "leo" && !beeSuit) {
       const SH = "#efe9dc", SH_D = shade(SH);
       const VEST = "#6a6a76", VEST_D = shade(VEST);
@@ -19330,105 +19341,14 @@ export function buildSprites() {
         if (dir === 2) P(g, x + 7 + step, 15 + bob, 2, 1, skin);
         else { P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin); }
       }
-      // ---- 2. LA TENUE. Chacune est une SILHOUETTE, pas une texture : à
-      // 16 px de haut, ce qu'on reconnaît est le contour (une robe s'évase,
-      // une cape tombe droit, un tailleur est étroit et net).
-      const gar = wd.outfit ? C.WARDROBE_OUTFITS[wd.outfit - 1] : null;
-      if (gar) {
-        const GC = base || "#3a3550", GD = shade(GC), GL = tint(GC);
-        if (gar.id === "gown") {
-          // Robe du soir : le buste reste étroit, la jupe s'évase jusqu'aux
-          // pieds et les efface — une robe longue n'a pas de chevilles.
-          P(g, x + 4, 13 + bob, 8, 5, GC);
-          P(g, x + 3, 17 + bob, 10, 4, GC);
-          P(g, x + 2, 20 + bob, 12, 4 - bob, GC);
-          P(g, x + 2, 23 - bob, 12, 1, GD);
-          P(g, x + 4, 13 + bob, 8, 1, GL);
-        } else if (gar.id === "cape") {
-          // Cape : deux pans droits qui tombent des épaules, col relevé.
-          P(g, x + 2, 10 + bob, 12, 11, GC);
-          P(g, x + 2, 10 + bob, 12, 1, GL);
-          P(g, x + 2, 20 + bob, 12, 1, GD);
-          P(g, x + 7, 11 + bob, 2, 10, GD);             // ouverture au milieu
-          P(g, x + 5, 8 + bob, 6, 2, GD);               // col relevé
-        } else if (gar.id === "suit") {
-          // Tailleur : veste courte, revers clairs, taille marquée.
-          P(g, x + 4, 10 + bob, 8, 7, GC);
-          P(g, x + 4, 10 + bob, 8, 1, GL);
-          P(g, x + 6, 10 + bob, 1, 5, GL); P(g, x + 9, 10 + bob, 1, 5, GL);
-          P(g, x + 4, 15 + bob, 8, 1, GD);
-          if (dir === 0) P(g, x + 7, 11 + bob, 2, 3, "#efe9dc");  // chemise
-        } else if (gar.id === "poncho") {
-          // Poncho : un trapèze qui déborde des épaules, franges en bas.
-          P(g, x + 2, 10 + bob, 12, 8, GC);
-          P(g, x + 2, 10 + bob, 12, 1, GL);
-          P(g, x + 2, 13 + bob, 12, 1, GD);
-          for (let k = 0; k < 6; k++) P(g, x + 2 + k * 2, 18 + bob, 1, 2, GD);
-        } else {
-          // Tutu : une jupe TRÈS large sur deux rangées, jambes bien dehors.
-          P(g, x + 1, 15 + bob, 14, 3, GL);
-          P(g, x + 2, 17 + bob, 12, 2, GC);
-          P(g, x + 3, 13 + bob, 10, 2, GC);
-          P(g, x + 1, 15 + bob, 14, 1, "rgba(255,255,255,0.5)");
-        }
-      }
-      // ---- 3. L'ÉCHARPE, autour du cou, par-dessus la tenue. Le PAN qui
-      // pend est ce qui la distingue d'un col : sans lui, ce n'est qu'une
-      // ligne de couleur sous le menton.
-      const sc = wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1] : null;
-      if (sc) {
-        const SCC = sc.id === "silk" ? (base || "#d94f6e") : sc.id === "feather" ? "#f2e6f2"
-                  : sc.id === "fur" ? "#c9b79a" : (base || "#8a4a3a");
-        const SCD = shade(SCC);
-        P(g, x + 4, 9 + bob, 8, 2, SCC);
-        P(g, x + 4, 10 + bob, 8, 1, SCD);
-        if (sc.id === "feather") { for (let k = 0; k < 5; k++) P(g, x + 4 + k * 2, 8 + bob, 1, 1, "#ffffff"); }
-        if (sc.id === "fur") { P(g, x + 3, 9 + bob, 10, 1, tint(SCC)); P(g, x + 3, 10 + bob, 1, 2, SCC); P(g, x + 12, 10 + bob, 1, 2, SCC); }
-        if (dir !== 1) { P(g, x + 10, 11 + bob, 2, 4, SCC); P(g, x + 10, 14 + bob, 2, 1, SCD); }  // le pan
-      }
-      // ---- 4. LE CHAPEAU, tout en haut, par-dessus tout — y compris la
-      // casquette générique, qui n'a plus à être vue si on porte un chapeau.
-      const ht = wd.hat ? C.WARDROBE_HATS[wd.hat - 1] : null;
-      if (ht) {
-        if (ht.id === "beret") {
-          const R = base || "#b4232c";
-          P(g, x + 3, 1 + bob, 9, 3, R); P(g, x + 3, 1 + bob, 9, 1, tint(R)); P(g, x + 3, 3 + bob, 9, 1, shade(R));
-          P(g, x + 7, 0 + bob, 1, 1, shade(R));
-        } else if (ht.id === "capeline") {
-          // Capeline : le BORD est le personnage. Il déborde de deux colonnes
-          // de chaque côté du crâne, sinon c'est un bonnet de paille.
-          const S = base || "#e0c274";
-          P(g, x + 1, 3 + bob, 14, 2, S); P(g, x + 1, 3 + bob, 14, 1, tint(S)); P(g, x + 1, 4 + bob, 14, 1, shade(S));
-          P(g, x + 4, 0 + bob, 8, 3, S); P(g, x + 4, 2 + bob, 8, 1, "#8a3c4a");   // ruban
-        } else if (ht.id === "tophat") {
-          /* ⚠️ LE HAUT-DE-FORME NE PEUT PAS DÉPASSER DU CADRE. Une case de
-             feuille fait 16×24 et le personnage l'occupe entièrement : tout
-             pixel posé au-dessus de y=0 est SILENCIEUSEMENT découpé par le
-             canevas (les frames sont dessinées côte à côte, translatées par
-             `dir * 24`). Premier jet : calotte de y=-4 à y=3 — un chapeau
-             décapité, et rien pour le signaler. La calotte tient donc dans les
-             quatre pixels du haut, le bord juste dessous ; ce qui est perdu en
-             hauteur est repris en LARGEUR de bord, qui est de toute façon ce
-             qui fait lire un haut-de-forme vu de dessus. */
-          const K = base || "#1c1a22";
-          P(g, x + 2, 4 + bob, 12, 2, K); P(g, x + 2, 4 + bob, 12, 1, tint(K)); // bord large
-          P(g, x + 4, 0 + bob, 8, 4, K); P(g, x + 4, 0 + bob, 8, 1, tint(K));   // calotte
-          P(g, x + 4, 3 + bob, 8, 1, "#d9b04a");                                // ganse dorée
-        } else if (ht.id === "beanie") {
-          const K = base || "#5a6a8a";
-          P(g, x + 3, 1 + bob, 10, 4, K);
-          for (let k = 0; k < 5; k++) P(g, x + 3 + k * 2, 1 + bob, 1, 4, shade(K));  // côtes
-          P(g, x + 3, 4 + bob, 10, 1, tint(K));
-          P(g, x + 7, 0 + bob, 2, 1, tint(K));                  // pompon
-        } else {
-          // Diadème : trois pointes et un éclat. Le plus petit article de la
-          // vitrine, et le plus cher — c'est aussi une blague.
-          const O = "#e8c860";
-          P(g, x + 4, 2 + bob, 8, 1, O);
-          P(g, x + 5, 1 + bob, 1, 1, O); P(g, x + 8, 0 + bob, 1, 2, O); P(g, x + 10, 1 + bob, 1, 1, O);
-          P(g, x + 8, 0 + bob, 1, 1, "#ffffff");
-        }
-      }
+      // ---- 2. LA TENUE, L'ÉCHARPE, LE CHAPEAU : `garderobeArt.js` (2026-10-21 — redessinés : drapé éclairé, plis, matières, trois
+      // vues, au pas ; le zip 427 les posait en aplats, les mêmes dans les trois vues).
+      paintWardrobe(g, P, x, { gender, dir, step, bob, skin, skinD, hair, wd, hairOver: () => {
+        // ce qui retombe sur les épaules repasse devant le col (les mèches d'origine, une coupe du catalogue, la barbe fournie)
+        if (legacy === "f") { P(g, x + 3, 9 + bob, 2, 4, hair); P(g, x + 11, 9 + bob, 2, 4, hair); }
+        else if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step, minY: 9 });
+        if (hl && hl.b) paintBeard(g, P, x, { beard: hl.b, col: hair, dir, bob, minY: 9 });
+      } });
     }
   }
   /* ⚠️ UNE SEULE FONCTION RELIT LA CHAÎNE, ET UNE SEULE LA FABRIQUE
@@ -19442,7 +19362,7 @@ export function buildSprites() {
     return n > 0 && n < C.CHAR_SKIN_TONES.length ? n : 0;
   }
   function parseWardrobeLook(look) {
-    if (typeof look === "string" && look.indexOf("~") >= 0) look = look.slice(0, look.indexOf("~"));
+    if (typeof look === "string") { const cut = look.search(/[~^]/); if (cut >= 0) look = look.slice(0, cut); }   // teinte (~) et coiffure (^) suivent
     if (typeof look !== "string" || look.length !== 5 || look[0] !== "w") return null;
     const d = (k) => {
       const n = look.charCodeAt(k) - 48;
@@ -22592,6 +22512,27 @@ house: house(),
     const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "") + (sugarWorker ? ":sugarWorker" : "") + (look ? ":" + look : "");
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker, look || null);
     return S.chars[key];
+  };
+  /* 2026-10-21 — UNE IMAGE SEULE du personnage (direction, pas de marche), peinte à l'origine d'un canevas neuf : pour les bancs, dont le faux
+     canevas ignore `translate` (la feuille de `charSheet` y superposerait ses trois rangées). `tools/render-garderobe.mjs`. */
+  S.charFrame = (gender, outfit, dir, frame, look) => {
+    const [c, g] = cv(16, 24);
+    drawCharFrame(g, 0, gender, outfit, dir, frame, false, false, false, false, false, false, look || null);
+    return c;
+  };
+  /* 2026-10-21 — LA CABINE D'ESSAYAGE DE LA MAISON GARFIELD : les feuilles des tenues ESSAYÉES (miroir et vignettes) vivent dans un cache À PART,
+     borné. Dans `S.chars` (jamais vidé), chaque combinaison regardée resterait une feuille pour toute la séance : on feuillette vite, et WebKit sur
+     iPad plafonne les canevas sans rien dire. Une tenue réellement portée par quelqu'un est déjà dans `S.chars` : on la reprend là. */
+  const FIT_MAX = 48, fitCache = new Map();
+  S.getCharFitting = (gender, outfit, look) => {
+    const key = gender + ":" + outfit + (look ? ":" + look : "");
+    if (S.chars[key]) return S.chars[key];
+    let c = fitCache.get(key);
+    if (c) { fitCache.delete(key); fitCache.set(key, c); return c; }   // la plus récente en dernier
+    c = charSheet(gender, outfit, false, false, false, false, false, false, look || null);
+    fitCache.set(key, c);
+    if (fitCache.size > FIT_MAX) fitCache.delete(fitCache.keys().next().value);
+    return c;
   };
   /* 2026-09-28 (phase 12a) — les arbres d'hiver, fabriqués à leur premier affichage. */
   S.townTreesWinter = makeWinterTrees();
