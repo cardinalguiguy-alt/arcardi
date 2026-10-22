@@ -11,19 +11,19 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-21 — CHEZ SOI, LOT 2c (LUMIÈRES, FEU, OBJETS DE MUR, REVENTE) ; RIEN DE COMMITÉ depuis le 2026-10-18 (ombres, Garfield, salon, Froufrou)
+### 2026-10-22 — CHEZ SOI, LOTS 2d (COLETTE) ET 4 (LA SONNETTE) ; NI L'UN NI L'AUTRE N'EST COMMITÉ
 
-Interrupteur par pièce (`f.inters`, manuel et gardé, `l`), lampes à la main (`a`), feu de cheminée et de poêle (`fe`, `f` : heure de jeu,
-4 h + braises), objets de mur (`HOME_MURAUX`, `w`, toiles provisoires), revente à moitié prix, vitres et fumée vues de la rue. Vu en jeu,
-`verify-maison` 198/198. **Supabase : rien.** Pas vu : vente confirmée, combles, deux clients, iPad.
-⚠️ `.panel` plafonne à 480 px : un panneau plus large lève `max-width` ET `width`. ⚠️ Le harnais `app/audit-tmp` vise des crochets React par NUMÉRO :
-tout `useState` ajouté au composant les décale (passer par une ref, comme `sellAsk` dans `homeDecoRef`). ⚠️ Ses captures (`__cap`) partent dans le
-dossier d'une ancienne session (`app/api/audit-cap`). ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
+2d : teinture par PASSES Blender (`tools/blender/rendre_teintes.py`, `maisonArt.teindrePx`), page « Chez Colette », rideaux tirés (E).
+4 : sonnette (partout, 30 s, une visite), double des clés au crochet de l'entrée, s'asseoir, gestes d'invité vérifiés par l'hôte À LA POSITION,
+Raccompagner — **vu à deux clients** (`/audit-duo`). `verify-maison` 225/225. **Supabase : rien.** Pas vu : propriétaire hors ligne, iPad.
+⚠️ Le harnais `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance à lui : tout crochet neuf se déclare APRÈS lui.
+⚠️ Une fonction de MODULE appelée par la boucle de rendu ne change pas au rechargement à chaud : recharger la page avant de juger.
+⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE LOT 2c, PUIS LE LOT 2d (Colette : rideaux, teinture des tissus — `docs/PROJETS.md` §6)
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER LES LOTS 2c, 2d ET 4 (`docs/A-JUGER.md`, trois blocs en tête), PUIS LE LOT 5 (les rares, `docs/PROJETS.md` §6)
 
-D'abord ses verdicts (`docs/A-JUGER.md`, bloc 2c) et la taille des toiles Gemini (`refs/lot-gemini/F-tableaux-maison.md`). Restes du salon, à
-proposer sans les faire d'office : la façade selon l'étape, rejouer la visite de Froufrou et « proposer d'emménager » (bloc Froufrou).
+En attente aussi : la taille des toiles Gemini (`refs/lot-gemini/F-tableaux-maison.md`). À proposer sans les faire d'office : Marcel (lot 3), le
+vantail de la porte de la cuisine peint sous l'interrupteur de l'entrée, la façade du salon selon l'étape, rejouer la visite de Froufrou.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -81,7 +81,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Skatepark** (relief, collision, dessin, montures, corps des riders, figures, grinds, chutes, commandes clavier/tactiles et « ? », cabane et échange, sons) | `components/ferme/skatepark.js`, `monture.js`, `skateparkArt.js`, `montureArt.js`, `sonPark.js`, `SkateHelp.js` ; `rideStepMe`, `rideDrawOf` dans FermeGame.js ; `resolveRentRide` dans fermeEngine.js ; README ferme (journaux 2026-10-11, 2026-10-14 et 2026-10-15 suite) | `verify-skatepark`, `verify-monture`, `render-skatepark` ; les poses : `app/audit-riders` (navigateur) |
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
-| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; ombres portées : `components/ferme/ombresMaison.js` ; interrupteurs, lampes, feu, objets de mur, revente : section « LOT 2c » de `maison.js`, `homeUseTarget` ; à venir : Colette, visites, rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
+| **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; ombres portées : `components/ferme/ombresMaison.js` ; interrupteurs, lampes, feu, objets de mur, revente : section « LOT 2c » de `maison.js`, `homeUseTarget` ; rideaux et teinture de Colette : section « LOT 2d », passes `tools/blender/rendre_teintes.py`, `maisonArt.teindrePx` ; sonnette, doubles, s'asseoir : « LOT 4 », `homeVisitReq` ; à venir : rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
 | **Garde-robe** (cabine Garfield, vêtements : `components/ferme/garderobeArt.js`, `render-garderobe` ; coupes du salon : `components/ferme/coiffureArt.js`, `render-coiffure`), création du personnage (coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
 <!-- routeur:fin -->
 

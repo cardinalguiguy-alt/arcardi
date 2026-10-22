@@ -1113,6 +1113,42 @@ export function drawCatalogue(ctx, x, y, w, h) {
    ⚠️ LA VOLÉE se trie à son bout NORD (`yHaut`) : qui marche dessus a les pieds
    plus au sud, il est donc dessiné après elle ; qui se tient sur le palier,
    au nord, passe derrière son haut — c'est ce que voit la caméra. */
+/* 2026-10-22 (lot 2d) — LES RIDEAUX D'UNE FACE, ÉVASÉS : peints à plat sur un calque de la taille de la face (plus une
+   marge de chaque côté : la tringle déborde de l'embrasure, et un canevas coupe en silence ce qui dépasse — noyau §4), puis
+   rangée par rangée avec LA MÊME correspondance que `bakeHomeFace`. Gardé par état (fenêtre, tirés, teintes) dans
+   `bake.rideauFl`. Rend { c, dx } ou null. */
+export const RIDEAU_RECUL = 0.18;   // les pans de façade tombent à 0,18 case (21 cm) devant le nu intérieur du mur (devant les radiateurs)
+/* ⚠️ VU À LA PLANCHE (2026-10-22) : coupés à 35 cm comme le mur, les pans ne dépassaient de l'arase (et de la tablette
+   d'appui) que de 4 px — une frise rouge, pas des rideaux. Le tissu se coupe plus haut que la pierre : 60 cm, l'emprise
+   d'un meuble bas devant la façade (le personnage en fait 85) ; la tranche plissée dit toujours que c'est une coupe. */
+export const RIDEAU_COUPE = pxOfM(0.60);
+function flaredRideaux(mk, bake, f, list, plan) {
+  const memo = bake.rideauFl || (bake.rideauFl = new Map());
+  const key = list.map((r) => r.w.k + (r.clos ? "f" : "o") + r.a + (r.b || "")).join("|");
+  if (memo.has(key)) return memo.get(key);
+  if (memo.size > 12) memo.clear();
+  const M = 14, W = bake.W, Hh = bake.H, xc = plan.w / 2;
+  const src = mk(W + 2 * M, Hh), sg = src.getContext("2d");
+  sg.imageSmoothingEnabled = false;
+  for (const r of list) {
+    const x0 = Math.round((r.w.a - f.x0) * MPX), x1 = Math.round((r.w.b - f.x0) * MPX);
+    paintRideau(sg, M + x0, Hh, x1 - x0, { fenetre: r.w.fenetre, court: r.w.court, clos: r.clos, a: r.a, b: r.b });
+  }
+  const rows = [];
+  let mn = Infinity, mx = -Infinity;
+  for (let ry = 0; ry < Hh; ry++) {
+    const z = Math.min(bake.wallPx, Hh - ry);
+    const a = Math.round(flarePx(f.x0, z, xc)), b = W + Math.round(flarePx(f.x1, z, xc)), sc = (b - a) / W;
+    const l = Math.round(a - M * sc), rr = Math.round(b + M * sc);
+    rows.push([l, rr]); mn = Math.min(mn, l); mx = Math.max(mx, rr);
+  }
+  const c = mk(Math.max(1, mx - mn), Hh), cg = c.getContext("2d");
+  cg.imageSmoothingEnabled = false;
+  rows.forEach(([l, rr], ry) => cg.drawImage(src, 0, ry, W + 2 * M, 1, l - mn, ry, Math.max(1, rr - l), 1));
+  const e = { c, dx: mn };
+  memo.set(key, e);
+  return e;
+}
 /* LE VERRE ÉVASÉ d'une fenêtre d'une face : le verre à plat (`paintGlass`, pour ce ciel), puis rangée par rangée avec
    LA MÊME correspondance que la face cuite (`bakeHomeFace` : la rangée r, à la hauteur z, s'étire de `a` à `b`). Gardé
    par ciel (arrondi à 1/24 par canal) dans `bake.glassFl`. Rend { c, dx } (dx : depuis le bord gauche de la face) ou
@@ -1166,6 +1202,14 @@ export function homeDrawItems(plan, L, o) {
         const z = bake.H - (g[1] + g[3] / 2), d = Math.round(flarePx(f.x0 + g[0] / MPX, z, xc));
         paintGlass(ctx, [px + g[0] + d, py - bake.H + g[1], g[2], g[3]], o.ciel);
       }
+      /* 2026-10-22 (lot 2d) — LES RIDEAUX DES FENÊTRES DE CETTE FACE (le mur du fond : cuisine, bains), peints sur une copie
+         de la face puis ÉVASÉS COMME ELLE (`flaredRideaux`) : un rideau droit dans une embrasure qui penche se verrait. Avant
+         les ombres portées : ce qui se tient devant le mur ombre aussi ses rideaux. */
+      if (top === 0 && o.rideaux && o.mk) {
+        const ici = o.rideaux.filter((r) => r.w.side === "N" && Math.abs(r.w.y - f.y) < 0.05 && r.w.a >= f.x0 - 0.01 && r.w.b <= f.x1 + 0.01);
+        const fl = ici.length ? flaredRideaux(o.mk, bake, f, ici, plan) : null;
+        if (fl) ctx.drawImage(fl.c, px + fl.dx, py - bake.H);
+      }
       /* 2026-10-18 — L'OMBRE PORTÉE SUR LE MUR (`ombresMaison.js`) : ce qui se tient devant lui. Cuite à sa place évasée ;
          le mur à demi descendu n'en montre que ses rangées encore debout (les mêmes rangées, aux mêmes places). */
       if (o.ombresMur) for (const s of o.ombresMur(f)) {
@@ -1187,6 +1231,12 @@ export function homeDrawItems(plan, L, o) {
         ctx.drawImage(im, X, Y);
         if (/^horloge/.test(mu.s) && o.tmin != null) paintClockHands(ctx, X, Y, mu.w, o.tmin);
       }
+      // 2026-10-22 (lot 4) — le crochet à clés de l'entrée, à sa place évasée (le glissement de son milieu, comme un objet de mur)
+      if (top === 0 && o.crochet && o.crochet.fid === f.id) {
+        const c = o.crochet, w = pxOfM(c.w), h = pxOfM(c.h), zb = pxOfM(c.z), xl = c.lx - c.w / 2 / CASE_M;
+        const X = px + Math.round((xl - f.x0) * MPX + flarePx(c.lx, zb + h / 2, xc));
+        paintCrochet(ctx, X, py - zb - h, w, h, c.left);
+      }
       if (top === 0 && o.allumees && o.allumees.has(f.room)) for (const ap of homeAppliques(plan, L, f)) {
         const zp = pxOfM(ap.z);
         paintApplique(ctx, px + Math.round((ap.lx - f.x0) * MPX + flarePx(ap.lx, zp, xc)), py, ap.z, true);
@@ -1200,6 +1250,17 @@ export function homeDrawItems(plan, L, o) {
         if (k > 0) paintWallTop(ctx, a, py - v - bake.capPx, b - a, bake.capPx);
         if (k < 1) { ctx.globalAlpha = 1 - k; paintCutTop(ctx, a, py - v - bake.capPx, b - a, bake.capPx, f.ext); ctx.globalAlpha = 1; }
       }
+    } });
+  }
+  /* 2026-10-22 (lot 2d) — LES RIDEAUX DE LA FAÇADE, COUPÉS AVEC ELLE : leurs pans tombent au sol 16 cm devant le nu
+     intérieur (devant les radiateurs), coupés à la hauteur du mur ; leur tranche dépasse de l'arase. Triés à leur pied,
+     donc derrière la façade, devant ce qui est plus au nord. */
+  for (const r of o.rideaux || []) {
+    if (r.w.side !== "S" || r.w.court) continue;
+    const yF = r.w.y - RIDEAU_RECUL;
+    out.push({ key: yF, draw: (ctx) => {
+      const [pa, py] = homePx(r.w.a, yF), [pb] = homePx(r.w.b, yF);
+      paintRideauCoupe(ctx, pa, py, pb - pa, RIDEAU_COUPE, r);
     } });
   }
   for (const lw of o.lows) {
@@ -1221,7 +1282,7 @@ export function homeDrawItems(plan, L, o) {
        posée dessus (2026-10-16). */
     const plat = HOME_FLAT.test(m.sprite);
     out.push({ key: plat ? -1e6 + m.ly : m.ly + fd, draw: (ctx) => {
-      const im = o.img(m.sprite + "_" + m.o);
+      const im = o.img(m.sprite + "_" + m.o, m.t);   // 2026-10-22 (lot 2d) : `t`, la teinture — le sprite recoloré (`teindrePx`)
       if (!im) return;
       const [sx, sy] = homePx(m.lx, m.ly);
       if (!plat) paintContactShadow(ctx, sx, sy, Math.round(meta.fw / CASE_M * MPX), Math.round(fd * MPX), 0.22);
@@ -1510,3 +1571,222 @@ export function bakeMural(mk, s, w, h, toile = null) {
 }
 /* La taille peinte d'un objet de mur (px des images cuites), depuis ses cotes en mètres (`maison.HOME_MURAUX`). */
 export const muralPx = (sp) => [pxOfM(sp.w), pxOfM(sp.h)];
+
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ LOT 2d (2026-10-22) — LA TEINTURE ET LES RIDEAUX DE COLETTE (règles : `maison.js`, « LOT 2d »).
+   ╚════════════════════════════════════════════════════════════════════════
+   1. LA TEINTURE D'UN SPRITE BLENDER (`teindrePx`). La matière toon de `studio.py` rend
+        couleur_lin × M(x)  puis  écran(·, reflet(x))
+      et ni M (le palier, l'occlusion, le froid des ombres) ni le reflet ne dépendent de la couleur. Les passes
+      (`public/maison/teinte/<meuble>_<O>_<a|b|g>.png`, `tools/blender/rendre_teintes.py`) donnent M pour la zone a (le
+      tissu) et b (l'accent), et le reflet seul ; on recompose EN LINÉAIRE ce que Blender aurait rendu. Mesuré
+      (`verify-maison`) : le canapé recoloré « canard / rouille » contre le vrai rendu `canape_canard` — au plus 15/255
+      sur le passepoil (un ton assombri en sRGB chez Blender, en linéaire ici), ±1 ailleurs (le grain du rendu).
+      ⚠️ Un pixel de passe n'est jamais tout à fait noir (le grain d'EEVEE rend 1/255) : le tissu se reconnaît au-dessus
+      de `TEINTE_SEUIL` (le plus sombre palier de tissu, au fond d'un pli, en vaut encore ~70).
+   2. LES RIDEAUX, peints au canevas (une baie a la largeur que lui donne sa façade : aucun rendu fixe n'y tiendrait),
+      MAIS AUX PALIERS DE LA MATIÈRE TOON (`toonTon` : les mêmes valeurs perçues 1 / 0,87 / 0,75 / 0,62, le même froid des
+      ombres que `studio.toon_group`) — c'est ce qui les fait tenir à côté des meubles Blender. La lumière vient d'en haut
+      à gauche : chaque pli est clair à gauche, sombre à droite. Ouverts et longs, ils sont retenus par une EMBRASSE
+      (dans la teinte d'accent) ; fermés, les deux pans se rejoignent au milieu. */
+export const TEINTE_SEUIL = 30;   // somme r + g + b d'un pixel de passe au-dessus de laquelle c'est du tissu
+const LIN = new Float32Array(256);
+for (let i = 0; i < 256; i++) { const c = i / 255; LIN[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
+const SRGB = new Uint8Array(4097);
+for (let i = 0; i <= 4096; i++) { const v = i / 4096; SRGB[i] = Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055)); }
+const enc = (v) => SRGB[Math.max(0, Math.min(4096, Math.round(v * 4096)))];
+export const hexLin = (h) => [1, 3, 5].map((i) => LIN[parseInt(h.slice(i, i + 2), 16)]);
+/* Recolore `base` (RGBA, Uint8ClampedArray) : `pa`, `pb` (ou null), `pg` les passes de même taille ; `ca`, `cb` les
+   teintes (« #rrggbb » ; `cb` null : l'accent garde sa couleur). Rend un nouveau tableau. */
+export function teindrePx(base, pa, pb, pg, ca, cb) {
+  const out = new Uint8ClampedArray(base), A = hexLin(ca), B = cb ? hexLin(cb) : null;
+  for (let i = 0; i < out.length; i += 4) {
+    if (!base[i + 3]) continue;
+    let P = null, c = null;
+    if (pa[i] + pa[i + 1] + pa[i + 2] > TEINTE_SEUIL) { P = pa; c = A; }
+    else if (B && pb && pb[i] + pb[i + 1] + pb[i + 2] > TEINTE_SEUIL) { P = pb; c = B; }
+    if (!P) continue;
+    for (let k = 0; k < 3; k++) out[i + k] = enc(1 - (1 - LIN[pg[i + k]]) * (1 - c[k] * LIN[P[i + k]]));
+  }
+  return out;
+}
+/* Le ton d'une couleur au palier perçu `v` de la matière toon (celle des meubles) : le palier passé en linéaire, puis le
+   froid des ombres (`studio.SHADOW_TINT`, mêlé d'autant plus que le palier est bas). Rend « rgb(…) ». */
+const SHADOW_TINT = [0.76, 0.74, 0.95];
+const TON_MEMO = new Map();
+export function toonTon(hex, v) {
+  const key = hex + v;
+  if (TON_MEMO.has(key)) return TON_MEMO.get(key);
+  const c = hexLin(hex), l = v ** 2.2, f = Math.max(0, Math.min(1, (l - 0.22) / 0.78));
+  const s = "rgb(" + [0, 1, 2].map((k) => enc(c[k] * l * (SHADOW_TINT[k] * (1 - f) + f))).join(",") + ")";
+  TON_MEMO.set(key, s);
+  return s;
+}
+const DOUBLURE = "#efe6d4";   // la doublure crème (la coupe, le revers des bords)
+/* Le palier d'un point de pli (`ph` dans [0, 1[, de gauche à droite d'un pli ; `creux` : un rideau tassé a des plis
+   profonds, qui descendent jusqu'au palier d'ombre). */
+function palierPli(ph, creux) {
+  if (creux) return ph < 0.28 ? 1.0 : ph < 0.52 ? 0.87 : ph < 0.76 ? 0.75 : 0.62;
+  return ph < 0.36 ? 1.0 : ph < 0.72 ? 0.87 : 0.75;
+}
+/* UN PAN, rangée par rangée. `xo` : son bord extérieur (contre le mur) ; `dir` +1 il s'étend vers la droite (le pan de
+   gauche), −1 vers la gauche ; `largeur(y)` : sa largeur à la rangée y ; `nf` : son nombre de plis (le même tissu,
+   qu'il soit tassé ou tiré) ; `creux` ; `y0`, `y1` : ses rangées. */
+function paintPan(ctx, xo, dir, y0, y1, largeur, nf, creux, a) {
+  for (let y = y0; y < y1; y++) {
+    const w = Math.max(1, Math.round(largeur(y))), xl = dir > 0 ? xo : xo - w;
+    let prev = null, run = 0, x0 = xl;
+    for (let i = 0; i <= w; i++) {
+      // le bord intérieur (vers le milieu de la baie) : un trait d'ombre, le revers du tissu
+      const v = i === w ? null : (dir > 0 ? i === w - 1 : i === 0) ? 0.62 : palierPli((i / w * nf) % 1, creux);
+      if (v === prev) { run++; continue; }
+      if (prev != null) rect(ctx, x0, y, run, 1, toonTon(a, prev));
+      prev = v; run = 1; x0 = xl + i;
+    }
+  }
+}
+/* LES RIDEAUX D'UNE BAIE, en px : `x0`, `w` la baie (l'embrasure) ; `yRod` la tringle ; `yBot` le bas des pans ; `yTie`
+   (ou null) la hauteur de l'embrasse ; `clos` ; `a` le tissu, `b` l'accent (l'embrasse) ; `deb` le débord sur le mur. */
+export function paintRideauPx(ctx, o) {
+  const { x0, w, yRod, yBot, clos, a } = o, deb = o.deb == null ? 6 : o.deb;
+  /* ⚠️ VU À LA PLANCHE (2026-10-22) : à un pli tous les 5 px, un rideau TIRÉ, évasé avec son mur (`flaredRideaux`, chaque
+     rangée étirée d'un facteur un peu différent), scintillait en hachures. Un pli tous les 7 px : des bandes de 2 à 3 px,
+     que l'étirement élargit sans les briser. Le même nombre de plis tassé, ouvert, donne des plis profonds de 2 à 3 px. */
+  const pwClos = Math.ceil(w / 2) + deb, nf = Math.max(2, Math.round(pwClos / 7));
+  const pw = clos ? pwClos : Math.round(w * 0.20) + deb, yT = yRod + 2, H = yBot - yT;
+  const tie = !clos && o.yTie != null && o.yTie > yT + 4 && o.yTie < yBot - 4 ? o.yTie : null;
+  // ouverts avec embrasse : pleins en haut, pincés à l'embrasse, évasés au pied ; sinon droits
+  const largeur = (y) => {
+    if (!tie) return pw;
+    if (y <= tie) return pw * (1 - 0.45 * (y - yT) / (tie - yT));
+    const t = (y - tie) / Math.max(1, yBot - tie);
+    return pw * (0.55 + 0.30 * Math.sqrt(t));
+  };
+  // l'ombre portée sur le mur (la lumière vient de la gauche) : 2 px à droite de chaque pan
+  ctx.globalAlpha = 0.16;
+  for (let y = yT; y < yBot; y += 1) {
+    const L = Math.round(largeur(y));
+    rect(ctx, x0 - deb + L, y + 1, 2, 1, "#20160f");
+    rect(ctx, x0 + w + deb, y + 1, 2, 1, "#20160f");
+  }
+  ctx.globalAlpha = 1;
+  paintPan(ctx, x0 - deb, +1, yT, yBot, largeur, nf, !clos, a);
+  paintPan(ctx, x0 + w + deb, -1, yT, yBot, largeur, nf, !clos, a);
+  // la tête plissée : une bande claire, un pincement sombre à chaque pli
+  for (const [xo, dir] of [[x0 - deb, 1], [x0 + w + deb, -1]]) {
+    const L = Math.round(largeur(yT)), xl = dir > 0 ? xo : xo - L;
+    rect(ctx, xl, yT, L, 3, toonTon(a, 1.0));
+    for (let k = 0; k < nf; k++) rect(ctx, xl + Math.round((k + 0.75) * L / nf), yT, 1, 3, toonTon(a, 0.75));
+    // l'ourlet du bas : un rang clair (le revers), un trait d'ombre
+    const Lb = Math.round(largeur(yBot - 1)), xb = dir > 0 ? xo : xo - Lb;
+    rect(ctx, xb, yBot - 2, Lb, 1, toonTon(a, 0.87));
+    rect(ctx, xb, yBot - 1, Lb, 1, toonTon(a, 0.62));
+    if (tie) {   // l'embrasse : une torsade dans la teinte d'accent, tirée vers le mur
+      const Lt = Math.round(largeur(tie)), xt = dir > 0 ? xo : xo - Lt - 2;
+      rect(ctx, xt, tie - 1, Lt + 2, 2, toonTon(o.b || a, 0.87));
+      rect(ctx, xt, tie - 1, Lt + 2, 1, toonTon(o.b || a, 1.0));
+      rect(ctx, dir > 0 ? xo - 1 : xo, tie - 1, 1, 2, "#3a2c20");   // le crochet au mur
+    }
+  }
+  // la tringle de fer forgé, ses anneaux, ses deux pommeaux
+  rect(ctx, x0 - deb - 3, yRod, w + 2 * deb + 6, 2, "#3b322c");
+  rect(ctx, x0 - deb - 3, yRod, w + 2 * deb + 6, 1, "#6a5c50");
+  for (const xp of [x0 - deb - 5, x0 + w + deb + 3]) { rect(ctx, xp, yRod - 1, 2, 4, "#3b322c"); rect(ctx, xp, yRod - 1, 1, 1, "#7a6a5c"); }
+  if (H > 0) for (const [xo, dir] of [[x0 - deb, 1], [x0 + w + deb, -1]]) {
+    const L = Math.round(largeur(yT));
+    for (let k = 0; k < nf; k++) rect(ctx, (dir > 0 ? xo : xo - L) + Math.round((k + 0.5) * L / nf), yRod + 1, 1, 2, "#8a7a68");
+  }
+}
+/* Les cotes d'une baie de mur (`maison.homeWindows`, le `fenetre` de sa pièce) en px au-dessus du pied du mur : la tringle
+   10 cm au-dessus du haut de la baie, le bas des pans au sol (longs) ou 2 cm sous l'appui (courts), l'embrasse un peu
+   au-dessus de l'appui. ⚠️ L'APPUI ET LE HAUT SONT CEUX DE `paintWallWindow` (0,90 / 2,15 m, ou ceux de la pièce). */
+export function rideauCotes(fenetre, court) {
+  const allege = fenetre ? fenetre.allege : 0.90, haut = fenetre ? fenetre.haut : 2.15;
+  return { rod: pxOfM(haut + 0.10) + 4, bot: court ? pxOfM(allege) - 4 : 1, tie: court ? null : pxOfM(allege + 0.12) };
+}
+/* LES RIDEAUX D'UNE FENÊTRE DU MUR DU FOND, sur sa face cuite : `x0`, `w` la baie en px de la face, `yFoot` le pied. */
+export function paintRideau(ctx, x0, yFoot, w, o) {
+  const c = rideauCotes(o.fenetre, o.court);
+  paintRideauPx(ctx, { x0, w, yRod: yFoot - c.rod, yBot: yFoot - c.bot, yTie: c.tie == null ? null : yFoot - c.tie, clos: o.clos, a: o.a, b: o.b });
+}
+/* LA COUPE DES RIDEAUX DEVANT LA FAÇADE (coupée à 35 cm, `HOME_CUT`) : les pans longs, au sol devant la baie, coupés à la
+   même hauteur que le mur ; leur tranche plissée (la doublure crème en zigzag, un pli sur deux plus haut) dépasse de
+   l'arase. `x0`, `w` : la baie en px ; `yFoot` : la ligne du sol où ils tombent ; `cut` : la hauteur de coupe (px). */
+export function paintRideauCoupe(ctx, x0, yFoot, w, cut, o) {
+  const deb = 6, pwClos = Math.ceil(w / 2) + deb, nf = Math.max(2, Math.round(pwClos / 7));
+  const pw = o.clos ? pwClos : Math.round((Math.round(w * 0.20) + deb) * 0.85);   // ouverts : leur pied évasé sous l'embrasse
+  const y0 = yFoot - cut, larg = () => pw;
+  paintPan(ctx, x0 - deb, +1, y0, yFoot, larg, nf, !o.clos, o.a);
+  paintPan(ctx, x0 + w + deb, -1, y0, yFoot, larg, nf, !o.clos, o.a);
+  for (const [xo, dir] of [[x0 - deb, 1], [x0 + w + deb, -1]]) {
+    const xl = dir > 0 ? xo : xo - pw;
+    for (let i = 0; i < pw; i++) {
+      const ph = (i / pw * nf) % 1, haut = ph < 0.5 ? 0 : 1;
+      rect(ctx, xl + i, y0 - 1 + haut, 1, 1, DOUBLURE);
+      rect(ctx, xl + i, y0 + haut, 1, 1, toonTon(o.a, 0.62));
+    }
+    rect(ctx, xl, yFoot - 1, pw, 1, toonTon(o.a, 0.62));
+  }
+}
+/* VU DE LA RUE : les rideaux derrière une vitre de façade, en px d'ÉCRAN (`X`, `Y`, `W`, `H` : la vitre). Ouverts, deux
+   bandes plissées sur les côtés ; fermés, la vitre entière. Peints sur l'image de jour, AVANT la lueur des vitres : une
+   pièce allumée derrière des rideaux tirés luit au travers. */
+export function paintRideauRue(ctx, X, Y, W, H, o) {
+  if (W < 2 || H < 2) return;
+  const sw = o.clos ? Math.ceil(W / 2) : Math.max(1, Math.round(W * 0.24)), per = W >= 12 ? 3 : 2;
+  for (const [xl, inner] of [[X, X + sw - 1], [X + W - sw, X + W - sw]]) {
+    for (let i = 0; i < sw; i++) {
+      const x = xl + i, v = x === inner && !o.clos ? 0.62 : (i % per) === 0 ? 1.0 : 0.87;
+      rect(ctx, x, Y, 1, H, toonTon(o.a, v));
+    }
+  }
+  if (o.clos) rect(ctx, X + Math.floor(W / 2), Y, 1, H, toonTon(o.a, 0.75));
+  rect(ctx, X, Y, W, 1, "#3b322c");
+}
+/* L'IMAGE D'UN RIDEAU (catalogue, garde-meuble) : une fenêtre sur un pan de mur, rideaux ouverts, `a` le tissu. */
+export function bakeRideauIcon(mk, a, b) {
+  const c = mk(48, 56), g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  rect(g, 0, 0, 48, 56, "#e6dcc6");
+  rect(g, 0, 50, 48, 6, "#b88a58");
+  rect(g, 0, 50, 48, 1, "#8f6a3e");
+  rect(g, 12, 10, 24, 28, "#efe8d8");
+  rect(g, 14, 12, 20, 24, "#a9c7dc");
+  rect(g, 14, 12, 20, 8, "#c8dcea");
+  rect(g, 23, 12, 2, 24, "#efe8d8");
+  rect(g, 10, 38, 28, 2, "#e8e0cc");
+  paintRideauPx(g, { x0: 12, w: 24, yRod: 5, yBot: 50, yTie: 36, clos: false, a, b, deb: 5 });
+  return c;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ LOT 4 (2026-10-22) — LE CROCHET À CLÉS DE L'ENTRÉE (règles : `maison.js`, « LOT 4 »).
+   ╚════════════════════════════════════════════════════════════════════════
+   Une planchette de chêne à trois crochets de laiton, peinte sur le mur du fond de l'entrée, entre l'interrupteur et
+   l'applique. LES DOUBLES QUI RESTENT Y PENDENT (`left`, de 0 à 3) : en confier un le décroche — ce qu'on lit au mur est ce
+   que l'hôte tient. `x`, `y` : le coin haut-gauche ; `w`, `h` : la planchette (px). */
+export function paintCrochet(ctx, x, y, w, h, left) {
+  ctx.globalAlpha = 0.28; rect(ctx, x + 1, y + 2, w, h, "#20160f"); ctx.globalAlpha = 1;   // son ombre au mur
+  rect(ctx, x, y, w, h, "#9a6a3e");
+  rect(ctx, x, y, w, 1, "#c08a55");
+  rect(ctx, x, y + h - 1, w, 1, "#6b4526");
+  rect(ctx, x, y, 1, h, "#b07a48");
+  for (const vx of [x + 2, x + w - 3]) { rect(ctx, vx, y + 2, 1, 1, "#4a3424"); }   // deux vis
+  // les clés pendent DEVANT la planchette (dessous, elles tombaient sur l'interrupteur) : crochet en haut, clé jusqu'au bas
+  const n = 3;
+  for (let i = 0; i < n; i++) {
+    const cx = x + Math.round((i + 0.5) * w / n), cy = y + 2;
+    rect(ctx, cx, cy, 1, 2, "#c9a24a");                 // le crochet
+    rect(ctx, cx, cy + 2, 2, 1, "#c9a24a");
+    rect(ctx, cx, cy, 1, 1, "#f0d488");
+    if (i >= left) continue;                             // ce double est confié : le crochet est vide
+    const kx = cx - 1, ky = cy + 3;
+    ctx.globalAlpha = 0.3; rect(ctx, kx + 1, ky + 1, 3, h - 6, "#20160f"); ctx.globalAlpha = 1;   // son ombre sur la planchette
+    rect(ctx, kx, ky, 3, 3, "#c9a24a");                  // l'anneau
+    rect(ctx, kx + 1, ky + 1, 1, 1, "#7a5a26");
+    rect(ctx, kx + 1, ky + 3, 1, h - 7, "#d8b25a");      // la tige
+    rect(ctx, kx + 2, ky + h - 7, 1, 1, "#d8b25a");      // le panneton
+    rect(ctx, kx + 2, ky + h - 5, 1, 1, "#d8b25a");
+    rect(ctx, kx, ky, 1, 1, "#f0d488");
+  }
+}

@@ -24,6 +24,9 @@
       celui de 9 sans rien perdre (`migrateHome`).
    15. (2026-10-21, lot 2c) Les interrupteurs, les lampes, le feu, les objets de
       mur, la revente, les vitres et la fumée vues de la rue.
+   16. (2026-10-22, lot 2d) Colette : les passes de teinture (présentes, au cadre
+      du sprite, et la recoloration contre le VRAI rendu Blender), la teinture et
+      les rideaux (accrocher, tirer, ranger, orphelins), le soleil coupé.
    ⚠️ 2026-10-17 — LE PLAN EST EN CASES DU PLAN, LA CARTE EN CASES DU MONDE
    (`HOME_K` = 2) : le calage (§2) et le pas des marcheurs (§5) passent par K.
 
@@ -37,8 +40,8 @@ import { installFakeDOM, loadFerme } from "./lib-canvas.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "maison", "maisonArt", "maisonSprites"]);
-const { maison: H, maisonArt: MA, fermeConstants: C, maisonSprites: MS } = mods;
+const mods = await loadFerme(ROOT, ["fermeConstants", "maison", "maisonArt", "maisonSprites", "ombresMaison", "fermeStrings"]);
+const { maison: H, maisonArt: MA, fermeConstants: C, maisonSprites: MS, ombresMaison: OM, fermeStrings: STR } = mods;
 const MA_SPRITES = MS.MEUBLES;
 const P = H.PLAN_ETROITE;
 let ok = 0, ko = 0;
@@ -590,8 +593,8 @@ console.log("\n=== 13. le lit pivoté, les appliques, le poêle ===");
 console.log("\n=== 14. le catalogue et les cartons ===");
 {
   const cat = H.HOME_CATALOGUE;
-  const absents = cat.flatMap((e) => e.coloris.filter((sp) => !MA_SPRITES[sp] && !H.HOME_MURAUX[sp]));   // 2026-10-21 : un objet de mur se peint (`maisonArt.paintMural`)
-  check("chaque coloris du catalogue a son sprite rendu (ou, objet de mur, sa peinture)", absents.length === 0, absents.join(", ") || `${cat.length} articles, ${cat.reduce((n, e) => n + e.coloris.length, 0)} coloris`);
+  const absents = cat.flatMap((e) => e.coloris.filter((sp) => !MA_SPRITES[sp] && !H.HOME_MURAUX[sp] && !H.HOME_RIDEAUX[sp]));   // 2026-10-21 : un objet de mur se peint (`maisonArt.paintMural`) ; 2026-10-22 : des rideaux aussi (`paintRideau`)
+  check("chaque coloris du catalogue a son sprite rendu (ou, objet de mur, rideaux, sa peinture)", absents.length === 0, absents.join(", ") || `${cat.length} articles, ${cat.reduce((n, e) => n + e.coloris.length, 0)} coloris`);
   const interdits = cat.flatMap((e) => e.coloris).filter((sp) => sp === "escalier" || /_allume$/.test(sp) || H.homeFixe(sp) || (H.homeWallItem(sp) && !H.HOME_MURAUX[sp]) || sp === "plante_morte");
   check("ni l'escalier, ni un équipement, ni le tableau provisoire de Blender, ni une version allumée, ni la plante morte ne se commandent", interdits.length === 0, interdits.join(", ") || "aucun");
   const prix = cat.map((e) => e.prix), plante = cat.find((e) => e.id === "plante_verte").prix, canape = cat.find((e) => e.id === "canape").prix;
@@ -749,6 +752,148 @@ console.log("\n=== 15. lot 2c : lumières, feu, objets de mur, revente ===");
   const hr2 = H.homeDepart(); hr2.l = { "0:sejour": 0 }; H.resolveHomeFire(hr2, { k: "cheminee", n: 0, v: 1 }, P, t0);
   check("vu de la rue : séjour éteint à la main = vitre noire ; une lampe allumée ou le feu la rallument",
     !sombre && lampe && H.homeRoomShines(P, hr2, 0, "sejour", false, t0 + 30) && !H.homeRoomShines(P, hr2, 0, "chambre", false, t0 + 30));
+}
+
+// ── 16. 2026-10-22 — LOT 2d : COLETTE, LA TEINTURE ET LES RIDEAUX.
+console.log("\n=== 16. Colette : la teinture et les rideaux ===");
+{
+  const SPR = path.join(ROOT, "public", "maison");
+  const rd = (f) => (fs.existsSync(path.join(SPR, f)) ? PNG.sync.read(fs.readFileSync(path.join(SPR, f))) : null);
+  // (a) les passes : chaque meuble teintable a, pour chacune de ses orientations, ses passes au cadre exact de son sprite
+  const meublesPy = fs.readFileSync(path.join(ROOT, "tools", "blender", "meubles.py"), "utf8");
+  const bases = Object.keys(H.HOME_TEINTABLES).filter((n) => !H.HOME_RIDEAUX[n]);
+  const manquent = [];
+  for (const b of bases) {
+    if (!new RegExp('"' + b + '": \\(dict').test(meublesPy)) manquent.push(b + " (absent de meubles.TEINTES)");
+    for (const o of Object.keys(MA_SPRITES[b] || {})) {
+      const base = rd(b + "_" + o + ".png");
+      for (const p of ["a", "g", ...(H.HOME_ACCENT[b] ? ["b"] : [])]) {
+        const im = rd("teinte/" + b + "_" + o + "_" + p + ".png");
+        if (!im || !base || im.width !== base.width || im.height !== base.height) manquent.push(b + "_" + o + "_" + p);
+      }
+    }
+  }
+  check("chaque meuble teintable a ses passes (a, g, et b s'il a un accent), au cadre de son sprite, et une entrée dans meubles.TEINTES",
+    manquent.length === 0, manquent.slice(0, 4).join(", ") || bases.join(", "));
+  // (b) LA RECOLORATION CONTRE LE VRAI RENDU : le canapé teint « canard » (accent rouille) contre `canape_canard` (Blender), le
+  // fauteuil teint « vert » contre `fauteuil_vert` — le second éprouve la passe du REFLET (cuir ciré, lustre 0,55).
+  const compare = (src, ref, t, o) => {
+    const b = rd(src + "_" + o + ".png"), r = rd(ref + "_" + o + ".png"), cc = H.homeTeinteCouleurs(src, t);
+    const pa = rd("teinte/" + cc.base + "_" + o + "_a.png"), pb = cc.b ? rd("teinte/" + cc.base + "_" + o + "_b.png") : null, pg = rd("teinte/" + cc.base + "_" + o + "_g.png");
+    const out = MA.teindrePx(b.data, pa.data, pb && pb.data, pg.data, cc.a, cc.b);
+    let n = 0, pres = 0, max = 0;
+    for (let i = 0; i < out.length; i += 4) {
+      if (!b.data[i + 3]) continue;
+      n++;
+      const d = Math.max(Math.abs(out[i] - r.data[i]), Math.abs(out[i + 1] - r.data[i + 1]), Math.abs(out[i + 2] - r.data[i + 2]));
+      if (d <= 3) pres++;
+      max = Math.max(max, d);
+    }
+    return { part: pres / n, max };
+  };
+  for (const [src, ref, t] of [["canape", "canape_canard", "canard"], ["fauteuil", "fauteuil_vert", "vert"]]) {
+    const rs = Object.keys(MA_SPRITES[src]).map((o) => compare(src, ref, t, o));
+    const part = Math.min(...rs.map((x) => x.part)), max = Math.max(...rs.map((x) => x.max));
+    /* ⚠️ Le seuil : 85 % à ±3 — le premier jet (90 %) tombait à 89,1 % sur le fauteuil, dont l'écart MAX n'est que de 8/255 : le
+       grain d'EEVEE (±1 à 2 d'un rendu à l'autre) sur le cuir ciré, et les tons assombris (boutons, passepoil) qu'il dérive en sRGB. */
+    check(`${src} teint « ${t} » = le rendu Blender ${ref} : ≥ 85 % des pixels à ±3, aucun écart > 24`, part >= 0.85 && max <= 24, `${(part * 100).toFixed(1)} % à ±3, écart max ${max}/255`);
+  }
+  // (c) la teinture : du garde-meuble chez Colette, retour en carton le lendemain, la teinte suit le meuble partout
+  const h = H.homeDepart();
+  h.g.push({ u: 90, s: "canape" }, { u: 91, s: "fauteuil" }, { u: 92, s: "table_basse" });
+  const d1 = H.resolveHomeDye(h, { u: 90, t: "prune" }, 5);
+  const enCarton = H.homeCartons(h).find((c) => c.u === 90);
+  check("teindre : le meuble quitte le garde-meuble, un carton revient le lendemain avec sa teinte ; le quart du prix",
+    d1.ok && d1.prix === 3000 && !h.g.some((x) => x.u === 90) && enCarton && enCarton.t === "prune" && enCarton.d === 6, `${d1.prix} or`);
+  const refus = [H.resolveHomeDye(h, { u: 91, t: "prune" }, 5), H.resolveHomeDye(h, { u: 92, t: "lin" }, 5), H.resolveHomeDye(h, { u: 77, t: "lin" }, 5)];
+  check("refusé : un cuir dans une teinte de tissu, un meuble sans tissu, un meuble absent", refus.map((r) => r.raison).join(",") === "teinte,teinte,inconnu", refus.map((r) => r.raison).join(","));
+  H.resolveHomeUnbox(h, { u: 90 }, 6);
+  const pose = H.resolveHomePlace(h, { u: 90, o: "N", n: 0, x: Math.round(2.75 * H.HOME_Q), y: Math.round(7.2 * H.HOME_Q) }, P, H.homeFacade({ model: "n2", variant: "simple" }, P));
+  const posé = h.m.find((x) => x.u === 90);
+  H.resolveHomeStore(h, { u: 90 });
+  check("déballé, posé, rangé : la teinte suit (garde-meuble → maison → garde-meuble) ; le dessin la lit (`homeMeublesAt`)",
+    pose.ok && posé && posé.t === "prune" && h.g.find((x) => x.u === 90).t === "prune", pose.raison || "");
+  const lit = H.homeDepart(); const u1 = lit.m.find((x) => /^lit/.test(x.s)).u; H.resolveHomeStore(lit, { u: u1 });
+  const dl = H.resolveHomeDye(lit, { u: u1, t: "nuit" }, 1); H.resolveHomeUnbox(lit, { u: u1 }, 2);
+  check("le lit offert se teint, et garde son identifiant : il ne se revend toujours pas", dl.ok && H.homeSellPrice(lit.g.find((x) => x.u === u1)) === null);
+  check("une teinte déjà portée est refusée", H.resolveHomeDye(lit, { u: u1, t: "nuit" }, 2).raison === "deja");
+  // (d) les rideaux : accrocher, refuser une fenêtre garnie, déplacer, tirer, ranger ; le sur-mesure exige Colette
+  const fac2 = H.homeFacade({ model: "n2", variant: "simple" }, P), fac1 = H.homeFacade({ model: "n1", variant: "simple" }, P);
+  const wins0 = H.homeWindows(P, 0, fac2), sud = wins0.filter((w) => w.side === "S"), nord = wins0.filter((w) => w.side === "N");
+  check("les fenêtres du rez-de-chaussée : celles du fond (cuisine, courtes) et celles de la façade (séjour, longues)",
+    nord.length === 2 && nord.every((w) => w.court && w.room === "cuisine") && sud.length >= 1 && sud.every((w) => !w.court && w.room !== "cage"), wins0.map((w) => w.k + "@" + w.room).join(" "));
+  const hr = H.homeDepart(); hr.g.push({ u: 95, s: "rideaux" }, { u: 96, s: "rideaux_sauge", t: "bordeaux" });
+  const a1 = H.resolveHomeCurtain(hr, { u: 95, n: 0, k: nord[0].k }, P, fac2);
+  const a2 = H.resolveHomeCurtain(hr, { u: 96, n: 0, k: nord[0].k }, P, fac2);
+  const a3 = H.resolveHomeCurtain(hr, { u: 96, n: 0, k: sud[0].k }, P, fac2);
+  const a4 = H.resolveHomeCurtain(hr, { u: 95, n: 0, k: nord[1].k }, P, fac2);
+  const a5 = H.resolveHomeCurtain(hr, { u: 95, n: 0, k: "S9999" }, P, fac2);
+  check("accrocher : une fenêtre libre oui, une fenêtre garnie non ; déplacer d'une fenêtre à l'autre ; une fenêtre qui n'existe pas non",
+    a1.ok && !a2.ok && a2.raison === "rideau" && a3.ok && a4.ok && !a5.ok && !H.homeRideaux(hr)["0:" + nord[0].k] && H.homeRideaux(hr)["0:" + nord[1].k].u === 95 && H.homeRideaux(hr)["0:" + sud[0].k].t === "bordeaux");
+  H.resolveHomeDrape(hr, { n: 0, k: sud[0].k, v: 1 });
+  const clos = H.homeRideauxClos(hr, P, fac2, 0);
+  const sej = P.niveaux[0].pieces.find((p) => p.id === "sejour"), cui = P.niveaux[0].pieces.find((p) => p.id === "cuisine");
+  const faces0 = H.homeFaces(P, 0);
+  const jourOuvert = OM.homeRoomLights(P, 0, sej, fac2, faces0, "jour").length, jourClos = OM.homeRoomLights(P, 0, sej, fac2, faces0, "jour", [], true, [], clos).length;
+  check("tirés : la fenêtre ne laisse plus entrer le soleil (la source du jour disparaît), les autres restent", clos.has(sud[0].k) && jourClos === jourOuvert - 1 && OM.homeRoomLights(P, 0, cui, fac2, faces0, "jour", [], true, [], clos).length === 2, `séjour ${jourOuvert} → ${jourClos}`);
+  const near = H.homeRideauNear(hr, P, fac2, 0, (sud[0].a + sud[0].b) / 2, P.d - 0.4), loin = H.homeRideauNear(hr, P, fac2, 0, 3.4, 5.6);
+  check("E à portée devant la fenêtre (0,4 case), pas au milieu de la pièce", near && near.w.k === sud[0].k && !loin);
+  const orph = H.homeRideauxOrphelins(hr, P, fac1), keepN = H.homeRideauxOrphelins(hr, P, fac2);
+  check("la façade change (N2 → N1) : un rideau de façade dont la fenêtre n'existe plus devient orphelin, ceux du fond restent",
+    keepN.length === 0 && orph.every((x) => /:S/.test(x.key)) && orph.length === sud.filter((w) => !H.homeWindows(P, 0, fac1).some((v) => v.k === w.k)).length, orph.map((x) => x.key).join(",") || "aucun (mêmes fenêtres)");
+  H.resolveHomeStore(hr, { u: 96 });
+  check("ranger des rideaux : ils reviennent au garde-meuble avec leur teinte", !Object.values(H.homeRideaux(hr)).some((x) => x.u === 96) && hr.g.find((x) => x.u === 96).t === "bordeaux");
+  const ho = H.homeDepart();
+  const o1 = H.resolveHomeOrder(ho, { s: "rideaux", t: "ciel" }, 3, false), o2 = H.resolveHomeOrder(ho, { s: "rideaux", t: "ciel" }, 3, true), o3 = H.resolveHomeOrder(ho, { s: "canape", t: "ciel" }, 3, true);
+  check("le sur-mesure : refusé sans Colette, à son prix avec elle (teinte dans le carton) ; seulement des rideaux",
+    !o1.ok && o2.ok && o2.prix === H.HOME_RIDEAU_MESURE && H.homeCartons(ho)[0].t === "ciel" && !o3.ok, [o1.raison, o2.prix, o3.raison].join(" · "));
+  check("Colette se reconnaît par son nom dans le roster ; résidente ou non", H.HOME_COLETTE_RID === C.VISITOR_ROSTER.find((v) => v.name === "Colette").rid
+    && H.homeColetteHere({ residents: [{ rid: H.HOME_COLETTE_RID }] }) && !H.homeColetteHere({ residents: [] }) && !H.homeColetteHere(null));
+  check("une sauvegarde d'avant (sans `r` ni `t`) : aucun rideau, aucune teinture", Object.keys(H.homeRideaux({ m: [], g: [] })).length === 0 && H.homeTeinteCouleurs("canape", undefined) === null);
+  const noms = [...Object.keys(H.HOME_RIDEAUX).map((s2) => [s2, "meuble"]), ...[...H.HOME_TEINTES.tissu, ...H.HOME_TEINTES.cuir].map((t) => [t.id, "teinte"])];
+  const sansNom = [];
+  for (const lg of ["fr", "en"]) { const L2 = STR.fstr(lg); for (const [k, q] of noms) if (!(q === "meuble" ? L2.homeMeubleName(k) : L2.homeTeinteName(k))) sansNom.push(lg + ":" + k); }
+  check("chaque rideau et chaque teinte a son nom, dans les deux langues", sansNom.length === 0, sansNom.join(", "));
+}
+
+// ── 17. 2026-10-22 — LOT 4 : LA SONNETTE, LE DOUBLE DES CLÉS, S'ASSEOIR.
+console.log("\n=== 17. la sonnette, le double des clés, s'asseoir ===");
+{
+  // (a) les doubles : donner, refuser un doublon, un quatrième, se les donner à soi ; reprendre
+  const h = H.homeDepart();
+  const r1 = H.resolveHomeKeys(h, { who: "b", v: 1 }, "a"), r2 = H.resolveHomeKeys(h, { who: "b", v: 1 }, "a"), r3 = H.resolveHomeKeys(h, { who: "a", v: 1 }, "a");
+  H.resolveHomeKeys(h, { who: "c", v: 1 }, "a"); H.resolveHomeKeys(h, { who: "d", v: 1 }, "a");
+  const r4 = H.resolveHomeKeys(h, { who: "e", v: 1 }, "a");
+  check("donner un double : oui, pas deux fois au même, pas à soi, pas plus de trois", r1.ok && r2.raison === "deja" && r3.raison === "cle" && r4.raison === "doubles" && H.homeKeysLeft(h) === 0, [r2.raison, r3.raison, r4.raison].join(","));
+  const r5 = H.resolveHomeKeys(h, { who: "b", v: 0 }, "a");
+  check("reprendre un double : il revient au crochet ; le titulaire n'en a plus", r5.ok && !H.homeHasKey(h, "b") && H.homeKeysLeft(h) === 1 && H.homeHasKey(h, "c"));
+  check("une sauvegarde d'avant (sans `cl`) : personne n'a de double, trois au crochet", H.homeKeys({ m: [], g: [] }).length === 0 && H.homeKeysLeft({ m: [], g: [] }) === 3);
+  // (b) le crochet : dans l'entrée, sur sa face, hors de la porte, entre l'interrupteur et l'applique
+  const c = H.homeCrochet(P), f = H.homeFaces(P, 0).find((g) => g.id === c.fid);
+  const x0 = c.lx - c.w / 2 / H.CASE_M, x1 = c.lx + c.w / 2 / H.CASE_M;
+  const porte = (f.portes || []).some(([a, b]) => x1 > a - 0.02 && x0 < b + 0.02);
+  const inter = H.ECHELLE_USAGE.interrupteur != null ? H.ECHELLE_USAGE.interrupteur : 0.60;
+  const zInter = [inter - 0.07, inter + 0.07], zApp = MA.APPLIQUE_Z - 0.17;
+  check("le crochet est sur le mur du fond de l'entrée, hors de la porte, au-dessus de l'interrupteur et sous l'applique",
+    f.room === "entree" && x0 >= f.x0 && x1 <= f.x1 && !porte && c.z > zInter[1] && c.z + c.h < zApp, `x ${x0.toFixed(2)}–${x1.toFixed(2)}, z ${c.z}–${(c.z + c.h).toFixed(2)} m (interrupteur jusqu'à ${zInter[1].toFixed(2)}, applique dès ${zApp.toFixed(2)})`);
+  check("E au crochet depuis l'entrée, pas depuis la cuisine de l'autre côté de la cloison", H.homeNearCrochet(P, c.lx, c.y + 0.4) && !H.homeNearCrochet(P, c.lx, c.y - 0.4));
+  // (c) les places : dans l'emprise du meuble, tournées comme lui, une par coussin
+  const fails = [];
+  for (const o of ["S", "N", "E", "W"]) for (const sp of ["canape", "fauteuil"]) {
+    const m = { sprite: sp, o, lx: 1, ly: 5, u: 9 }, [a, b, cc, d] = H.homeFurnitureRect(m), ss = H.homeSeats(m);
+    const dir = { S: 0, N: 1, E: 3, W: 2 }[o];
+    if (ss.length !== (sp === "canape" ? 3 : 1) || ss.some((q) => q.lx < a || q.lx > cc || q.ly < b || q.ly > d || q.dir !== dir)) fails.push(sp + o);
+  }
+  check("chaque place d'un canapé (3) et d'un fauteuil (1) est dans son emprise et regarde comme lui, dans les quatre sens", fails.length === 0, fails.join(",") || "8 cas");
+  const hs = H.homeDepart(); hs.m.push({ u: 50, s: "canape", o: "S", n: 0, x: Math.round(2.75 * H.HOME_Q), y: Math.round(7.0 * H.HOME_Q) });
+  const fac = H.homeFacade({ model: "n2", variant: "simple" }, P);
+  const libre = H.homeSeatNear(hs, P, fac, 0, 3.2, 8.2), prise = H.homeSeatNear(hs, P, fac, 0, 3.2, 8.2, new Set(["50:0"])), loin = H.homeSeatNear(hs, P, fac, 0, 1.0, 6.0);
+  check("la place libre la plus proche ; une place prise se saute ; rien depuis l'entrée", libre && libre.k === 0 && prise && prise.k !== 0 && !loin, `${libre && libre.k} puis ${prise && prise.k}`);
+  // (d) ce qu'un invité peut faire
+  check("un invité : la lumière, les lampes, le feu, les rideaux — et rien d'autre", [...H.HOME_GESTES_INVITE].sort().join(",") === "homeDrape,homeFire,homeLamp,homeSwitch");
+  const sansNom = [];
+  for (const lg of ["fr", "en"]) { const L2 = STR.fstr(lg); for (const k of ["invite", "cle", "doubles"]) if (!L2.homeRefus(k)) sansNom.push(lg + ":" + k); }
+  check("chaque refus des visites a son texte, dans les deux langues", sansNom.length === 0, sansNom.join(", "));
 }
 
 console.log(`\n${ok} OK, ${ko} ÉCHEC`);

@@ -6,6 +6,30 @@
 
 ---
 
+### À juger — CHEZ SOI, LOT 4 : LA SONNETTE, LE DOUBLE DES CLÉS, S'ASSEOIR (2026-10-22, suite)
+
+À deux : `tools/out/maison-4.png`, puis en jeu (deux navigateurs, ou `/audit-duo`) : sonne chez l'autre (E à sa porte en ville).
+- **La sonnette** : le panneau « X sonne chez toi » en haut au milieu, où que tu sois ; le ding-dong (synthétisé) ; 30 s, puis « personne ne
+  répond ». Assez visible ? trop insistant ?
+- **Le crochet** de l'entrée et ses trois doubles (en confier un le décroche du mur). ⚠️ Il est peint sur le vantail ouvert de la porte de la
+  cuisine, comme l'interrupteur et l'applique avant lui : déplacer la porte ou l'ouvrir de l'autre côté ?
+- **S'asseoir** : la hauteur (`maison-4.png`), le fauteuil de profil (un peu haut ?) ; E ou un pas pour se lever.
+- **Raccompagner** : le bouton « X est chez toi · Raccompagner », en haut à droite, tant que quelqu'un est chez toi.
+Pas vu : propriétaire hors ligne, trois clients, iPad.
+
+### À juger — CHEZ SOI, LOT 2d : COLETTE, LES RIDEAUX ET LA TEINTURE (2026-10-22)
+
+`tools/out/maison-2d.png`, `maison-2d-teintes.png`, puis en jeu : menu dev → « 🧵 Colette emménage », « Garnir le garde-meuble », « +100000 or » ;
+le catalogue de l'entrée (E) → « Chez Colette » ; « Livrer les cartons maintenant », puis B.
+- **La palette de Colette** : douze tissus (chacun avec son accent sur les coussins du canapé), six cuirs pour le fauteuil. Des teintes à
+  retirer, à ajouter ? Le lit ne teint que la couette (oreillers, plaid gardés) — assez ?
+- **Les rideaux** : longs au séjour et à la chambre, courts à la cuisine et aux bains, embrasse dans la teinte d'accent. À la façade, on ne voit
+  dedans que leur COUPE (60 cm, au-dessus de la pierre coupée à 35) : lisible ? Fermés au mur du fond, ils penchent avec le mur (l'évasement 0,17).
+- **Le prix** : teinture = le quart du catalogue (3 000 le canapé) ; sur-mesure 3 400, le catalogue 2 400.
+- **Le mode déco cache la barre d'outils** (elle couvrait la façade) : gênant ?
+- **Pas fait** : coussins et tapis teints, motifs (rayures, toile de Jouy), une pièce plus sombre de jour rideaux tirés (seuls le soleil au sol et
+  les ombres changent). Pas vu : deux clients, iPad, un orphelin pour de vrai.
+
 ### À juger — CHEZ SOI, LOT 2c : LUMIÈRES, FEU, OBJETS DE MUR, REVENTE (2026-10-21, suite)
 
 Entre chez toi la nuit (`maison-2c.png`, `maison-muraux.png`), menu développeur → « Garnir le garde-meuble », puis B.

@@ -250,6 +250,9 @@ envoyé avant l'abonnement de l'autre est perdu. **La panne d'avant : `netCanBro
 une requête `devSky` de l'invité arrive chez l'hôte et revient chez les deux, et inversement. ⚠️ Les index de hooks changent à chaque `useRef` ajouté :
 retrouver une ref par sa FORME (`__sharedIdx` le fait pour `sharedRef`), jamais par un numéro écrit en dur. ⚠️ Naviguer la page parente efface les
 iframes : changer `iframe.src` d'un seul client suffit pour le recharger (état neuf, champ de neige neuf — utile pour mesurer une première arrivée).
+⚠️ **LE RECHARGEMENT À CHAUD NE REMPLACE PAS LA BOUCLE DE RENDU** (vu le 2026-10-22, lot 2d) : une retouche du JSX se voit aussitôt, mais une
+fonction de MODULE que la boucle déjà lancée appelle (`drawScreenExactBitmap`, un peintre de `maisonArt`…) reste l'ancienne — la boucle garde le
+module d'avant. Recharger la page (l'état de la partie repart à neuf : le reposer à la main, ex. `sharedRef.current.homes`).
 Les DEUX dossiers `audit-*` et `app/api/audit-cap` se suppriment avant livraison.
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle

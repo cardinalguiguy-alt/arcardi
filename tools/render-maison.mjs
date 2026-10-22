@@ -59,6 +59,21 @@ function img(nom) {
   }
   return images.get(nom);
 }
+/* 2026-10-22 (lot 2d) — UN SPRITE TEINT, comme le jeu le recolore (`maisonArt.teindrePx`, les passes de
+   `tools/blender/rendre_teintes.py`). `nom` : « canape_S » ; `t` : une teinte de `HOME_TEINTES`. */
+function imgT(nom, t) {
+  if (!t) return img(nom);
+  const k = nom + "~" + t;
+  if (images.has(k)) return images.get(k);
+  const o = nom.slice(nom.lastIndexOf("_") + 1), s = nom.slice(0, nom.lastIndexOf("_")), cc = H.homeTeinteCouleurs(s, t), base = img(nom);
+  if (!cc || !base) { images.set(k, base); return base; }
+  const pas = (p) => img("teinte/" + cc.base + "_" + o + "_" + p);
+  const pa = pas("a"), pb = cc.b ? pas("b") : null, pg = pas("g");
+  const c = makeCanvas(base.width, base.height);
+  c.px.set(MA.teindrePx(base.px, pa.px, pb && pb.px, pg.px, cc.a, cc.b));
+  images.set(k, c);
+  return c;
+}
 /* 2026-10-18 — l'alpha d'un sprite (les ombres portées, `ombresMaison.js`). */
 const alphas = new Map();
 function alphaOf(nom) {
@@ -74,7 +89,7 @@ function alphaOf(nom) {
 /* LES OMBRES PORTÉES D'UN NIVEAU, comme le jeu les calcule (`ombresMaison.js`) : pièce par pièce, de jour par ses fenêtres,
    de nuit par ses appliques et ses lampes (toutes les pièces allumées, au banc). Rend les canevas du sol, ceux des murs par
    face, et les sources de nuit (pour la passe de lumière du banc). `o.ombres === false` : sans (l'« avant »). */
-function ombresDe(plan, L, facade, faces, meubles, nuit, appliques = true) {
+function ombresDe(plan, L, facade, faces, meubles, nuit, appliques = true, clos = null) {
   const ff = faces.map(({ f }) => f), fl = faces.map(({ f, bake }) => ({ f, wallPx: bake.wallPx }));
   const occAll = meubles.map((m) => OM.homeOccluder(m, META, alphaOf)).filter(Boolean);
   const sols = [], murs = new Map(), sources = [];
@@ -84,7 +99,7 @@ function ombresDe(plan, L, facade, faces, meubles, nuit, appliques = true) {
       return pc && pc.id === room.id;
     });
     const lampes = nuit ? occs.filter((oc) => OM.lampeDe(oc.sprite)).map((occ) => ({ occ, lampe: OM.lampeDe(occ.sprite) })) : [];
-    const lights = OM.homeRoomLights(plan, L, room, facade, ff, nuit ? "nuit" : "jour", lampes, appliques);   // 2026-10-21 : l'interrupteur (lot 2c)
+    const lights = OM.homeRoomLights(plan, L, room, facade, ff, nuit ? "nuit" : "jour", lampes, appliques, [], clos);   // 2026-10-21 : l'interrupteur (lot 2c) ; 2026-10-22 : les rideaux tirés
     if (nuit) for (const lt of lights) {
       const [x, y, z] = lt.pts[0];
       sources.push({ x: x + 3, y: y - z * 0.45, r: lt.r, k: lt.self ? 0.9 : 0.6, c: [255, 196, 120] });
@@ -113,7 +128,9 @@ function compose(plan, L, look, o = {}) {
   g.drawImage(floor, 0, 0);
   const ciel = o.nuit ? [0.30, 0.35, 0.56] : [1, 1, 1];
   // le soleil par les fenêtres de la façade (l'après-midi), de jour
+  const clos = new Set((o.rideaux || []).filter((r) => r.clos).map((r) => r.w.k));   // 2026-10-22 (lot 2d) : rideaux tirés, pas de soleil
   if (!o.nuit) for (const [a, b] of facade.fenetres[L] || []) {
+    if (clos.has("S" + Math.round(a * 100))) continue;
     const [pa, py] = MA.homePx(a, plan.d), [pb] = MA.homePx(b, plan.d);
     MA.paintSunPool(g, pa, py, pb - pa, MA.pxOfM(1.63), -MA.pxOfM(0.66), 0.9, MA.homePx(0, 0)[0], MA.homePx(plan.w, 0)[0]);
   }
@@ -121,11 +138,12 @@ function compose(plan, L, look, o = {}) {
   // 2026-10-17 : les équipements de la maison (la nuit, la cheminée est allumée)
   const fixes = H.homeFixes(plan, L, facade).map((f) => (o.nuit && f.sprite === "cheminee" ? { ...f, sprite: "cheminee_allume" } : f));
   const meubles = fixes.concat(o.meubles || H.HOME_DEPART.filter((m) => m.niveau === L));
-  const om = o.ombres === false ? null : ombresDe(plan, L, facade, faces, meubles.map((m) => ({ ...m, sprite: m.sprite.replace(/_allume$/, "") })), !!o.nuit, o.appliques !== false);
+  const om = o.ombres === false ? null : ombresDe(plan, L, facade, faces, meubles.map((m) => ({ ...m, sprite: m.sprite.replace(/_allume$/, "") })), !!o.nuit, o.appliques !== false, clos);
   if (om) for (const s of om.sols) g.drawImage(s.c, s.x, s.y);
   const items = MA.homeDrawItems(plan, L, {
     H, faces, cutPx: (f) => (f.ext || !o.perso || f.room === (H.homeRoomAt(plan, L, o.perso[0], o.perso[1]) || {}).id ? 1e9 : 0), lows: H.homeLows(plan, L, facade),
-    meubles, meta: META, img, ciel, ampoules: o.ampoules || [], mk,
+    meubles, meta: META, img: imgT, ciel, ampoules: o.ampoules || [], mk,
+    rideaux: o.rideaux || null,   // 2026-10-22 (lot 2d)
     ombresMur: om ? (f) => om.murs.get(f.id) || [] : null,
     allumees: o.nuit && o.appliques !== false ? new Set(plan.niveaux[L].pieces.map((p) => p.id)) : null,
     // 2026-10-21 (lot 2c) — les objets de mur, peints comme au jeu (`bakeMural`) ; l'horloge à `o.tmin`
@@ -134,7 +152,18 @@ function compose(plan, L, look, o = {}) {
       return { s: it.s, fid: span.f.id, lx: span.x0, z: H.homeMuralZ(plan, L, it.s), w, h };
     }),
     muralImg: (s2, w, h) => MA.bakeMural(mk, s2, w, h), tmin: o.tmin ?? 1170,
+    crochet: o.crochet || null,   // 2026-10-22 (lot 4)
   });
+  // 2026-10-22 (lot 4) — DES PERSONNAGES ASSIS (`A.drawSeated`, la pose des bancs de la ville), triés juste après leur meuble
+  // comme au jeu (`seatKey`), montés de `liftPx` (px du monde) — `o.assis` : [{ lx, ly, dir, apres }].
+  for (const as of o.assis || []) {
+    items.push({ key: as.apres + 0.01, draw: (ctx) => {
+      const tmp = makeCanvas(16, 24), row = as.dir === 0 ? 0 : as.dir === 1 ? 1 : 2;
+      A.drawSeated(tmp.ctx, CHAR, row, 0, 11);
+      const [px, py] = MA.homePx(as.lx, as.ly), lift = (as.lift ?? 5) * KC;
+      ctx.drawImage(tmp, 0, 0, 16, 24, px - 8 * KC, py - 7 * KC - 11 * KC - lift, 16 * KC, 24 * KC);
+    } });
+  }
   if (o.perso) {
     const [lx, ly] = o.perso;
     const lift = H.homeStairLift(plan, L, lx, ly);
@@ -271,4 +300,57 @@ planche("maison-temoin-planche.png", [
   const objs = Object.entries(H.HOME_MURAUX).map(([s2, sp]) => { const [w, h] = MA.muralPx(sp); return MA.bakeMural(mk, s2, w, h); });
   const fond = objs.map((c) => { const b = makeCanvas(c.width + 8, 48); b.ctx.fillStyle = "#e8dcc4"; b.ctx.fillRect(0, 0, b.width, 48); b.ctx.drawImage(c, 4, 4); return b; });
   planche("maison-muraux.png", fond, 4);
+}
+
+// 5. LE LOT 2d (2026-10-22) — COLETTE : LES RIDEAUX ET LA TEINTURE. (a) la cuisine, rideaux courts : l'un ouvert, l'autre
+// tiré ; (b) le séjour, rideaux longs de la façade ouverts (leur coupe dépasse de l'arase), canapé teint « prune » et fauteuil
+// « marine » ; (c) le même, rideaux tirés : plus de soleil ; (d) la chambre, lit « nuit ». Puis les nuanciers : le canapé
+// dans les douze teintes de Colette, le fauteuil dans les six cuirs, le lit, les rideaux (`maison-2d-teintes.png`).
+{
+  const look = { model: "n2", variant: "simple" }, fac = H.homeFacade(look, P);
+  const rid = (L, k, clos, t) => {
+    const w = H.homeWindows(P, L, fac).find((x) => x.k === k);
+    const te = H.homeTeinte("tissu", t);
+    return { w, clos, a: te.a, b: te.b };
+  };
+  const nord = H.homeWindows(P, 0, fac).filter((w) => w.side === "N");
+  const sud0 = H.homeWindows(P, 0, fac).filter((w) => w.side === "S"), sud1 = H.homeWindows(P, 1, fac).filter((w) => w.side === "S");
+  console.log("  fenêtres : rdc", H.homeWindows(P, 0, fac).map((w) => w.k + (w.court ? "c" : "") + "@" + w.room).join(" "), "· étage", H.homeWindows(P, 1, fac).map((w) => w.k + "@" + w.room).join(" "));
+  const cuisine = compose(P, 0, look, { meubles: [], perso: [2.4, 2.6], rideaux: [rid(0, nord[0].k, false, "sauge"), rid(0, nord[1].k, true, "sauge")] });
+  const meubles = (t1, t2) => [{ ...TAPIS("tapis"), niveau: 0 }, ...SEJOUR_A.map((m) => ({ ...m, niveau: 0, t: m.sprite === "canape" ? t1 : m.sprite === "fauteuil" ? t2 : undefined }))];
+  const sej = (clos) => compose(avecDeco(P, 0, decoA), 0, look, { meubles: meubles("prune", "marine"), perso: [3.9, 6.95], rideaux: sud0.map((w) => rid(0, w.k, clos, "bordeaux")) });
+  const lit = { sprite: "lit", o: "S", lx: 1.6, ly: 6.2, niveau: 1, t: "nuit" };
+  const chambre = compose(P, 1, look, { meubles: [lit], perso: [3.6, 7.2], rideaux: sud1.map((w, i) => rid(1, w.k, i === 0, "nuit")) });
+  const cropR = (cv, a, b, c, d) => { const [x0, y0] = MA.homePx(a, b), [x1, y1] = MA.homePx(c, d); const out = makeCanvas(x1 - x0, y1 - y0); out.ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0); return out; };
+  planche("maison-2d.png", [cropR(cuisine, 0.8, -2.4, 5.3, 4.6), cropR(sej(false), 2.0, 3.4, 5.3, 9.5), cropR(sej(true), 2.0, 3.4, 5.3, 9.5), cropR(chambre, -0.3, 4.6, 5.3, 9.5)], 2);
+  // les nuanciers : chaque meuble teint, de face, sur le fond des murs
+  const cell = (c, wd = 0) => { const b = makeCanvas(Math.max(c.width, wd) + 6, c.height + 6); b.ctx.fillStyle = "#e8dcc4"; b.ctx.fillRect(0, 0, b.width, b.height); b.ctx.drawImage(c, 3, 3); return b; };
+  const rang = (cvs) => { const W = cvs.reduce((s2, c) => s2 + c.width + 4, 0), Hh = Math.max(...cvs.map((c) => c.height)); const r = makeCanvas(W, Hh); let x = 0; for (const c of cvs) { r.ctx.drawImage(c, x, 0); x += c.width + 4; } return r; };
+  const rangs = [
+    rang([cell(img("canape_canard_S")), ...H.HOME_TEINTES.tissu.map((t) => cell(imgT("canape_S", t.id)))]),
+    rang([cell(img("fauteuil_S")), ...H.HOME_TEINTES.cuir.map((t) => cell(imgT("fauteuil_S", t.id))), ...["N", "E"].map((o) => cell(imgT("fauteuil_" + o, "marine")))]),
+    rang(H.HOME_TEINTES.tissu.slice(0, 6).map((t) => cell(imgT("lit_S", t.id)))),
+    rang(H.HOME_TEINTES.tissu.map((t) => cell(MA.bakeRideauIcon(mk, t.a, t.b)))),
+  ];
+  const W = Math.max(...rangs.map((r) => r.width)), Hh = rangs.reduce((s2, r) => s2 + r.height + 6, 0);
+  const tout = makeCanvas(W, Hh); let y = 0; for (const r of rangs) { tout.ctx.drawImage(r, 0, y); y += r.height + 6; }
+  planche("maison-2d-teintes.png", [tout], 2);
+}
+
+// 6. LE LOT 4 (2026-10-22) — LA SONNETTE ET LE DOUBLE DES CLÉS. (a) l'entrée : le crochet à clés, ses trois doubles au mur, puis un seul
+// (deux confiés) ; (b) le séjour : deux amis assis sur le canapé (de face), un troisième dans le fauteuil (`HM.homeSeats`).
+{
+  const look = { model: "n2", variant: "simple" };
+  const cr = (left) => ({ ...H.homeCrochet(P), left });
+  const cropR = (cv, a, b, c, d) => { const [x0, y0] = MA.homePx(a, b), [x1, y1] = MA.homePx(c, d); const out = makeCanvas(x1 - x0, y1 - y0); out.ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0); return out; };
+  const entree = (left) => cropR(compose(P, 0, look, { crochet: cr(left), perso: [0.9, 5.6] }), -0.3, 2.2, 2.6, 7.0);
+  const canape = { sprite: "canape", o: "S", lx: 2.75, ly: 7.2, niveau: 0, u: 1 }, fauteuil = { sprite: "fauteuil", o: "W", lx: 4.32, ly: 5.7, niveau: 0, u: 2 };
+  const meubles = [{ ...TAPIS("tapis"), niveau: 0 }, ...SEJOUR_A.filter((m) => !/^(canape|fauteuil)/.test(m.sprite)).map((m) => ({ ...m, niveau: 0 })), canape, fauteuil];
+  const sc = H.homeSeats(canape), sf = H.homeSeats(fauteuil);
+  console.log("  places : canapé", sc.map((x) => x.lx.toFixed(2) + "," + x.ly.toFixed(2)).join(" "), "· fauteuil", sf.map((x) => x.lx.toFixed(2) + "," + x.ly.toFixed(2)).join(" "));
+  const bas = (f) => H.homeFurnitureRect(f)[3];
+  /* ⚠️ DE FACE SEULEMENT : le faux canevas des bancs rend vides les rangées de dos et de profil de la feuille du personnage (8 px
+     opaques sur 185 — noyau §4, « le faux canevas ignore translate, scale et rotate »). Le fauteuil (de profil) se juge en jeu. */
+  const sej = (lift) => cropR(compose(avecDeco(P, 0, decoA), 0, look, { meubles, assis: [{ ...sc[0], apres: bas(canape), lift }, { ...sc[2], apres: bas(canape), lift }] }), 2.0, 5.6, 5.3, 9.0);
+  planche("maison-4.png", [entree(3), entree(1), sej(2), sej(5)], 2);
 }

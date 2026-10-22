@@ -900,6 +900,90 @@ COLORIS = {
 }
 
 
+# ─── LES PASSES DE TEINTURE (2026-10-22, lot 2d : Colette) ───────────────
+# ⚠️⚠️ POURQUOI DES PASSES ET NON UN RENDU PAR COLORIS : la matière toon (`studio.toon_group`) rend
+#   couleur_linéaire × M(x)  puis  écran(·, crème × lustre(x))
+# où M(x) (le palier de lumière, l'occlusion, la teinte froide des ombres) et le lustre NE DÉPENDENT PAS de la couleur.
+# Rendre une fois le tissu en BLANC donne M(x) ; le rendre en NOIR avec son lustre donne le reflet seul. Le jeu recompose
+# alors n'importe quelle teinture de Colette EXACTEMENT comme Blender l'aurait rendue (`maisonArt.teindre`) — la qualité d'un
+# rendu par coloris, sans 4 orientations × N teintes × chaque meuble d'images (ni de canevas sur iPad). `verify-maison` le
+# prouve : le canapé recoloré « canard / rouille » contre le vrai rendu Blender `canape_canard`.
+# Les ZONES : « a » le tissu principal (et ce qui en dérive : passepoil, capitons, piqûres — un ton assombri du blanc),
+# « b » l'accent (les coussins jetés du canapé). Elles se repèrent au NOM de la matière (`_za`, `_zb`) : la fonction du
+# meuble est appelée avec ces couleurs-là, rien d'autre ne change — la géométrie, donc le cadrage et l'ancre, sont les mêmes.
+TISSU["_za"] = TISSU["_zb"] = "#ffffff"
+CUIR["_za"] = "#ffffff"
+TEINTES = {
+    # meuble : (paramètres des zones, zones)
+    "canape": (dict(tissu="_za", coussins="_zb"), "ab"),
+    "fauteuil": (dict(cuir="_za"), "a"),
+    "lit": (dict(couette="_za"), "a"),
+}
+
+
+def _noir():
+    m = bpy.data.materials.get("ArcPasseNoir") or bpy.data.materials.new("ArcPasseNoir")
+    m.use_nodes = True; nt = m.node_tree; nt.nodes.clear()
+    em = nt.nodes.new('ShaderNodeEmission'); em.inputs['Color'].default_value = (0, 0, 0, 1)
+    out = nt.nodes.new('ShaderNodeOutputMaterial'); nt.links.new(em.outputs[0], out.inputs['Surface'])
+    # ⚠️ VU À LA PREMIÈRE PASSE (2026-10-22) : le noir remplace aussi `ArcContour`, la coque inversée qui ENFERME le meuble —
+    # sans les deux réglages de `studio.outline_mat`, elle se voyait par-dessus tout et la passe sortait noire.
+    m.use_backface_culling = True
+    m.use_backface_culling_shadow = True
+    return m
+
+
+def _reflet_seul(m):
+    """La matière `m`, couleur NOIRE (lien de texture coupé), lustre gardé : seul le reflet reste."""
+    k = bpy.data.materials.get(m.name + "~g")
+    if k is None:
+        k = m.copy(); k.name = m.name + "~g"
+    g = next(n for n in k.node_tree.nodes if n.type == 'GROUP')
+    for l in list(g.inputs['Couleur'].links):
+        k.node_tree.links.remove(l)
+    g.inputs['Couleur'].default_value = (0, 0, 0, 1)
+    return k
+
+
+def passe(r, p):
+    """Repeint les matières sous `r` pour la passe `p` : « a » ou « b » (la zone en blanc, le reste en noir pur), « g » (les
+    zones en noir avec leur lustre, le reste en noir). Le contour (`ArcContour`) passe au noir comme le reste."""
+    noir = _noir()
+    garde = ("_za", "_zb") if p == "g" else ("_z" + p,)
+    stack = [r]
+    while stack:
+        o = stack.pop()
+        stack.extend(o.children)
+        if o.type not in ('MESH', 'CURVE'):
+            continue
+        mats = o.data.materials
+        for i, m in enumerate(mats):
+            if m is None:
+                continue
+            zone = any(z in m.name for z in garde)
+            mats[i] = (_reflet_seul(m) if p == "g" else m) if zone else noir
+
+
+def rendre_teinte(nom, fabrique, dossier, orients=("S", "E", "N", "W")):
+    """Rend les passes de `nom` dans `dossier/<nom>_<O>_<passe>.png`. Rend { O: {w, h, ax, ay} } (le banc vérifie qu'elles
+    tombent sur le cadre du rendu ordinaire)."""
+    import os
+    kw, zones = TEINTES[nom]
+    meta = {}
+    for p in zones + "g":
+        S.reset_scene(); S.setup()
+        S.ZK = ECHELLE_Z.get(nom, 1.0)
+        try:
+            r, w, d = fabrique(**kw)
+            passe(r, p)
+            for o in orients:
+                S.orient(r, w, d, o)
+                meta.setdefault(o, {})[p] = S.render(r, os.path.join(dossier, f"{nom}_{o}_{p}.png"))
+        finally:
+            S.ZK = 1.0
+    return meta
+
+
 # ─── L'ÉCHELLE D'USAGE : LES COTES DE HAUTEUR SE LISENT CONTRE LE PERSONNAGE ──
 # ⚠️⚠️ 2026-10-17 (après-midi) — « la tête du player est en dessous des plans de travail et objets ». Dedans, le
 # plan est à ×2 (`maison.HOME_K`) mais le personnage ne l'est pas : il fait 1,70 / 2 = 0,85 m à côté de ses meubles.

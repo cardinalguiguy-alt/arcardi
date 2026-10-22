@@ -108,7 +108,9 @@ title("1. tout bitmap passe par la table");
      qu'à un endroit (`HM.homeSpriteUrl`) ; `verify-maison` §2 tient l'existence, la
      taille et le grain de chaque PNG. Le premier jet (2026-10-16) écrivait
      `"/maison/" + nom + ".png"` dans la boucle : ce banc rougissait depuis. */
-  const homeRef = /^HM\.homeSpriteUrl\(nom\)$/;
+  /* 2026-10-22 (lot 2d) — les PASSES DE TEINTURE (`tools/blender/rendre_teintes.py`) ont leur fabrique d'URL à côté :
+     `HM.homeTeinteUrl` ; `verify-maison` §16 tient leur existence et leur cadre. */
+  const homeRef = /^HM\.(homeSpriteUrl\(nom\)|homeTeinteUrl\(cc\.base, o, p\))$/;
   const stray = calls.filter(c => !tableRef.test(c.arg) && c.arg !== grassTpl && !homeRef.test(c.arg));
   /* « Un banc qui compte des occurrences doit publier combien il en a LUES »
      (CLAUDE.md §10) : sans ce nombre, un motif qui ne matche rien passerait vert. */

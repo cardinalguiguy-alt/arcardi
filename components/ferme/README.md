@@ -1,5 +1,64 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-22 (suite) — CHEZ SOI, LOT 4 : LA SONNETTE, LE DOUBLE DES CLÉS, S'ASSEOIR
+
+Ses neuf réponses, toutes sur la recommandation : la sonnette joue **partout** (un interphone) ; 30 s sans réponse, 20 s entre deux coups ;
+« Ouvrir » vaut **une visite** ; le double se donne au **crochet de l'entrée** ; l'invité marche, **s'assoit**, se sert de la lumière, des
+rideaux et du feu, jamais du mode déco, du catalogue, des cartons, de la revente ni du lit ; **personne n'est éjecté** (« Raccompagner ») ; une
+maison sans intérieur le dit. **Supabase : rien** (le champ `cl` vit dans le JSON de `ferme_saves` ; les sonnettes, en mémoire chez l'hôte).
+- **Les règles** (`maison.js`, « LOT 4 ») : `homeKeys` / `resolveHomeKeys` (trois doubles), `homeCrochet` (au milieu du plus grand pan libre du
+  mur du fond de l'entrée — ⚠️ « à l'aplomb de l'interrupteur » touchait le chambranle), `homeSeats` / `homeSeatNear` (trois places au canapé,
+  une au fauteuil, dans les quatre sens), `HOME_GESTES_INVITE`.
+- **L'hôte** (`homeVisitReq`, FermeGame.js) : `homeRing` → `homeBell` chez le propriétaire où qu'il soit ; `homeBellAnswer` → `homePass` chez le
+  visiteur ; `homeKeyEnter` (le propriétaire prévenu) ; `homeKeys` ; `homeShowOut` → `homeOut`. ⚠️ **Un geste d'invité est vérifié à sa
+  POSITION** (il doit se tenir dans la maison de `req.slot`), pas sur la foi du menu. Un `out.toasts` (plusieurs destinataires) s'ajoute à `out.toast`.
+- **S'asseoir** : la pose des bancs de la ville (`A.drawSeated`), `sitOn` = { x: le meuble, y: −1 } ; l'assise voyage déjà (`pub.sit`) ; trié
+  juste après le meuble (comme le dormeur et son lit), monté de `HOME_ASSISE_PX` (5 : à 2, les hanches tombaient au bord du coussin,
+  `maison-4.png`). E ou un pas relève, devant le meuble.
+- **Le crochet** (`maisonArt.paintCrochet`) : les doubles qui restent y pendent — en confier un le décroche.
+- **La sonnette** : un « ding-dong » de carillon synthétisé (`sonMaison.js`), chez le propriétaire et, plus bas, chez celui qui sonne.
+- **Vu à DEUX CLIENTS** (`/audit-duo`, 640 × 480) — le premier lot des intérieurs vu ainsi : sonner, le panneau chez l'hôte, Ouvrir, l'invitée
+  entre ; l'hôte voit « Amie est chez toi » ; elle s'assoit sur le canapé (vu chez l'hôte), allume le feu (la maison de l'hôte change sur les
+  deux écrans, la sienne non) ; Raccompagner ; le double confié (le crochet passe à deux clés, l'invitée prévenue, « entrer avec ton double »),
+  l'entrée au double (l'hôte prévenu) ; le double repris ; Refuser ; la pause de 20 s ; « personne ne répond » à 30 s. L'hôte assis de profil
+  dans le fauteuil. Bancs : `verify-maison` 225/225 (§17 neuf), `render-maison` (`maison-4.png`), `verify-strings`, `verify-densite`, `verify-docs`.
+- **Pas vu** : un propriétaire hors ligne (le double ouvre seul, « personne à la maison » sans double), un geste d'invité refusé hors de la
+  maison, trois clients, iPad. ⚠️ **Déjà là avant le lot** : dans l'entrée, le vantail ouvert de la porte de la cuisine est peint sur le mur
+  où sont l'interrupteur et l'applique — le crochet s'y pose aussi.
+
+## 2026-10-22 — CHEZ SOI, LOT 2d : COLETTE, LES RIDEAUX ET LA TEINTURE
+
+Ses réponses : les rideaux **se tirent (E)** ; la commande passe par **une page « Chez Colette » du catalogue** ; la teinture est **rendue le
+lendemain** ; la technique de teinture laissée au choix, « le rendu le plus professionnel ». **Supabase : rien** (`shared.homes`, JSON).
+- **La teinture, décidée en l'écrivant : des PASSES Blender, pas un rendu par coloris ni une teinte plaquée.** La matière toon de `studio.py`
+  rend `couleur × M(x)` puis un reflet, ni l'un ni l'autre ne dépendant de la couleur : le tissu rendu une fois en BLANC (zone a, l'accent b) et
+  son reflet seul (g) suffisent à recomposer n'importe quelle teinte comme Blender l'aurait rendue (`tools/blender/rendre_teintes.py`,
+  `maisonArt.teindrePx`). Mesuré contre le vrai rendu : canapé « canard » à 93 % des pixels à ±3, au plus 15/255 (le passepoil) ; fauteuil
+  « vert » au plus 8/255. Douze teintes de tissu (chacune avec son accent pour les coussins du canapé), six cuirs pour le fauteuil.
+  ⚠️ Vu à la première passe : la coque inversée du contour (`ArcContour`), repeinte en noir sans son « backface culling », couvrait tout.
+- **Le geste** : depuis la page de Colette, un meuble du garde-meuble part chez elle et revient teint le lendemain dans un CARTON (la machinerie
+  du 2b, champ `t` sur le carton, puis sur le meuble rangé, posé, rangé). Le quart du prix du catalogue. Le lit offert se teint et ne se revend
+  toujours pas. Sur la même page, des rideaux SUR MESURE dans toute la palette (3 400 or). Sans Colette résidente, la page n'existe pas et le
+  catalogue vend trois rideaux (page « Fenêtres ») ; menu dev « 🧵 Colette emménage ».
+- **Les rideaux** (`maison.js`, « LOT 2d ») : une paire par fenêtre (`homeWindows` : celles du mur du fond et celles de la façade ; champ `r`),
+  pendue au mode déco (la fenêtre visée cernée de vert ou de rouge), tirée avec E (`homeDrape`, l'état VOULU). Peints au canevas AUX PALIERS DE
+  LA MATIÈRE TOON (`toonTon`) pour tenir à côté des meubles : plis clairs à gauche, tête plissée, embrasse dans la teinte d'accent, tringle de
+  fer. Longs dans les pièces à vivre, courts (à l'appui) à la cuisine et aux bains. Au mur du fond, évasés avec lui (`flaredRideaux`).
+  ⚠️ **Ceux de la façade ne se voient dedans qu'en coupe** : coupés à 35 cm comme la pierre, ils ne dépassaient de l'arase que de 4 px (une frise) ;
+  le tissu se coupe à 60 cm (`RIDEAU_COUPE`), sa tranche plissée en zigzag.
+- **Tirés** : plus de soleil par cette fenêtre (la tache au sol, les sources du jour d'`ombresMaison` : `homeRoomLights(…, clos)`), et vus de la
+  rue la vitre montre le tissu ; la nuit, la lueur d'une pièce allumée passe au travers (plus faible), et derrière des rideaux ouverts elle ne
+  prend que le milieu. ⚠️ Vu en jeu : le tissu peint sur la vitre effaçait ses petits bois ; on repose les pixels de BOIS de l'image (chauds :
+  sur la N1 le verre est plus sombre que le bois, « les pixels sombres » ne rendait rien) — `curtainMullions`.
+- **Orphelins** : la façade change avec R ; un rideau dont la fenêtre n'existe plus n'est plus dessiné, le garde-meuble le montre (« décrochés »).
+- **Mode déco : la barre d'outils est cachée.** Vu en jeu : elle couvrait la façade (ses fenêtres et le pied du séjour ne se visaient plus).
+- Vu en jeu (`/audit-tmp`, 1024 × 768, un client) : page de Colette, aperçu teint, teinture payée et rendue en carton, sur-mesure commandé,
+  déballés ; canapé teint posé à la souris ; rideaux pendus à la souris (cuisine, façade du séjour) ; E « tirer les rideaux » ; l'ombre du soleil
+  derrière le canapé qui disparaît ; façade de la rue de jour (tirés, ouverts) et de nuit. Bancs : `verify-maison` 216/216 (§16 neuf),
+  `render-maison` (`maison-2d.png`, `maison-2d-teintes.png`), `verify-strings`, `verify-densite`, `verify-docs`.
+- **Pas vu** : deux clients, iPad, la nuit avec une pièce éteinte derrière des rideaux, un rideau orphelin pour de vrai (façade changée en jeu),
+  les combles et l'étage (la chambre est au banc seulement).
+
 ## 2026-10-21 (suite) — CHEZ SOI, LOT 2c : LES INTERRUPTEURS, LES LAMPES, LE FEU, LES OBJETS DE MUR, LA REVENTE
 
 Ses réponses (toutes sur la recommandation) : lumières **manuelles et gardées** ; le feu **s'allume avec E et dure** ; **quatre sortes

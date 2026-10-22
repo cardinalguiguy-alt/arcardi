@@ -106,7 +106,9 @@ function bloque(o, px, py, pz, sx, sy, sz) {
    2026-10-21 (lot 2c) — les lumières sont à la main : `appliques` (faux : l'interrupteur de la pièce est éteint, seules ses
    lampes et son feu éclairent) ; `feux` : [{ occ }] la cheminée ou le poêle qui flambe, une source basse (`FEU_Z`). */
 export const FEU_Z = 0.28;   // la hauteur de la flamme, en part de la hauteur du foyer
-export function homeRoomLights(plan, L, room, facade, faces, mode, lampes = [], appliques = true, feux = []) {
+/* 2026-10-22 (lot 2d) — `clos` : les fenêtres aux rideaux TIRÉS (un Set de clés `maison.homeWindows`, « S » ou « N » et le
+   bord gauche en centièmes de case) : de jour, elles ne laissent plus entrer le soleil. */
+export function homeRoomLights(plan, L, room, facade, faces, mode, lampes = [], appliques = true, feux = [], clos = null) {
   const out = [];
   const dedans = (lx, ly) => room.rects.some(([x0, y0, x1, y1]) => lx >= x0 && lx < x1 && ly >= y0 && ly < y1);
   if (mode === "jour") {
@@ -117,9 +119,10 @@ export function homeRoomLights(plan, L, room, facade, faces, mode, lampes = [], 
       out.push({ pts: [0.18, 0.5, 0.82].map((t) => [X(a + w * t), ys, zc]), k: w, r: 0 });
     };
     // la façade (au sud) : ses fenêtres qui donnent dans la pièce
-    if (facade) for (const [a, b] of facade.fenetres[L] || []) if (dedans((a + b) / 2, plan.d - 0.1)) baie(a, b, plan.d, false);
+    const tire = (side, a) => !!clos && clos.has(side + Math.round(a * 100));
+    if (facade) for (const [a, b] of facade.fenetres[L] || []) if (dedans((a + b) / 2, plan.d - 0.1) && !tire("S", a)) baie(a, b, plan.d, false);
     // le mur du fond de la pièce (la cuisine, les bains)
-    for (const f of faces) if (f.room === room.id) for (const [a, b] of f.fenetres || []) baie(Math.max(a, f.x0), Math.min(b, f.x1), f.y, true);
+    for (const f of faces) if (f.room === room.id) for (const [a, b] of f.fenetres || []) if (!tire("N", a)) baie(Math.max(a, f.x0), Math.min(b, f.x1), f.y, true);
   } else {
     for (const f of faces) {
       if (!appliques || f.room !== room.id) continue;

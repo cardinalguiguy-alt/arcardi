@@ -97,6 +97,7 @@ import * as MO from "./monture";       // 2026-10-11 — la physique des monture
 import * as MA from "./montureArt";    // 2026-10-11 — leur dessin (le véhicule en 3D sur la surface, le corps du rider)
 import { parkSoundUpdate, parkSoundEvent, parkSoundStop } from "./sonPark";   // 2026-10-11 — leurs sons, synthétisés
 import { chantierSoundUpdate, chantierSoundStop, chantierSoundClank } from "./sonChantier";   // 2026-10-12 — le chantier de la place s'entend
+import { homeDingDong } from "./sonMaison";   // 2026-10-22 (lot 4) — la sonnette des maisons, synthétisée
 import * as CH from "./chantier";      // 2026-10-11 — les chantiers de la place : l'horloge, l'équipe, les engins (pur)
 import * as CA from "./chantierArt";   // 2026-10-11 — leur dessin : engins, barrière, gestes des ouvriers
 import * as BN from "./bonhomme";   // 2026-10-05 — le bonhomme de neige : croissance des boules, empilement, décor, dégel (pur)      // 2026-10-04 — le patin à glace : la machine d'état du patineur (pure)      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
@@ -315,6 +316,31 @@ const RINK_INSIST = { t: 0, toast: 0 };
    coupe pas par le milieu. Un drapeau de MODULE, posé à chaque image par la boucle (`blockedTown` le lit). */
 const RINK_RACE = { island: false };
 const RINK_SURF = { parked: false };   // 2026-10-06 : la surfaceuse est-elle garée (alors sa place est occupée, `blockedTown`) ?
+/* 2026-10-22 (lot 2d) — LES PETITS BOIS D'UNE VITRE : les pixels de BOIS de la vitre de l'image (chauds : le rouge passe le bleu
+   de 10, et pas un reflet clair), sur un calque transparent à la taille de la vitre dans l'image. ⚠️ Premier jet « les pixels
+   sombres » : sur la façade N1 le verre (bleu nuit) est PLUS sombre que ses croisillons — rien ne revenait. Gardé par image et par vitre
+   (au plus 64 : §10, le nombre de canevas compte sur iPad). null tant que l'image n'est pas lisible. */
+const MULLIONS = new Map();
+function curtainMullions(img, q) {
+  if (!img || !img.naturalWidth) return null;
+  const k = img.src + "|" + q.x.toFixed(4) + "," + q.y.toFixed(4) + "," + q.w.toFixed(4) + "," + q.h.toFixed(4);
+  if (MULLIONS.has(k)) return MULLIONS.get(k);
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const sx = Math.round(q.x * iw), sy = Math.round(q.y * ih), sw = Math.max(1, Math.round(q.w * iw)), sh = Math.max(1, Math.round(q.h * ih));
+  const c = document.createElement("canvas"); c.width = sw; c.height = sh;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  let out = null;
+  try {
+    g.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    const id = g.getImageData(0, 0, sw, sh), d = id.data;
+    for (let i = 0; i < d.length; i += 4) { const lum = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; if (!(d[i] >= d[i + 2] + 10 && lum < 170)) d[i + 3] = 0; }
+    g.putImageData(id, 0, 0);
+    out = c;
+  } catch (e) { out = null; }
+  if (MULLIONS.size >= 64) MULLIONS.clear();
+  MULLIONS.set(k, out);
+  return out;
+}
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
@@ -345,6 +371,18 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
     if (sn.l > 0.01 && mip.snowL) { const im = loadBitmap(mip.snowL); if (im) { ctx.globalAlpha = a0 * sn.l; ctx.drawImage(im, left, top, dw, dh); } }
     if (sn.h > 0.01 && mip.snowH) { const im = loadBitmap(mip.snowH); if (im) { ctx.globalAlpha = a0 * sn.h; ctx.drawImage(im, left, top, dw, dh); } }
     ctx.globalAlpha = a0;
+  }
+  /* 2026-10-22 (lot 2d) — LES RIDEAUX D'UNE MAISON DE JOUEUR, dans ses vitres (`HMA.paintRideauRue`) : sur l'image de jour, AVANT la
+     lueur des vitres — une pièce allumée derrière des rideaux tirés luit au travers. Au pixel d'écran, comme la façade. */
+  const cu = glowOpts && glowOpts.curtains;
+  if (cu && cu.length) for (const q of cu) {
+    const X = Math.round(left + q.x * dw), Y = Math.round(top + q.y * dh), W = Math.round(q.w * dw), H = Math.round(q.h * dh);
+    HMA.paintRideauRue(ctx, X, Y, W, H, q);
+    /* ⚠️ VU EN JEU (2026-10-22) : le tissu peint sur la vitre effaçait ses PETITS BOIS — le rideau est derrière le verre, pas
+       devant. On repose par-dessus les pixels SOMBRES de la vitre de l'image (le bois des croisillons), lus une fois par image
+       et par vitre (`curtainMullions`). */
+    const mu = curtainMullions(img, q);
+    if (mu) ctx.drawImage(mu, X, Y, W, H);
   }
   let glowImg = null, glowParts = null;
   if (mip.glow && nightA > 0.01 && !(glowOpts && glowOpts.rects && !glowOpts.rects.length)) {
@@ -1157,11 +1195,60 @@ function sleeperHeadClosed(sheet) {
 /* Quand chacun s'est endormi (vu par CE client), et après combien il ferme les yeux : 1 à 7 s, tiré à l'endormissement. Rien
    sur le réseau : c'est un détail de dessin, chaque client tire le sien (noyau §3 : ce qui peut se déduire ne se diffuse pas). */
 const SLEEP_SEEN = new Map();
+/* 2026-10-22 (lot 4) — LA HAUTEUR DE L'ASSISE D'UN CANAPÉ, en px du MONDE au-dessus du point où se pose le personnage assis :
+   `A.drawSeated` le pose à la hauteur d'un banc de la ville ; l'assise d'un canapé (0,45 m réels × ½, `meubles.ECHELLE_Z`) se lit
+   un peu plus haut à l'échelle de la maison. Réglé en jeu. */
+const HOME_ASSISE_PX = 5;   // 2 au premier jet : vu à la planche (`maison-4.png`), les hanches au bord avant du coussin ; à 5, le dos au dossier
+
+/* ╔════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-22 (lot 2d) — UN SPRITE DE MEUBLE TEINT PAR COLETTE (`HM.homeTeinteCouleurs`, `HMA.teindrePx`).
+   ╚════════════════════════════════════════════════════════════════════════
+   Le sprite Blender et ses passes (`/maison/teinte/<meuble>_<O>_<a|b|g>.png`, tools/blender/rendre_teintes.py) recomposés
+   UNE FOIS par sprite et par teinte, gardés (au plus 48 : §10, le nombre de canevas compte sur iPad). Les pixels se lisent
+   dans UN SEUL canevas de travail, réutilisé. Tant que les passes arrivent, le sprite d'origine (un instant, à l'entrée). */
+const HOME_DYED = new Map();
+let homeDyeScratch = null;
+function homeDyedImg(nom, t) {
+  const base = loadBitmap(HM.homeSpriteUrl(nom));
+  if (!t || !base) return base;
+  const k = nom + "~" + t;
+  if (HOME_DYED.has(k)) return HOME_DYED.get(k);
+  const i = nom.lastIndexOf("_"), o = nom.slice(i + 1), cc = HM.homeTeinteCouleurs(nom.slice(0, i), t);
+  if (!cc) return base;
+  const pas = (p) => loadBitmap(HM.homeTeinteUrl(cc.base, o, p));
+  const pa = pas("a"), pb = cc.b ? pas("b") : null, pg = pas("g");
+  if (!pa || !pg || (cc.b && !pb)) return base;
+  const w = base.naturalWidth || base.width, h = base.naturalHeight || base.height;
+  if (!homeDyeScratch) homeDyeScratch = document.createElement("canvas");
+  homeDyeScratch.width = w; homeDyeScratch.height = h;
+  const sg = homeDyeScratch.getContext("2d", { willReadFrequently: true });
+  const px = (im) => { sg.clearRect(0, 0, w, h); sg.drawImage(im, 0, 0); return sg.getImageData(0, 0, w, h).data; };
+  const out = document.createElement("canvas"); out.width = w; out.height = h;
+  const og = out.getContext("2d"), id = og.createImageData(w, h);
+  id.data.set(HMA.teindrePx(px(base), px(pa), pb ? px(pb) : null, px(pg), cc.a, cc.b));
+  og.putImageData(id, 0, 0);
+  if (HOME_DYED.size >= 48) HOME_DYED.clear();
+  HOME_DYED.set(k, out);
+  return out;
+}
 
 /* 2026-10-21 (lot 2c) — L'IMAGE D'UN OBJET DU GARDE-MEUBLE OU DU CATALOGUE, pour une balise <img> : le sprite Blender d'un
    meuble ; pour un objet de mur (peint, sans PNG), sa peinture (`maisonArt.bakeMural`) en data URL, faite une fois. */
 const HOME_MURAL_SRC = new Map();
-function homeItemSrc(sp) {
+function homeItemSrc(sp, t = null) {
+  // 2026-10-22 (lot 2d) — des rideaux : une fenêtre et ses rideaux ouverts, dans leur teinte ; un meuble teint : son sprite recoloré
+  if (HM.homeRideau(sp)) {
+    const te = HM.homeRideauTeinte({ s: sp, t }), k = "rideau|" + te.id;
+    if (!HOME_MURAL_SRC.has(k)) HOME_MURAL_SRC.set(k, HMA.bakeRideauIcon((cw, ch) => { const c = document.createElement("canvas"); c.width = cw; c.height = ch; return c; }, te.a, te.b).toDataURL());
+    return HOME_MURAL_SRC.get(k);
+  }
+  if (t && !HM.HOME_MURAUX[sp]) {
+    const nom = sp + "_" + (HM.homeOrients(sp)[0] || "S"), k = nom + "~" + t;
+    if (HOME_MURAL_SRC.has(k)) return HOME_MURAL_SRC.get(k);
+    const im = homeDyedImg(nom, t);
+    if (im && im.toDataURL) { HOME_MURAL_SRC.set(k, im.toDataURL()); return HOME_MURAL_SRC.get(k); }
+    return HM.homeSpriteUrl(nom);   // les passes arrivent : le sprite d'origine en attendant
+  }
   if (!HM.HOME_MURAUX[sp]) return HM.homeSpriteUrl(sp + "_" + (HM.homeOrients(sp)[0] || "S"));
   if (!HOME_MURAL_SRC.has(sp)) {
     const [w, h] = HMA.muralPx(HM.HOME_MURAUX[sp]);
@@ -2462,6 +2549,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
   const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, homes: {}, star: Q.newStar() });
+  /* 2026-10-22 (lot 4) — LA SONNETTE ET LES VISITES. ⚠️ DÉCLARÉS APRÈS `sharedRef` EXPRÈS : le harnais `app/audit-tmp` vise les
+     crochets React d'AVANT lui par leur distance à lui (`__hook(302…307)`) — un crochet ajouté plus haut les décalerait tous.
+     `homeVisitUi` : { bell: { from, name, slot } (on sonne chez moi), keys: true (le crochet ouvert), guests: [{ id, name }] (qui
+     est chez moi) } ; `homeBellsRef` (L'HÔTE SEUL) : par visiteur, sa dernière sonnette { owner, slot, t, done } ; `homeRingRef` :
+     ma sonnette en attente (le délai de « personne ne répond »). */
+  const [homeVisitUi, setHomeVisitUi] = useState(null);
+  const homeBellsRef = useRef(new Map());
+  const homeRingRef = useRef(null);
+  const homeGuestsKeyRef = useRef("");
+  /* Qui est chez moi (le panneau « Raccompagner ») : relu deux fois par seconde dans les positions qui arrivent déjà (noyau §3 :
+     ce qui se déduit ne se diffuse pas). ⚠️ Monté une fois (noyau §4) : il ne lit que des refs et des fonctions qui lisent des refs. */
+  useEffect(() => {
+    const id = setInterval(() => {
+      const slot = homeSlotOfId(me.id), g = [];
+      if (slot >= 0) for (const [pid, p] of playersRef.current) if (p && p.zone === "home" && HM.homeFootLocal(p.x, p.y).slot === slot) g.push({ id: pid, name: p.name || "?" });
+      const k = g.map((x) => x.id).join(",");
+      if (k !== homeGuestsKeyRef.current) { homeGuestsKeyRef.current = k; setHomeVisitUi((u) => ({ ...(u || {}), guests: g })); }
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
   /* 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE, CE QUI EST LOCAL (`course.js`). La session vit dans l'état partagé
      (`sharedRef.current.rink`, arbitrée par l'hôte) ; ici, ce que CE client mesure : ses horloges (datées à la RÉCEPTION
      des durées que l'hôte envoie, §3), son compteur de tours, son chrono, son fantôme, les courses des résidents (tirées de
@@ -5479,6 +5586,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostFlushOut(out, f, null);
       return;
     }
+    if (req.kind === "devColette") {
+      /* 2026-10-22 (lot 2d) — COLETTE EMMÉNAGE (menu développeur) : sa page du catalogue n'existe qu'une fois résidente, et
+         « Peupler la ferme » installe d'abord les artisans nommés — elle n'y vient qu'au-delà. Même famille que devResidents :
+         l'hôte l'installe (rid réel du roster), dans la limite de MAX_RESIDENTS. */
+      const st2 = s.station || (s.station = E.newStationState());
+      if (!Array.isArray(st2.residents)) st2.residents = [];
+      const deja = HM.homeColetteHere(st2), plein = st2.residents.length >= C.MAX_RESIDENTS;
+      if (!deja && !plein) {
+        const ro2 = C.VISITOR_ROSTER.find((v) => v.rid === HM.HOME_COLETTE_RID);
+        st2.residents.push({ rid: ro2.rid, job: ro2.job, sinceDay: (s.day | 0) || 1 });
+        dirtyRef.current = true;
+        broadcastStation();
+      }
+      broadcastChat("🛠️", L.devColetteChat(f.name, deja ? "deja" : plein ? "plein" : "ok"));
+      hostFlushOut(out, f, null);
+      return;
+    }
     if (req.kind === "devHomeGift") {
       /* 2026-10-16 (lot 2a) — un exemplaire de chaque meuble au garde-meuble du
          demandeur (le catalogue est le lot 2b). Même famille que devMoney. */
@@ -6148,7 +6272,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     } else if (req.kind === "homePlace" || req.kind === "homeStore" || req.kind === "homeDecor" || req.kind === "homeOrder" || req.kind === "homeUnbox" || req.kind === "homeCartonsIn"
-               || req.kind === "homeHang" || req.kind === "homeSwitch" || req.kind === "homeLamp" || req.kind === "homeFire" || req.kind === "homeSell") {   // 2026-10-21 : lot 2c
+               || req.kind === "homeHang" || req.kind === "homeSwitch" || req.kind === "homeLamp" || req.kind === "homeFire" || req.kind === "homeSell"   // 2026-10-21 : lot 2c
+               || req.kind === "homeDye" || req.kind === "homeCurtain" || req.kind === "homeDrape"   // 2026-10-22 : lot 2d (Colette)
+               || req.kind === "homeRing" || req.kind === "homeBellAnswer" || req.kind === "homeKeyEnter" || req.kind === "homeKeys" || req.kind === "homeShowOut") {   // 2026-10-22 : lot 4 (visites)
+      if (homeVisitReq(req, f, out)) { hostFlushOut(out, f, null); return; }   // 2026-10-22 (lot 4) : un geste d'INVITÉ, chez un autre
       /* ═══ 2026-10-16 (lot 2a) — LA MAISON, ARBITRÉE PAR L'HÔTE ═══
          Le joueur ne touche qu'à SA maison (sa parcelle doit être une étroite).
          Les règles sont dans `maison.js` (pures, `verify-maison` §7) ; ici on
@@ -6172,6 +6299,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (req.kind === "homeSwitch") r = HM.resolveHomeSwitch(h, req, P);
         else if (req.kind === "homeLamp") r = HM.resolveHomeLamp(h, req);
         else if (req.kind === "homeFire") r = HM.resolveHomeFire(h, req, P, HM.homeGameMin(day, E.gameTimeMin(s.dayStartAt, Date.now())));
+        /* 2026-10-22 (lot 2d) — accrocher des rideaux, les tirer ; TEINDRE chez Colette (résidente : sinon refusé), payé par la
+           caisse commune, rendu le lendemain dans un carton. */
+        else if (req.kind === "homeCurtain") r = HM.resolveHomeCurtain(h, req, P, fac);
+        else if (req.kind === "homeDrape") r = HM.resolveHomeDrape(h, req);
+        else if (req.kind === "homeDye") {
+          r = HM.homeColetteHere(s2.station) ? HM.resolveHomeDye(h, req, day) : { ok: false, raison: "colette" };
+          if (r.ok && s.money < r.prix) r = { ok: false, raison: "or" };
+          if (r.ok) { s.money -= r.prix; out.state = shareState(); out.toast = { id: f.id, key: "homeDyed", n: { s: (HM.homeCartons(h).find((c) => c.u === (req.u | 0)) || {}).s, t: req.t } }; }
+        }
         else if (req.kind === "homeSell") {
           r = HM.resolveHomeSell(h, req);
           if (r.ok && r.prix > 0) { s.money += r.prix; out.state = shareState(); }
@@ -6179,9 +6315,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         else if (req.kind === "homeOrder") {
           /* 2026-10-18 (lot 2b) — COMMANDER AU CATALOGUE : la caisse commune paie, le carton part (livré demain matin). */
-          r = HM.resolveHomeOrder(h, req, day);
+          r = HM.resolveHomeOrder(h, req, day, HM.homeColetteHere(s2.station));   // 2026-10-22 (lot 2d) : le sur-mesure de Colette
           if (r.ok && s.money < r.prix) r = { ok: false, raison: "or" };
-          if (r.ok) { s.money -= r.prix; out.state = shareState(); out.toast = { id: f.id, key: "homeOrdered", n: req.s }; }
+          if (r.ok) { s.money -= r.prix; out.state = shareState(); out.toast = { id: f.id, key: "homeOrdered", n: req.t ? { s: req.s, t: req.t } : req.s }; }
         } else {
           r = HM.resolveHomeDecor(h, req, P);
           if (r.ok && s.money < r.prix) r = { ok: false, raison: "or" };
@@ -7389,6 +7525,80 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      deux descriptions d'une même chose finissent toujours par diverger
      (leçon du zip 387, appliquée à la couche réseau).
      ========================================================================== */
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-22 (lot 4) — LES VISITES, ARBITRÉES PAR L'HÔTE (`maison.js`, « LOT 4 »).
+     ╚══════════════════════════════════════════════════════════════════════
+     Sonner (`homeRing`), répondre (`homeBellAnswer`), entrer avec son double (`homeKeyEnter`), donner ou reprendre un double
+     (`homeKeys`), raccompagner (`homeShowOut`), et les gestes d'un INVITÉ chez un autre (`HM.HOME_GESTES_INVITE`, avec
+     `req.slot`). Rend vrai si la requête était une des siennes (`out` est rempli). ⚠️ L'INVITÉ EST VÉRIFIÉ À SA POSITION : il
+     doit se tenir dans la maison de `req.slot` (la position voyage déjà, noyau §3 : ce qui se déduit ne se diffuse pas).
+     Une sonnette ne se sauvegarde pas : elle vit 30 s, ici, en mémoire. */
+  function homeVisitReq(req, f, out) {
+    const ids = homeIds(), online = (id) => id === me.id || playersRef.current.has(id);
+    const nameOf = (id) => ((farmersRef.current || {})[id] || {}).name || "?";
+    const now = Date.now(), bells = homeBellsRef.current;
+    if (req.kind === "homeRing") {
+      const slot = req.slot | 0, owner = ids[slot], hsn = C.TOWN_HOUSES[slot];
+      if (!owner || owner === f.id || !hsn) return true;
+      if (!HM.homeHasInterior(hsn)) { out.toast = { id: f.id, key: "homeNoInterior", n: nameOf(owner) }; return true; }
+      const prev = bells.get(f.id);
+      if (prev && now - prev.t < HM.HOME_SONNETTE_PAUSE_MS) { out.toast = { id: f.id, key: "homeBellWait" }; return true; }
+      if (!online(owner)) { out.toast = { id: f.id, key: "homeNobody", n: nameOf(owner) }; return true; }
+      bells.set(f.id, { owner, slot, t: now, done: false });
+      out.homeBell = { to: owner, from: f.id, name: f.name || nameOf(f.id), slot };
+      out.toast = { id: f.id, key: "homeRang", n: nameOf(owner) };
+      return true;
+    }
+    if (req.kind === "homeBellAnswer") {
+      const from = String(req.from || ""), b = bells.get(from);
+      if (!b || b.owner !== f.id || b.done || now - b.t > HM.HOME_SONNETTE_MS + 3000) { out.toast = { id: f.id, key: "homeBellLate" }; return true; }
+      b.done = true;
+      out.homePass = { to: from, slot: b.slot, ok: !!req.ok, name: nameOf(f.id) };
+      return true;
+    }
+    if (req.kind === "homeKeyEnter") {
+      const slot = req.slot | 0, owner = ids[slot];
+      if (!owner || owner === f.id) return true;
+      if (!HM.homeHasKey(HM.homeOf(sharedRef.current.homes, owner), f.id)) { out.toast = { id: f.id, key: "homeNoKey" }; return true; }
+      out.homePass = { to: f.id, slot, ok: true, cle: true, name: nameOf(owner) };
+      if (online(owner) && owner !== f.id) out.toasts = [{ id: owner, key: "homeKeyIn", n: nameOf(f.id) }];
+      return true;
+    }
+    if (req.kind === "homeKeys") {
+      const slotF = homeSlotOfId(f.id);
+      if (slotF < 0 || !HM.homeHasInterior(C.TOWN_HOUSES[slotF])) return true;
+      const s2 = sharedRef.current;
+      if (!s2.homes) s2.homes = {};
+      const h = HM.homeClone(HM.homeOf(s2.homes, f.id)), who = String(req.who || "");
+      const r = (farmersRef.current || {})[who] ? HM.resolveHomeKeys(h, req, f.id) : { ok: false, raison: "cle" };
+      if (r.ok) {
+        s2.homes[f.id] = h; dirtyRef.current = true;
+        out.toasts = [{ id: f.id, key: req.v ? "homeKeyGiven" : "homeKeyTaken", n: nameOf(who) }, { id: who, key: req.v ? "homeKeyGot" : "homeKeyLost", n: nameOf(f.id) }];
+      } else out.toast = { id: f.id, key: "homeRefus", n: r.raison };
+      out.home = { id: f.id, h: s2.homes[f.id] || HM.homeOf(s2.homes, f.id) };
+      return true;
+    }
+    if (req.kind === "homeShowOut") {
+      const who = String(req.who || ""), slotF = homeSlotOfId(f.id);
+      if (!who || who === f.id || slotF < 0) return true;
+      out.homeOut = { to: who, slot: slotF, name: nameOf(f.id) };
+      return true;
+    }
+    if (HM.HOME_GESTES_INVITE.has(req.kind) && req.slot != null && (req.slot | 0) !== homeSlotOfId(f.id)) {
+      const slot = req.slot | 0, owner = ids[slot], pos = f.id === me.id ? meRef.current : playersRef.current.get(f.id);
+      const ici = pos && pos.zone === "home" && HM.homeFootLocal(pos.x, pos.y).slot === slot;
+      if (!owner || !ici) { out.toast = { id: f.id, key: "homeRefus", n: "invite" }; return true; }
+      const s2 = sharedRef.current;
+      if (!s2.homes) s2.homes = {};
+      const h = HM.homeClone(HM.homeOf(s2.homes, owner)), P = HM.PLAN_ETROITE, fac = homeFacadeOfSlot(slot);
+      const r = req.kind === "homeSwitch" ? HM.resolveHomeSwitch(h, req, P) : req.kind === "homeLamp" ? HM.resolveHomeLamp(h, req)
+        : req.kind === "homeDrape" ? HM.resolveHomeDrape(h, req) : HM.resolveHomeFire(h, req, P, HM.homeGameMin(s2.day | 0, E.gameTimeMin(s2.dayStartAt, now)));
+      if (r.ok) { s2.homes[owner] = h; dirtyRef.current = true; }
+      out.home = { id: owner, h: s2.homes[owner] || HM.homeOf(s2.homes, owner) };
+      return true;
+    }
+    return false;
+  }
   function hostFlushOut(out, f, questId) {
     const s = sharedRef.current;
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -9553,6 +9763,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sh.homes = { ...(sh.homes || {}), [p.home.id]: p.home.h };
       bumpHome();
     }
+    /* 2026-10-22 (lot 4) — LES VISITES. On SONNE chez moi (où que je sois) : le panneau Ouvrir / Refuser, 30 s. On m'OUVRE (ou
+       ma clé est bonne) : j'entre, si je suis encore en ville. On me RACCOMPAGNE : je sors, si je suis encore chez lui. */
+    if (p.homeBell && p.homeBell.to === me.id) {
+      const b = { from: p.homeBell.from, name: p.homeBell.name, slot: p.homeBell.slot, t0: Date.now() };
+      setHomeVisitUi((u) => ({ ...(u || {}), bell: b }));
+      homeDingDong(1);
+      setTimeout(() => setHomeVisitUi((u) => (u && u.bell && u.bell.t0 === b.t0 ? { ...u, bell: null } : u)), HM.HOME_SONNETTE_MS);
+    }
+    if (p.homePass && p.homePass.to === me.id) {
+      homeRingRef.current = null;
+      const m = meRef.current;
+      if (!p.homePass.ok) pushToast(L.homeBellNo(p.homePass.name));
+      else if (m && m.zone === "town") { pushToast(p.homePass.cle ? L.homeKeyOpen(p.homePass.name) : L.homeBellYes(p.homePass.name)); enterHome(p.homePass.slot); }
+    }
+    if (p.homeOut && p.homeOut.to === me.id) {
+      const m = meRef.current;
+      if (m && m.zone === "home" && HM.homeFootLocal(m.x, m.y).slot === p.homeOut.slot) { m.sitOn = null; m.seat = 0; pushToast(L.homeShownOut(p.homeOut.name)); leaveHome(); }
+    }
+    if (Array.isArray(p.toasts)) for (const t of p.toasts) if (t && t.id === me.id) pushToast(toastMsg(t.key, t.n));
+    // une sonnette refusée d'emblée (personne, trop tôt, pas d'intérieur) ne doit pas dire aussi « personne ne répond » 30 s plus tard
+    if (p.toast && p.toast.id === me.id && ["homeNobody", "homeBellWait", "homeNoInterior", "homeNoKey"].includes(p.toast.key)) homeRingRef.current = null;
     if (p.wardrobe) {
       const before = wardrobeLookOf(me.id);
       sharedRef.current.wardrobe = p.wardrobe;
@@ -9988,9 +10219,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "salonDone") return L.salonDone;   // 2026-10-21 — le salon de coiffure
     if (key === "salonNoGold") return L.salonNoGold;
     if (key === "homeRefus") return L.homeRefus(n);
-    if (key === "homeOrdered") return L.homeOrdered(L.homeMeubleName(n));   // 2026-10-18 (lot 2b)
+    if (key === "homeOrdered") return L.homeOrdered(n && n.t ? L.homeTeinteDe(L.homeMeubleName(n.s), L.homeTeinteName(n.t)) : L.homeMeubleName(n));   // 2026-10-18 (lot 2b) ; 2026-10-22 : le sur-mesure de Colette dit sa teinte
     if (key === "homeSold") return L.homeSold(L.homeMeubleName((n || {}).s), (n || {}).prix | 0);   // 2026-10-21 (lot 2c) : la revente
     if (key === "homeThrown") return L.homeThrown(L.homeMeubleName((n || {}).s));
+    // 2026-10-22 (lot 4) — les visites
+    if (key === "homeNoInterior") return L.homeNoInterior(n);
+    if (key === "homeBellWait") return L.homeBellWait;
+    if (key === "homeNobody") return L.homeNobody(n);
+    if (key === "homeRang") return L.homeRang(n);
+    if (key === "homeBellLate") return L.homeBellLate;
+    if (key === "homeNoKey") return L.homeNoKey;
+    if (key === "homeKeyIn") return L.homeKeyIn(n);
+    if (key === "homeKeyGiven") return L.homeKeyGiven(n);
+    if (key === "homeKeyTaken") return L.homeKeyTaken(n);
+    if (key === "homeKeyGot") return L.homeKeyGot(n);
+    if (key === "homeKeyLost") return L.homeKeyLost(n);
+    if (key === "homeDyed") return L.homeDyed(L.homeMeubleName((n || {}).s), L.homeTeinteName((n || {}).t));   // 2026-10-22 (lot 2d)
     if (key === "homeUnboxed") return L.homeUnboxed(L.homeMeubleName(n));   // 2026-10-16 (lot 2a) : pourquoi une pose ou un décor est refusé
     if (key === "boutiqueBought") {
       const t = n || {};
@@ -17622,7 +17866,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      liste » aurait rendu l'un des deux inaccessible). Le même calcul sert l'invite (`drawHomeFrame`) et la touche (`onAct`) :
      ce qu'on lit est ce qu'on fait. Rend { key (l'invite), req (ou null : se coucher), d } ou null. Chez soi seulement. */
   function homeUseTarget(slot, L, lx, ly) {
-    if (slot !== homeSlotOfId(me.id)) return null;
+    /* 2026-10-22 (lot 4) — CHEZ UN AUTRE AUSSI : un invité se sert de la lumière, des rideaux, du feu (`HM.HOME_GESTES_INVITE`,
+       l'hôte le vérifie à sa position) et s'assoit ; le lit et le crochet restent au propriétaire. Chaque `req` porte `slot`. */
+    const mine = slot === homeSlotOfId(me.id);
     const P = HM.PLAN_ETROITE, fac = homeFacadeOfSlot(slot), home = homeOfSlot(slot), night = homeNightRef.current > 0.08;
     const me0 = HM.homeRoomAt(P, L, lx, ly);
     if (!me0) return null;
@@ -17630,29 +17876,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const roomOn = (id) => HM.homeRoomOn(home, L, id, night && id === me0.id);
     const cands = [];
     const sw = HM.homeSwitchNear(P, L, lx, ly);
-    if (sw) { const on = roomOn(sw.piece); cands.push({ d: sw.d, key: on ? "homeSwitchOff" : "homeSwitchOn", req: { kind: "homeSwitch", n: L, piece: sw.piece, v: on ? 0 : 1 } }); }
+    if (sw) { const on = roomOn(sw.piece); cands.push({ d: sw.d, key: on ? "homeSwitchOff" : "homeSwitchOn", req: { kind: "homeSwitch", n: L, piece: sw.piece, v: on ? 0 : 1, slot } }); }
     const dist = (f) => HM.homeDistToRects([HM.homeFurnitureRect(f)], lx, ly);
     const now = homeNowMin();
     for (const f of HM.homeMeublesAt(home, L)) {
       if (HM.HOME_LAMPE.test(f.sprite) && HM.homeNearFurnitureIn(P, L, f, lx, ly)) {
         const [x0, y0, x1, y1] = HM.homeFurnitureRect(f), pc = HM.homeRoomAt(P, L, (x0 + x1) / 2, (y0 + y1) / 2);
         const on = HM.homeLampOn(f, pc && roomOn(pc.id));
-        cands.push({ d: dist(f), key: on ? "homeLampOff" : "homeLampOn", req: { kind: "homeLamp", u: f.u, v: on ? 0 : 1 } });
+        cands.push({ d: dist(f), key: on ? "homeLampOff" : "homeLampOn", req: { kind: "homeLamp", u: f.u, v: on ? 0 : 1, slot } });
       }
       if (/^poele/.test(f.sprite) && HM.homeNearFurnitureIn(P, L, f, lx, ly)) {
         const lv = HM.homeFireLevel(f.f, now);
-        cands.push({ d: dist(f), key: lv >= 1 ? "homeFireOff" : lv > 0 ? "homeFireRevive" : "homeFireOn", req: { kind: "homeFire", u: f.u, v: lv >= 1 ? 0 : 1 } });
+        cands.push({ d: dist(f), key: lv >= 1 ? "homeFireOff" : lv > 0 ? "homeFireRevive" : "homeFireOn", req: { kind: "homeFire", u: f.u, v: lv >= 1 ? 0 : 1, slot } });
       }
-      if (/^lit/.test(f.sprite) && HM.homeNearFurnitureIn(P, L, f, lx, ly)) cands.push({ d: dist(f), key: energyRef.current >= C.MAX_ENERGY ? "homeBedFull" : "homeBed", req: null });
+      if (mine && /^lit/.test(f.sprite) && HM.homeNearFurnitureIn(P, L, f, lx, ly)) cands.push({ d: dist(f), key: energyRef.current >= C.MAX_ENERGY ? "homeBedFull" : "homeBed", req: null });
     }
+    // 2026-10-22 (lot 2d) — les rideaux d'une fenêtre de la pièce : E les tire ou les ouvre (l'état VOULU part, comme l'interrupteur)
+    const rd = HM.homeRideauNear(home, P, fac, L, lx, ly);
+    if (rd) cands.push({ d: rd.d, key: rd.it.f ? "homeDrapeOpen" : "homeDrapeClose", req: { kind: "homeDrape", n: L, k: rd.w.k, v: rd.it.f ? 0 : 1, slot } });
+    // 2026-10-22 (lot 4) — une place libre (canapé, fauteuil) : les autres joueurs assis dans CETTE maison la prennent (`p.sit` = [u, −1, place])
+    const prises = new Set();
+    for (const p of playersRef.current.values()) {
+      if (p.zone === "home" && Array.isArray(p.sit) && p.sit[1] === -1 && HM.homeFootLocal(p.x, p.y).slot === slot) prises.add(p.sit[0] + ":" + (p.sit[2] | 0));
+    }
+    const seat = HM.homeSeatNear(home, P, fac, L, lx, ly, prises);
+    if (seat) cands.push({ d: seat.d + 0.05, key: "homeSit", req: null, sit: seat });   // +0,05 : la lampe posée à côté du fauteuil passe d'abord
+    if (mine && L === 0 && HM.homeNearCrochet(P, lx, ly)) { const c = HM.homeCrochet(P); cands.push({ d: Math.hypot(lx - c.lx, ly - c.y), key: "homeKeysHook", req: null, keys: true }); }
     const hearth = HM.homeFixes(P, L, fac).find((f) => /^cheminee/.test(f.sprite));
     if (hearth && HM.homeNearFurnitureIn(P, L, hearth, lx, ly, 0.8)) {
       const lv = HM.homeFireLevel(HM.homeFires(home)[HM.homeHearthKey(L)], now);
-      cands.push({ d: dist(hearth), key: lv >= 1 ? "homeFireOff" : lv > 0 ? "homeFireRevive" : "homeFireOn", req: { kind: "homeFire", k: "cheminee", n: L, v: lv >= 1 ? 0 : 1 } });
+      cands.push({ d: dist(hearth), key: lv >= 1 ? "homeFireOff" : lv > 0 ? "homeFireRevive" : "homeFireOn", req: { kind: "homeFire", k: "cheminee", n: L, v: lv >= 1 ? 0 : 1, slot } });
     }
     return cands.length ? cands.reduce((a, b) => (b.d < a.d ? b : a)) : null;
   }
   function homeMeublesOfSlot(slot, L) { return HM.homeMeublesAt(homeOfSlot(slot), L); }
+  /* 2026-10-22 (lot 4) — S'ASSEOIR, chez soi comme en visite : on prend la place (`HM.homeSeats`), on regarde comme le meuble.
+     `sitOn` = { x: le meuble (u), y: −1 (une maison, pas un banc de la ville) } et `seat` la place : la position voyage déjà
+     (`pub.sit`), rien de plus sur le réseau. On garde d'où l'on vient pour s'y relever (on se lève devant le meuble). */
+  function canStandHomeAt(x, y) { return HM.homeCanStand(x, y, homeFacadeOfSlot, homeMeublesOfSlot); }   // la même règle que la boucle (`canStandHome`)
+  function homeSitDown(slot, L, seat) {
+    const m = meRef.current;
+    if (!m || m.zone !== "home") return;
+    m.homeSeatFrom = { x: m.x, y: m.y };
+    const w = HM.homeToWorld(slot, L, seat.lx, seat.ly);
+    m.x = w.x - C.BODY_CX; m.y = w.y - C.BODY_FY; m.dir = seat.dir; m.moving = false; m.animT = 0;
+    m.sitOn = { x: seat.u, y: -1 }; m.seat = seat.k;
+    sendPos();
+  }
+  function homeStandUp() {
+    const m = meRef.current;
+    if (!m || !m.sitOn) return;
+    if (m.homeSeatFrom && canStandHomeAt(m.homeSeatFrom.x, m.homeSeatFrom.y)) { m.x = m.homeSeatFrom.x; m.y = m.homeSeatFrom.y; }
+    m.sitOn = null; m.seat = 0; m.homeSeatFrom = null;
+    sendPos();
+  }
   /* LE MODE DÉCO (décision 1) : chez soi seulement. `hand` : le meuble tenu
      ({ u, s, o, from: "garde"|"pose", x, y, n } — x, y : sa place d'avant, pour
      Échap). L'écran le lit dans la boucle (ref), le panneau dans l'état. */
@@ -17674,15 +17951,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* LA POSE OPTIMISTE : ma maison change tout de suite à l'écran, la requête
      part, et la réponse de l'hôte (la maison entière) la confirme ou la défait. */
   function homeApplyMine(req) {
-    const sh = sharedRef.current, slot = homeSlotOfId(me.id);
-    const h = HM.homeClone(HM.homeOf(sh.homes, me.id));
+    /* 2026-10-22 (lot 4) — `req.slot` : la maison où le geste se fait (un invité allume chez son ami) ; absent = la mienne. */
+    const sh = sharedRef.current, slot = req.slot != null ? req.slot | 0 : homeSlotOfId(me.id), owner = homeIds()[slot] || me.id;
+    const h = HM.homeClone(HM.homeOf(sh.homes, owner));
     const P = HM.PLAN_ETROITE, fac = homeFacadeOfSlot(slot);
     /* 2026-10-21 (lot 2c) — accrocher, l'interrupteur, la lampe et le feu aussi : la lumière qui tarde d'un aller-retour (jusqu'à
        300 ms vers l'Australie) se lit comme une touche qui n'a pas pris. La vente, non : l'or est à l'hôte. */
     const r = req.kind === "homePlace" ? HM.resolveHomePlace(h, req, P, fac) : req.kind === "homeStore" ? HM.resolveHomeStore(h, req)
       : req.kind === "homeHang" ? HM.resolveHomeHang(h, req, P) : req.kind === "homeSwitch" ? HM.resolveHomeSwitch(h, req, P)
-      : req.kind === "homeLamp" ? HM.resolveHomeLamp(h, req) : req.kind === "homeFire" ? HM.resolveHomeFire(h, req, P, homeNowMin()) : { ok: false };
-    if (r.ok) { sh.homes = { ...(sh.homes || {}), [me.id]: h }; bumpHome(); }
+      : req.kind === "homeLamp" ? HM.resolveHomeLamp(h, req) : req.kind === "homeFire" ? HM.resolveHomeFire(h, req, P, homeNowMin())
+      : req.kind === "homeCurtain" ? HM.resolveHomeCurtain(h, req, P, fac) : req.kind === "homeDrape" ? HM.resolveHomeDrape(h, req) : { ok: false };   // 2026-10-22 (lot 2d)
+    if (r.ok) { sh.homes = { ...(sh.homes || {}), [owner]: h }; bumpHome(); }
     sendReq(req);
     return r;
   }
@@ -17700,8 +17979,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function homeTakeFromGarde(u) {
     const h = HM.homeOf(sharedRef.current.homes, me.id), it = h.g.find((x) => x.u === u);
-    if (!it) return;
-    homeDecoSet({ hand: { u, s: it.s, o: HM.homeOrients(it.s)[0] || "S", from: "garde" }, tab: "meubles" });
+    // 2026-10-22 (lot 2d) — un rideau ORPHELIN (sa fenêtre a disparu avec la façade) se reprend comme s'il était posé
+    const orph = !it && HM.homeRideauxOrphelins(h, HM.PLAN_ETROITE, homeFacadeOfSlot(homeSlotOfId(me.id))).find((x) => x.it.u === u);
+    if (!it && !orph) return;
+    const src = it || orph.it;
+    homeDecoSet({ hand: { u, s: src.s, t: src.t, o: HM.homeOrients(src.s)[0] || "S", from: it ? "garde" : "pose" }, tab: "meubles" });
   }
   /* La façade de la maison d'un emplacement : le modèle que son propriétaire a
      choisi avec R (sa préférence voyage déjà, `facadeStyle`) et la version de
@@ -17971,6 +18253,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            rez-de-chaussée. La position en ville est gardée pour ressortir par où
            l'on est entré, exactement comme pour le tribunal. */
         m.townX = m.x; m.townY = m.y;
+        m.sitOn = null; m.seat = 0; m.homeSeatFrom = null;   // 2026-10-22 (lot 4) : assis sur un banc de la ville, on se lève pour entrer
         const fac = homeFacadeOfSlot(zt.slot);
         const sp = HM.homeSpawnLocal(fac);
         const w = HM.homeToWorld(zt.slot, 0, sp.lx, sp.ly);
@@ -17985,6 +18268,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (zt.slot === homeSlotOfId(me.id) && HM.homeCartons(HM.homeOf(sharedRef.current.homes, me.id)).some((c) => c.d <= (sharedRef.current.day | 0) && !c.i)) sendReq({ kind: "homeCartonsIn" });
       } else if (zt.dest === "townFromHome") {
         m.zone = "town";
+        m.sitOn = null; m.seat = 0; m.homeSeatFrom = null;   // 2026-10-22 (lot 4) : `sitOn` d'une maison ({ x: u, y: −1 }) n'est pas un banc
         const slot0 = HM.homeSlotOf(C.footX(m.x)), h0 = C.TOWN_HOUSES[slot0];
         m.x = (typeof m.townX === "number" ? m.townX : (h0 ? h0.x + 3 : C.TOWN_SPAWN.x));
         m.y = (typeof m.townY === "number" ? m.townY : (h0 ? h0.y + C.TOWN_HOUSE_H + 1 : C.TOWN_SPAWN.y));
@@ -26568,13 +26852,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const lit = w.lamp ? true : wr ? HM.homeRoomShines(HM.PLAN_ETROITE, hm, wr.L, wr.piece, homeOccupied.has(o.homeSlot + "|" + wr.L + "|" + wr.piece), hmNow)
               : hm ? (wi++, false) : LUM.windowLit(o.hi, wi++, winTmin, winNa, o.asleep);
             if (!lit || w.ghost) continue;
-            rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
+            /* 2026-10-22 (lot 2d) — derrière des rideaux OUVERTS, la lueur ne prend que le milieu de la vitre (les pans restent du
+               tissu) ; derrière des rideaux TIRÉS, toute la vitre, plus faible : la lumière passe au travers du tissu. */
+            const rd = hm && !w.lamp ? HM.homeRideauFacade(hm, look, w) : null;
+            if (rd && !rd.f) rects.push({ x: (w.x + w.w * 0.24 - c0) / cw, y: (w.y - c1) / ch, w: w.w * 0.52 / cw, h: w.h / ch });
+            else rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch, k: rd ? 0.55 : 1 });
             if (w.g || w.lamp) townWinLights.push({
               x: (doorWX + (w.x + w.w / 2 - M.door) * k) / T,
               y: footWY / T + 0.35 - houseE * EP / T,
               r: w.lamp ? 1.6 : C.TOWN_WINDOW_LIGHT_RADIUS, c: w.lamp ? "lamp" : "window", k: w.lamp ? 0.5 : 0.6,
             });
           }
+        }
+        /* 2026-10-22 (lot 2d) — LES RIDEAUX VUS DE LA RUE : ceux de la pièce derrière chaque vitre (`HM.homeRideauFacade`), peints
+           sur l'image de jour au pixel d'écran (`drawScreenExactBitmap`, `curtains`), de jour comme de nuit. */
+        const curtains = [];
+        if (hm && !o.ruin) for (const w of wins) {
+          if (w.lamp || w.ghost) continue;
+          const rd = HM.homeRideauFacade(hm, look, w);
+          if (!rd) continue;
+          const te = HM.homeRideauTeinte(rd);
+          curtains.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch, a: te.a, clos: !!rd.f });
         }
         let glowA = houseLit;
         if (o.ruin) {
@@ -26611,7 +26909,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         pushE(footWY, houseE, () => {
           drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY, curtains });
           if (r) {
             // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
             lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
@@ -28423,6 +28721,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             /* 2026-10-16 — UNE ÉTROITE A UN INTÉRIEUR : sa porte s'ouvre (on dort au lit, dedans).
                Les autres largeurs gardent le sommeil à la porte jusqu'à leurs plans (lot 7). */
             if (hsn.ownerId === me.id) tpk = HM.homeHasInterior(hsn) ? "townHome" : energyRef.current >= C.MAX_ENERGY ? "townSleepFull" : "townSleep";
+            // 2026-10-22 (lot 4) : chez un autre qui a son intérieur, on sonne — ou on entre, avec son double
+            else if (hsn.ownerName && hsn.ownerId && HM.homeHasInterior(hsn)) tpk = (HM.homeHasKey(HM.homeOf(sharedRef.current.homes, hsn.ownerId), me.id) ? "homeKeyDoor:" : "homeRing:") + hsn.ownerName;
             else tpk = hsn.ownerName ? "townHouse:" + hsn.ownerName : "townHouseSale";
             break;
           }
@@ -28629,7 +28929,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       return memo.get(key);
     }
-    const homeImg = (nom) => loadBitmap(HM.homeSpriteUrl(nom));   // 2026-10-17 : l'URL vient de la table des meubles (verify-densite §1)
+    const homeImg = (nom, t) => (t ? homeDyedImg(nom, t) : loadBitmap(HM.homeSpriteUrl(nom)));   // 2026-10-17 : l'URL vient de la table des meubles (verify-densite §1) ; 2026-10-22 : `t`, la teinture (lot 2d)
     /* 2026-10-21 (lot 2c) — LES OBJETS DE MUR : peints une fois par sorte (`maisonArt.bakeMural`, cinq canevas en tout), et
        ceux d'un niveau, à leur face (`HM.homeMuralSpan`). ⚠️ Les toiles Gemini (refs/lot-gemini/F-tableaux-maison.md), le jour où
        elles arrivent, passent par le dernier argument de `bakeMural` — chargées ici, dans la même clé. */
@@ -28678,7 +28978,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        IMAGE : entrer dans une maison de jour en demande quatre d'un coup — étalées, elles apparaissent en quelques images
        au lieu de figer la première. Rend, par pièce, { sol: {c, x, y} | null, murs: Map(fid → {c, x, y}) } ou null (pas
        encore). `occAll` : les meubles du niveau vus par la lumière ; `lit` : les pièces allumées. */
-    function homeShadows(bk, lvl, fac, occAll, mode, lit, appl) {
+    function homeShadows(bk, lvl, fac, occAll, mode, lit, appl, clos = null) {
       const memo = homeShadowRef.current, P = bk.plan, out = new Map();
       const ff = bk.faces.map(({ f }) => f), fl = bk.faces.map(({ f, bake }) => ({ f, wallPx: bake.wallPx }));
       let budget = 1;
@@ -28688,13 +28988,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-10-21 (lot 2c) — la nuit, la clé porte aussi CE QUI ÉCLAIRE : les appliques (l'interrupteur), chaque lampe
            allumée, chaque feu (flammes ou braises : la même source, une ombre qui ne bouge pas avec le vacillement). */
         const nuitK = mode === "nuit" ? (appl.has(room.id) ? "A" : "a") + occs.map((oc) => (oc.lampOn ? "L" : "") + (oc.feu > 0 ? "F" : "")).join("") : "";
-        const key = [P.taille, lvl, room.id, mode, nuitK, JSON.stringify(fac.fenetres[lvl] || []), occs.map((oc) => oc.sprite + "@" + Math.round(oc.x0) + "," + Math.round(oc.y0)).join(",")].join("|");
+        // 2026-10-22 (lot 2d) : le jour, la clé porte aussi les fenêtres aux rideaux tirés (`clos`)
+        const closK = mode === "jour" && clos && clos.size ? [...clos].sort().join(",") : "";
+        const key = [P.taille, lvl, room.id, mode, nuitK, closK, JSON.stringify(fac.fenetres[lvl] || []), occs.map((oc) => oc.sprite + "@" + Math.round(oc.x0) + "," + Math.round(oc.y0)).join(",")].join("|");
         let r = memo.get(key);
         if (!r) {
           if (budget-- <= 0) continue;
           const lampes = mode === "nuit" ? occs.filter((oc) => oc.lampOn).map((occ) => ({ occ, lampe: HOM.lampeDe(occ.sprite) })) : [];
           const feux = mode === "nuit" ? occs.filter((oc) => oc.feu > 0).map((occ) => ({ occ })) : [];
-          const raw = HOM.homeShadowRoom(P, lvl, room, occs, HOM.homeRoomLights(P, lvl, room, fac, ff, mode, lampes, appl.has(room.id), feux), fl);
+          const raw = HOM.homeShadowRoom(P, lvl, room, occs, HOM.homeRoomLights(P, lvl, room, fac, ff, mode, lampes, appl.has(room.id), feux, clos), fl);
           const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
           const force = mode === "nuit" ? HOM.OMBRE_NUIT : HOM.OMBRE_JOUR;
           r = { sol: raw.sol ? { c: HOM.maskCanvas(mk, raw.sol, force), x: raw.sol.x, y: raw.sol.y } : null, murs: new Map() };
@@ -28739,6 +29041,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
         if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
       }
+      // 2026-10-22 (lot 4) — ASSIS : on ne bouge pas ; un pas (flèches) relève, devant le meuble (`homeStandUp`)
+      if (m.sitOn) { if (dx || dy) homeStandUp(); m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
@@ -28800,6 +29104,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function homeHandState() {
       const d = homeDecoRef.current, pt = homePointerLocal();
       if (!d.on || !d.hand || !pt) return null;
+      if (HM.homeRideau(d.hand.s)) {
+        /* 2026-10-22 (lot 2d) — DES RIDEAUX se pendent à la fenêtre que vise le pointeur (`homeRideauTarget`) ; refusés si elle a
+           déjà les siens (l'hôte tient la même règle, `HM.resolveHomeCurtain`). */
+        const tg = homeRideauTarget(pt);
+        if (!tg) return { cand: null, verdict: { ok: false, raison: "fenetre" }, rideau: true };
+        const other = HM.homeRideaux(homeOfSlot(pt.slot))[pt.lvl + ":" + tg.k];
+        return { cand: { u: d.hand.u, s: d.hand.s, t: d.hand.t, n: pt.lvl, k: tg.k }, w: tg, verdict: other && other.u !== d.hand.u ? { ok: false, raison: "rideau" } : { ok: true }, rideau: true };
+      }
       if (HM.homeWallItem(d.hand.s)) {
         /* 2026-10-21 (lot 2c) — UN OBJET DE MUR se tient sur le mur du fond que vise le pointeur (`HM.homeSnapWall`), et sa
            règle est celle des murs (`HM.homeCanHang`), pas celle du sol. */
@@ -28812,10 +29124,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const fac = homeFacadeOfSlot(pt.slot);
       const sn = HM.homeSnap(HM.PLAN_ETROITE, fac, pt.lvl, d.hand.s, d.hand.o, pt.lx, pt.ly);
-      const cand = { u: d.hand.u, s: d.hand.s, o: d.hand.o, n: pt.lvl, x: sn.x, y: sn.y };
+      const cand = { u: d.hand.u, s: d.hand.s, t: d.hand.t, o: d.hand.o, n: pt.lvl, x: sn.x, y: sn.y };
       const key = [cand.s, cand.o, cand.n, cand.x, cand.y, homeTickRef.current].join("|");
       if (homeHandMemo.key !== key) homeHandMemo = { key, v: HM.homeCanPlace(HM.PLAN_ETROITE, fac, homeOfSlot(pt.slot), cand, d.hand.u) };
       return { cand, verdict: homeHandMemo.v };
+    }
+    /* 2026-10-22 (lot 2d) — LA FENÊTRE VISÉE pour des rideaux, et la boîte (en cases du plan, projetée : une hauteur z sur un
+       mur au pied y se voit à y − z) où on les verrait : sur le mur du fond, de l'appui de la pièce au-dessus de la baie ; à
+       la façade, la coupe des pans (`HMA.RIDEAU_COUPE`) devant elle. */
+    function homeRideauBox(w) {
+      if (w.side === "N") {
+        const c = HMA.rideauCotes(w.fenetre, w.court);
+        return [w.a - 0.18, w.y - c.rod / HMA.MPX - 0.05, w.b + 0.18, w.y - c.bot / HMA.MPX];
+      }
+      const yF = w.y - HMA.RIDEAU_RECUL;
+      return [w.a - 0.18, yF - HMA.RIDEAU_COUPE / HMA.MPX - 0.05, w.b + 0.18, yF + 0.02];
+    }
+    function homeRideauTarget(pt) {
+      let best = null, bd = 0.9;
+      for (const w of HM.homeWindows(HM.PLAN_ETROITE, pt.lvl, homeFacadeOfSlot(pt.slot))) {
+        const [x0, y0, x1, y1] = homeRideauBox(w);
+        const dx = Math.max(0, x0 - pt.lx, pt.lx - x1), dy = Math.max(0, y0 - pt.ly, pt.ly - y1), dd = Math.hypot(dx, dy);
+        if (dd < bd) { bd = dd; best = w; }
+      }
+      return best;
     }
     function homePickAt(pt) {
       const home = homeOfSlot(pt.slot), meta = HOME_MEUBLES;
@@ -28838,6 +29170,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const r = homeMuralRectPx(P, mu);
         if (bx >= r.x && by >= r.y && bx <= r.x + r.w && by <= r.y + r.h) return { u: mu.u, s: mu.s, o: "S", mural: true };
       }
+      // 2026-10-22 (lot 2d) — des rideaux pendus, sous le pointeur (leur boîte)
+      for (const { w, it } of HM.homeRideauxAt(home, HM.PLAN_ETROITE, homeFacadeOfSlot(pt.slot), pt.lvl)) {
+        const [x0, y0, x1, y1] = homeRideauBox(w);
+        if (pt.lx >= x0 && pt.lx <= x1 && pt.ly >= y0 && pt.ly <= y1) return { u: it.u, s: it.s, t: it.t, o: "S", rideau: true, w };
+      }
       return null;
     }
     function homeDecoClick(button) {
@@ -28852,13 +29189,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (d.hand) {
         const hs = homeHandState(); if (!hs) return;
         if (!hs.verdict.ok) { pushToast(L.homeRefus(hs.verdict.raison)); return; }
-        if (hs.mural) homeApplyMine({ kind: "homeHang", u: hs.cand.u, n: hs.cand.n, x: hs.cand.x, y: hs.cand.y });
+        if (hs.rideau) homeApplyMine({ kind: "homeCurtain", u: hs.cand.u, n: hs.cand.n, k: hs.cand.k });   // 2026-10-22 (lot 2d)
+        else if (hs.mural) homeApplyMine({ kind: "homeHang", u: hs.cand.u, n: hs.cand.n, x: hs.cand.x, y: hs.cand.y });
         else homeApplyMine({ kind: "homePlace", u: hs.cand.u, o: hs.cand.o, n: hs.cand.n, x: hs.cand.x, y: hs.cand.y });
         homeDecoSet({ hand: null });
         return;
       }
       const it = homePickAt(pt);
-      if (it) homeDecoSet({ hand: { u: it.u, s: it.s, o: it.o, from: "pose" } });
+      if (it) homeDecoSet({ hand: { u: it.u, s: it.s, t: it.t, o: it.o, from: "pose" } });   // 2026-10-22 : la teinture suit
     }
     const homeRotateHand = () => homeHandRotate();
     /* Les touches du mode déco passent AVANT le reste du gestionnaire (R y
@@ -28909,6 +29247,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (!sel && !(hov && hov.id === pc.id)) continue;
           for (const r of pc.rects) box(r, sel ? "rgba(255,214,120,0.95)" : "rgba(255,244,214,0.6)", sel ? "rgba(255,214,120,0.10)" : null);
         }
+      } else if (d.hand && HM.homeRideau(d.hand.s)) {
+        /* 2026-10-22 (lot 2d) — les rideaux tenus : la fenêtre visée cernée de vert (libre) ou de rouge (déjà garnie), leur fantôme
+           à plat (sur le mur du fond) ou leur coupe (à la façade). */
+        const hs = homeHandState();
+        if (hs && hs.w) {
+          const te = HM.homeRideauTeinte(hs.cand), R = homeRideauBox(hs.w);
+          ctx.globalAlpha = hs.verdict.ok ? 0.85 : 0.5;
+          if (hs.w.side === "N") { const [pa, py] = HMA.homePx(hs.w.a, hs.w.y), [pb] = HMA.homePx(hs.w.b, hs.w.y); HMA.paintRideau(ctx, pa, py, pb - pa, { fenetre: hs.w.fenetre, court: hs.w.court, clos: false, a: te.a, b: te.b }); }
+          else { const yF = hs.w.y - HMA.RIDEAU_RECUL, [pa, py] = HMA.homePx(hs.w.a, yF), [pb] = HMA.homePx(hs.w.b, yF); HMA.paintRideauCoupe(ctx, pa, py, pb - pa, HMA.RIDEAU_COUPE, { clos: false, a: te.a, b: te.b }); }
+          ctx.globalAlpha = 1;
+          box(R, hs.verdict.ok ? "rgba(120,230,140,0.95)" : "rgba(240,90,80,0.95)", hs.verdict.ok ? "rgba(120,230,140,0.12)" : "rgba(240,90,80,0.15)");
+        }
+        for (const w of HM.homeWindows(HM.PLAN_ETROITE, lvl, fac)) if (!hs || !hs.w || hs.w.k !== w.k) box(homeRideauBox(w), "rgba(255,244,214,0.45)", null);
       } else if (d.hand && HM.homeWallItem(d.hand.s)) {
         // 2026-10-21 (lot 2c) — l'objet de mur tenu : son fantôme à sa place sur le mur visé, cerné de vert ou de rouge
         const hs = homeHandState();
@@ -28927,12 +29278,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const mt = HOME_MEUBLES[hs.cand.s][hs.cand.o];
           const lx = hs.cand.x / HM.HOME_Q, ly = hs.cand.y / HM.HOME_Q, fd = mt.fd / HM.CASE_M;
           box(HM.homeItemRect(hs.cand), hs.verdict.ok ? "rgba(120,230,140,0.95)" : "rgba(240,90,80,0.95)", hs.verdict.ok ? "rgba(120,230,140,0.15)" : "rgba(240,90,80,0.18)");
-          const im = homeImg(hs.cand.s + "_" + hs.cand.o);
+          const im = homeImg(hs.cand.s + "_" + hs.cand.o, hs.cand.t);
           if (im) { const [px, py] = HMA.homePx(lx, ly + fd); ctx.globalAlpha = hs.verdict.ok ? 0.85 : 0.55; ctx.drawImage(im, px - mt.ax, py - mt.ay); ctx.globalAlpha = 1; }
         }
       } else if (pt) {
         const it = homePickAt(pt);
-        if (it && it.mural) {
+        if (it && it.rideau) box(homeRideauBox(it.w), "rgba(255,244,214,0.85)", null);   // 2026-10-22 (lot 2d)
+        else if (it && it.mural) {
           const P = HM.homePlanDecore(home), mu = homeMuralsDraw(home, { plan: P }, lvl, null).find((x) => x.u === it.u);
           if (mu) { const r = homeMuralRectPx(P, mu); box([(r.x - 2) / HMA.MPX + HMA.HOME_FX0, (r.y - 2) / HMA.MPX + HMA.HOME_FY0, (r.x + r.w + 2) / HMA.MPX + HMA.HOME_FX0, (r.y + r.h + 2) / HMA.MPX + HMA.HOME_FY0], "rgba(255,244,214,0.85)", null); }
         } else if (it) box(HM.homeItemRect(it), "rgba(255,244,214,0.85)", null);
@@ -28964,6 +29316,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const deco = homeDecoRef.current.on ? homeDecoRef.current : null;
       const bk = homeBakes(lvl, home);
       homeCamLast = { cam, zm, slot: cam.slot, lvl };
+      /* 2026-10-22 (lot 2d) — LES RIDEAUX DE CE NIVEAU (moins ceux qu'on tient au mode déco), leur teinte, tirés ou non ; les
+         fenêtres aux rideaux TIRÉS ne laissent plus entrer le soleil (la tache au sol, les ombres du jour). */
+      const handR = homeDecoRef.current.on && homeDecoRef.current.hand;
+      const rideauxL = HM.homeRideauxAt(home, P, fac, lvl).filter(({ it }) => !(handR && handR.from === "pose" && handR.u === it.u))
+        .map(({ w, it }) => { const te = HM.homeRideauTeinte(it); return { w, clos: !!it.f, a: te.a, b: te.b }; });
+      const closL = new Set(rideauxL.filter((r) => r.clos).map((r) => r.w.k));
       local();
       ctx.drawImage(bk.floor, 0, 0);
       /* LE SOLEIL ENTRE PAR LA FAÇADE (au sud) : le cisaillement des ombres de
@@ -28978,6 +29336,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (sh && sh.a > 0.01) {
           const prof = Math.min(HMA.pxOfM(2.6), Math.round(sh.k * HMA.pxOfM(1.2)));   // 2026-10-17 : la borne en mètres (70 px à 32 px par case), plus en px
           for (const [a, b] of fac.fenetres[lvl] || []) {
+            if (closL.has("S" + Math.round(a * 100))) continue;   // 2026-10-22 (lot 2d) : rideaux tirés
             const [pa, py] = HMA.homePx(a, P.d), [pb] = HMA.homePx(b, P.d);
             HMA.paintSunPool(ctx, pa, py, pb - pa, prof, Math.round(sh.sx * prof * 0.6), Math.min(1, sh.a * 2.6), HMA.homePx(0, 0)[0], HMA.homePx(P.w, 0)[0]);
           }
@@ -29051,8 +29410,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const vus = posees.map((mb) => { const fe = feuOf(mb); return lampOn(mb) ? { ...mb, sprite: mb.sprite + "_allume" } : fe > 0 ? { ...mb, feu: fe } : mb; });
       const dusk = Math.min(1, night / 0.65);   // le même fondu que les lampes de la couche de lumière (`lumiere.js`)
-      const shJour = !occAttente && dusk < 0.98 ? homeShadows(bk, lvl, fac, occAll, "jour", roomsLit, roomsAppl) : null;
-      const shNuit = !occAttente && roomsLit.size ? homeShadows(bk, lvl, fac, occAll, "nuit", roomsLit, roomsAppl) : null;
+      const shJour = !occAttente && dusk < 0.98 ? homeShadows(bk, lvl, fac, occAll, "jour", roomsLit, roomsAppl, closL) : null;
+      const shNuit = !occAttente && roomsLit.size ? homeShadows(bk, lvl, fac, occAll, "nuit", roomsLit, roomsAppl, closL) : null;
       const ombresMur = (f) => {
         const out = [];
         const j = shJour && shJour.get(f.room), n = shNuit && shNuit.get(f.room);
@@ -29067,6 +29426,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         meubles: vus, meta: HOME_MEUBLES, img: homeImg, ciel: sky, allumees: roomsAppl, ombresMur,
         // 2026-10-21 (lot 2c) — les objets de mur de ce niveau (moins celui qu'on tient), l'horloge à l'heure du jeu
         murals: homeMuralsDraw(home, bk, lvl, hand), muralImg: homeMuralImg, tmin: nowMin % 1440,
+        rideaux: rideauxL,   // 2026-10-22 (lot 2d) — les rideaux du niveau (le mur du fond : peints sur lui ; la façade : coupés avec elle)
+        crochet: lvl === 0 ? { ...HM.homeCrochet(P), left: HM.homeKeysLeft(home) } : null,   // 2026-10-22 (lot 4) — le crochet à clés, ses doubles
         // 2026-10-18 (lot 2b) — le catalogue au sol de l'entrée, les cartons livrés à côté
         catalogue: lvl === 0 ? HM.homeCataloguePos(P, fac) : null,
         cartons: lvl === 0 ? HM.homeCartons(home).filter((c) => c.d <= (sharedRef.current.day | 0)).slice(0, HM.HOME_CARTONS_MAX).map((c, i) => ({ ...HM.homeCartonSpots(P)[i], k: c.u })) : [],
@@ -29106,18 +29467,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#ffffff"; ctx.fillText("Zzz", hx + 12, hy - 3 - zt * 8);
         ctx.restore();
       };
+      /* 2026-10-22 (lot 4) — ASSIS SUR UN CANAPÉ OU UN FAUTEUIL : trié JUSTE APRÈS le meuble (son bord sud), comme le dormeur et son
+         lit — trié à ses pieds, il passerait sous le dossier. `sitU` : le meuble ({ x: u, y: −1 } chez moi, `p.sit` = [u, −1, place]
+         chez les autres) ; le corps assis monte de la hauteur de l'assise (`HOME_ASSISE_PX`). */
+      const seatKey = (u, ly) => { const f = meubles.find((x) => x.u === u); return f ? Math.max(ly, HM.homeFurnitureRect(f)[3] + 0.01) : ly; };
       for (const { p, pl } of here) {
         if (p.sleeping) { draws.push({ y: bed ? HM.homeFurnitureRect(bed)[3] + 0.01 : pl.ly, fn: () => drawSleeper(p) }); continue; }
         SLEEP_SEEN.delete(p.id);   // réveillé : le prochain endormissement retire son délai
-        const rz = rzOf(pl);
-        draws.push({ y: pl.ly, fn: () => { ctx.save(); ctx.translate(0, -rz); drawRemotePets(p, dt); drawCharacter(p, false); ctx.restore(); } });
+        const assis = Array.isArray(p.sit) && p.sit[1] === -1;
+        const rz = rzOf(pl) + (assis ? HOME_ASSISE_PX : 0);
+        draws.push({ y: assis ? seatKey(p.sit[0], pl.ly) : pl.ly, fn: () => { ctx.save(); ctx.translate(0, -rz); drawRemotePets(p, dt); drawCharacter(p, false); ctx.restore(); } });
       }
       if (ft.level !== lvl) { /* le mode déco regarde un autre niveau : on ne s'y dessine pas */ }
       else if (m.sleeping) draws.push({ y: bed ? HM.homeFurnitureRect(bed)[3] + 0.01 : ft.ly, fn: () => drawSleeper(m) });
       else {
         SLEEP_SEEN.delete(m.id);
-        const myRz = rzOf(ft);
-        draws.push({ y: ft.ly, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); drawSelf(m); ctx.restore(); } });
+        const assis = !!(m.sitOn && m.sitOn.y === -1);
+        const myRz = rzOf(ft) + (assis ? HOME_ASSISE_PX : 0);
+        draws.push({ y: assis ? seatKey(m.sitOn.x, ft.ly) : ft.ly, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); drawSelf(m); ctx.restore(); } });
       }
       draws.sort((a, b) => a.y - b.y);
       /* Les ombres au SOL, sous tout ce qui se trie (faces, meubles, personnages) : le sol et la tache de soleil sont déjà
@@ -29223,7 +29590,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillStyle = "#f2e6c8"; ctx.fillText(fname, 27, canvas.height - 36);
       // ---- lvl'invite : la porte (sortir), le lit (se coucher).
       let cpk = null;
-      if (!m.sleeping && !deco) {
+      if (m.sitOn && !deco) cpk = "homeStand";   // 2026-10-22 (lot 4)
+      else if (!m.sleeping && !deco) {
         const mine = cam.slot === homeSlotOfId(me.id);
         if (lvl === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) cpk = "homeExit";
         else if (lvl === 0 && mine && HM.homeCartonNear(home, P, sharedRef.current.day | 0, ft.lx, ft.ly)) cpk = "homeUnbox";   // 2026-10-18 (lot 2b)
@@ -38849,6 +39217,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        (sortir) puis le lit (se coucher) — l'ordre de l'invite (`drawHomeFrame`). */
     if (m0 && m0.zone === "home") {
       const P = HM.PLAN_ETROITE, ft = HM.homeFootLocal(m0.x, m0.y), fac = homeFacadeOfSlot(ft.slot);
+      if (m0.sitOn) { homeStandUp(); return; }   // 2026-10-22 (lot 4) : assis, E relève
       if (ft.level === 0 && HM.homeNearExit(fac, ft.lx, ft.ly)) { leaveHome(); return; }
       // 2026-10-18 (lot 2b) — chez soi : déballer un carton livré, feuilleter le catalogue
       if (ft.level === 0 && ft.slot === homeSlotOfId(me.id)) {
@@ -38859,6 +39228,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-10-21 (lot 2c) — l'interrupteur, une lampe, le feu, ou le lit : le plus proche (`homeUseTarget`, comme l'invite)
       const use = homeUseTarget(ft.slot, ft.level, ft.lx, ft.ly);
       if (use && use.req) { homeApplyMine(use.req); return; }
+      // 2026-10-22 (lot 4) — s'asseoir (chez soi comme en visite) ; le crochet à clés (chez soi)
+      if (use && use.sit) { homeSitDown(ft.slot, ft.level, use.sit); return; }
+      if (use && use.keys) { setHomeVisitUi((u) => ({ ...(u || {}), keys: true })); return; }
+      if (ft.slot !== homeSlotOfId(me.id)) return;   // 2026-10-22 (lot 4) : le lit est au propriétaire — un invité ne s'y couche pas
       const bed = homeMeublesOfSlot(ft.slot, ft.level).find((f) => /^lit/.test(f.sprite));   // lot 2a : le lit est où on l'a posé
       if (bed && HM.homeNearFurnitureIn(P, ft.level, bed, ft.lx, ft.ly)) { startSleep(); return; }   // 2026-10-17 : dans la pièce du lit
       return;
@@ -39096,6 +39469,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (fid === me.id) {
             if (HM.homeHasInterior(hsn)) { enterHome(hi); return; }   // 2026-10-16 — l'étroite a son intérieur
             startSleep(); pushToast(L.sleepInHouseToast); return;
+          }
+          /* 2026-10-22 (lot 4) — CHEZ UN AUTRE QUI A SON INTÉRIEUR : son double des clés ouvre (l'hôte vérifie, puis prévient le
+             propriétaire) ; sinon, on SONNE — l'hôte le fait entendre au propriétaire où qu'il soit, et 30 s sans réponse disent
+             « personne ne répond ». */
+          if (fid && HM.homeHasInterior(hsn)) {
+            const nm = (farmersRef.current[fid] || {}).name || "?";
+            if (HM.homeHasKey(HM.homeOf(sharedRef.current.homes, fid), me.id)) { sendReq({ kind: "homeKeyEnter", slot: hi }); return; }
+            const rg = homeRingRef.current;
+            if (rg && Date.now() - rg.t < HM.HOME_SONNETTE_MS) { pushToast(L.homeBellWait); return; }
+            const t0 = Date.now();
+            homeRingRef.current = { slot: hi, t: t0 };
+            homeDingDong(0.4);
+            sendReq({ kind: "homeRing", slot: hi });
+            setTimeout(() => { if (homeRingRef.current && homeRingRef.current.t === t0) { homeRingRef.current = null; pushToast(L.homeBellNone(nm)); } }, HM.HOME_SONNETTE_MS);
+            return;
           }
           if (!fid) pushToast(L.toastHouseSale);
           else pushToast(L.toastTheirHouse((farmersRef.current[fid] || {}).name || "?"));
@@ -40185,7 +40573,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -40195,8 +40583,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
-      {/* Barre d'outils */}
-      <div className="ferme-toolbar panel">
+      {/* Barre d'outils — ⚠️ 2026-10-22 (lot 2d) : CACHÉE AU MODE DÉCO. Le mode déco cadre le niveau sur tout l'écran (`homeFitZoom`) :
+          la barre posait par-dessus la façade, et vu en jeu ses fenêtres (les rideaux) et le pied du séjour ne se visaient plus.
+          Aucun outil ne sert à décorer. */}
+      <div className="ferme-toolbar panel" style={homeDecoUi ? { display: "none" } : undefined}>
         {slots.map((s, i) => {
           /* zip 403 : cinq cases. `isHerd`/`isHand` deviennent deux MODES de la
              même case ; tout le reste du bloc les lit comme avant, ce qui
@@ -44512,7 +44902,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const h = HM.homeOf(sharedRef.current.homes, me.id);
         const gold = sharedRef.current.money | 0;
         const groups = [];
-        for (const it of h.g) { const gr = groups.find((x) => x.s === it.s); if (gr) gr.us.push(it.u); else groups.push({ s: it.s, us: [it.u] }); }
+        // 2026-10-22 (lot 2d) — groupés par sprite ET teinture ; les rideaux orphelins (leur fenêtre a disparu avec la façade) à part
+        for (const it of h.g) { const gr = groups.find((x) => x.s === it.s && x.t === (it.t || null) && !x.orph); if (gr) gr.us.push(it.u); else groups.push({ s: it.s, t: it.t || null, us: [it.u] }); }
+        for (const { it } of HM.homeRideauxOrphelins(h, HM.PLAN_ETROITE, homeFacadeOfSlot(homeSlotOfId(me.id)))) groups.push({ s: it.s, t: it.t || null, us: [it.u], orph: true });
         const room = homeDecoUi.room;
         const cur = room ? HM.homeRoomDecor(h, HM.PLAN_ETROITE, room.n, room.id) : null;
         const curOf = (quoi) => !cur ? null : quoi === "papier" ? cur.murs.papier : quoi === "lambris" ? (cur.murs.lambris || "") : cur.sol.join(":");
@@ -44545,13 +44937,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   /* 2026-10-21 (lot 2c) — LA REVENTE : la moitié du prix à la caisse commune, ou « Jeter » (la plante morte) ; le
                      mobilier de départ n'a pas de bouton. Deux clics (le second confirme) ; l'hôte tranche et crédite (§3). Dans un
                      groupe, on vend un exemplaire qui SE VEND (le lit offert et un lit acheté se rangent ensemble). */
-                  const sellU = gr.us.find((u) => HM.homeSellPrice({ u, s: gr.s }) != null);
+                  const sellU = gr.orph ? null : gr.us.find((u) => HM.homeSellPrice({ u, s: gr.s }) != null);
                   const prix = sellU != null ? HM.homeSellPrice({ u: sellU, s: gr.s }) : null, ask = sellU != null && homeDecoUi.sellAsk === sellU;
                   return (
-                    <div key={gr.s} className="ferme-deco-cell">
+                    <div key={gr.s + "|" + (gr.t || "") + (gr.orph ? "|o" + gr.us[0] : "")} className="ferme-deco-cell">
                       <button className={"ferme-deco-item" + (homeDecoUi.hand === gr.s ? " on" : "")} onClick={() => { homeDecoSet({ sellAsk: null }); homeTakeFromGarde(gr.us[0]); }}>
-                        <img src={homeItemSrc(gr.s)} alt="" />
-                        <span>{L.homeMeubleName(gr.s)}{gr.us.length > 1 ? " ×" + gr.us.length : ""}</span>
+                        <img src={homeItemSrc(gr.s, gr.t)} alt="" />
+                        <span>{gr.t ? L.homeTeinteDe(L.homeMeubleName(gr.s), L.homeTeinteName(gr.t)) : L.homeMeubleName(gr.s)}{gr.us.length > 1 ? " ×" + gr.us.length : ""}{gr.orph ? <><br /><small>{L.homeDecoOrphelin}</small></> : null}</span>
                       </button>
                       {prix != null && (
                         <button className={"ferme-deco-sell" + (ask ? " ask" : "")}
@@ -44586,7 +44978,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ))}
               </div>
             )}
-            <div className="ferme-deco-help">{homeDecoUi.tab === "meubles" ? L.homeDecoHelp : L.homeDecoHelpMurs}</div>
+            <div className="ferme-deco-help">{homeDecoUi.tab !== "meubles" ? L.homeDecoHelpMurs : homeDecoUi.hand && HM.homeRideau(homeDecoUi.hand) ? L.homeDecoHelpRideau : L.homeDecoHelp}</div>
           </div>
         );
       })()}
@@ -44598,6 +44990,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const gold = sharedRef.current.money | 0, day = sharedRef.current.day | 0;
         const cartons = HM.homeCartons(h), enRoute = cartons.filter((c) => c.d > day).length, plein = cartons.length >= HM.HOME_CARTONS_MAX;
         const page = catalogOpen.page;
+        // 2026-10-22 (lot 2d) — la page de Colette n'existe que si elle est résidente (décision 5 : sans elle, le catalogue suffit)
+        const colette = HM.homeColetteHere(sharedRef.current.station);
+        const pages = colette ? [...HM.HOME_CATALOGUE_PAGES, "colette"] : HM.HOME_CATALOGUE_PAGES;
         const items = HM.HOME_CATALOGUE.filter((e) => e.page === page);
         const pick = catalogOpen.pick && HM.homeCatalogueOf(catalogOpen.pick) ? catalogOpen.pick : items[0] && items[0].coloris[0];
         const ent = pick ? HM.homeCatalogueOf(pick) : null;
@@ -44609,10 +45004,68 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>📖 {L.homeCatalogTitle}</h2>
               <div className="ferme-hint">{L.homeCatalogEdition(L.seasonName(E.seasonOf().key))} — <GoldIco sprites={spritesReady ? spritesRef.current : null} /> {gold}</div>
               <div className="ferme-deco-seg" style={{ alignSelf: "flex-start", marginBottom: 8 }}>
-                {HM.HOME_CATALOGUE_PAGES.map((pg) => (
+                {pages.map((pg) => (
                   <button key={pg} className={pg === page ? "on" : ""} onClick={() => setCatalogOpen({ page: pg, pick: null })}>{L.homeCatalogPage(pg)}</button>
                 ))}
               </div>
+              {page === "colette" ? (() => {
+                /* ═══ 2026-10-22 (lot 2d) — CHEZ COLETTE ═══ Deux choses, dans la même page : des rideaux SUR MESURE dans toute sa
+                   palette (`HM.HOME_RIDEAU_MESURE`), et la TEINTURE d'un meuble du garde-meuble (il part chez elle, revient teint
+                   demain matin dans un carton). L'aperçu est le vrai sprite recoloré (`homeItemSrc` → `homeDyedImg`). Rien ne
+                   s'écrit ici : deux `req`, l'hôte débite la caisse (§3). */
+                const tissus = HM.HOME_TEINTES.tissu;
+                const tR = catalogOpen.t && HM.homeTeinte("tissu", catalogOpen.t) ? catalogOpen.t : tissus[0].id;
+                const teints = h.g.filter((it) => HM.homeTeintable(it.s));
+                const dyeIt = teints.find((it) => it.u === catalogOpen.u) || teints[0] || null;
+                const kind = dyeIt ? HM.homeTeintable(dyeIt.s) : null;
+                const tD = dyeIt && catalogOpen.td && HM.homeTeinte(kind, catalogOpen.td) ? catalogOpen.td : dyeIt ? (HM.HOME_TEINTES[kind].find((x) => x.id !== dyeIt.t) || {}).id : null;
+                const prixD = dyeIt ? HM.homeTeintePrix(dyeIt) : 0;
+                const set = (patch) => setCatalogOpen({ ...catalogOpen, ...patch });
+                return (
+                  <div className="ferme-catalog-colette">
+                    <div className="ferme-hint" style={{ fontStyle: "italic" }}>{L.homeColetteHello}</div>
+                    <div className="ferme-catalog-body">
+                      <div className="ferme-catalog-fiche">
+                        <b>{L.homeColetteMesure}</b>
+                        <div className="ferme-catalog-apercu"><img src={homeItemSrc("rideaux", tR)} alt="" /></div>
+                        <div className="ferme-catalog-coloris">
+                          {tissus.map((te) => (
+                            <button key={te.id} className={"ferme-deco-sw" + (te.id === tR ? " on" : "")} onClick={() => set({ t: te.id })} title={L.homeTeinteName(te.id)}>
+                              <img src={homeItemSrc("rideaux", te.id)} alt="" /><span>{L.homeTeinteName(te.id)}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="ferme-hint">{L.homeColetteMesureHint(HM.HOME_RIDEAU_MESURE)}</div>
+                        <button className="ferme-btn" disabled={gold < HM.HOME_RIDEAU_MESURE || plein} onClick={() => sendReq({ kind: "homeOrder", s: "rideaux", t: tR })}>{L.homeCatalogOrder}</button>
+                      </div>
+                      <div className="ferme-catalog-fiche">
+                        <b>{L.homeColetteDye}</b>
+                        {!dyeIt ? <div className="ferme-hint">{L.homeColetteDyeEmpty}</div> : (<>
+                          <div className="ferme-deco-garde ferme-catalog-grid">
+                            {teints.map((it) => (
+                              <button key={it.u} className={"ferme-deco-item" + (it === dyeIt ? " on" : "")} onClick={() => set({ u: it.u, td: null })}>
+                                <img src={homeItemSrc(it.s, it.t)} alt="" />
+                                <span>{it.t ? L.homeTeinteDe(L.homeMeubleName(it.s), L.homeTeinteName(it.t)) : L.homeMeubleName(it.s)}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="ferme-catalog-apercu"><img src={homeItemSrc(dyeIt.s, tD)} alt="" /></div>
+                          <div className="ferme-catalog-coloris">
+                            {HM.HOME_TEINTES[kind].map((te) => (
+                              <button key={te.id} className={"ferme-deco-sw" + (te.id === tD ? " on" : "")} disabled={te.id === dyeIt.t} onClick={() => set({ td: te.id })} title={L.homeTeinteName(te.id)}>
+                                <span className="ferme-teinte-pastille" style={{ background: te.a, boxShadow: te.b && HM.HOME_ACCENT[HM.homeTeinteBase(dyeIt.s)] ? "inset -6px -6px 0 " + te.b : "none" }} />
+                                <span>{L.homeTeinteName(te.id)}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="ferme-hint">{L.homeColetteDyeHint}</div>
+                          <button className="ferme-btn" disabled={!tD || gold < prixD || plein} onClick={() => { sendReq({ kind: "homeDye", u: dyeIt.u, t: tD }); set({ u: null, td: null }); }}>{L.homeColetteDyeBtn(prixD)}</button>
+                        </>)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })() : (
               <div className="ferme-catalog-body">
                 <div className="ferme-deco-garde ferme-catalog-grid">
                   {items.map((e) => {
@@ -44641,10 +45094,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <div className="ferme-catalog-prix">{ent.prix} <GoldIco sprites={spritesReady ? spritesRef.current : null} /></div>
                     <button className="ferme-btn" disabled={gold < ent.prix || plein} onClick={() => sendReq({ kind: "homeOrder", s: pick })}>{L.homeCatalogOrder}</button>
                     <div className="ferme-hint">{plein ? L.homeCatalogFull : L.homeCatalogDelivery}</div>
+                    {page === "fenetres" && !colette && <div className="ferme-hint">{L.homeColetteSans}</div>}
                   </div>
                 )}
               </div>
+              )}
               <div className="ferme-hint">{L.homeCatalogCartons(enRoute, cartons.length - enRoute)}</div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ═══ 2026-10-22 (lot 4) — LES VISITES ═══ La sonnette (on sonne chez moi, où que je sois : Ouvrir / Refuser, 30 s), qui est
+          chez moi (Raccompagner), le crochet à clés (donner, reprendre un double). Rien ne s'écrit ici : des `req`, l'hôte tranche. */}
+      {homeVisitUi && homeVisitUi.bell && (
+        <div className="panel ferme-visit-bell">
+          <div>🔔 {L.homeBellAsk(homeVisitUi.bell.name)}</div>
+          <div className="ferme-visit-row">
+            <button className="ferme-btn" onClick={() => { sendReq({ kind: "homeBellAnswer", from: homeVisitUi.bell.from, ok: 1 }); setHomeVisitUi((u) => ({ ...u, bell: null })); }}>{L.homeBellOpen}</button>
+            <button className="ferme-btn ferme-btn-ghost" onClick={() => { sendReq({ kind: "homeBellAnswer", from: homeVisitUi.bell.from, ok: 0 }); setHomeVisitUi((u) => ({ ...u, bell: null })); }}>{L.homeBellRefuse}</button>
+          </div>
+        </div>
+      )}
+      {homeVisitUi && homeVisitUi.guests && homeVisitUi.guests.length > 0 && (
+        <div className="panel ferme-visit-guests">
+          {homeVisitUi.guests.map((g) => (
+            <div key={g.id} className="ferme-visit-row">
+              <span>🏠 {L.homeGuestHere(g.name)}</span>
+              <button className="ferme-btn ferme-btn-ghost" onClick={() => sendReq({ kind: "homeShowOut", who: g.id })}>{L.homeShowOutBtn}</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {homeVisitUi && homeVisitUi.keys && (() => {
+        const h = HM.homeOf(sharedRef.current.homes, me.id), autres = Object.keys(farmersRef.current || {}).filter((id) => id !== me.id);
+        const close = () => setHomeVisitUi((u) => ({ ...u, keys: false }));
+        return (
+          <div className="ferme-modal open" onClick={close}>
+            <div className="panel ferme-modal-panel" onClick={(e) => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>🔑 {L.homeKeysTitle}</h2>
+              <div className="ferme-hint">{L.homeKeysHint(HM.homeKeysLeft(h), HM.HOME_DOUBLES)}</div>
+              {autres.length === 0 && <div className="ferme-hint">{L.homeKeysNobody}</div>}
+              {autres.map((id) => {
+                const a = HM.homeHasKey(h, id), nm = (farmersRef.current[id] || {}).name || "?";
+                return (
+                  <div key={id} className="ferme-visit-row">
+                    <span>{a ? "🔑 " : ""}{nm}</span>
+                    <button className="ferme-btn" disabled={!a && HM.homeKeysLeft(h) <= 0} onClick={() => sendReq({ kind: "homeKeys", who: id, v: a ? 0 : 1 })}>{a ? L.homeKeysTake : L.homeKeysGive}</button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -45207,6 +45706,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid">
                   <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devHomeGift" })}>{L.devHomeGiftBtn}</button>
                   <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devHomeDeliver" })}>{L.devHomeDeliverBtn}</button>
+                  <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devColette" })}>{L.devColetteBtn}</button>
                 </div>
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSalonSection}</div>
                 <div className="ferme-dev-hint">{L.devSalonHint}</div>

@@ -144,7 +144,7 @@ Reste vrai : un M4 est bien plus rapide qu'un iPad ordinaire (A14 ≈ 0,55 × en
 
 ---
 
-## 6. Les intérieurs des maisons des joueurs (lots 0, 1, 2a, 2b, 2c FAITS — à juger en jeu ; 2d à faire)
+## 6. Les intérieurs des maisons des joueurs (lots 0 à 2d et 4 FAITS — à juger en jeu ; lot 5, les rares, ensuite)
 
 > Demande de Guillaume, 2026-10-16 : « designer l'intérieur des maisons. accès règlementé : sur invitation pour les maisons des autres,
 > et accès libre pour sa maison. […] très poussé. Je veux des plans cohérents avec la taille des maisons, et une ambiance personnalisable.
@@ -236,8 +236,15 @@ sol), lumière de profondeur (pieds et angles des murs, dégradé par pièce), �
 
 **2026-10-21 — LOT 2c FAIT, à juger** (journal du README de la ferme) : interrupteur par pièce (manuel et gardé ; une pièce jamais touchée
 s'allume seule la nuit), lampes à la main, feu de cheminée et de poêle (4 h de jeu, braises), objets de mur (trois tableaux, miroir, horloge ;
-toiles Gemini à venir : `refs/lot-gemini/F-tableaux-maison.md`), revente à moitié prix, vitres et fumée vues de la rue. **Prochain : 2d**
-(Colette : rideaux, teinture).
+toiles Gemini à venir : `refs/lot-gemini/F-tableaux-maison.md`), revente à moitié prix, vitres et fumée vues de la rue.
+**2026-10-22 — LOT 2d FAIT, à juger** (journal du README de la ferme) : Colette (page du catalogue quand elle est résidente) — rideaux sur
+mesure, teinture des tissus par PASSES Blender (`tools/blender/rendre_teintes.py`), rendue le lendemain en carton ; rideaux qu'on pend et
+qu'on TIRE (E), vus de la rue, qui coupent le soleil. **Le lot 2 est fini.** Le lot 3 (catalogue, livraison, Marcel, Colette) est fait pour
+le catalogue et Colette ; reste Marcel (pièces sur commande).
+**2026-10-22 (suite) — LOT 4 FAIT, à juger** (journal du README de la ferme ; ses neuf réponses, toutes sur la recommandation) : la sonnette
+(partout, 30 s, une visite), le double des clés au crochet de l'entrée (trois), s'asseoir (canapé, fauteuil), les gestes d'un invité (lumière,
+rideaux, feu ; vérifiés par l'hôte à sa position), Raccompagner. Vu à deux clients. **Prochain selon l'ordre décidé : le lot 5, les rares**
+(brocanteur, troc, trophées, séries de saison) — ou Marcel, reste du lot 3.
 **Lot 2 — CADRÉ le 2026-10-16 (ses réponses, toutes sur les recommandations), RIEN DE CODÉ** :
 1. **Un mode déco**, chez soi seulement (touche ou bouton) : caméra figée, grille légère, un meuble se prend au clic, se tourne, se pose ; une
    palette en bas montre le GARDE-MEUBLE (ce qu'on possède et qui n'est pas posé).

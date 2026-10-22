@@ -2019,6 +2019,15 @@ outils.
   `public/maison/` (servies au jeu), avec le module GÉNÉRÉ `components/ferme/maisonSprites.js` : par image, sa taille, son ANCRE (`ax`, `ay` :
   le pixel du coin avant-gauche de l'emprise, au sol) et son emprise tournée (`fw`, `fd`, en mètres). Le studio (caméra, lumière, contour) est `studio.py`, les meubles `meubles.py` (une fonction chacun).
   Rendu en ligne de commande = rendu en direct, au pixel près (vérifié sur le canapé et le poêle).
+- **`tools/blender/rendre_teintes.py`** (2026-10-22, lot 2d ; `Blender -b -P tools/blender/rendre_teintes.py`, 5 s) : les PASSES DE TEINTURE
+  des meubles teintables (`meubles.TEINTES` : canapé, fauteuil, lit) dans `public/maison/teinte/<meuble>_<O>_<a|b|g>.png` — le tissu en blanc
+  (zone a, l'accent b), le reflet seul (g). Le jeu recompose n'importe quelle teinte de Colette comme Blender l'aurait rendue
+  (`maisonArt.teindrePx`). Vérifie lui-même que chaque passe tombe au pixel sur le cadre du sprite ordinaire. ⚠️ À relancer après tout
+  changement d'un meuble teintable dans `rendre_meubles.py`. Planche : `render-maison` → `maison-2d.png`, `maison-2d-teintes.png` ;
+  preuve chiffrée : `verify-maison` §16 (le canapé recoloré contre le vrai `canape_canard` : 93 % à ±3, au plus 15/255).
+  Lot 4 (2026-10-22) : `render-maison` → `maison-4.png` (le crochet à clés de l'entrée, des amis assis sur le canapé) ; `verify-maison` §17
+  (les doubles, le crochet hors de la porte et entre l'interrupteur et l'applique, les places assises dans les quatre sens, les gestes d'invité).
+  ⚠️ Le faux canevas rend vides les rangées de dos et de profil du personnage : les assis de dos ou de côté se jugent en jeu.
 - **`render-maison.mjs`** (refait au lot 1 sur le VRAI plan, avec les fonctions du jeu : `maison.js`, `maisonArt.homeDrawItems`) : la COQUE
   (`maison-coque-n1.png`, `-n2.png` : les trois niveaux au premier passage de porte, la fermière dans une pièce de chacun) et le TÉMOIN
   (`maison-temoin-planche.png` : le RDC vide, meublé de jour, de nuit, ambiance B). Aucun contrôle chiffré : un banc à REGARDER.
