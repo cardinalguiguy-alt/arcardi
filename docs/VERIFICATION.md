@@ -254,6 +254,9 @@ iframes : changer `iframe.src` d'un seul client suffit pour le recharger (état 
 fonction de MODULE que la boucle déjà lancée appelle (`drawScreenExactBitmap`, un peintre de `maisonArt`…) reste l'ancienne — la boucle garde le
 module d'avant. Recharger la page (l'état de la partie repart à neuf : le reposer à la main, ex. `sharedRef.current.homes`).
 Les DEUX dossiers `audit-*` et `app/api/audit-cap` se suppriment avant livraison.
+⚠️ **UN `pagehide` SIMULÉ (`dispatchEvent`) DÉCONNECTE LE TEMPS RÉEL DE CE CLIENT** (vu le 2026-10-22) : Phoenix (`@supabase/phoenix`) se coupe au
+`pagehide` et ne revient qu'au `pageshow` — l'hôte devient muet (« falling back to REST API »), un invité rechargé reste à l'écran de choix. Envoyer
+`new PageTransitionEvent("pageshow", { persisted: true })` juste après.
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
 quelle au 454 puis au 456) :

@@ -1257,6 +1257,31 @@ function homeItemSrc(sp, t = null) {
   return HOME_MURAL_SRC.get(sp);
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-22 — LA MÉMOIRE DE POSITION : on revient où l'on était, plus devant la maison.
+   ╚══════════════════════════════════════════════════════════════════════════
+   `fermier.lastPos = { z, x, y }`, dans le JSON de `ferme_saves` (aucune migration) : l'hôte l'écrit à chaque `pos` reçu
+   (aucun message de plus) et pour lui-même dans `currentSnapshot` (le canal est en `self:false`, il ne reçoit pas les siens).
+   ⚠️ LA ZONE VOYAGE AVEC LES COORDONNÉES (§4, deux cartes sans repère commun) : le `x/y` nu du fermier, écrit depuis
+   longtemps, mélange la ferme, la ville et les intérieurs — il n'est JAMAIS relu pour placer quelqu'un. Une fiche sans
+   `lastPos` (toute ferme d'avant ce jour) part donc devant la maison, comme avant.
+   La carte maléfique se publie déjà par la case du passage, côté ferme (`pubMe`) : on la range en « farm ». */
+function lastPosOf(zone, x, y) {
+  if (typeof x !== "number" || typeof y !== "number" || !isFinite(x) || !isFinite(y)) return null;
+  return { z: zone === "evil" ? "farm" : (zone || "farm"), x: +x.toFixed(2), y: +y.toFixed(2) };
+}
+/* Les décalages essayés autour d'une position refusée, du plus proche au plus loin (demi-case, 12 cases au plus : le
+   skatepark fait une vingtaine de cases de large, et à 6 on en ressortait à la gare depuis son milieu — mesuré). */
+const START_NUDGES = (() => {
+  const out = [];
+  for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) if (dx * dx + dy * dy <= 576) out.push([dx / 2, dy / 2]);
+  return out.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]));
+})();
+function nearestStart(ok, x, y) {
+  for (const [dx, dy] of START_NUDGES) if (ok(x + dx, y + dy)) return { x: x + dx, y: y + dy };
+  return null;
+}
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden, onChangeFarm }) {
   const L = fstr(lang);
 
@@ -2605,6 +2630,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const minimapImgRef = useRef(null);
   const minimapDirtyRef = useRef(true);
   const dirtyRef = useRef(false);
+  /* 2026-10-22 — une position a bougé depuis la dernière sauvegarde (la mémoire de position, `lastPosOf`). Elle ne
+     déclenche PAS le minuteur de 3 s (une écriture toutes les 3 s tant que quelqu'un marche) : seulement le filet de
+     sortie (pagehide, onglet masqué, démontage) — sans lui, un hôte qui se promène puis ferme l'onglet sans rien
+     toucher d'autre perdait sa position (mesuré au harnais : rien n'est « dirty » quand on ne fait que marcher). */
+  const posDirtyRef = useRef(false);
   const overridesRef = useRef({ ground: {}, object: {} }); // deltas vs monde de base
   const lastPosSentRef = useRef(0);
   const lastPosKeyRef = useRef("s");        // FIX 243: derniere cle d'etat de mouvement diffusee ("m"+dir ou "s") pour l'emission par intention
@@ -4057,7 +4087,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     });
     ch.on("broadcast", { event: "pos" }, ({ payload }) => {
-      if (isHost && farmersRef.current[payload.id]) { farmersRef.current[payload.id].x = payload.x; farmersRef.current[payload.id].y = payload.y; }
+      if (isHost && farmersRef.current[payload.id]) {
+        const fh = farmersRef.current[payload.id];
+        fh.x = payload.x; fh.y = payload.y;
+        // 2026-10-22 — la mémoire de position (voir `lastPosOf`) : pas de `dirtyRef`, elle part avec la prochaine sauvegarde
+        const lp = lastPosOf(payload.zone, payload.x, payload.y);
+        if (lp && !(fh.lastPos && fh.lastPos.z === lp.z && fh.lastPos.x === lp.x && fh.lastPos.y === lp.y)) { fh.lastPos = lp; posDirtyRef.current = true; }
+      }
       if (payload.id === me.id) return;
       /* 2026-10-05 (nuit) — un `pos` d'un joueur que je ne connaissais pas (arrivée, ou retrouvailles
          après un balayage mutuel, voir le gestionnaire `ping`) reçoit le mien en retour : sans ça, un
@@ -4433,8 +4469,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   // -------- Hôte : construction de l'instantané + persistance --------
+  /* 2026-10-22 — ma propre position dans ma fiche (l'hôte ne reçoit pas ses `pos`) ; jamais avant d'être entré : meRef
+     serait celui d'avant. Rend vrai si elle a changé. Que des refs : appelable depuis le filet de sortie (effet monté une fois). */
+  function recordMyLastPos() {
+    const mm = meRef.current, fm = farmersRef.current[me.id];
+    if (!joinedRef.current || !mm || !fm) return false;
+    const lp = mm.zone === "evil" ? lastPosOf("farm", mm.farmX, mm.farmY) : lastPosOf(mm.zone, mm.x, mm.y);
+    if (!lp || (fm.lastPos && fm.lastPos.z === lp.z && fm.lastPos.x === lp.x && fm.lastPos.y === lp.y)) return false;
+    fm.lastPos = lp;
+    return true;
+  }
   function currentSnapshot() {
     const s = sharedRef.current;
+    recordMyLastPos();
     return {
       seed: s.seed, money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned,
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
@@ -4530,6 +4577,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // échoue) : c'est lui qui protège les bascules d'instance dans l'onglet
     // (voir hostFarmMemCache en tête de fichier).
     const snap = currentSnapshot();
+    posDirtyRef.current = false;   // les positions partent avec toute sauvegarde (voir `lastPosOf`)
     hostFarmMemCache = { code: farmCodeRef.current, state: snap, at: Date.now() };
     try {
       await supabase.from("ferme_saves").upsert(
@@ -4557,7 +4605,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // elle-même ne fait rien côté invité (isHost + farmCode + monde requis).
   useEffect(() => {
     const flush = () => {
-      if (!dirtyRef.current) return;
+      // `recordMyLastPos` sans garde `isHost` : cet effet ne voit que le PREMIER rendu (un invité promu hôte resterait « invité ») ;
+      // chez un vrai invité, persistFarm ne fait rien de toute façon.
+      if (!dirtyRef.current && !posDirtyRef.current && !recordMyLastPos()) return;
       dirtyRef.current = false;
       persistFnRef.current && persistFnRef.current();
     };
@@ -10940,9 +10990,68 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoin() {
     pendingSkinRef.current = mySkinRec().skin === undefined ? skinPick : null;
     doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
+  /* Le parvis d'un bâtiment civique (tribunal, mairie, église), en ville : là où l'on ressort. `bkey` = `COURT_FLOORS[].bld`. */
+  function civicParvisPos(bkey) {
+    const b = bkey === "hall" ? C.TOWN_HALL : bkey === "church" ? C.TOWN_CHURCH : C.TOWN_COURT;
+    return { x: b.x + b.w / 2, y: b.y + b.h + 2 };
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-10-22 — OÙ L'ON REVIENT (la mémoire de position, voir `lastPosOf`).
+     ╚══════════════════════════════════════════════════════════════════════════
+     Rend `{ zone, x, y, townX?, townY? }`, ou null (devant la maison, comme avant). La fiche peut dater de plusieurs jours : la
+     glace a fondu, un enclos a poussé, la patinoire est là… On ne reprend donc la case que si l'on peut s'y tenir MAINTENANT, et
+     sinon la plus proche à douze cases. ⚠️ LA VILLE SE JUGE AU TEST PESSIMISTE DES RÉSIDENTS (`townCanStand`) : l'eau y est de
+     l'eau même gelée — revenir sur l'étang sans patins, c'est tomber au premier pas. La patinoire, le skatepark (on n'y marche
+     qu'en roulant) et le cratère encore chaud de l'étoile sont refusés en plus.
+       - ferme : là où l'on était ;
+       - ville : là où l'on était, sinon la gare ;
+       - tribunal, mairie, église : sur le parvis (l'intérieur se traverse ; on n'y revient pas au milieu d'une audience) ;
+       - maison : chez soi, dedans (hors de l'escalier, qui se prend marche par marche) ; chez un ami, devant sa porte — y entrer
+         se demande (la sonnette, lot 4), et son propriétaire n'est peut-être pas là. */
+  function savedStartPos(f) {
+    const p = f && f.lastPos;
+    if (!p || typeof p.x !== "number" || typeof p.y !== "number" || !isFinite(p.x) || !isFinite(p.y)) return null;
+    const townAt = (x, y) => {
+      const tw = townWorldNow();
+      const hot = starCraterHeatNow() > 0 ? starCraterPos() : null;
+      const ok = (qx, qy) => {
+        if (!townCanStand(tw, qx, qy)) return false;
+        if (BN.snowmanBlocks(sharedRef.current.snowmen, "town", qx, qy, Date.now())) return false;
+        for (const [px, py] of C.bodyPoints(qx, qy)) {
+          const fx = Math.floor(px), fy = Math.floor(py), i = fy * tw.w + fx;
+          if ((tw.rink && tw.rink[i]) || (tw.rinkBand && tw.rinkBand[i]) || (tw.parkCell && tw.parkCell[i])) return false;
+        }
+        return !(hot && Math.hypot(qx - hot.x, qy - hot.y) < C.STAR_CRATER_DRAW_R + 1.5);
+      };
+      const q = nearestStart(ok, x, y);
+      return q ? { zone: "town", x: q.x, y: q.y } : { zone: "town", x: C.TOWN_SPAWN.x, y: C.TOWN_SPAWN.y };
+    };
+    if (p.z === "farm") {
+      const w = worldRef.current; if (!w) return null;
+      const q = nearestStart((qx, qy) => canStand(w, qx, qy), p.x, p.y);
+      return q ? { zone: "farm", x: q.x, y: q.y } : null;
+    }
+    if (p.z === "town") return townAt(p.x, p.y);
+    if (p.z === "court") { const pv = civicParvisPos(E.courtBuildingOf(p.y).key); return townAt(pv.x, pv.y); }
+    if (p.z === "home") {
+      const loc = HM.homeFootLocal(p.x, p.y), door = homeDoorTownPos(loc.slot);
+      if (loc.slot >= 0 && loc.slot === homeSlotOfId(me.id) && canStandHomeAt(p.x, p.y) && !HM.homeInStair(HM.PLAN_ETROITE, loc.lx, loc.ly)) {
+        if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
+        return { zone: "home", x: p.x, y: p.y, townX: door.x, townY: door.y };
+      }
+      return townAt(door.x, door.y);
+    }
+    return null;
+  }
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
-    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false, zone: "farm" };
+    /* 2026-10-22 — LA POSITION. « Changer de perso » en pleine partie (l'état privé est déjà là, voir plus bas) : on reste où
+       l'on est — avant, on repartait devant la maison. Première entrée : la mémoire de position, sinon devant la maison. */
+    const m0 = meRef.current;
+    const start = invRef.current && m0 && m0.id === me.id
+      ? { zone: m0.zone || "farm", x: m0.x, y: m0.y, townX: m0.townX, townY: m0.townY, farmX: m0.farmX, farmY: m0.farmY }
+      : (savedStartPos(farmersRef.current[me.id]) || { zone: "farm", x: C.SPAWN.x, y: C.SPAWN.y });
+    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, dir: 0, moving: false, animT: 0, sleeping: false, ...start };
     /* ZIP 383 — L'HÔTE RETROUVE SON PROPRE ÉTAT PRIVÉ À LA REPRISE.
 
        Bug trouvé en cherchant pourquoi le record du défi (inv.runBest)
@@ -17858,6 +17967,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      fermiers triés est le rang de sa parcelle (`townHouseOwners`), et l'inverse. */
   function homeIds() { return Object.keys(farmersRef.current || {}).sort(); }
   function homeSlotOfId(id) { return homeIds().indexOf(id); }
+  /* Devant la porte d'une maison, en ville : le repli de la sortie (position d'entrée perdue) et le retour d'une visite
+     chez un ami (la mémoire de position, `doJoinWith`). Une seule écriture pour les deux. */
+  function homeDoorTownPos(slot) {
+    const h0 = C.TOWN_HOUSES[slot];
+    return h0 ? { x: h0.x + 3, y: h0.y + C.TOWN_HOUSE_H + 1 } : { x: C.TOWN_SPAWN.x, y: C.TOWN_SPAWN.y };
+  }
   function homeOfSlot(slot) { return HM.homeOf(sharedRef.current.homes, homeIds()[slot]); }
   /* 2026-10-21 (lot 2c) — L'HEURE DE JEU, en minutes depuis le jour 0 (`HM.homeGameMin`) : le feu se date et se relit avec elle. */
   function homeNowMin() { const sh = sharedRef.current; return HM.homeGameMin(sh.day, E.gameTimeMin(sh.dayStartAt, Date.now())); }
@@ -18165,8 +18280,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                Haute-Ville, sans qu'aucune erreur ne le dise. `COURT_FLOORS`
                porte déjà `bld` : on le lit. */
             const bkey0 = (C.COURT_FLOORS[DEV_FLOOR_OF[dk]] || {}).bld || "court";
-            const bldg = bkey0 === "hall" ? C.TOWN_HALL : bkey0 === "church" ? C.TOWN_CHURCH : C.TOWN_COURT;
-            m.townX = bldg.x + bldg.w / 2; m.townY = bldg.y + bldg.h + 2;
+            const pv0 = civicParvisPos(bkey0);
+            m.townX = pv0.x; m.townY = pv0.y;
           }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           if (!courtWorldRef.current) courtWorldRef.current = getCourtWorldCached(E);
@@ -18243,8 +18358,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.zone = "town";
         // Repli sur le parvis si la position d'entrée manque (téléport
         // développeur d'un client rechargé) : jamais d'atterrissage à (0,0).
-        m.x = (typeof m.townX === "number" ? m.townX : C.TOWN_COURT.x + C.TOWN_COURT.w / 2);
-        m.y = (typeof m.townY === "number" ? m.townY : C.TOWN_COURT.y + C.TOWN_COURT.h + 2);
+        // 2026-10-22 : le parvis du bâtiment dont on sort (`civicParvisPos`), plus toujours celui du tribunal.
+        const pvX = civicParvisPos(wasBld);
+        m.x = (typeof m.townX === "number" ? m.townX : pvX.x);
+        m.y = (typeof m.townY === "number" ? m.townY : pvX.y);
         m.moving = false;
         sendPos();
         pushToast(wasBld === "hall" ? L.hallExitToast : wasBld === "church" ? L.churchExitToast : L.courtExitToast);
@@ -18269,9 +18386,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (zt.dest === "townFromHome") {
         m.zone = "town";
         m.sitOn = null; m.seat = 0; m.homeSeatFrom = null;   // 2026-10-22 (lot 4) : `sitOn` d'une maison ({ x: u, y: −1 }) n'est pas un banc
-        const slot0 = HM.homeSlotOf(C.footX(m.x)), h0 = C.TOWN_HOUSES[slot0];
-        m.x = (typeof m.townX === "number" ? m.townX : (h0 ? h0.x + 3 : C.TOWN_SPAWN.x));
-        m.y = (typeof m.townY === "number" ? m.townY : (h0 ? h0.y + C.TOWN_HOUSE_H + 1 : C.TOWN_SPAWN.y));
+        const door0 = homeDoorTownPos(HM.homeSlotOf(C.footX(m.x)));
+        m.x = (typeof m.townX === "number" ? m.townX : door0.x);
+        m.y = (typeof m.townY === "number" ? m.townY : door0.y);
         m.dir = 0; m.moving = false;
         sendPos();
         pushToast(L.homeExitToast);

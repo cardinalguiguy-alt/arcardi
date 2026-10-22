@@ -1,5 +1,24 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-22 (fin) — LA MÉMOIRE DE POSITION : ON REVIENT OÙ L'ON ÉTAIT
+
+Demande de Guillaume : « pas nécessairement devant la maison ». Ses choix (les recommandés) : la position vit dans la FERME (elle suit le joueur
+d'un appareil à l'autre), sans expiration. **Supabase : rien** (`fermier.lastPos = { z, x, y }` dans le JSON de `ferme_saves`) ; **aucun message
+de plus** (l'hôte la lit dans les `pos` qu'il reçoit déjà, et range la sienne dans `currentSnapshot`).
+- **Où l'on revient** (`savedStartPos`, FermeGame.js) : la ferme et la ville, là où l'on était ; la carte maléfique, devant le passage (c'est
+  déjà ce que `pubMe` publie) ; tribunal, mairie, église, sur le parvis (`civicParvisPos`) ; chez soi, dedans (hors de l'escalier) ; chez un ami,
+  devant sa porte (`homeDoorTownPos`) — y entrer se demande. « Changer de perso » ne bouge plus personne.
+- **La case doit être sûre MAINTENANT** : sinon la plus proche à 12 cases (`nearestStart`), sinon la gare (ville) ou devant la maison (ferme).
+  La ville se juge au test pessimiste des résidents (`townCanStand` : l'eau même gelée), plus la patinoire, le skatepark et le cratère chaud.
+- ⚠️ **Le `x/y` nu du fermier n'est jamais relu pour placer quelqu'un** : écrit depuis longtemps par les `pos`, il mélange ferme, ville et
+  intérieurs (§4, deux cartes sans repère commun). Une ferme d'avant ce jour n'a pas de `lastPos` : premier retour devant la maison.
+- ⚠️ **Marcher ne rend rien « dirty »** : la position part avec n'importe quelle sauvegarde, et le filet de sortie (pagehide, démontage) écrit
+  désormais aussi quand seule une position a bougé (`posDirtyRef`, `recordMyLastPos`) — sinon l'hôte qui se promène puis ferme perdait la sienne.
+- **Vu à deux clients** (`/audit-duo`, invitée rechargée) : ferme ; rivière → la berge ; ville ; étang → la rive ; tribunal → parvis ; chez soi
+  → dedans, puis ressortie devant sa porte ; chez l'hôte → devant sa porte ; carte maléfique → passage ; skatepark → son bord (à 6 cases : la
+  gare) ; « Changer de perso » en ville ; le filet de sortie de l'hôte. **Pas vu** : la patinoire (pas d'hiver forcé), une vraie relecture de
+  `ferme_saves` (le Supabase local ne garde rien : seul l'instantané de l'hôte a servi), iPad.
+
 ## 2026-10-22 (suite) — CHEZ SOI, LOT 4 : LA SONNETTE, LE DOUBLE DES CLÉS, S'ASSEOIR
 
 Ses neuf réponses, toutes sur la recommandation : la sonnette joue **partout** (un interphone) ; 30 s sans réponse, 20 s entre deux coups ;

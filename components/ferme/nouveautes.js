@@ -51,4 +51,6 @@ export const NOUVEAUTES = [
     en: { t: "Colette: curtains and dyeing", s: "Curtains to hang and draw (E), seen from the street; Colette, once a resident, makes them to measure and dyes sofa, armchair, bed and curtains in her palette.", voir: "The catalogue: \"Windows\", then \"At Colette's\"" } },
   { date: "2026-10-22", fr: { t: "Recevoir chez soi", s: "On sonne chez un ami (il ouvre où qu'il soit), on confie un double de ses clés au crochet de l'entrée, on s'assoit sur le canapé ensemble.", voir: "E à la porte d'un ami, en ville" },
     en: { t: "Having friends over", s: "Ring at a friend's door (they can open from anywhere), leave a spare key on the hook in your hall, sit on the sofa together.", voir: "E at a friend's door, in town" } },
+  { date: "2026-10-22", fr: { t: "On revient où l'on était", s: "En rejoignant la ferme, on réapparaît là où on l'avait quittée — ferme, ville ou chez soi — plus forcément devant la maison.", voir: "Quitter puis revenir" },
+    en: { t: "Back where you left off", s: "When you rejoin the farm you reappear where you left it — farm, town or at home — not always in front of the house.", voir: "Leave, then come back" } },
 ];

@@ -11,11 +11,12 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-22 — CHEZ SOI, LOTS 2d (COLETTE) ET 4 (LA SONNETTE) ; NI L'UN NI L'AUTRE N'EST COMMITÉ
+### 2026-10-22 — MÉMOIRE DE POSITION, PAS COMMITÉE (LES LOTS 2c À 4 DE CHEZ SOI LE SONT : `b4b8b7f`)
 
-2d : teinture par PASSES Blender (`tools/blender/rendre_teintes.py`, `maisonArt.teindrePx`), page « Chez Colette », rideaux tirés (E).
-4 : sonnette (partout, 30 s, une visite), double des clés au crochet de l'entrée, s'asseoir, gestes d'invité vérifiés par l'hôte À LA POSITION,
-Raccompagner — **vu à deux clients** (`/audit-duo`). `verify-maison` 225/225. **Supabase : rien.** Pas vu : propriétaire hors ligne, iPad.
+Position : `fermier.lastPos = { z, x, y }` (`lastPosOf`, `savedStartPos`, `posDirtyRef` dans FermeGame.js) ; on revient où l'on était (parvis
+pour les bâtiments, devant la porte chez un ami, passage pour la carte maléfique), sur une case sûre MAINTENANT. **Vu à deux clients. Supabase : rien.**
+2d (Colette, teinture par passes Blender) et 4 (sonnette, doubles, s'asseoir) : README ferme, journal du 2026-10-22. `verify-maison` 225/225.
+Pas vu : relecture réelle de `ferme_saves` (le Supabase local ne garde rien), propriétaire hors ligne, iPad.
 ⚠️ Le harnais `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance à lui : tout crochet neuf se déclare APRÈS lui.
 ⚠️ Une fonction de MODULE appelée par la boucle de rendu ne change pas au rechargement à chaud : recharger la page avant de juger.
 ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
