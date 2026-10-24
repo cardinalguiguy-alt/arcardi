@@ -91,6 +91,7 @@ import * as PO from "./poussiere"; // 2026-10-04 — la poussière soulevée par
 import * as GL from "./glace";
 import * as PT from "./patin";
 import * as DU from "./duo"; // 2026-10-06 (soir) — les figures à deux sur la glace (pur)
+import * as EX from "./expressions"; // 2026-10-23 — les expressions automatiques des personnages en 32 × 48 (pur)
 import * as SPK from "./skatepark";      // 2026-10-11 — le skatepark de la place (printemps) : son relief, ses garde-corps, la marche (pur)
 import * as SPA from "./skateparkArt";   // 2026-10-11 — son dessin : le relief projeté en 3/4, éclairé, découpé en tranches de tri
 import * as MO from "./monture";       // 2026-10-11 — la physique des montures du park (skate, rollers, trottinette, BMX), pure
@@ -130,6 +131,189 @@ const ZOOM = 3;
    tombe donc exactement sur le même cran que le dézoom automatique des
    monuments, jamais un second nombre qui pourrait diverger de lui. */
 const ZOOM_LEVELS = [1, 2, 3, 4, 5];
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-23 — LES JOUEURS EN 32 × 48, DERRIÈRE UN INTERRUPTEUR (⚙️ → « Personnages fins »)
+   ╚══════════════════════════════════════════════════════════════════════════
+   Décision de Guillaume : même taille à l'écran que l'ancien 16 × 24, deux fois plus de pixels (`persoHdArt.js`, `S.getCharHD`),
+   « joueurs d'abord » (les résidents gardent l'ancien), un interrupteur pour revenir à l'ancien dessin. Réglage LOCAL (chaque
+   joueur choisit ce qu'IL voit, rien ne part sur le réseau — §3) et de MODULE : la boucle de rendu le lit à chaque image sans
+   closure figée (§4, « un effet monté une fois voit pour toujours l'état de son premier rendu »).
+   LE CRAN DÉCIDE DU CHEMIN (`drawCharHD`) — un pixel du 32 × 48 vaut cran/2 pixels d'écran :
+   · crans 2 et 4, et partout chez soi (×`HOME_K` : 4 et 8) → un nombre ENTIER : on dessine tel quel, au pixel ;
+   · crans 3 (le cran par défaut !) et 5 → 1,5 et 2,5 : posé tel quel, des pixels inégaux qui grouillent en marchant (§4, « à échelle
+     non entière, le navigateur lisse… »). On cuit UNE FOIS une feuille à la taille d'écran exacte (agrandie au plus proche ×cran,
+     puis réduite de moitié en moyenne : les bords se fondent d'un demi-pixel, mais rien ne bouge) et on la pose AU PIXEL D'ÉCRAN
+     ENTIER, comme les maisons (`drawScreenExactBitmap`) ; une feuille miroir pour le profil ouest ;
+   · cran 1 → un demi-pixel : l'ancien 16 × 24, dessiné POUR cette taille, reste le bon dessin (un niveau de détail, pas un repli) ;
+   · une échelle fractionnaire (le fondu du zoom, l'enfoncement du cratère) → la feuille fine lissée, le temps du fondu. */
+const PERSO_HD = { on: true, _read: false };
+function persoHdOn() {
+  if (!PERSO_HD._read) {
+    PERSO_HD._read = true;
+    try { const v = localStorage.getItem("arcardi.persoHd"); if (v === "0") PERSO_HD.on = false; } catch (e) { /* stockage refusé : on garde le réglage par défaut */ }
+  }
+  return PERSO_HD.on;
+}
+function setPersoHd(on) {
+  PERSO_HD.on = !!on; PERSO_HD._read = true;
+  try { localStorage.setItem("arcardi.persoHd", on ? "1" : "0"); } catch (e) { /* idem */ }
+}
+/* 2026-10-23 — LES EXPRESSIONS AUTOMATIQUES (`expressions.js`) : la mémoire de chaque visage, par identifiant. Une Map de MODULE : la
+   boucle de rendu (qui choisit le visage) et les réceptions réseau (qui datent un événement) la partagent sans passer par React.
+   L'horloge est `performance.now()` de CETTE machine : seules des durées comptent (§3, on ne compare jamais deux horloges). */
+const EXPR_MEM = new Map();
+function exprMemOf(id) {
+  const k = String(id == null ? "?" : id);
+  let m = EXPR_MEM.get(k);
+  if (!m) EXPR_MEM.set(k, (m = EX.newExprMem()));
+  return m;
+}
+function exprEvent(id, kind) { if (id != null) EX.exprMark(exprMemOf(id), kind, performance.now()); }
+const HD_SCALED = new WeakMap();   // feuille 32 × 48 → Map("cran|miroir" → feuille cuite à la taille d'écran)
+function hdScaledSheet(hd, k, mirror) {
+  let m = HD_SCALED.get(hd);
+  if (!m) HD_SCALED.set(hd, m = new Map());
+  const key = k + (mirror ? "m" : "");
+  if (m.has(key)) return m.get(key);
+  const big = document.createElement("canvas"); big.width = hd.width * k; big.height = hd.height * k;
+  const bg = big.getContext("2d"); bg.imageSmoothingEnabled = false; bg.drawImage(hd, 0, 0, big.width, big.height);
+  const out = document.createElement("canvas"); out.width = big.width / 2; out.height = big.height / 2;
+  const og = out.getContext("2d"); og.imageSmoothingEnabled = true; og.imageSmoothingQuality = "high";
+  if (mirror) { og.translate(out.width, 0); og.scale(-1, 1); }
+  og.drawImage(big, 0, 0, out.width, out.height);
+  m.set(key, out);
+  return out;
+}
+/* Pose l'image (`frame`, `row`) d'un joueur dans le rectangle MONDE (wx, wy, 16, 24) de la transformation courante — miroir compris
+   (le profil ouest arrive avec un `scale(-1, 1)` déjà posé). `old` : la feuille 16 × 24, pour le cran 1. */
+function drawCharHD(ctx, hd, old, frame, row, wx, wy) {
+  const M = ctx.getTransform();
+  const k = Math.hypot(M.a, M.b), kr = Math.round(k), whole = Math.abs(k - kr) < 1e-3 && Math.abs(M.b) < 1e-6 && Math.abs(Math.abs(M.d) - k) < 1e-3;
+  if (k < 1.75) { ctx.drawImage(old, frame * 16, row * 24, 16, 24, wx, wy, 16, 24); return; }
+  if (!whole) {
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(hd, frame * 32, row * 48, 32, 48, wx, wy, 16, 24); ctx.restore(); return;
+  }
+  if (kr % 2 === 0) { ctx.drawImage(hd, frame * 32, row * 48, 32, 48, wx, wy, 16, 24); return; }
+  const mirror = M.a < 0, sc = hdScaledSheet(hd, kr, mirror), fw = 16 * kr, fh = 24 * kr;
+  const sx = M.a * wx + M.c * wy + M.e, sy = M.b * wx + M.d * wy + M.f;
+  const left = Math.round(mirror ? sx - fw : sx), top = Math.round(sy);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(sc, (mirror ? 3 - frame : frame) * fw, row * fh, fw, fh, left, top, fw, fh);
+  ctx.restore();
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-23 — LES POSES EN 32 × 48 SANS RÉÉCRIRE UNE SEULE POSE (`drawPoseHD`)
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume : « la façon la plus économique d'avoir un vrai rendu pro, sans casser les déplacements et poses existantes ; très
+   propre, sois ultra exigeant ». Toutes les poses (assis, bateau, cheval, lancer, halage, fouille, glissades du cratère, patin,
+   skate/BMX/trottinette/rollers) DÉCOUPENT la feuille avec les repères du gabarit 16 × 24 (tête 0-10, buste, demi-jambes…) — et la
+   feuille fine EST ce gabarit à ×2 (`persoHdArt.js`). Donc :
+   1. la pose s'exécute TELLE QUELLE, sur une toile de travail à ×2 du monde (`POSE_HD`), avec la feuille fine NUE (sans contour) ;
+      `hdCtxProxy` multiplie par `__hdK` les rectangles SOURCE découpés dans une feuille marquée — et rien d'autre : les
+      coordonnées monde, les `fillRect` des membres et des accessoires, les miroirs de l'appelant passent sans changement ;
+   2. le CONTOUR (« selout », la même règle que `persoHdArt`) se pose sur la pose FINIE : pas de couture entre buste, cuisses et
+      mollets, et la botte ou la lame peinte au `fillRect` reçoit le même cerne que le corps ;
+   3. la toile est posée à l'écran par la règle des crans de `drawCharHD` (entier tel quel, impair cuit au pixel d'écran entier,
+      cran 1 : la pose ANCIENNE, rejouée sur la toile du jeu avec la feuille 16 × 24).
+   ⚠️ Les pixels à demi transparents (le creux sous les genoux d'une pose assise, à 30 %) ne portent pas de contour : seul un pixel
+   plein (alpha ≥ 200) en appelle un, et seul un pixel entièrement vide en reçoit un. */
+const POSE_BOX = { x: -24, y: -48, w: 64, h: 88 };   // la boîte monde de la toile, autour de (px, py) : sauts, bras levés, planche
+const POSE_HD = { cv: null, g: null, up: null, ug: null, dn: null, dg: null };
+function hdCtxProxy(g) {
+  return new Proxy(g, {
+    get(t, k) {
+      if (k === "drawImage") return (img, ...a) => {
+        const K = img && img.__hdK;
+        if (K && a.length === 8) return t.drawImage(img, a[0] * K, a[1] * K, a[2] * K, a[3] * K, a[4], a[5], a[6], a[7]);
+        if (K && a.length === 2) return t.drawImage(img, a[0], a[1], img.width / K, img.height / K);
+        return t.drawImage(img, ...a);
+      };
+      const v = t[k];
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+}
+// Le contour posé sur la pose finie ; rend la boîte des pixels peints (pour ne mettre à l'échelle que ce qui sert), ou null.
+// ⚠️ Mesuré au premier jet (une fonction par voisin, octet par octet) : 1,4 ms par pose et par image — dix habitants assis sur des
+// bancs en auraient coûté 14. Lu en mots de 32 bits (petit-boutiste : l'alpha est l'octet de poids fort), les voisins en ligne.
+function outlineHD(g, W, H) {
+  const im = g.getImageData(0, 0, W, H), d = new Uint32Array(im.data.buffer), src = d.slice();
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
+    const v = src[i];
+    if (v >>> 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; continue; }
+    // le voisin d'en bas d'abord (il pose la silhouette sur ses pieds), puis les côtés, puis le haut — comme `persoHdArt`
+    let n = 0;
+    if (y < H - 1 && src[i + W] >>> 24 >= 200) n = src[i + W];
+    else if (x > 0 && src[i - 1] >>> 24 >= 200) n = src[i - 1];
+    else if (x < W - 1 && src[i + 1] >>> 24 >= 200) n = src[i + 1];
+    else if (y > 0 && src[i - W] >>> 24 >= 200) n = src[i - W];
+    else continue;
+    const r = n & 255, gg = (n >>> 8) & 255, b = (n >>> 16) & 255;
+    d[i] = (0xff000000 | (Math.round(b + (30 - b) * 0.74) << 16) | (Math.round(gg + (14 - gg) * 0.74) << 8) | Math.round(r + (28 - r) * 0.74)) >>> 0;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  g.putImageData(im, 0, 0);
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+/* Pose la partie `b` (px de la toile ×2) de la toile `cv`, qui couvre le rectangle monde (wx, wy, ww, wh). */
+function blitHD(ctx, cv, b, wx, wy) {
+  const M = ctx.getTransform(), k = Math.hypot(M.a, M.b), kr = Math.round(k);
+  const bwx = wx + b.x / 2, bwy = wy + b.y / 2, bww = b.w / 2, bwh = b.h / 2;
+  const whole = Math.abs(k - kr) < 1e-3 && M.a > 0 && Math.abs(M.b) < 1e-6 && Math.abs(M.c) < 1e-6 && Math.abs(M.d - k) < 1e-3;
+  if (!whole) {   // le fondu du zoom, l'ombre du soleil (cisaillée), un reflet : lissé, le temps que ça dure
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(cv, b.x, b.y, b.w, b.h, bwx, bwy, bww, bwh); ctx.restore(); return;
+  }
+  if (kr % 2 === 0) { ctx.drawImage(cv, b.x, b.y, b.w, b.h, bwx, bwy, bww, bwh); return; }
+  // Cran impair : ×cran au plus proche, puis ½ en moyenne (comme `hdScaledSheet`), posé au pixel d'écran ENTIER.
+  const P = POSE_HD, UW = b.w * kr, UH = b.h * kr, DW = Math.round(UW / 2), DH = Math.round(UH / 2);
+  if (!P.up) { P.up = document.createElement("canvas"); P.dn = document.createElement("canvas"); }
+  if (P.up.width < UW || P.up.height < UH) { P.up.width = Math.max(P.up.width, UW); P.up.height = Math.max(P.up.height, UH); P.ug = null; }
+  if (P.dn.width < DW || P.dn.height < DH) { P.dn.width = Math.max(P.dn.width, DW); P.dn.height = Math.max(P.dn.height, DH); P.dg = null; }
+  const ug = P.ug || (P.ug = P.up.getContext("2d")), dg = P.dg || (P.dg = P.dn.getContext("2d"));
+  ug.setTransform(1, 0, 0, 1, 0, 0); ug.clearRect(0, 0, UW, UH); ug.imageSmoothingEnabled = false; ug.drawImage(cv, b.x, b.y, b.w, b.h, 0, 0, UW, UH);
+  dg.setTransform(1, 0, 0, 1, 0, 0); dg.clearRect(0, 0, DW, DH); dg.imageSmoothingEnabled = true; dg.imageSmoothingQuality = "high"; dg.drawImage(P.up, 0, 0, UW, UH, 0, 0, DW, DH);
+  const sx = M.a * bwx + M.e, sy = M.d * bwy + M.f;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(P.dn, 0, 0, DW, DH, Math.round(sx), Math.round(sy), DW, DH); ctx.restore();
+}
+/* Joue une pose : `fn(c, sh)` — `c` le contexte où dessiner, `sh` la feuille. Au cran 1, la pose ancienne directement.
+   `key` (facultatif) : la pose est IMMOBILE (assis, couché, en bateau, à cheval à l'arrêt) — elle se cuit une fois par feuille et par
+   clé, puis se repose sans rejouer ni recontourer. La clé dit tout ce qui change le dessin (rangée, miroir, décalage) ; `px`, `py`
+   arrondis, la cuisson ne dépend pas de la position. Au plus 48 poses par feuille. */
+const POSE_CACHE = new WeakMap();
+function drawPoseHD(ctx, naked, old, px, py, fn, key) {
+  const M = ctx.getTransform();
+  if (Math.hypot(M.a, M.b) < 1.75) return fn(ctx, old);
+  px = Math.round(px); py = Math.round(py);
+  let per = null;
+  if (key != null) {
+    per = POSE_CACHE.get(naked);
+    if (!per) POSE_CACHE.set(naked, per = new Map());
+    const hit = per.get(key);
+    if (hit) { if (hit.cv) blitHD(ctx, hit.cv, { x: 0, y: 0, w: hit.cv.width, h: hit.cv.height }, px + hit.dx, py + hit.dy); return; }
+  }
+  const P = POSE_HD, W = POSE_BOX.w * 2, H = POSE_BOX.h * 2;
+  if (!P.cv) { P.cv = document.createElement("canvas"); P.cv.width = W; P.cv.height = H; P.g = P.cv.getContext("2d", { willReadFrequently: true }); }
+  const g = P.g, bx = px + POSE_BOX.x, by = py + POSE_BOX.y;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; g.clearRect(0, 0, W, H);
+  g.setTransform(2, 0, 0, 2, -2 * bx, -2 * by); g.imageSmoothingEnabled = false;
+  g.save();
+  let ret;
+  try { ret = fn(hdCtxProxy(g), naked); } finally { g.restore(); }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const b = outlineHD(g, W, H);
+  if (per) {
+    let cv = null;
+    if (b) { cv = document.createElement("canvas"); cv.width = b.w; cv.height = b.h; cv.getContext("2d").drawImage(P.cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h); }
+    if (per.size >= 48) per.clear();
+    per.set(key, { cv, dx: POSE_BOX.x + (b ? b.x / 2 : 0), dy: POSE_BOX.y + (b ? b.y / 2 : 0) });
+  }
+  if (b) blitHD(ctx, P.cv, b, bx, by);
+  return ret;
+}
 
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-10-11 — QUALITÉ ADAPTATIVE : LE JEU S'ALLÈGE SEUL SUR UNE MACHINE QUI RAME.
@@ -2574,6 +2758,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
   const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, homes: {}, star: Q.newStar() });
+  // 2026-10-23 — le libellé de l'interrupteur « Personnages fins » (⚙️). L'état qui compte est `PERSO_HD` (module) ; celui-ci ne sert
+  // qu'à redessiner le bouton. ⚠️ Déclaré APRÈS `sharedRef` : le harnais `app/audit-tmp` vise les crochets d'avant par leur distance.
+  const [persoHdUi, setPersoHdUi] = useState(() => (typeof window === "undefined" ? true : persoHdOn()));
+  /* 2026-10-23 (lot A) — LES PORTRAITS DE L'INTERFACE (panneaux des résidents, création du personnage, salon…) : la feuille fine
+     quand l'interrupteur le veut — `Sprite` découpe une feuille `__hdK` à son échelle, les découpes des appelants ne changent pas.
+     Mêmes arguments que `getChar` ; `uiCharJ` pour un JOUEUR (son visage de joueur), `uiChar` pour un PNJ. Lit `persoHdUi` :
+     basculer l'interrupteur redessine les portraits. */
+  const uiChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look, joueur) => {
+    const S2 = spritesRef.current, old = S2.getChar(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look);
+    if (!persoHdUi || !S2.getCharHD) return old;
+    const any = overalls || cap || beeSuit || plaid || cheeseHat || sugarWorker;
+    if (joueur && any) return old;
+    const fl = any ? { overalls: !!overalls, cap: !!cap, beeSuit: !!beeSuit, plaid: !!plaid, cheeseHat: !!cheeseHat, sugarWorker: !!sugarWorker } : true;
+    return S2.getCharHD(gender, outfit, look, false, "neutre", joueur ? null : fl) || old;
+  };
+  const uiCharJ = (gender, outfit, o1, o2, o3, o4, o5, o6, look) => uiChar(gender, outfit, o1, o2, o3, o4, o5, o6, look, true);
   /* 2026-10-22 (lot 4) — LA SONNETTE ET LES VISITES. ⚠️ DÉCLARÉS APRÈS `sharedRef` EXPRÈS : le harnais `app/audit-tmp` vise les
      crochets React d'AVANT lui par leur distance à lui (`__hook(302…307)`) — un crochet ajouté plus haut les décalerait tous.
      `homeVisitUi` : { bell: { from, name, slot } (on sonne chez moi), keys: true (le crochet ouvert), guests: [{ id, name }] (qui
@@ -8007,7 +8207,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveVisitorDeal(f, s, req);
       if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
       // Zip 237: pets can land in the seller's bag now, so include pets in the payload.
-      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
+      // 2026-10-23 — `joy` : un marché conclu AVEC un cadeau fait sourire qui le reçoit (expressions) ; l'hôte, qui n'entend pas son
+      // propre `ch.send`, le marque chez lui
+      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState(), ...(r.gift ? { joy: f.id } : {}) } });
+      if (r.gift) exprEvent(f.id, "joie");
       stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
       if (r.gift) { if (r.petOffer) hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull, rid: v.rid } } }); else stationChat(giftChatLine(v.rid, r), "\u{1F381}"); }
       broadcastStation();
@@ -8017,7 +8220,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (req.kind === "visitorSwap") {
       const r = E.resolveVisitorSwap(f, s, req);
       if (!r.ok) { toastTo(r.toast === "visitorNotEnough" ? "swapNotEnough" : (r.toast || "actionFailed")); return true; }
-      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
+      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState(), joy: f.id } });   // 2026-10-23 : le troc fait sourire (expressions)
+      exprEvent(f.id, "joie");
       stationChat(L.swapDone(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F501}");
       if (r.petOffer && r.gift) hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull } } });
       else if (r.giftQueued || r.giftPromised) stationChat(giftChatLine(v.rid, r), "\u{1F381}");
@@ -8044,9 +8248,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // that nobody has claimed yet (idempotent, see resolveVisitorGreet).
       const r = E.resolveVisitorGreet(f, s, req.rid);
       if (r.ok) {
-        if (r.petOffer && r.gift) { hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull } } }); }
+        // 2026-10-23 — le cadeau d'arrivée fait sourire qui le reçoit (expressions) : `joy` dans l'annonce qui part déjà
+        if (r.petOffer && r.gift) { hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull }, joy: f.id } }); }
         else {
-          if (r.gift && !r.giftQueued) ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets } } });
+          if (r.gift && !r.giftQueued) { ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, joy: f.id } }); exprEvent(f.id, "joie"); }
           stationChat(L.visitorArrivalGift(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
         }
         broadcastStation();
@@ -10050,6 +10255,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.petChoice && p.petChoice.id === me.id) setPetChoice({ petId: p.petChoice.petId, full: !!p.petChoice.full, rid: p.petChoice.rid });
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
+    /* 2026-10-23 — LES EXPRESSIONS, datées à la réception : le poisson tiré (l'effet « fish »/« sea » part déjà à tous, sans dire qui
+       pêchait : c'est le joueur le plus proche de la case), le cadeau du chat (son toast part à tous), et la JOIE qu'une annonce de
+       l'hôte porte déjà (`joy` : un troc, un marché conclu avec cadeau, le cadeau d'arrivée d'un visiteur — un champ dans un message qui
+       partait de toute façon, aucun message de plus). */
+    if (p.fx) for (const f of [].concat(p.fx)) if (f && (f.k === "fish" || f.k === "sea")) exprFishCaught(f);
+    if (p.toast && p.toast.key === "catGift") exprEvent(p.toast.id, "joie");
+    if (p.joy) exprEvent(p.joy, "joie");
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
@@ -13118,7 +13330,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        (`hostRinkDone`), donc l'état d'avant est déjà « done » — le tableau ne s'ouvrait jamais chez lui (vu en jeu). On
        retient la dernière session dont on a ouvert les résultats. */
     void prev;
-    if (rk.state === "done" && loc.doneSid !== rk.sid) { loc.doneSid = rk.sid; loc.resultsOpen = true; }
+    if (rk.state === "done" && loc.doneSid !== rk.sid) {
+      loc.doneSid = rk.sid; loc.resultsOpen = true;
+      // 2026-10-23 — LES EXPRESSIONS : le vainqueur rit (le premier du classement, s'il n'est pas un résident) ; au contre-la-montre,
+      // qui bat le record. Lu sur la session qui vient d'arriver, chez chacun.
+      if (rk.mode === "tt") for (const id of rk.newRec || []) exprEvent(id, "rire");
+      else { const w = (rk.res || [])[0]; if (w && !w.bot && w.ms != null) exprEvent(w.id, "rire"); }
+    }
   }
   /* Les résidents-coureurs de la session, calculés UNE fois (la graine) : [{ b, run }]. */
   function rinkBotsNow() {
@@ -27918,9 +28136,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const sheet = sprC.getChar(cw.gender, cw.outfit, false, false, false, false, false, false, cw.look);
             const row = w.dir === 0 ? 0 : w.dir === 1 ? 1 : 2, px = Math.round(p.x * T), py = Math.round(p.y * T), frame = w.moving ? Math.floor(w.phase * 7) % 4 : 0;
             ctx.fillStyle = "rgba(0,0,0,0.25)"; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, 6, C.CHAR_SHADOW_RY);
-            let hand;
-            if (w.dir === 2) { ctx.save(); ctx.translate(px + 16, 0); ctx.scale(-1, 1); hand = CA.drawWorkerAct(ctx, sheet, row, 0, py, w.act, w.phase, frame); ctx.restore(); if (hand) hand = { x: px + 16 - hand.x, y: hand.y }; }
-            else hand = CA.drawWorkerAct(ctx, sheet, row, px, py, w.act, w.phase, frame);
+            // 2026-10-23 (lot A) — le geste d'un ouvrier en 32 × 48 : la même pose, rejouée sur la toile ×2 (`drawPoseHD`).
+            const act = (c, sh) => {
+              if (w.dir !== 2) return CA.drawWorkerAct(c, sh, row, px, py, w.act, w.phase, frame);
+              c.save(); c.translate(px + 16, 0); c.scale(-1, 1); const hh = CA.drawWorkerAct(c, sh, row, 0, py, w.act, w.phase, frame); c.restore();
+              return hh ? { x: px + 16 - hh.x, y: hh.y } : hh;
+            };
+            const hdW = persoHdOn() && sprC.getCharHD ? sprC.getCharHD(cw.gender, cw.outfit, cw.look, true, "neutre", true) : null;
+            const hand = hdW ? drawPoseHD(ctx, hdW, sheet, px, py, act) : act(ctx, sheet);
             // la charge portée : à deux (une feuille entre les deux paires de mains), seul (un panneau de barrière)
             if (w.act === "carry" && hand) {
               const pw = w.with ? posOf(w.with) : null;
@@ -29572,11 +29795,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!ss) SLEEP_SEEN.set(p.id, ss = { t0: now, d: 1000 + Math.random() * 6000 });
         const clos = now - ss.t0 >= ss.d ? sleeperHeadClosed(sheet) : null;
         const src = clos || sheet;
-        if (pw.rot) {
-          ctx.save(); ctx.translate(hx + 8, hy + 10); ctx.rotate(pw.rot * Math.PI / 2);
-          ctx.drawImage(src, 0, 0, 16, 11, -8, -10, 16, 11);
-          ctx.restore();
-        } else ctx.drawImage(src, 0, 0, 16, 11, hx, hy, 16, 11);
+        const drawHead = (c, s) => {
+          if (pw.rot) {
+            c.save(); c.translate(hx + 8, hy + 10); c.rotate(pw.rot * Math.PI / 2);
+            c.drawImage(s, 0, 0, 16, 11, -8, -10, 16, 11);
+            c.restore();
+          } else c.drawImage(s, 0, 0, 16, 11, hx, hy, 16, 11);
+        };
+        /* 2026-10-23 — UN JOUEUR EN 32 × 48 DORT EN 32 × 48 : sa tête vient de la feuille fine, les yeux fermés par l'expression
+           « sommeil » (le même délai de 1 à 7 s), posée comme une pose (`drawPoseHD` : quarts de tour exacts sur la toile ×2, contour,
+           cran). Les « Zzz » restent ceux d'avant. */
+        const hdS = persoHdOn() && sprites.getCharHD && !p.overalls && !p.cap
+          ? sprites.getCharHD(p.gender, p.outfit, wardrobeLookOf(p.id) || p.look || null, true, clos ? "sommeil" : "neutre") : null;
+        if (hdS) drawPoseHD(ctx, hdS, src, hx, hy + 10, drawHead, "dort|" + (pw.rot | 0));
+        else drawHead(ctx, src);
         const zt = (now / 900) % 1;
         ctx.save();
         ctx.font = "bold 7px monospace"; ctx.globalAlpha = 1 - zt;
@@ -30820,6 +31052,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `m.dig = true` mettrait un état d'animation dans l'objet qui porte la
          position et le sac — et c'est ce mélange qui, au 441, a fait porter deux
          sens au même nombre. */
+      if (persoHdOn()) exprArrivals(m);   // 2026-10-23 — un ami arrive (les expressions)
       drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null,
                       ...craterSlipDraw(m, true), ...skateDraw(m, true), ...selfDigDraw(), ...selfCastDraw(), ...selfHaulDraw() }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
@@ -32279,9 +32512,66 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       ctx.restore();
     }
+    /* 2026-10-23 — LES EXPRESSIONS : ce que le choix du visage demande au monde (expressions.js reste pur).
+       `exprZoneKey` : « où » est un joueur, chez soi compris (la maison se lit à sa position, comme partout dans ce fichier). */
+    function exprZoneKey(q) {
+      const z = (q && q.zone) || "farm";
+      return z === "home" ? "home:" + HM.homeFootLocal(q.x, q.y).slot : z;
+    }
+    // un autre JOUEUR assis à côté (même zone, à moins d'une case et demie) : la joie par moments
+    function exprSeatedBuddy(p) {
+      const me0 = meRef.current, zp = exprZoneKey(p), cands = [];
+      if (me0 && me0.sitOn) cands.push(me0);
+      for (const q of playersRef.current.values()) if (q && q.sit) cands.push(q);
+      for (const q of cands) if (q.id !== p.id && exprZoneKey(q) === zp && Math.hypot(q.x - p.x, q.y - p.y) < 1.6) return true;
+      return false;
+    }
+    /* UN AMI ARRIVE (son verdict : « oui ») — un joueur qui devient présent dans MA zone après plus d'une minute d'absence : il sourit, et
+       moi aussi. Chaque client le déduit de son côté : quand il arrive, je le vois apparaître ; lui, en arrivant, me trouve déjà là.
+       Une fois par image, depuis `drawSelf`. */
+    function exprArrivals(m) {
+      const now = performance.now(), zk = exprZoneKey(m);
+      for (const q of playersRef.current.values()) {
+        if (!q || !q.id || exprZoneKey(q) !== zk) continue;
+        const mem = exprMemOf(q.id);
+        if (mem.seenAt == null || now - mem.seenAt > EX.EXPR.ARRIVE_GAP) { exprEvent(q.id, "joie"); exprEvent(m.id, "joie"); }
+        mem.seenAt = now;
+      }
+    }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
       const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat, p.sugarWorker, p.look);
+      /* Les joueurs (visage de joueur), et depuis le lot A (2026-10-23) TOUS les autres : habitants, artisans, Carla, Léo, Froufrou,
+         le vandale, les ouvriers — avec leurs costumes (`npcHd`) et un visage de PNJ. Depuis le lot B (même soir), les vêtements de
+         Garfield, les coupes et les barbes du salon aussi : `getCharHD` ne rend plus null que pour un look inconnu. */
+      const isPlayerP = isSelf || playersRef.current.has(p.id);
+      const npcHd = isPlayerP ? null : (p.overalls || p.cap || p.beeSuit || p.plaid || p.cheeseHat || p.sugarWorker)
+        ? { overalls: !!p.overalls, cap: !!p.cap, beeSuit: !!p.beeSuit, plaid: !!p.plaid, cheeseHat: !!p.cheeseHat, sugarWorker: !!p.sugarWorker } : true;
+      /* 2026-10-23 — L'EXPRESSION (`expressions.js`), lue sur ce que ce dessin sait déjà du personnage : sa pose (chute au patin, au
+         park, glissade du cratère ; la retombée d'une figure), son assise, sa blessure, son look, l'heure du jeu — et les événements
+         datés à la réception (`exprEvent` : course gagnée, figure à deux, cadeau, poisson, ami qui arrive). Rien ne circule de plus.
+         Seulement en 32 × 48 (le visage du 16 × 24 n'a pas la place). Les PNJ : le clignement et le sommeil (`npc`). */
+      const hurtAt = isSelf ? injuredUntilRef.current : (p.injuredUntil || 0);
+      let expr = "neutre";
+      if (persoHdOn() && sprites.getCharHD) {
+        const nowE = performance.now(), eid = p.id || p.name, mem = exprMemOf(eid);
+        if (isPlayerP) { EX.exprLookStep(mem, p.look, nowE); EX.exprRideStep(mem, p.ride || null, nowE); EX.exprSkateStep(mem, p.skate || null, nowE); }
+        const falling = p.skate === "slip" || p.skate === "fall" || !!(p.ride && p.ride.mode === "bail") || p.slip === "slide";
+        expr = EX.exprPick(mem, { id: eid, npc: !isPlayerP, seated: !!p.sit, gameMin: E.gameTimeMin(sharedRef.current.dayStartAt, Date.now()),
+          falling, hurt: hurtAt > Date.now(), buddy: isPlayerP && !!p.sit && exprSeatedBuddy(p) }, nowE);
+      }
+      const hdSheet = persoHdOn() && sprites.getCharHD && (!isPlayerP || !(p.overalls || p.cap || p.beeSuit || p.plaid || p.cheeseHat || p.sugarWorker))
+        ? sprites.getCharHD(p.gender, p.outfit, p.look, false, expr, npcHd) : null;
+      /* 2026-10-23 — LES POSES (voir `drawPoseHD`, en tête de fichier) : chaque branche de pose ci-dessous passe par `pose`, qui la
+         joue sur la toile ×2 avec la feuille fine NUE pour un joueur en 32 × 48, ou telle quelle sur la toile du jeu sinon. Le code
+         de chaque pose ne change pas : seuls `ctx` et `sheet` deviennent les `c` et `sh` qu'on lui tend.
+         ⚠️ La feuille nue se fabrique À LA DEMANDE (une pose la réclame) : avec une feuille par expression, la fabriquer pour chaque
+         personnage qui marche doublait le nombre de canevas pour rien (mesuré : README ferme, journal du 2026-10-23 « les visages »). */
+      let hdNakedC;
+      const pose = (fn, key) => {
+        if (hdNakedC === undefined) hdNakedC = hdSheet ? sprites.getCharHD(p.gender, p.outfit, p.look, true, expr, npcHd) : null;
+        return hdNakedC ? drawPoseHD(ctx, hdNakedC, sheet, px, py, fn, key) : fn(ctx, sheet);
+      };
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -32457,8 +32747,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            pas.* */
         const seatY = py + 14 + sprites.boatSeatDy(p.dir);
         const bx = basePx + (isPilot ? 0 : (p.dir === 1 || p.dir === 0 ? 5 : -6));
-        if (flip) { ctx.translate(bx + 16, 0); ctx.scale(-1, 1); A.drawSeated(ctx, sheet, row, 0, seatY); }
-        else A.drawSeated(ctx, sheet, row, bx, seatY);
+        pose((c, sh) => { if (flip) { c.translate(bx + 16, 0); c.scale(-1, 1); A.drawSeated(c, sh, row, 0, seatY); } else A.drawSeated(c, sh, row, bx, seatY); },
+          "bateau|" + row + "|" + (flip ? 1 : 0) + "|" + Math.round(bx - px) + "|" + Math.round(seatY - py));
       } else if (riding) {
         // ASSIS (chantier 2026-07, demande Guillaume : "le fermier qui le
         // chevauche doit clairement être assis dessus, de manière plus
@@ -32468,16 +32758,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // (colonne 0). Une jambe fléchie est ajoutée par-dessus : cuisse à
         // l'horizontale, mollet qui tombe le long du flanc, botte au bout.
         const seatY = py - 8 - lift + hBob;
-        ctx.save();
-        if (flip) { ctx.translate(px + 16, seatY); ctx.scale(-1, 1); }
-        else ctx.translate(px, seatY);
-        ctx.drawImage(sheet, 0, row * 24, 16, 15, 0, 0, 16, 15);
-        ctx.fillStyle = "#3a3550";  // pantalon
-        ctx.fillRect(6, 13, 6, 3);  // cuisse
-        ctx.fillRect(10, 15, 3, 5); // mollet
-        ctx.fillStyle = "#241c14";  // botte
-        ctx.fillRect(10, 19, 4, 3);
-        ctx.restore();
+        pose((c, sh) => {
+          c.save();
+          if (flip) { c.translate(px + 16, seatY); c.scale(-1, 1); }
+          else c.translate(px, seatY);
+          c.drawImage(sh, 0, row * 24, 16, 15, 0, 0, 16, 15);
+          c.fillStyle = "#3a3550";  // pantalon
+          c.fillRect(6, 13, 6, 3);  // cuisse
+          c.fillRect(10, 15, 3, 5); // mollet
+          c.fillStyle = "#241c14";  // botte
+          c.fillRect(10, 19, 4, 3);
+          c.restore();
+        }, "cheval|" + row + "|" + (flip ? 1 : 0) + "|" + Math.round(seatY - py));
       } else if (p.cast) {
         /* 2026-09-03 (lot C) — LE LANCER SPÉCIAL. Même contrat que p.dig/p.slip
            juste en dessous : le dessin vit dans fermeArt (drawStarCast), ici
@@ -32485,17 +32777,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            l'eau) ; sous scale(-1,1) du profil ouest, le passer tel quel
            lancerait du mauvais côté à l'écran — même piège que digFx/slipX,
            réglé de la même façon (le miroir multiplie, il ne remplace pas). */
-        const drawCast = (ox, mir) => A.drawStarCast(ctx, sheet, row, ox, py, p.castPh || 0, (p.castKx || 1) * mir);
-        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawCast(0, -1); }
-        else drawCast(px, 1);
+        pose((c, sh) => {
+          const drawCast = (ox, mir) => A.drawStarCast(c, sh, row, ox, py, p.castPh || 0, (p.castKx || 1) * mir);
+          if (flip) { c.translate(px + 16, 0); c.scale(-1, 1); drawCast(0, -1); }
+          else drawCast(px, 1);
+        });
       } else if (p.haul) {
         /* 2026-09-04 — LE HALAGE. Même contrat que p.cast juste au-dessus :
            le dessin vit dans fermeArt (drawStarHaul), ici seulement le choix
            et le miroir. `haulKx` est un sens du MONDE (vers l'eau), mirroité
            comme castKx/digFx/slipX. */
-        const drawHaul = (ox, mir) => A.drawStarHaul(ctx, sheet, row, ox, py, p.haulTension || 0, !!p.haulHolding, (p.haulKx || 1) * mir, p.haulSlipMs);
-        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawHaul(0, -1); }
-        else drawHaul(px, 1);
+        pose((c, sh) => {
+          const drawHaul = (ox, mir) => A.drawStarHaul(c, sh, row, ox, py, p.haulTension || 0, !!p.haulHolding, (p.haulKx || 1) * mir, p.haulSlipMs);
+          if (flip) { c.translate(px + 16, 0); c.scale(-1, 1); drawHaul(0, -1); }
+          else drawHaul(px, 1);
+        });
       } else if (p.dig) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 469 — LA POSE DE FOUILLE. Même contrat que les trois poses du
@@ -32520,12 +32816,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            à 97 % d'images figées au 430 — et il vient d'être repris à l'endroit,
            par le seul banc qui sache le voir. */
         const ph = Math.floor((performance.now() - (p.digT0 || 0)) / 125);
-        const drawDig = (ox, mir) => A.drawStarDig(ctx, sheet, row, ox, py, ph, (p.digFx || 1) * mir);
-        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawDig(0, -1); }
-        else drawDig(px, 1);
+        pose((c, sh) => {
+          const drawDig = (ox, mir) => A.drawStarDig(c, sh, row, ox, py, ph, (p.digFx || 1) * mir);
+          if (flip) { c.translate(px + 16, 0); c.scale(-1, 1); drawDig(0, -1); }
+          else drawDig(px, 1);
+        });
       } else if (p.ride) {
         /* 2026-10-11 — LE RIDER DU SKATEPARK (`montureArt.js`) : le véhicule en 3D sur la surface, le corps par-dessus. */
-        MA.drawRide(ctx, sheet, px, py, p, p.gender === "f");
+        pose((c, sh) => MA.drawRide(c, sh, px, py, p, p.gender === "f"));
         if (isSelf && !reflecting && !sunCasting) {   // l'ancre des noms de figures : au-dessus de la tête, en coordonnées ÉCRAN
           const Mx = ctx.getTransform(), ax = px + 8, ay = py - 14 - Math.round(p.skAir || 0);
           parkFxRef.current.anchor = { sx: Mx.a * ax + Mx.c * ay + Mx.e, sy: Mx.b * ax + Mx.d * ay + Mx.f, s: Math.max(1, Math.round(Math.abs(Mx.a))) };
@@ -32549,7 +32847,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const rowS = dS === 0 ? 0 : dS === 1 ? 1 : 2, flipS = dS === 2, pyS = py - Math.round(p.skAir || 0);   // 2026-10-06 (soir) : le saut est AUSSI dans l'ombre du soleil — voir `sunCasting`
         /* 2026-10-06 (soir) : la main tendue d'une figure à deux — dans le repère de la feuille (mirroité avec le profil gauche). */
         const handS = p.skHand ? { x: flipS ? px + 16 - p.skHand.x : p.skHand.x, y: p.skHand.y } : null;
-        const drawSk = (ox) => A.drawSkate(ctx, sheetS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
         /* 2026-10-06 (soir) — LE REFLET DU PATINEUR (Guillaume : « la réflexion du patineur joue sur l'aspect lisse de la glace »).
            Le corps renversé sous la semelle (en entier depuis le 2026-10-07, voir plus bas) ; son poids suit le poli de la glace
            (`GLOSS_K` : plein sur la glace lisse, nul sur l'usée). Seulement sur la glace entretenue, jamais dans l'ombre du soleil. */
@@ -32586,8 +32883,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           cx.globalCompositeOperation = "source-over";
           const a0R = ctx.globalAlpha; ctx.globalAlpha = a0R * aR; ctx.drawImage(cv, px - 12, fyR); ctx.globalAlpha = a0R;
         }
-        if (flipS) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSk(0); }
-        else drawSk(px);
+        pose((c, sh) => {
+          const shS = kitD && kitD.suit ? A.suitSheet(sh, kitD.color) : sh;
+          const drawSkC = (ox) => A.drawSkate(c, shS, rowS, ox, pyS, p.skate, p.skPh || 0, p.gender === "f", { kit: kitD, hand: handS });
+          if (flipS) { c.translate(px + 16, 0); c.scale(-1, 1); drawSkC(0); }
+          else drawSkC(px);
+        });
       } else if (p.slip && (p.slip !== "climb" || p.dir === 1) && (p.slip !== "slide" || p.dir !== 3)) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 459 — LES TROIS POSES DU CRATÈRE.
@@ -32614,13 +32915,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            ferait pencher le fermier du mauvais côté — un défaut qui ne se voit que
            dans une des deux directions, donc une image sur deux, donc jamais en
            relecture. */
-        const drawSlip = (ox, mir) => {
-          if (p.slip === "climb") A.drawStarClimb(ctx, sheet, row, ox, py, Math.floor((p.animT || 0) % A.STAR_CLIMB_FRAMES));
-          else if (p.slip === "brace") A.drawStarBrace(ctx, sheet, row, ox, py);
-          else A.drawStarSlide(ctx, sheet, row, ox, py, (p.slipX || 0) * mir, p.slipY || 0);
-        };
-        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSlip(0, -1); }
-        else drawSlip(px, 1);
+        pose((c, sh) => {
+          const drawSlip = (ox, mir) => {
+            if (p.slip === "climb") A.drawStarClimb(c, sh, row, ox, py, Math.floor((p.animT || 0) % A.STAR_CLIMB_FRAMES));
+            else if (p.slip === "brace") A.drawStarBrace(c, sh, row, ox, py);
+            else A.drawStarSlide(c, sh, row, ox, py, (p.slipX || 0) * mir, p.slipY || 0);
+          };
+          if (flip) { c.translate(px + 16, 0); c.scale(-1, 1); drawSlip(0, -1); }
+          else drawSlip(px, 1);
+        });
       } else if (p.sit) {
         /* ⚠️ ZIP 428 — LA POSE ASSISE EST DESSINÉE PAR `A.drawSeated`, ET ELLE
            A DÉMÉNAGÉ DANS fermeArt.js EXPRÈS. Elle vivait ici, dans la closure
@@ -32632,8 +32935,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            sont là-bas.
            ⚠️ Frame 0 imposée : un cycle de marche sur quelqu'un d'assis donne
            un gigotement permanent. */
-        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); A.drawSeated(ctx, sheet, row, 0, py); }
-        else A.drawSeated(ctx, sheet, row, px, py);
+        pose((c, sh) => { if (flip) { c.translate(px + 16, 0); c.scale(-1, 1); A.drawSeated(c, sh, row, 0, py); } else A.drawSeated(c, sh, row, px, py); },
+          "assis|" + row + "|" + (flip ? 1 : 0));
       } else if (p.scale && p.scale !== 1) {
         /* Zip 427 — LES ENFANTS DE LA FAMILLE. Une simple mise à l'échelle
            ANCRÉE AUX PIEDS : le sprite rétrécit vers le bas, donc l'enfant reste
@@ -32642,8 +32945,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            à sa taille. */
         const sc = p.scale, w2 = 16 * sc, h2 = 24 * sc;
         const bx2 = px + (16 - w2) / 2, by2 = (py - 8 - lift) + (24 - h2);
-        if (flip) { ctx.translate(bx2 + w2, by2); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, w2, h2); }
+        // 2026-10-23 — en 32 × 48, la feuille fine à l'échelle de l'enfant (une échelle fractionnaire : `drawCharHD` la lisse).
+        if (hdSheet) { ctx.translate(flip ? bx2 + w2 : bx2, by2); ctx.scale(flip ? -sc : sc, sc); drawCharHD(ctx, hdSheet, sheet, frame, row, 0, 0); }
+        else if (flip) { ctx.translate(bx2 + w2, by2); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, w2, h2); }
         else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, bx2, by2, w2, h2);
+      } else if (hdSheet) {
+        // 2026-10-23 — un JOUEUR en 32 × 48 (voir `drawCharHD`, en tête de fichier) : debout et en marche seulement, pour l'instant.
+        if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); drawCharHD(ctx, hdSheet, sheet, frame, row, 0, 0); }
+        else drawCharHD(ctx, hdSheet, sheet, frame, row, px, py - 8 - lift);
       } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
@@ -32695,7 +33004,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // fermier blessé, soi-même ou distant (voir p.injuredUntil, propagé à
       // tous via applyDeltas/p.injured), pour qu'un autre joueur repère qui
       // soigner (trousse de soins, touche E à proximité).
-      const hurtUntil = isSelf ? injuredUntilRef.current : (p.injuredUntil || 0);
+      const hurtUntil = hurtAt;   // calculé plus haut (l'expression « gêne » le lit aussi)
       if (hurtUntil > Date.now()) {
         ctx.font = "10px monospace";
         ctx.fillText("🩹", px + 8, py - 20);
@@ -34865,7 +35174,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (r.done) { D.act = null; return; }
     a.cur = r;
     const pp = (q) => ({ x: q.x - C.footX(0), y: q.y - C.footY(0) });
-    if (r.landed && !a.landed) { a.landed = true; skateBurst(pp(r.a), 22, 1.0); skateBurst(pp(r.b), 22, 1.0); }
+    if (r.landed && !a.landed) { a.landed = true; skateBurst(pp(r.a), 22, 1.0); skateBurst(pp(r.b), 22, 1.0); exprEvent(a.d.a, "rire"); exprEvent(a.d.b, "rire"); }   // 2026-10-23 : la figure à deux posée, les deux rient
     for (const [id, q] of [[a.d.a, r.a], [a.d.b, r.b]]) {
       const spd = Math.hypot(q.vx, q.vy);
       if (spd > 1.8 && !q.air) skateTrail(pp(q), q.vx, q.vy, { key: "duo" + id });
@@ -39687,6 +39996,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else { const ct = findCauldronTile(); if (ct && nearTile(ct)) cauldronInteract(); else if (m0 && m0.zone === "farm") snowStartAct(); }   // 2026-10-05 — dernier recours : une boule de neige
   }
 
+  /* 2026-10-23 — LES EXPRESSIONS : qui vient de tirer ce poisson ? L'effet ne le dit pas : c'est le joueur le plus proche de la case
+     pêchée (on pêche depuis la rive, à une case), dans la zone de l'effet. */
+  function exprFishCaught(f) {
+    const zone = f.zone || "farm", cx = f.x + 0.5, cy = f.y + 0.5, me0 = meRef.current;
+    let best = null, bd = 2.6;
+    for (const q of [me0, ...playersRef.current.values()]) {
+      if (!q || (q.zone || "farm") !== zone) continue;
+      const d = Math.hypot(q.x - cx, q.y - cy);
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (best) exprEvent(best.id, "joie");
+  }
   function spawnFx(m) {
     /* ⚠️ ZIP 426 — UN EFFET DE VILLE NE SE JOUE QU'EN VILLE, et c'est un
        garde-fou contre le piège maison du projet : l'ALIASING DE COORDONNÉES.
@@ -40274,11 +40595,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <input className="ferme-name-input" maxLength={14} value={nameVal} onChange={e => setNameVal(e.target.value)} placeholder={L.namePlaceholder} autoFocus />
             <div className="ferme-char-pick">
               <div className={"ferme-char-card" + (gender === "m" ? " sel" : "")} onClick={() => setGender("m")}>
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
+                <Sprite img={spritesReady ? uiCharJ("m", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
                 <div>{L.fermier}</div>
               </div>
               <div className={"ferme-char-card" + (gender === "f" ? " sel" : "")} onClick={() => setGender("f")}>
-                <Sprite img={spritesReady ? spritesRef.current.getChar("f", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
+                <Sprite img={spritesReady ? uiCharJ("f", myOutfit, false, false, false, false, false, false, (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) > 0 ? "~" + (mySkinRec().skin === undefined ? skinPick : (mySkinRec().skin | 0)) : null) : null} sx={16} sy={24} w={48} h={72} />
                 <div>{L.fermiere}</div>
               </div>
             </div>
@@ -40669,6 +40990,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
+        <button className="ferme-btn ferme-btn-ghost" title={L.btnPersoHdTip} onClick={() => { const v = !persoHdOn(); setPersoHd(v); setPersoHdUi(v); }}>{L.btnPersoHd(persoHdUi)}</button>
         {/* 2026-09-21 bis (correctif de Guillaume, même jour) — LA PREMIÈRE
             VERSION DE CE BOUTON (voir l'historique juste ici) renvoyait à la
             page d'accueil Arcardi (`onChangeFarm`=`leaveRoom`, quitter le
@@ -41084,7 +41406,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}{isLumberjack && Date.now() < (res.superUntil || 0) ? "☕🪓⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
@@ -41137,7 +41459,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             })}
             {sharedRef.current.greg && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} sx={16} sy={24} w={24} h={36} />
+                <Sprite img={spritesReady ? uiChar("m", 0) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesGregName} {Date.now() < (sharedRef.current.greg.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((sharedRef.current.greg.expiresAt - Date.now()) / 3600000)))}</span>
@@ -41151,7 +41473,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             )}
             {sharedRef.current.soan && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} sx={16} sy={24} w={24} h={36} />
+                <Sprite img={spritesReady ? uiChar("m", 1) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesSoanName} {Date.now() < (sharedRef.current.soan.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">
@@ -41169,7 +41491,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             )}
             {sharedRef.current.harald && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} sx={16} sy={24} w={24} h={36} />
+                <Sprite img={spritesReady ? uiChar("m", 6) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesHaraldName}</b>
                   <span className="ferme-usage">{L.haraldHiredUntil(Math.max(0, Math.ceil((sharedRef.current.harald.expiresAt - Date.now()) / 3600000)))} — {L.haraldStatusRounds}</span>
@@ -41191,7 +41513,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                      <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -41236,7 +41558,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     const ro = rosterOf(res.rid); if (!ro) return null;
                     return (
                       <div className="ferme-shop-row" key={"pilot-" + res.rid}>
-                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                        <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                         <div className="info"><b>{ro.name}</b><span className="ferme-usage">{L.residentTag(ro.job)}</span></div>
                         <button onClick={() => sendReq({ kind: "assignBalloonPilot", rid: res.rid })}>{L.balloonAssignBtn}</button>
                       </div>
@@ -41253,7 +41575,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         const ro = rosterOf(res.rid); if (!ro) return null;
                         return (
                           <div className="ferme-shop-row" key={"ticket-" + res.rid}>
-                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                            <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                             <div className="info"><b>{ro.name}</b></div>
                             <button onClick={() => sendReq({ kind: "buyBalloonTicket", rid: res.rid })}>{L.balloonBuyForResidentBtn(ro.name, C.BALLOON_TICKET_PRICE)}</button>
                           </div>
@@ -41562,7 +41884,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setGregCardOpen(false)}>\u2715</button>
               <h2>{L.employeesGregName}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, true) : null} w={26} h={32} />
+                <Sprite img={spritesReady ? uiChar("m", 0, true) : null} w={26} h={32} />
                 <div className="info">
                   <b>Greg</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((g.expiresAt - Date.now()) / 3600000)))}</span>
@@ -42028,7 +42350,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             </div>
             <div style={{ display: shopCatOpen.staff === false ? "none" : undefined }}>
             <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
+              <Sprite img={spritesReady ? uiChar("m", 0) : null} w={26} h={32} />
               <div className="info">
                 <b>{L.gregRowTitle(C.GREG_HIRE_COST)}</b>
                 <span>{L.gregRowSub}</span>
@@ -42039,7 +42361,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : <button disabled={hud.money < C.GREG_HIRE_COST} onClick={hireGreg}>{L.hireLabel}</button>}
             </div>
             <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} w={26} h={32} />
+              <Sprite img={spritesReady ? uiChar("m", 1) : null} w={26} h={32} />
               <div className="info">
                 <b>{L.soanRowTitle(C.SOAN_HIRE_COST)}</b>
                 <span>{L.soanRowSub}</span>
@@ -42059,7 +42381,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : <button disabled={hud.money < C.SOAN_HIRE_COST} onClick={hireSoan}>{L.hireLabel}</button>}
             </div>
             <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} w={26} h={32} />
+              <Sprite img={spritesReady ? uiChar("m", 6) : null} w={26} h={32} />
               <div className="info">
                 <b>{L.haraldRowTitle(C.HARALD_HIRE_COST)}</b>
                 <span>{L.haraldRowSub}</span>
@@ -42488,7 +42810,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
@@ -42626,7 +42948,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setTownChatCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info">
                   <b>{townChatCard.greet}</b>
                   <span>{townChatCard.line}</span>
@@ -43739,7 +44061,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={32} h={48} />
+                  <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={32} h={48} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
@@ -43754,7 +44076,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       personnage sur la carte sans savoir qui c'est. */}
                   {ro.look === "carla" && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 11, opacity: .8 }}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, false, false, false, false, false, false, "leo") : null} sx={16} sy={24} w={16} h={24} />
+                      <Sprite img={spritesReady ? uiChar("m", 0, false, false, false, false, false, false, "leo") : null} sx={16} sy={24} w={16} h={24} />
                       <span>{L.carlaAssistant}</span>
                     </div>
                   )}
@@ -43941,7 +44263,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         aria-label={L.closeBtn || "×"}
                         onClick={() => setDismissedNotifs(prev => { const next = new Set(prev); next.add(vv.rid); return next; })}
                       >×</button>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                      <Sprite img={spritesReady ? uiChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                       <div className="ferme-notif-body">
                         <b>{L.notifAsk(ro.name)}</b><br />
                         {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
@@ -45001,7 +45323,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <h2>{L.skinTitle}</h2>
             <div className="ferme-hint">{L.skinSubInvite}</div>
             <div style={{ display: "flex", justifyContent: "center" }}>
-              <Sprite img={spritesReady && meRef.current ? spritesRef.current.getChar(meRef.current.gender, meRef.current.outfit, false, false, false, false, false, false, skinPick > 0 ? "~" + skinPick : null) : null} sx={16} sy={24} w={48} h={72} />
+              <Sprite img={spritesReady && meRef.current ? uiCharJ(meRef.current.gender, meRef.current.outfit, false, false, false, false, false, false, skinPick > 0 ? "~" + skinPick : null) : null} sx={16} sy={24} w={48} h={72} />
             </div>
             {skinSwatches(skinPick, setSkinPick, false)}
             <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
@@ -45285,7 +45607,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cand = {};
         for (const sl of C.WARDROBE_SLOTS) cand[sl] = fitTry[sl] !== undefined ? fitTry[sl] : wornOf(sl);
         const candSkin = fitTry.skin !== undefined ? fitTry.skin : skinNow;
-        const sheetOf = (worn, skin) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn, skin, hair: wr.hair })) : null;   // la coiffure du salon suit
+        const sheetOf = (worn, skin) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn, skin, hair: wr.hair }), persoHdUi) : null;   // la coiffure du salon suit
         const tryOn = (sl, idx) => setFitTry((t) => ({ ...t, [sl]: idx }));
         const nameOf = (sl, idx) => idx === 0 ? L.boutiqueNothing : (lang === "en" ? C.wardrobeCatalog(sl)[idx - 1].nameEn : C.wardrobeCatalog(sl)[idx - 1].name);
         const tabLabel = { hat: L.boutiqueSlotHat, scarf: L.boutiqueSlotScarf, outfit: L.boutiqueSlotOutfit, tint: L.boutiqueSlotTint, skin: L.boutiqueSlotSkin };
@@ -45315,7 +45637,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>{L.boutiqueTitle}</h2>
               <div className="ferme-hint">{L.boutiqueSub} — {gi} {gold}</div>
               <div className="ferme-fit-carla">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("f", 1, false, false, false, false, false, false, "carla") : null} sx={16} sy={17} w={32} h={34} />
+                <Sprite img={spritesReady ? uiChar("f", 1, false, false, false, false, false, false, "carla") : null} sx={16} sy={17} w={32} h={34} />
                 <div><b>Carla Garfield</b> <span className="ferme-usage">{q(carlaLine)}</span></div>
               </div>
               <div className="ferme-deco-seg ferme-fit-tabs">
@@ -45400,7 +45722,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const hh = wr.hair || {}, cur = { c: hh.c | 0, d: hh.d | 0, b: hh.b | 0 };
         const cand = { ...cur, ...salonTry };
         const gold = sharedRef.current.money | 0;
-        const sheetOf = (h) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn: wr.worn, skin: wr.skin, hair: h })) : null;
+        const sheetOf = (h) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn: wr.worn, skin: wr.skin, hair: h }), persoHdUi) : null;   // lot B : en 32 × 48 si « Personnages fins »
         const nm = (it) => lang === "en" ? it.nameEn : it.name;
         const cutName = (i) => i ? nm(C.HAIR_CUTS[i]) : L.salonOrigin;
         const dyeName = (i) => i ? nm(C.HAIR_DYES[i]) : L.salonNatural;
@@ -45422,7 +45744,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>💈 {L.salonTitle}</h2>
               <div className="ferme-hint">{L.salonSub} — {gi} {gold}</div>
               <div className="ferme-fit-carla">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, false, false, false, false, false, false, "froufrou") : null} sx={16} sy={17} w={32} h={34} />
+                <Sprite img={spritesReady ? uiChar("m", 0, false, false, false, false, false, false, "froufrou") : null} sx={16} sy={17} w={32} h={34} />
                 <div><b>Froufrou</b> <span className="ferme-usage">{q(line)}</span></div>
               </div>
               <div className="ferme-deco-seg ferme-fit-tabs">
@@ -46391,12 +46713,14 @@ function fmtNewsDate(iso, lg) {
 function Sprite({ img, w = 32, h = 32, sx, sy, ox = 0, oy = 0, flip = false }) {
   const ref = useCallback((node) => {
     if (!node || !img) return;
-    const sw = sx || img.width, sh = sy || img.height;
+    // 2026-10-23 — une feuille 32 × 48 (`__hdK`) : les découpes des appelants restent celles du 16 × 24, multipliées ici.
+    const K = img.__hdK || 1;
+    const sw = (sx || img.width / K) * K, sh = (sy || img.height / K) * K;
     node.width = sw; node.height = sh;
     const g = node.getContext("2d"); g.imageSmoothingEnabled = false;
     g.clearRect(0, 0, sw, sh);
     if (flip) { g.save(); g.translate(sw, 0); g.scale(-1, 1); }
-    g.drawImage(img, ox, oy, sw, sh, 0, 0, sw, sh);
+    g.drawImage(img, ox * K, oy * K, sw, sh, 0, 0, sw, sh);
     if (flip) g.restore();
   }, [img, sx, sy, ox, oy, flip]);
   return <canvas ref={ref} style={{ width: w, height: h, imageRendering: "pixelated" }} />;

@@ -137,6 +137,13 @@ title("1. tout bitmap passe par la table");
   const SMOOTH_OK = [
     ["FermeGame.js", 'sg.imageSmoothingEnabled = true; sg.imageSmoothingQuality = "high";'],
     ["FermeGame.js", 'hg.imageSmoothingEnabled = true; hg.imageSmoothingQuality = "high"; hg.drawImage(src, 0, 0, h2.width, h2.height);'],
+    /* 2026-10-23 — LES PERSONNAGES EN 32 × 48 aux crans IMPAIRS : la feuille agrandie ×cran au plus proche puis RÉDUITE de moitié en
+       moyenne (`hdScaledSheet`, `blitHD`) — une réduction, comme la carte ; et le fondu du zoom ou l'ombre cisaillée (`drawCharHD`,
+       `blitHD`), le temps qu'ils durent. */
+    ["FermeGame.js", 'og.imageSmoothingEnabled = true; og.imageSmoothingQuality = "high";'],
+    ["FermeGame.js", 'dg.imageSmoothingEnabled = true; dg.imageSmoothingQuality = "high"; dg.drawImage(P.up, 0, 0, UW, UH, 0, 0, DW, DH);'],
+    ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(hd, frame * 32'],
+    ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(cv, b.x, b.y'],
   ];
   let smoothTrue = 0, smoothOk = 0;
   const staleOk = [];

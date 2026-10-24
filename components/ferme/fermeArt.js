@@ -36,7 +36,8 @@ import { waterHash, WAT_STOPS, townWaterBakeReady, drawBakedBank, drawBakedWater
 import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
 import { paintWardrobe, paintFroufrou } from "./garderobeArt";
-import { lookHair, paintHair, paintBeard } from "./coiffureArt";   // 2026-10-21 — le salon de coiffure   // 2026-10-21 — les vêtements de la Maison Garfield
+import { lookHair, paintHair, paintBeard } from "./coiffureArt";
+import * as HD from "./persoHdArt";   // 2026-10-23 — les joueurs en 32 × 48 (S.getCharHD)   // 2026-10-21 — le salon de coiffure   // 2026-10-21 — les vêtements de la Maison Garfield
 import * as PT from "./patin";   // 2026-10-05 (fin quater) : les couleurs et les lames du matériel de patin (pur)
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis";
@@ -5741,10 +5742,12 @@ export function suitSheet(sheet, colorIdx) {
     const cv = document.createElement("canvas"); cv.width = sheet.width; cv.height = sheet.height;
     const g = cv.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(sheet, 0, 0);
     const im = g.getImageData(0, 0, cv.width, cv.height), d = im.data;
+    // 2026-10-23 — une feuille 32 × 48 (`__hdK`) a des rangées de 48 et un cou deux fois plus bas : mêmes repères, à l'échelle.
+    const K = sheet.__hdK || 1, ROW = 24 * K, NECK = (POSE_TORSO_Y + 1) * K;
     const hex = PT.SKATE_COLORS[Math.max(0, Math.min(PT.SKATE_COLORS.length - 1, key))].suit;
     const cr = parseInt(hex.slice(1, 3), 16), cg = parseInt(hex.slice(3, 5), 16), cb = parseInt(hex.slice(5, 7), 16);
     for (let y = 0; y < cv.height; y++) {
-      if (y % 24 < POSE_TORSO_Y + 1) continue;                          // la tête (et le cou) restent comme ils sont
+      if (y % ROW < NECK) continue;                                      // la tête (et le cou) restent comme ils sont
       for (let x = 0; x < cv.width; x++) {
         const i = (y * cv.width + x) * 4; if (d[i + 3] < 8) continue;
         const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
@@ -5752,7 +5755,7 @@ export function suitSheet(sheet, colorIdx) {
         d[i] = Math.min(255, cr * m); d[i + 1] = Math.min(255, cg * m); d[i + 2] = Math.min(255, cb * m);
       }
     }
-    g.putImageData(im, 0, 0); out = cv;
+    g.putImageData(im, 0, 0); out = cv; if (sheet.__hdK) cv.__hdK = sheet.__hdK;
   } catch (e) { out = sheet; }
   per.set(key, out);
   return out;
@@ -22197,6 +22200,7 @@ house: house(),
     bin: sellBin(),
     crops: [],
     chars: {},
+    charsHD: {},
     icons: {},
     gemIcons: [],
     fishIcons: [],
@@ -22513,24 +22517,93 @@ house: house(),
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker, look || null);
     return S.chars[key];
   };
+  /* 2026-10-23 — LES JOUEURS EN 32 × 48 (`persoHdArt.js`, décision de Guillaume : même taille à l'écran, deux fois plus de pixels,
+     un interrupteur dans les paramètres). Même découpe que `charSheet` — 4 images × 3 rangées (face, dos, profil vers la droite) —
+     à 32 × 48 la case. La tenue se relit par les MÊMES décodeurs que `drawCharFrame` (`lookSkin`, `lookHair`, `parseWardrobeLook` :
+     §4, une seule fonction relit la chaîne) : la teinte de peau et la couleur du salon passent ; un VÊTEMENT de la Maison Garfield,
+     une COUPE du salon ou une BARBE ne sont pas encore redessinés en 32 × 48 → `null`, et l'appelant garde l'ancien dessin (un
+     joueur ne perd jamais ce qu'il a acheté) — LEVÉ au lot B, même soir : tout est redessiné. `null` pour une chaîne qui n'est pas une
+     tenue de joueur (« carla », « ouvrier:3 »…) quand l'appelant n'est pas un PNJ.
+     `naked` : la même feuille SANS contour, pour les poses — on l'assemble en morceaux, et le contour se pose sur la pose finie.
+     `expr` : une expression de `PERSO_HD_EXPRESSIONS` (le dormeur : « sommeil ») ; une feuille par expression, en cache. */
+  S.getCharHD = (gender, outfit, look, naked, expr, npc) => {
+    /* `npc` (2026-10-23, lot A) : { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker } — les drapeaux de `getChar` — ou `true`
+       pour un habitant sans costume. Un PNJ prend le visage d'un PNJ (`persoHdArt`, `faceStyleOf`), jamais le sourire d'un joueur. */
+    const fl = npc && typeof npc === "object" ? npc : {};
+    const key = gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
+      + (npc ? ":pnj" + ["overalls", "cap", "beeSuit", "plaid", "cheeseHat", "sugarWorker"].map((k) => (fl[k] ? k[0] + k[1] : "")).join("") : "");
+    if (!(key in S.charsHD)) S.charsHD[key] = makeCharHD(gender, outfit, look, naked, expr, npc, fl);
+    return S.charsHD[key];
+  };
+  // La fabrique de `getCharHD`, sans cache : la cabine d'essayage (`getCharFitting`) a le sien, borné.
+  function makeCharHD(gender, outfit, look, naked, expr, npc, fl) {
+    let sheet = null;
+    const special = look === "carla" || look === "leo" || look === "froufrou" || look === "vandal" ? look : null, wk = workerLookOf(look);
+    const rest = special || wk ? "" : typeof look === "string" ? look.replace(/~\d/, "").replace(/\^.*$/, "") : "";
+    const hl = special || wk ? null : lookHair(look);
+    const ok = (gender === "f" || gender === "m") && (rest === "" || /^w\d{4}$/.test(rest)) && (!(special || wk) || npc);
+    const wd = special || wk ? null : parseWardrobeLook(look);
+    if (ok) {
+      const o = C.OUTFITS[outfit % C.OUTFITS.length];
+      const tone = !special && !wk && lookSkin(look) ? C.CHAR_SKIN_TONES[lookSkin(look)] : null;
+      let cos = null;
+      if (npc) {
+        cos = { npc: true };
+        if (fl.beeSuit) cos.bee = true;
+        else {
+          if (fl.cap) cos.cap = true; if (fl.overalls) cos.overalls = true; if (fl.plaid) cos.plaid = true;
+          if (fl.cheeseHat) cos.cheese = true; if (fl.sugarWorker) cos.sugar = true;
+          if (special) cos.look = special;
+          if (wk) {
+            const crew = WORKER_CREW[wk.v % WORKER_CREW.length], chief = wk.role === "chef";
+            cos.worker = { role: wk.role, vest: chief ? WORKER_VESTS.orange : WORKER_VESTS[crew.vest], hat: chief ? WORKER_HATS.white : WORKER_HATS[crew.hat], pants: crew.pants, sleeves: crew.sleeves };
+          }
+        }
+      }
+      /* Lot B (2026-10-23) : la coupe, la barbe et les vêtements du joueur voyagent dans `cos` par leurs IDENTIFIANTS de catalogue ;
+         la teinte (« Couleurs ») recolore le haut, comme `drawCharFrame` (et devient la couleur propre des articles). */
+      const tintCol = wd && wd.tint ? C.WARDROBE_TINTS[wd.tint - 1].col : null;
+      if (!npc && (wd || (hl && (hl.c || hl.b)))) {
+        cos = {};
+        if (hl && hl.c) cos.cut = C.HAIR_CUTS[hl.c].id;
+        if (hl && hl.b) cos.beard = C.BEARDS[hl.b].id;
+        if (wd) cos.wd = { hat: wd.hat ? C.WARDROBE_HATS[wd.hat - 1].id : null, scarf: wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1].id : null,
+          outfit: wd.outfit ? C.WARDROBE_OUTFITS[wd.outfit - 1].id : null, tint: tintCol };
+      }
+      const base = { skin: tone ? tone.main : SKIN, hair: hl && hl.d ? C.HAIR_DYES[hl.d].col : HAIR_COLORS[outfit % HAIR_COLORS.length], top: tintCol || o.shirt, pants: o.pants };
+      const cc = HD.persoHdCostume(cos, base);
+      const pal = { ...HD.persoHdPalette(cc.args), ...cc.extra };
+      const [c, g] = cv(4 * HD.PERSO_HD_W, 3 * HD.PERSO_HD_H);
+      for (let dir = 0; dir < 3; dir++) for (let f = 0; f < 4; f++) HD.drawPersoHD(g, f * HD.PERSO_HD_W, dir * HD.PERSO_HD_H, { gender, dir, frame: f, pal, outline: !naked, pose: !!naked, expr: expr || "neutre", costume: cos });   // nue = la feuille des POSES (persoHdArt, « LES ÉPAULES »)
+      // `__hdK` : « cette feuille est le gabarit 16 × 24 à ×2 ». Les poses (drawSeated, drawSkate…) la découpent avec les repères du
+      // 16 × 24 ; c'est l'appelant (FermeGame.js, `hdCtxProxy`) qui multiplie leurs rectangles source par ce facteur.
+      c.__hdK = 2;
+      sheet = c;
+    }
+    return sheet;
+  }
   /* 2026-10-21 — UNE IMAGE SEULE du personnage (direction, pas de marche), peinte à l'origine d'un canevas neuf : pour les bancs, dont le faux
      canevas ignore `translate` (la feuille de `charSheet` y superposerait ses trois rangées). `tools/render-garderobe.mjs`. */
-  S.charFrame = (gender, outfit, dir, frame, look) => {
+  S.charFrame = (gender, outfit, dir, frame, look, f) => {
     const [c, g] = cv(16, 24);
-    drawCharFrame(g, 0, gender, outfit, dir, frame, false, false, false, false, false, false, look || null);
+    // `f` (2026-10-23, planche des costumes de PNJ) : { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker } — comme `getChar`.
+    const o = f || {};
+    drawCharFrame(g, 0, gender, outfit, dir, frame, !!o.overalls, !!o.cap, !!o.beeSuit, !!o.plaid, !!o.cheeseHat, !!o.sugarWorker, look || null);
     return c;
   };
   /* 2026-10-21 — LA CABINE D'ESSAYAGE DE LA MAISON GARFIELD : les feuilles des tenues ESSAYÉES (miroir et vignettes) vivent dans un cache À PART,
      borné. Dans `S.chars` (jamais vidé), chaque combinaison regardée resterait une feuille pour toute la séance : on feuillette vite, et WebKit sur
      iPad plafonne les canevas sans rien dire. Une tenue réellement portée par quelqu'un est déjà dans `S.chars` : on la reprend là. */
   const FIT_MAX = 48, fitCache = new Map();
-  S.getCharFitting = (gender, outfit, look) => {
+  // `hd` (2026-10-23, lot B) : la feuille en 32 × 48 quand l'interrupteur « Personnages fins » le veut — même cache borné.
+  S.getCharFitting = (gender, outfit, look, hd) => {
     const key = gender + ":" + outfit + (look ? ":" + look : "");
-    if (S.chars[key]) return S.chars[key];
-    let c = fitCache.get(key);
-    if (c) { fitCache.delete(key); fitCache.set(key, c); return c; }   // la plus récente en dernier
-    c = charSheet(gender, outfit, false, false, false, false, false, false, look || null);
-    fitCache.set(key, c);
+    if (hd ? S.charsHD[key] : S.chars[key]) return hd ? S.charsHD[key] : S.chars[key];
+    const fk = (hd ? "hd:" : "") + key;
+    let c = fitCache.get(fk);
+    if (c) { fitCache.delete(fk); fitCache.set(fk, c); return c; }   // la plus récente en dernier
+    c = (hd && makeCharHD(gender, outfit, look || null, false, "neutre", null, {})) || charSheet(gender, outfit, false, false, false, false, false, false, look || null);
+    fitCache.set(fk, c);
     if (fitCache.size > FIT_MAX) fitCache.delete(fitCache.keys().next().value);
     return c;
   };

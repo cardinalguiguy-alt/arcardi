@@ -354,6 +354,23 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   elle ne mesure rien (un chapeau qui flotte n'est pas un nombre).
 - **`tools/render-coiffure.mjs` (2026-10-21)** : les 11 coupes du salon (`components/ferme/coiffureArt.js`) × 2 genres × 3 vues au pas, les 12 couleurs, les 4 barbes,
   et les coupes sous trois chapeaux et sous les cols — `tools/out/coiffure-*.png`. ⚠️ Se juge à l'œil.
+- **`tools/render-pnj-hd.mjs` (2026-10-23)** : les 17 PNJ (costumes de `drawCharFrame`, habitants) en 32 × 48 à côté de leur 16 × 24 agrandi ×2,
+  face / dos / profil → `pnj-hd-planche.png` (×3).
+- **`tools/verify-expressions.mjs` (2026-10-23)** : les expressions automatiques (`components/ferme/expressions.js`, pur) contre ses verdicts — l'ordre
+  des priorités, la surprise bornée d'une chute qui dure, l'assoupi après 22 h, le clignement (3 à 6 s, 0,1 s, un rythme par personnage), la joie d'être assis
+  ensemble par moments, les retombées au park et au patin, le changement de look, des PNJ sobres ; et deux garde-fous de source (chaque nom rendu est dessiné ;
+  aucun message neuf). Les planches des visages : `render-perso-hd` (`perso-hd-expressions*.png`, « cligne » compris).
+- **`tools/render-poses-hd.mjs` (2026-10-24)** : TOUTES les poses qui découpent la feuille du personnage (assis, glissade, arc-boutement,
+  grimpe, fouille, lancer, halage, patin, main tendue, riders du park, gestes des ouvriers), jouées comme en jeu par `drawPoseHD` (rectangles
+  source ×2, contour sur la pose finie), l'ancien 16 × 24 à gauche, le fin à droite → `poses-hd.png` (×3 ; `K=6` dans l'environnement pour
+  regarder de près ; un argument filtre). ⚠️ À relancer pour TOUTE retouche du gabarit 32 × 48 (§4 « feuille de personnage »). Ni miroir ni
+  rotation (faux canevas) : bateau, cheval et profils gauches se regardent en jeu.
+- **`tools/render-garderobe-hd.mjs` (2026-10-23, lot B)** : les coupes, couleurs et barbes du salon, puis les chapeaux, écharpes, tenues (deux genres) et teintes
+  de la Maison Garfield, en 32 × 48 (`S.getCharHD`, le chemin du jeu) à côté du 16 × 24 ×2 : face / dos / profil, puis deux images de marche →
+  `garderobe-hd-coupes.png`, `garderobe-hd-vetements.png` (×3). Un argument filtre les rangées (⚠️ il réécrit alors les deux planches filtrées). Se juge à l'œil.
+- **`tools/render-perso-hd.mjs` (2026-10-23)** : les personnages en 32 × 48 (`components/ferme/persoHdArt.js`), fermière et fermier : l'actuel agrandi ×2,
+  face / dos / profil, la marche de face et de profil (`perso-hd-planche.png`), les expressions de face et de profil (`perso-hd-expressions*.png`), la marche brute (`perso-hd-marche-brute.png`,
+  dont `perso-hd-marche.gif` se fait à la main à 9 images/s), et la bande brute.
 - **`tools/render-garderobe.mjs` (2026-10-21)** : les 14 vêtements de la Maison Garfield (`components/ferme/garderobeArt.js`) dans leurs trois vues et au pas,
   sur la fermière et le fermier, puis sous les huit couleurs — `tools/out/garderobe-planche.png`, `garderobe-couleurs.png` (`SORTIE=nom` change le préfixe).
   Passe par `S.charFrame` (une image seule à l'origine : le faux canevas ignore le `translate` de la feuille). ⚠️ Elle se JUGE à l'œil, elle ne mesure rien.

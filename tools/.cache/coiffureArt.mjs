@@ -165,3 +165,12 @@ export function paintBeard(g, P, x, o) {
   const R = wardrobeRamp(o.col);
   paintRows(g, P, x, rows, { l: R.m, m: R.d, d: R.o, o: R.o }, o.bob | 0, o.minY | 0);
 }
+
+/* 2026-10-23 — LES RANGÉES SEULES, pour le 32 × 48 (`persoHdArt.js`) : il les agrandit (Scale2x) au lieu de recopier le dessin. Une coupe :
+   { rows, sway, braid } dans une direction ; une barbe : ses rangées (null de dos). Une seule source pour les deux définitions. */
+export function hairCutRows(id, dir) {
+  const cut = CUTS[id];
+  if (!cut) return null;
+  return { rows: cut[dir] || [], sway: cut.sway && cut.sway[dir] != null ? cut.sway[dir] : null, braid: cut.braid ? cut.braid[dir] || [] : null };
+}
+export function beardRows(id, dir) { return (BEARD_ROWS[id] && BEARD_ROWS[id][dir]) || null; }

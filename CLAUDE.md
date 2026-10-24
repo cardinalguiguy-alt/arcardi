@@ -11,20 +11,19 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-22 — MÉMOIRE DE POSITION, PAS COMMITÉE (LES LOTS 2c À 4 DE CHEZ SOI LE SONT : `b4b8b7f`)
+### 2026-10-23 — AUDIT « AAA » PUIS DEUX CHANTIERS DÉCIDÉS : CLORE LA LISTE D'ATTENTE, PASSER LES PERSONNAGES EN 32 × 48
 
-Position : `fermier.lastPos = { z, x, y }` (`lastPosOf`, `savedStartPos`, `posDirtyRef` dans FermeGame.js) ; on revient où l'on était (parvis
-pour les bâtiments, devant la porte chez un ami, passage pour la carte maléfique), sur une case sûre MAINTENANT. **Vu à deux clients. Supabase : rien.**
-2d (Colette, teinture par passes Blender) et 4 (sonnette, doubles, s'asseoir) : README ferme, journal du 2026-10-22. `verify-maison` 225/225.
-Pas vu : relecture réelle de `ferme_saves` (le Supabase local ne garde rien), propriétaire hors ligne, iPad.
-⚠️ Le harnais `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance à lui : tout crochet neuf se déclare APRÈS lui.
-⚠️ Une fonction de MODULE appelée par la boucle de rendu ne change pas au rechargement à chaud : recharger la page avant de juger.
-⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
+1. **Passe de clôture FAITE** : ses 61 verdicts sont dans `docs/A-JUGER.md` (en tête) ; ce qui est À CODER y est listé (zoom cran 3, cuisine,
+   rideaux Blender, feu, fondu d'étage, meubles « luxe », patinoire, ombre au saut, park, dettes) ; projets neufs : `docs/PROJETS.md` §7 à §9.
+2. **Le 32 × 48 est BRANCHÉ** derrière ⚙️ « Personnages fins » : joueurs (toutes poses, `drawPoseHD`), TOUS LES PNJ, vêtements Garfield,
+   coupes et barbes ; les VISAGES S'ANIMENT (`expressions.js`, aucun message neuf) ; ses ÉPAULES « variante C » (les poses gardent le bras du
+   gabarit, §4 « feuille de personnage ») — README ferme, journaux du 2026-10-23 nuit et du 2026-10-24.
+⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. Un nom se juge sur `__cap`, pas sur la
+capture du volet (réduite, elle brouille la police). ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER LES LOTS 2c, 2d ET 4 (`docs/A-JUGER.md`, trois blocs en tête), PUIS LE LOT 5 (les rares, `docs/PROJETS.md` §6)
+### ⏭️ ACTION SUIVANTE — LUI FAIRE REGARDER EN JEU LES VISAGES ET LES ÉPAULES, PUIS LA LISTE « À CODER » DE `docs/A-JUGER.md`
 
-En attente aussi : la taille des toiles Gemini (`refs/lot-gemini/F-tableaux-maison.md`). À proposer sans les faire d'office : Marcel (lot 3), le
-vantail de la porte de la cuisine peint sous l'interrupteur de l'entrée, la façade du salon selon l'étape, rejouer la visite de Froufrou.
+Expressions jamais vues à l'écran (seulement leurs feuilles) ; épaules vues au cran 4. Quoi regarder : `docs/A-JUGER.md` (« À REGARDER »).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -74,6 +73,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Réseau, salons, sauvegardes | §3 ci-dessous ; `lib/gameSync.js`, `lib/realtimeQuota.js` ; `components/ferme/SECURITE.md` | (aucun banc réseau) `tools/fake-supabase.mjs` pour jouer à deux |
 | Textes, traduction | `components/ferme/fermeStrings.js` | `verify-strings` |
 | Noms au-dessus des personnages | `components/ferme/pixelFont.js` | `verify-noms` |
+| Personnages en 32 × 48, visages et expressions automatiques | `components/ferme/persoHdArt.js`, `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter` (FermeGame.js) ; README ferme (journaux du 2026-10-23) | `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd` |
 | Dessin procédural d'un sprite | `components/ferme/DESSIN.md`, `fermeArt.js` | le `render-*` du sujet |
 | Autres jeux | `components/chess/`, `components/PetitsChevaux.js` + `ludoBot.js`, `public/candyluge/README.md` | `verify-echecs`, `verify-ludo`, `verify-ousthat` |
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |
@@ -83,7 +83,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | **Fluidité de la ville** (sol cuit par blocs, coût par image, mesure et comparaison au pixel au navigateur) | `TOWN_GROUND`, `paintTownGroundTile`, `townGroundFrame` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js townGround`) ; `app/audit-tmp` (`?raf=real`, `__ft`) ; README ferme (journal 2026-10-15) | aucun banc : `__arcardiGround.off` au navigateur |
 | **Chantier de la place** (horloge de Paris, script des ouvriers, engins, barrière, glace qui fond, sons ; l'équipe à resservir) | `components/ferme/chantier.js`, `chantierArt.js`, `sonChantier.js` ; « LE CHANTIER DE LA PLACE » dans FermeGame.js ; README ferme (journal 2026-10-12) | `verify-chantier`, `verify-pluie` |
 | **Intérieurs des maisons** (zone « home » : plan, carte à ×2 du personnage — `HOME_K`, collision, escalier, murs coupés, lumière, mode déco, équipements — `homeFixes` ; meubles rendus par Blender à 64 px par case ; cotes d'usage ÷ K : `ECHELLE_USAGE`, `ECHELLE_Z` ; catalogue et cartons : `HOME_CATALOGUE` ; appliques : `homeAppliques` ; ombres portées : `components/ferme/ombresMaison.js` ; interrupteurs, lampes, feu, objets de mur, revente : section « LOT 2c » de `maison.js`, `homeUseTarget` ; rideaux et teinture de Colette : section « LOT 2d », passes `tools/blender/rendre_teintes.py`, `maisonArt.teindrePx` ; sonnette, doubles, s'asseoir : « LOT 4 », `homeVisitReq` ; à venir : rares, dressing) | `docs/PROJETS.md` §6 ; `components/ferme/maison.js`, `components/ferme/maisonArt.js` ; `drawHomeFrame`, `updateMeHome`, `getCamHome`, `homeFrameNow` dans FermeGame.js ; `tools/blender/studio.py`, `tools/blender/meubles.py`, `tools/blender/rendre_meubles.py` ; README ferme (journaux du 2026-10-16) | `verify-maison`, `render-maison` ; les sprites : Blender `-b -P tools/blender/rendre_meubles.py` |
-| **Garde-robe** (cabine Garfield, vêtements : `components/ferme/garderobeArt.js`, `render-garderobe` ; coupes du salon : `components/ferme/coiffureArt.js`, `render-coiffure`), création du personnage (coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | — (rien n'est codé) |
+| **Garde-robe** (cabine Garfield, vêtements : `components/ferme/garderobeArt.js`, `render-garderobe` ; coupes du salon : `components/ferme/coiffureArt.js`, `render-coiffure`), création du personnage (coiffure), tests iPad, **usages de la place hors printemps et hiver (miroir d'eau l'été, Halloween l'automne), piscine municipale (centre aquatique, nord-est)** | `docs/PROJETS.md` (§1 à §5) puis `components/ferme/README.md` (garde-robe, §12) | `render-garderobe`, `render-coiffure` ; en 32 × 48 : `render-garderobe-hd` |
 <!-- routeur:fin -->
 
 
@@ -271,6 +271,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN JEU MESURÉ EN « DEDANS / DEHORS » CASSE LA RÈGLE « PAS PLUS PRÈS QU'AVANT » : LA DISTANCE DOIT ÊTRE CONTINUE
 - UN COUP DE POUCE DU JEU S'ACCORDE UNE FOIS PAR GESTE : REDONNÉ À CHAQUE PAS, IL DEVIENT UN ÉTAT
 - UNE TRANCHE DE TRI QUI PORTE UN RELIEF PASSE DEVANT CE QUI SE TIENT DEDANS, CE QUI EST DERRIÈRE COMPRIS
+- UNE FEUILLE DE PERSONNAGE EST UN ATLAS : LES POSES LA DÉCOUPENT PAR REPÈRES, ET UNE RETOUCHE DU GABARIT SE JUGE SUR CHACUNE
 
 **JavaScript / three.js / canevas**
 

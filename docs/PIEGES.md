@@ -288,6 +288,14 @@ dépôt.
   sur le relief COUPE sa tranche (dessinée avant lui, ses pixels de devant redessinés après lui, `parkDrawPieces`) ; et ce qui est porté se trie
   au bout de ce qui le porte, pas au point qui le représente (la roue arrière d'un BMX). Contrôle : la vérité d'occlusion pixel par pixel
   (`render-skatepark`), avec la mesure du tri d'avant pour prouver que le contrôle voit le défaut.
+- ⚠️⚠️ **UNE FEUILLE DE PERSONNAGE EST UN ATLAS : LES POSES LA DÉCOUPENT PAR REPÈRES, ET UNE RETOUCHE DU GABARIT SE JUGE SUR CHACUNE** (2026-10-24, les épaules
+  de la variante C). Une feuille de personnage ne sert pas qu'à la marche : toutes les poses (assis, bateau, cheval, glissade, grimpe,
+  patin, riders du park, gestes des ouvriers) la DÉCOUPENT avec les repères du gabarit 16 × 24 — le buste aux rangées 10-15, la manche en
+  x 3-5 / 10-12 (`POSE_SLICES`, fermeArt.js) — et la feuille 32 × 48 n'est que ce gabarit ×2. Des bras plus longs et plus bas, justes à la
+  marche, faisaient tomber la main dans la tranche des cuisses (elle suivait les JAMBES : une main à côté des pieds dans la glissade) et
+  laissaient la manche découpée sans main ; aucune erreur, et rien à voir debout. Parade : la feuille des POSES (la feuille nue) garde la
+  hauteur et la longueur de bras du gabarit (`ARM_POSE`, persoHdArt.js), la marche a les siennes ; et toute retouche du gabarit passe par
+  `render-poses-hd` (chaque pose, l'ancien à côté du fin) avant d'être livrée.
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22

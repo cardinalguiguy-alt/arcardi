@@ -267,3 +267,34 @@ de chacun (meubles posés, garde-meuble, décor des pièces, cartons) vit dans l
 glisser), l'hôte arbitre l'or. ⚠️ Piège prévisible : « un résolveur qui écrit un champ neuf doit être livré dans le même geste que sa
 déclaration et sa migration » (§4) — ici la déclaration et la lecture d'une sauvegarde ancienne (champ absent = maison de départ).
 
+
+## 7. Chez soi entre joueurs : l'effraction, la police, les invitations (décidé le 2026-10-23, rien de codé)
+
+Verdict de la passe de clôture (« le rôle de la maison ») : « L'important, c'est qu'il y ait un aspect INTERACTIF ENTRE JOUEURS. » Déjà là :
+la sonnette, le double des clés, raccompagner (lot 4). À ajouter :
+1. **Tenter d'entrer par effraction** : la tentative ALERTE le propriétaire (comme la sonnette, où qu'il soit), et elle peut ÉCHOUER — 90 % de
+   chances d'être expulsé de Valley Town par une POLICE qui reste à créer (un chantier à part : qui, où, à quoi elle ressemble).
+2. **Inviter** : le propriétaire envoie une invitation aux autres joueurs pour venir visiter sa maison.
+3. Les autres pistes de l'audit, NON retenues pour l'instant : un coffre, les trophées de la quête exposés, un repos qui rend de l'énergie.
+⚠️ Réseau : chaque geste est une `req` arbitrée par l'hôte (§3) ; l'expulsion est un état (jusqu'à quand), pas une suite de messages.
+
+## 8. Skatepark : des niveaux d'expérience (idée du 2026-10-23, « pour plus tard »)
+
+En jouant le park : « La méca, les figures sont super. » Idée : une expérience qui se gagne en roulant et débloque des figures plus rapides,
+plus acrobatiques et plus complexes, ou une vitesse de déplacement plus grande. Rien n'est décidé au-delà : à cadrer avec lui (que débloque
+chaque niveau, se perd-elle, est-elle partagée entre montures).
+
+## 9. Les visages : ce qui viendra après les expressions automatiques (ses notes du 2026-10-23, rien de codé)
+
+Les expressions automatiques sont branchées (README ferme, journal du 2026-10-23 « les visages s'animent » ; `components/ferme/expressions.js`).
+Ses notes sur la page d'arbitrage, pour la suite :
+- **Une roue d'émotes**, « comme sur GeoGuessr » : le joueur choisit lui-même une émotion. ⚠️ Décision structurante : contrairement aux
+  expressions automatiques, une émote CHOISIE ne se déduit pas — il faut la diffuser (un champ dans le paquet de position qui part déjà,
+  ou un message). À cadrer avec lui (quelles émotes, durée, touche ou bouton, iPad) avant de coder ; CLAUDE.md §3.
+- **Les cœurs** (l'expression « amour », déjà dessinée) : « quand on aura ajouté les relations amoureuses dans le jeu ». Aujourd'hui, deux
+  joueurs assis côte à côte ont la joie par moments, jamais le cœur.
+- **La joie des PNJ selon leur caractère** : « aussi joie, mais pas pour tous ; certains sont un peu nerveux, il faudra pondérer en fonction
+  du caractère et du contexte ». Aujourd'hui les PNJ ne font que cligner et s'assoupir.
+- **Colère, tristesse, clin d'œil** : dessinés, aucun déclencheur — ils viendront avec les interactions entre personnages.
+- **Les cheveux de profil « font casque »** : « la position des cheveux peut changer un peu aussi, à revoir à l'avenir ». Le 2026-10-23, le
+  front a seulement été dégagé au-dessus de l'œil (`FRONT_SIDE`, persoHdArt.js) ; la forme des coupes de profil n'a pas changé.

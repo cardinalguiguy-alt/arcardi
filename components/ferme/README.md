@@ -1,5 +1,160 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-24 — LES ÉPAULES : MOINS HAUTES, MOINS CRISPÉES (VARIANTE C)
+
+Sa demande : « les épaules un peu moins hautes et crispées, une cohérence anatomique plus réaliste » — d'abord en maquettes, sans toucher
+au jeu (trois variantes : léger, tombantes, tombantes et bras plus longs) ; il a retenu la troisième, « en vérifiant poses, costumes et
+vêtements ». **Supabase : rien. Réseau : rien.**
+- **Le gabarit** (`persoHdArt.js`, « LES ÉPAULES ») : les bras pendent deux pixels plus bas (`SHOULDER_DROP`), rentrés d'un pixel
+  (`SHOULDER_INSET` : ils tombent alors pile sur les colonnes de bras du 16 × 24 ×2), deux pixels plus longs (`ARM_LONG` : la main en haut
+  de la cuisse), le haut de la manche arrondi ; l'ENVELOPPE des épaules (`SHOULDER_FRONT`, `SHOULDER_SIDE` : la pente du trapèze de profil)
+  taille tout ce qui dépasse — torse, costumes, vêtements agrandis — avant les bras ; les cheveux longs passent ensuite DERRIÈRE (`mk(…).behind()`,
+  seules les cases vides), visibles dans le creux de l'épaule.
+- **Les poses** : banc neuf `tools/render-poses-hd.mjs` (toutes les poses qui découpent la feuille, jouées comme `drawPoseHD`). Premier
+  essai avec le bras long partout : la main tombait dans la tranche des cuisses et suivait les jambes, la manche découpée n'avait plus de
+  main. → la feuille des POSES (`pose`, la nue) garde la hauteur et la longueur du gabarit (`ARM_POSE`) et prend la pente et les bras
+  rentrés ; la marche, l'arrêt, les miroirs, les portraits ont la variante entière. Piège inscrit (§4, « feuille de personnage »).
+- **Costumes et vêtements** : les manches pleines (robe, tailleur, tutu, costumes de PNJ) suivent ; cape et poncho couvrent toujours les
+  bras (sous le poncho, la main dépasse désormais) ; Léo, qui porte ses cartons, garde le bras plié du gabarit de face et de profil (le bras
+  long sortait une troisième main sous le carton).
+- **Vu** : planches (`render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd`, `render-poses-hd`) ; en jeu au cran 4, debout, assis, en
+  marche. **Pas vu** : bateau, cheval (hors banc), iPad, à deux.
+
+## 2026-10-23 (nuit, fin) — LES VISAGES S'ANIMENT : EXPRESSIONS AUTOMATIQUES, ET LE PROFIL RÉPARÉ
+
+Ses verdicts sur une page d'arbitrage (24 points, ma recommandation cochée ; https://claude.ai/artifact/YAniCBJccRoGG1vHUX9frU), et une
+remarque en cours de route : « de profil les expressions doivent être ajustées ». **Supabase : rien. Réseau : aucun message neuf** (un
+champ `joy` dans trois annonces de l'hôte qui partaient déjà).
+- **Le profil** (`faceSide`, persoHdArt.js) : l'œil de profil était UN PIXEL EN ARRIÈRE du 16 × 24 agrandi (colonnes 19-20 au lieu de
+  20-21), juste sous la mèche — les yeux en arc, fermé, en cœur n'en montraient que la moitié. Tous les traits avancent d'un pixel ; le
+  front au-dessus de l'œil est DÉGAGÉ pour toutes les coupes (`FRONT_SIDE` : la mèche du fermier, la queue de cheval, les macarons y
+  descendaient), et le visage y est retracé après les cheveux ; les sourcils s'y posent sur la peau (ils tombaient sur la frange, sombre
+  sur sombre) ; une bouche ouverte (rire, surprise, colère, joie) ENTAILLE le bord avant au lieu de faire une tache sur la joue.
+- **Le clignement** : une expression neuve, « cligne » (la tête de repos, paupières baissées).
+- **Le moteur** (`expressions.js`, pur, et `drawCharacter`) : le visage se choisit à chaque image sur ce que le dessin sait déjà — la pose
+  (chute au patin et au park, glissade du cratère ; retombée d'une figure), l'assise, la blessure, le look, l'heure — et sur des événements
+  DATÉS À LA RÉCEPTION (`exprEvent`) : la course gagnée (`rinkApply`), la figure à deux posée (`duoFrame`), le poisson (l'effet « fish »
+  part à tous sans dire qui pêchait : le joueur le plus proche), le cadeau du chat (son toast), troc / marché avec cadeau / cadeau
+  d'arrivée (`joy`), l'ami qui arrive (`exprArrivals`). Ordre : sommeil > surprise > gêne > rire > joie > joie d'être assis ensemble (par
+  moments, ≈ 9 % du temps) > clignement. Les PNJ : clignement et sommeil seulement. En 16 × 24, rien ne change.
+- **La mémoire** : une feuille par expression (`getCharHD(…, expr)`, en cache). La feuille NUE (les poses) se fabrique maintenant À LA
+  DEMANDE — avant, chaque personnage qui marchait en fabriquait une ; le clignement ajoute une feuille, et ses feuilles cuites des crans
+  impairs. Estimé par calcul (pas mesuré) : par personnage qui marche au cran 3, ~480 Ko avant, ~810 Ko maintenant (feuille 74 Ko,
+  feuille cuite 166 Ko par sens) ; vingt-cinq personnages : ~12 → ~20 Mo de canevas.
+- **Vu** : planches (`render-perso-hd`, `perso-hd-expressions-profil.png` ; profils de travail ×8, coupes du salon de profil). **En jeu**,
+  par les feuilles que le dessin demande (le volet du navigateur était masqué, aucune capture possible) : clignement, l'ami qui arrive
+  (joie chez moi) et blessé (gêne chez lui), la joie à la nouvelle tenue, la pose assise et l'assoupi après 22 h ; aucune erreur. Banc neuf
+  `verify-expressions` 31/31 ; `verify-portee`, `verify-strings`. **Pas vu** : la chute au patin ou au park, la course, la figure à deux,
+  le poisson, les cadeaux, deux joueurs assis côte à côte (le banc les joue, le jeu non) ; iPad ; à deux. **Pas fait** (docs/PROJETS.md §9) :
+  roue d'émotes, cœurs, joie des PNJ selon leur caractère, cheveux de profil « en casque » ; les ouvriers du chantier (`CA.drawWorkerAct`)
+  et les portraits de l'interface restent sans expression.
+
+## 2026-10-23 (nuit, suite) — LOT B : LES MÈCHES, LES PLIS D'UN PIXEL, ET DES ANGLES
+
+Sa demande : « pose les détails proposés : mèches fines sur les coupes du catalogue, plis d'un pixel sur la robe et la cape » ; en cours de
+route : « moins de rondeur systématique, parfois plus d'angles ». **Supabase : rien. Réseau : rien.**
+- **Des angles** (`scale2x`, `persoHdArt.js`) : Scale2x classique coupait le coin de TOUT bloc. Il ne le coupe plus que là où le bord est
+  vraiment en biais (le voisin en diagonale continue la pente) ; où deux bords droits se rencontrent, l'angle reste droit — frange, bout
+  du carré, bords de chapeau, épaules du tailleur. `SOFT` garde l'arrondi aux matières molles : boucles, macarons, boa, fourrure, béret.
+- **Les mèches** (`HAIR_DETAIL`, `hairDetail`) : par coupe et par direction, des traits droits ou en biais, des marques, un grain pour le
+  rasé, l'ombre de chaque reflet de boucle ; elles ne touchent QUE des cheveux, la silhouette du salon reste la sienne, sauf les pointes
+  qu'on entaille (frange en pointes, bas du carré, mulet). Leçon : un trait sombre seul sur un aplat clair se lit comme une FISSURE (la
+  queue de cheval de dos faisait une étoile craquelée) — la mèche en relief (« ~ ») pose son creux ET son arête claire côté lumière ; et une
+  spirale de cinq pixels se lit comme un chiffre (le chignon de dos : retirée, la torsade d'origine suffit).
+- **Les plis d'un pixel** (`foldsHD`) : agrandis, les plis du drapé faisaient deux pixels de creux et deux d'arête — des bandes.
+  `wardrobeLayer(…, folds)` RECUEILLE maintenant les plis au lieu de les peindre (l'ancien dessin vérifié identique à l'octet), et le
+  32 × 48 les retrace : un pixel de creux, un d'arête, sur le même segment. Tous les plis du drapé : robe, cape, poncho, jupe du tailleur.
+- **Vu** : planches (`render-garderobe-hd`) ; en jeu aux crans 2, 3 et 4 (la cape et le carré). Bancs : `verify-portee`, `verify-densite`,
+  `verify-maison` 225/225. **Pas vu** : iPad, à deux.
+
+## 2026-10-23 (nuit) — LOT B : LA MAISON GARFIELD ET LE SALON EN 32 × 48
+
+Sa demande : « le lot B (Garfield, coupes, barbes en 32 × 48), puis les expressions automatiques » ; la règle du chantier : strictement
+fidèle, les détails neufs proposés sur planche. **Supabase : rien. Réseau : rien.**
+- **La méthode** : les vêtements (`garderobeArt.js`) et les coupes (`coiffureArt.js`) sont DÉJÀ des grilles de lettres de ton dessinées à la
+  main. On ne les recopie pas : `persoHdArt.js` (« LOT B ») les AGRANDIT par Scale2x — un coin ne s'arrondit que là où deux voisins le disent —
+  et lit leurs palettes (`wardrobePal`, sortie de `paintWardrobe` ; `wardrobeLayer`, `hairCutRows`, `beardRows` : exports neufs, l'ancien
+  dessin vérifié IDENTIQUE à l'octet). Une seule source : changer une coupe là-bas la change ici.
+- **Ce que le 32 × 48 fait lui-même** : le pas au DEMI-pixel (la jupe, la cape, les pans, les franges du poncho glissent d'un pixel fin) ;
+  les TRESSES (quatre pixels, un croisement tous les trois, ruban, houppe) ; les manches des tenues qui couvrent le bras (robe, tailleur à
+  manchettes blanches, bras nus du tutu) et l'ombre du bras dans la couleur de la tenue ; les collants fins du tutu ; l'ourlet de la robe
+  recollé au sol ; la barbe qui ne couvre ni les yeux ni la bouche (ni ses expressions) ; les sourcils peints avant le chapeau.
+- **Les pièges** : Scale2x arrondit les coins d'épaule — la chemise y pointait (robe, tailleur, tutu prennent la couleur de la tenue au
+  haut ; sous la cape et le poncho, la chemise se voit exprès) ; l'ombre du bras gardait la couleur de la chemise (traits rouges sur le
+  tailleur) ; « long » et « court » sont les gabarits d'origine, QUEL QUE SOIT le genre.
+- **Branché** : `getCharHD` ne refuse plus rien de ce qu'un joueur porte ; la cabine (miroir, vignettes) et le salon par
+  `getCharFitting(…, hd)`, même cache borné. Bancs : `render-garderobe-hd` (neuf), `verify-densite` (le lissage ½ des crans impairs du lot A,
+  quatre exceptions NOMMÉES), `verify-maison` 225/225, `verify-patin` 82/82, `verify-skatepark` 14/14, `verify-monture` 50/50, `verify-portee`,
+  `verify-strings`. **Vu en jeu** (cran 3) : béret, grosse maille, tailleur, mulet roux et barbe fournie ; la marche de profil (tresses,
+  haut-de-forme, soie, robe) ; assis ; la cabine dans ses quatre quarts de tour ; le salon. **Pas vu** : les autres crans, iPad, à deux.
+  **Pas fait** : les détails proposés (`docs/A-JUGER.md`), les expressions automatiques.
+
+## 2026-10-23 (fin) — LOT A : TOUS LES PNJ EN 32 × 48, STRICTEMENT FIDÈLES
+
+Ses mots : « strictement fidèles, mais parfois des détails à proposer sur planche » ; puis, en cours de route : « gardons l'élégance sobre
+et sévère de certains PNJ, pas rendre tout forcément trop mimi ». **Supabase : rien. Réseau : rien.**
+- **Les costumes** (`persoHdArt.js`, « LES COSTUMES DES PNJ ») : chacun est celui de `drawCharFrame`, aux MÊMES repères ×2 et aux MÊMES
+  couleurs — casquette (Soan, Harald), salopette (Greg, Harald), tartan (Tristan), apiculteur (René), béret et tablier (Ingrid), Jérôme
+  Martial, Carla, Léo et ses cartons, Froufrou, le vandale, les ouvriers (rôle × équipe, la table `WORKER_CREW` LUE, jamais recopiée).
+  Les couleurs du corps changent par la palette (`persoHdCostume`), le reste se peint par couches : sur le corps (sous les bras),
+  sur la tête et devant le corps (en dernier). Une ouvrière porte le pantalon de l'équipe ; un costume couvrant a un pantalon uni.
+- **Les visages** (`faceStyleOf`) : le sourire est aux joueurs ; un habitant a la bouche droite de son 16 × 24 ; Léo l'œil étroit et
+  pas de rose ; Carla sa bouche rouge ; ni le vandale (QUETE.md) ni René sous son voile n'ont de visage. Froufrou garde son sourire
+  (« exubérant, tendre »).
+- **Froufrou, « ses yeux semblent rouges, c'est effrayant »** : au 16 × 24, deux verres magenta posés SUR les yeux. Ici des montures plus
+  larges que l'œil et un verre clair autour : on lit des lunettes, et un regard derrière. La lavallière léopard descend sous le menton.
+- **Le vandale** : premier jet, un creux de capuche cerné — un écran de télévision. Retour à la capuche unie de l'original.
+- **Branché** : `drawCharacter` (tout non-joueur ; `getCharHD(…, npc)`), les ENFANTS (feuille fine à leur échelle), les GESTES des
+  ouvriers (`CA.drawWorkerAct` par `drawPoseHD`, qui rend maintenant la valeur de la pose : la main qui porte), les PORTRAITS de
+  l'interface (`uiChar` / `uiCharJ` ; `Sprite` découpe une feuille `__hdK` à son échelle).
+- **Vu** : `tools/render-pnj-hd.mjs` (`pnj-hd-planche.png` : 17 PNJ, l'ancien ×2 à gauche, le fin à droite) ; en jeu, la ferme à vingt
+  résidents (Eduardo sur son cheval blanc), la ville, le chantier (le chef qui montre, l'ouvrière à la raclette). Bancs : `verify-portee`,
+  `verify-strings`, `verify-maison` 225/225. **Pas vu** : Carla et Léo en jeu (ils marchaient hors champ ; vus sur planche), les
+  portraits des panneaux à l'écran, iPad. **Pas fait** : vêtements Garfield, coupes et barbes du salon (lot B) — un PNJ qui en porte
+  garde l'ancien dessin ; les expressions automatiques.
+
+## 2026-10-23 (suite) — LES POSES DES JOUEURS EN 32 × 48, SANS RÉÉCRIRE UNE POSE
+
+Ses décisions pour le chantier « tous les personnages + positions » : les POSES D'ABORD ; « la façon la plus économique d'avoir un vrai
+rendu pro, sans casser les déplacements et poses existantes ; très propre, sois ultra exigeant » ; PNJ strictement fidèles (détails
+éventuels proposés sur planche) ; expressions AUTOMATIQUES (déduites, aucun message), à enrichir plus tard par les interactions.
+**Supabase : rien. Réseau : rien.**
+- **La méthode** (`drawPoseHD`, en tête de FermeGame.js) : toutes les poses découpent la feuille avec les repères du gabarit 16 × 24, et
+  la feuille fine EST ce gabarit à ×2. La pose s'exécute telle quelle sur une toile ×2, avec la feuille fine NUE (`getCharHD(…, naked)`) ;
+  `hdCtxProxy` double les seuls rectangles SOURCE d'une feuille marquée `__hdK` ; le contour se pose sur la pose finie (`outlineHD`) ;
+  la toile se pose à l'écran par la règle des crans (`blitHD`). Le code des onze dessinateurs de pose n'a pas changé d'une ligne.
+- **Branchées** : bateau, cheval, lancer, halage, fouille, rider du park (skate, BMX, trottinette, rollers), patin (combinaison comprise :
+  `suitSheet` compte maintenant ses rangées à l'échelle), glissade / arc-bouté / grimpe du cratère, assis (banc, canapé), le DORMEUR (sa
+  tête en fin, les yeux fermés par l'expression « sommeil » après le même délai).
+- **Le coût, mesuré** : premier jet 1,4 ms par pose et par image (dix habitants assis en auraient coûté 14) → contour lu en mots de 32 bits
+  (0,1 ms) et les poses IMMOBILES cuites une fois par feuille et par clé (`POSE_CACHE` : assis, couché, bateau, cheval) — un joueur couché
+  coûte autant qu'un joueur debout.
+- **Vu en jeu** (`/audit-duo`, la fiche de l'invitée réglée chez l'hôte, comme le fait le réseau) : les quatorze poses, l'ancien et le fin
+  côte à côte, le dormeur chez soi (yeux ouverts puis fermés). Bancs : `verify-portee`, `verify-patin` 82/82, `verify-skatepark` 14/14,
+  `verify-monture` 50/50, `verify-maison` 225/225, `verify-strings`.
+- **Défauts D'ORIGINE, rendus plus visibles par le contour** (l'ancien dessin les a aussi) : au LANCER et au CYGNE du patin, le bras levé est
+  posé un pixel à côté du corps (une pièce détachée). À reprendre dans `drawStarCast` et `drawSkate` — sur son accord.
+- **Pas fait** : le reflet du patineur sur la glace garde l'ancien corps (voilé à 12-50 %) ; la jambe du cavalier reste un aplat
+  « pantalon » d'avant ; les ouvriers et tous les PNJ (lot suivant). Pas vu : iPad, un vrai cheval (le test forçait la monture d'Eduardo,
+  dont l'image ne se charge pas hors de sa scène — l'ancien dessin non plus).
+
+## 2026-10-23 — LES JOUEURS EN 32 × 48, DERRIÈRE UN INTERRUPTEUR
+
+Ses décisions : même taille à l'écran (deux fois plus de pixels, collision et sièges inchangés), pixel art EN CODE, Claude seul, un
+interrupteur pour revenir. Trois jets le même jour (le premier, arrondi : « un peu moche » ; il veut l'ANATOMIE CARRÉE et la tête simple) ;
+le troisième, retenu : le gabarit de `drawCharFrame` ×2 (`persoHdArt.js`), dix expressions (pas encore branchées), marche face et profil.
+**Supabase : rien. Réseau : rien** (le réglage est local, `localStorage` « arcardi.persoHd »).
+- **La feuille** : `S.getCharHD(gender, outfit, look)` (fermeArt.js, à côté de `getChar`), 4 × 3 cases de 32 × 48. La tenue se relit par les
+  décodeurs de `drawCharFrame` ; un vêtement Garfield, une coupe ou une barbe du salon → `null`, et l'ancien dessin reste.
+- **Le dessin** (`drawCharHD`, en tête de FermeGame.js) : JOUEURS seulement, debout et en marche. Crans 2 et 4 et chez soi : tel quel ;
+  crans 3 (défaut) et 5 : une feuille cuite à la taille d'écran exacte (×cran au plus proche, puis ½ en moyenne), posée au pixel ENTIER ;
+  cran 1 : l'ancien 16 × 24 ; échelle fractionnaire (fondu de zoom, cratère) : la feuille lissée.
+- **L'interrupteur** : ⚙️ → « ✨ Personnages fins : oui / non », par appareil, gardé au rechargement.
+- **Vu en jeu** : ferme aux crans 1 à 5, marche vers l'ouest (miroir), ville au cran 3, chez soi la nuit, l'interrupteur (et après
+  rechargement), un joueur distant à deux clients (`/audit-duo`). **Pas fait** : assis, couché, à cheval, en bateau, skate, patin, figures à
+  deux, scènes de l'étoile — ces poses gardent l'ancien dessin (on y change de finesse) ; les résidents et PNJ ; vêtements, coupes et barbes ;
+  les expressions en jeu. Pas vu : iPad.
+
 ## 2026-10-22 (fin) — LA MÉMOIRE DE POSITION : ON REVIENT OÙ L'ON ÉTAIT
 
 Demande de Guillaume : « pas nécessairement devant la maison ». Ses choix (les recommandés) : la position vit dans la FERME (elle suit le joueur

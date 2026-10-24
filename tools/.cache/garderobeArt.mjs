@@ -67,8 +67,10 @@ const LIGHTER = { o: "d", d: "m", m: "l", l: "h", h: "h" };
 // ⚠️ TROIS ZONES LARGES, pas cinq bandes : cinq tons répartis en colonnes faisaient un CODE-BARRES (première planche du 2026-10-21).
 function toneAt(u) { return u < 0.2 ? "l" : u < 0.7 ? "m" : u < 0.93 ? "d" : "o"; }
 /* LE DRAPÉ. `rows` : [y, x0, x1] ; `folds` : [y0, y1, xa, xb] (un pli droit de (xa, y0) à (xb, y1)). La dernière rangée est l'ourlet. */
+let FOLDS_OUT = null;   // 2026-10-23 : quand le 32 × 48 demande une couche, il RECUEILLE les plis au lieu de les peindre (voir `wardrobeLayer`)
 function drape(L, rows, folds = []) {
   const last = rows.length ? rows[rows.length - 1][0] : -1;
+  if (FOLDS_OUT) { FOLDS_OUT.push(...folds); folds = []; }
   for (const [y, x0, x1] of rows) {
     for (let x = x0; x <= x1; x++) {
       const t = toneAt(x1 === x0 ? 0.5 : (x - x0) / (x1 - x0));
@@ -318,24 +320,63 @@ function hat(L, id, dir) {
   }
 }
 
+// ─── les palettes et les couches seules ─────────────────────────────────────────────────────────────────────────
+const SHARED = (skin, skinD) => ({ s: skin, S: skinD, w: "#f4efe4", W: "#cfc6b4", g: GOLD.g, G: GOLD.G, k: "#3a2a24", K: "#24181a" });
+const SCARF_COL = { feather: "#efdcef", fur: "#c9b08a" };
+/* La palette d'un article : `slot` "outfit" | "scarf" | "hat", `base` la teinte portée (hex) ou null. 2026-10-23 : sortie de `paintWardrobe`
+   pour que le 32 × 48 (`persoHdArt.js`) lise LES MÊMES couleurs — une seule source, jamais recopiée. */
+export function wardrobePal(slot, id, base, skin, skinD) {
+  const shared = SHARED(skin, skinD);
+  if (slot === "outfit") {
+    const pal = { ...shared, ...wardrobeRamp(base || OUTFIT_COL[id]) };
+    if (id === "cape") { const lin = wardrobeRamp("#d8b45a"); pal.c = lin.l; pal.C = lin.d; }
+    else if (id === "suit") { pal.k = wardrobeRamp(base ? "#5a1f2a" : "#7a2432").m; pal.K = wardrobeRamp("#5a1f2a").o; }
+    else if (id === "poncho") Object.assign(pal, { w: "#efe2c4", W: "#c9b48e", y: "#d9a441", Y: "#a8772a", k: "#3a2a24" });
+    return pal;
+  }
+  if (slot === "scarf") {
+    const col = id === "silk" ? (base || "#d94f6e") : SCARF_COL[id] || (base || "#8a4a3a");
+    return { ...shared, ...wardrobeRamp(col) };
+  }
+  if (id === "capeline") { const rb = wardrobeRamp(base || "#9a3a52"); return { ...wardrobeRamp("#e2c97e"), r: rb.l, R: rb.d }; }
+  if (id === "crown") return { g: GOLD.g, G: GOLD.G, h: GOLD.h, w: "#ffffff", r: "#e04a5a", R: "#8a1a2a" };
+  return { ...shared, ...wardrobeRamp(base || (id === "beret" ? "#b4232c" : id === "tophat" ? "#24222c" : "#4f6488")) };
+}
+/* La grille de lettres d'un article (16 × 24), sans la peindre : `step` et `bob` comme `paintWardrobe`. Le 32 × 48 la demande À L'ARRÊT
+   (0, 0), l'agrandit, et fait suivre le pas lui-même au demi-pixel. */
+export function wardrobeLayer(slot, id, dir, gender, step = 0, bob = 0, folds = null) {
+  /* `folds` (2026-10-23, « des plis d'un pixel ») : un tableau qui reçoit les plis du drapé [y0, y1, xa, xb] au lieu de les peindre — le
+     32 × 48 les trace lui-même, un pixel de creux et un d'arête, là où l'agrandissement en faisait deux et deux. */
+  FOLDS_OUT = folds;
+  try { return layerOf(slot, id, dir, gender, step, bob); } finally { FOLDS_OUT = null; }
+}
+function layerOf(slot, id, dir, gender, step, bob) {
+  const L = blank();
+  if (slot === "outfit") {
+    if (id === "gown") gown(L, dir, step);
+    else if (id === "cape") cape(L, dir, step);
+    else if (id === "suit") suit(L, dir, gender);
+    else if (id === "poncho") poncho(L, dir, step);
+    else tutu(L, dir, bob);
+  } else if (slot === "scarf") scarf(L, id, dir, step);
+  else hat(L, id, dir);
+  return L;
+}
+
 // ─── l'entrée ────────────────────────────────────────────────────────────────────────────────────────────────────
 /* `o` : { gender, dir (0 face, 1 dos, 2 profil droit), step (−1, 0, 1), bob (0, 1), skin, skinD, hair, wd ({ hat, scarf, outfit,
    tint }, indices décalés de 1) }. `P` est le `fillRect` de fermeArt (aucune transformation : le faux canevas des bancs les ignore). */
 export function paintWardrobe(g, P, x, o) {
   const { gender, dir, step, bob, skin, skinD, wd } = o;
   const base = wd.tint ? C.WARDROBE_TINTS[wd.tint - 1].col : null;
-  const shared = { s: skin, S: skinD, w: "#f4efe4", W: "#cfc6b4", g: GOLD.g, G: GOLD.G, k: "#3a2a24", K: "#24181a" };
+  const shared = SHARED(skin, skinD);
 
   // 1. LA TENUE
   const gar = wd.outfit ? C.WARDROBE_OUTFITS[wd.outfit - 1] : null;
   if (gar) {
-    const L = blank(), id = gar.id, R = wardrobeRamp(base || OUTFIT_COL[id]);
-    const pal = { ...shared, ...R };
-    if (id === "gown") gown(L, dir, step);
-    else if (id === "cape") { cape(L, dir, step); const lin = wardrobeRamp("#d8b45a"); pal.c = lin.l; pal.C = lin.d; }
-    else if (id === "suit") { suit(L, dir, gender); pal.k = wardrobeRamp(base ? "#5a1f2a" : "#7a2432").m; pal.K = wardrobeRamp("#5a1f2a").o; }
-    else if (id === "poncho") { poncho(L, dir, step); pal.w = "#efe2c4"; pal.W = "#c9b48e"; pal.y = "#d9a441"; pal.Y = "#a8772a"; pal.k = "#3a2a24"; }
-    else tutu(L, dir, bob);
+    const id = gar.id, R = wardrobeRamp(base || OUTFIT_COL[id]);
+    const pal = wardrobePal("outfit", id, base, skin, skinD);
+    const L = wardrobeLayer("outfit", id, dir, gender, step, bob);
     if (id === "tutu") {
       // les collants et les chaussons : on efface la jupe ou le pantalon de base sous le tulle, puis on repeint les jambes
       g.clearRect(x + 3, 18 + bob, 10, H - 18 - bob);
@@ -357,27 +398,14 @@ export function paintWardrobe(g, P, x, o) {
 
   // 2. L'ÉCHARPE
   const sc = wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1] : null;
-  if (sc) {
-    const col = sc.id === "silk" ? (base || "#d94f6e") : sc.id === "feather" ? "#efdcef" : sc.id === "fur" ? "#c9b08a" : (base || "#8a4a3a");
-    const L = blank();
-    scarf(L, sc.id, dir, step);
-    emit(g, P, x, L, { ...shared, ...wardrobeRamp(col) }, bob, false);
-  }
+  if (sc) emit(g, P, x, wardrobeLayer("scarf", sc.id, dir, gender, step, bob), wardrobePal("scarf", sc.id, base, skin, skinD), bob, false);
 
   // 3. CE QUI RETOMBE SUR LES ÉPAULES (cheveux longs, tresses, barbe) repasse devant le col — `drawCharFrame` sait quelle coupe on porte
   if ((gar || sc) && o.hairOver) o.hairOver();
 
   // 4. LE CHAPEAU, tout en haut
   const ht = wd.hat ? C.WARDROBE_HATS[wd.hat - 1] : null;
-  if (ht) {
-    const L = blank();
-    hat(L, ht.id, dir);
-    let pal;
-    if (ht.id === "capeline") { const rb = wardrobeRamp(base || "#9a3a52"); pal = { ...wardrobeRamp("#e2c97e"), r: rb.l, R: rb.d }; }
-    else if (ht.id === "crown") pal = { g: GOLD.g, G: GOLD.G, h: GOLD.h, w: "#ffffff", r: "#e04a5a", R: "#8a1a2a" };
-    else pal = { ...shared, ...wardrobeRamp(base || (ht.id === "beret" ? "#b4232c" : ht.id === "tophat" ? "#24222c" : "#4f6488")) };
-    emit(g, P, x, L, pal, bob, false);
-  }
+  if (ht) emit(g, P, x, wardrobeLayer("hat", ht.id, dir, gender), wardrobePal("hat", ht.id, base, skin, skinD), bob, false);
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════
