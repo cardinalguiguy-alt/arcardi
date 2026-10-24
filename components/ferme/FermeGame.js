@@ -29854,7 +29854,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       world();
       openNameTags();
       for (const d of draws) { try { d.fn(); } catch (e) { world(); console.error("[FERME] home draw ignoré", e); } }
-      flushNameTags();
       world();
       // La lumière : le jour d'une pièce (un peu sous le dehors), la nuit des appliques.
       {
@@ -29896,6 +29895,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         lightRendererRef.current.draw(ctx, { zm, Rx: -CX, Ry: -CY, W: canvas.width, H: canvas.height },
           { sky: amb, night: Math.max(night, 0.7), lights, heads, occluders: [], glows: [], screenGlows: [] });
       }
+      /* 2026-10-24 — LES NOMS APRÈS LA LUMIÈRE, COMME DEHORS (phase 3, 2026-09-25 : ce qui appartient à l'interface reste lisible
+         la nuit). Ils passaient AVANT elle : la nuit, sans lampe, la pièce les multipliait jusqu'à ~0,3 (bleu de lune). Ils restent
+         AVANT l'assombrissement des pièces voisines, qui est un cadrage et non une lumière : un nom de la pièce d'à côté ne tire
+         pas plus l'œil que celui qui le porte. Tout y est en espace écran (`paintLabels`, `drawFindMe`). */
+      flushNameTags();
       /* 2026-10-17 (soir) — « surtout la pièce dans laquelle on se trouve » : ce qui est hors du cadre de la pièce s'assombrit
          (le voisinage reste lisible, il ne tire plus l'œil). Le cadre assombri suit la caméra (même lissage), le plan
          entier l'éteint. En espace ÉCRAN : quatre bandes autour du cadre, un dégradé de 28 px à son bord. */

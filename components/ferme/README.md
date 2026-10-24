@@ -1,4 +1,18 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-24
+
+## 2026-10-24 (nuit) — LES REFLETS DES CORPS FINS ET LA LUMIÈRE ; LES NOMS DES MAISONS APRÈS ELLE
+
+Sa question : « les reflets sur les nouveaux corps (surtout les cheveux) évoluent-ils avec l'heure, la luminosité ambiante ? » **Oui, en
+teinte et en intensité, jamais en direction.** Le reflet est peint dans la feuille (`J` de la rampe des cheveux, `persoHdArt.js`, la
+lumière en haut à gauche), et la feuille ignore l'heure ; c'est la passe de lumière, après les personnages, qui multiplie toute la scène
+par le ciel (aube, heure dorée, mauve, lune ; l'assombrissement du temps ; l'éclair) et y ajoute les lampes, murs compris — ferme, ville,
+maisons. Le reflet garde donc son rapport à la base, mais reste à gauche quand la lampe est à droite, et ne suit pas le soleil comme les
+ombres portées. Sans heure : le tribunal (décision écrite, une vignette fixe) et `drawEvilFrame`.
+- **Corrigé en passant** : dans une maison, les NOMS se peignaient AVANT la lumière — la nuit, sans lampe, la pièce les multipliait jusqu'à
+  ~0,3. Ils passent après elle, comme dehors (phase 3 du 2026-09-25), et restent avant l'assombrissement des pièces voisines (un cadrage,
+  pas une lumière). **Vu en jeu** à 1 h : pièce bleu de lune, « Hote » en blanc pur (640 px à 255,255,255). **Supabase : rien. Réseau : rien.**
+- `verify-densite` était rouge : l'exception de lissage de `drawCharHD` citait `frame * 32`, devenu `fHD * 32` avec la marche à huit
+  images. Mise à jour : vert.
 
 ## 2026-10-24 (soir) — LA MARCHE À HUIT IMAGES
 

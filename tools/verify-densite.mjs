@@ -142,7 +142,8 @@ title("1. tout bitmap passe par la table");
        `blitHD`), le temps qu'ils durent. */
     ["FermeGame.js", 'og.imageSmoothingEnabled = true; og.imageSmoothingQuality = "high";'],
     ["FermeGame.js", 'dg.imageSmoothingEnabled = true; dg.imageSmoothingQuality = "high"; dg.drawImage(P.up, 0, 0, UW, UH, 0, 0, DW, DH);'],
-    ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(hd, frame * 32'],
+    // 2026-10-24 — `fHD`, plus `frame` : la feuille fine a neuf images par vue (la marche à huit images), son index n'est plus celui de l'ancienne
+    ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(hd, fHD * 32'],
     ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(cv, b.x, b.y'],
   ];
   let smoothTrue = 0, smoothOk = 0;
