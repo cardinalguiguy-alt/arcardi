@@ -369,8 +369,8 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   de la Maison Garfield, en 32 × 48 (`S.getCharHD`, le chemin du jeu) à côté du 16 × 24 ×2 : face / dos / profil, puis deux images de marche →
   `garderobe-hd-coupes.png`, `garderobe-hd-vetements.png` (×3). Un argument filtre les rangées (⚠️ il réécrit alors les deux planches filtrées). Se juge à l'œil.
 - **`tools/render-perso-hd.mjs` (2026-10-23)** : les personnages en 32 × 48 (`components/ferme/persoHdArt.js`), fermière et fermier : l'actuel agrandi ×2,
-  face / dos / profil, la marche de face et de profil (`perso-hd-planche.png`), les expressions de face et de profil (`perso-hd-expressions*.png`), la marche brute (`perso-hd-marche-brute.png`,
-  dont `perso-hd-marche.gif` se fait à la main à 9 images/s), et la bande brute.
+  face / dos / profil, la marche de face et de profil — huit images depuis le 2026-10-24 (`perso-hd-planche.png`), les expressions de face et de profil (`perso-hd-expressions*.png`), la marche brute
+  (`perso-hd-marche-brute.png` : face, dos, profil × 9 images, l'image 0 debout ; une animation s'en fait à 18 images/s), et la bande brute.
 - **`tools/render-garderobe.mjs` (2026-10-21)** : les 14 vêtements de la Maison Garfield (`components/ferme/garderobeArt.js`) dans leurs trois vues et au pas,
   sur la fermière et le fermier, puis sous les huit couleurs — `tools/out/garderobe-planche.png`, `garderobe-couleurs.png` (`SORTIE=nom` change le préfixe).
   Passe par `S.charFrame` (une image seule à l'origine : le faux canevas ignore le `translate` de la feuille). ⚠️ Elle se JUGE à l'œil, elle ne mesure rien.

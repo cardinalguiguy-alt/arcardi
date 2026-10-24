@@ -1,5 +1,64 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-03
 
+## 2026-10-24 (soir) — LA MARCHE À HUIT IMAGES
+
+Sur la marche corrigée le matin : « le mouvement de bras doit être plus naturel, l'articulation… pousse au max le réalisme de la
+démarche — fluide, fun et réaliste, mais toujours bien stylisé sur les formes ». Cinq maquettes hors jeu, jugées en animation
+(https://claude.ai/artifact/L4mrNwQSKMBGVnNyVK9tEA), puis « raccourcir un peu et puis brancher ». **Supabase : rien. Réseau : rien** (la même
+horloge de pas, `animT`). Le récit des réglages et de ce que chaque maquette refusée a appris : `persoHdArt.js`, « LA MARCHE À HUIT
+IMAGES » ; la règle : DESSIN.md (« entre le figé et le pigeon »).
+- **La feuille de marche a 9 images par vue** : 0 DEBOUT (portraits, miroirs, cabine d'essayage lisent l'image 0 et n'ont pas changé),
+  1 à 8 la foulée — contact, amorti, passage, poussée, puis l'autre pied ; `drawCharacter` la lit à `1 + ⌊(animT mod 4) × 2⌋`, `drawCharHD`
+  reçoit cette image (`fHD`) et son miroir compte les images de la feuille. La feuille des POSES garde ses 4 images. Coût mesuré au
+  navigateur : 5 à 9 ms par feuille de marche (une fois par personnage et par expression, puis en cache), 2,5 fois l'ancienne.
+- **Les membres** : peints droits puis recopiés os par os (`w2bone`) ; genou par cinématique inverse (le pied d'appui reste au sol quand
+  le bassin descend), talon qui attaque et pointe qui pousse ; coude ; le bras du fond se montre de profil. La tête suit le corps et reste
+  en bas une image de plus ; le poids passe d'un pied sur l'autre (face, dos), la tête avec le buste. Bras : pendule court, le second à
+  70 %, un bras de face ne fait que raccourcir, détendu ; de dos, l'avant-bras qui avance passe derrière la hanche. Léo garde ses bras
+  sur ses cartons.
+- **Les bras d'un pixel plus courts** (`ARM_LONG` 2 → 1) : mesurés identiques de face et de profil, mais le bout des doigts tombait au-dessus
+  du genou ; il arrive à mi-cuisse.
+- **La jupe vit** (`w2skirt`) : robe de base, robe et tailleur de la Maison Garfield, habitantes ; les pieds passent dessous. **Le pantalon
+  du costume suit les jambes** (sa grille est coupée aux hanches). **Les pieds de face** ne montrent plus leur semelle (elle se lisait à
+  l'envers). **Le profil est mince** (`torsoSide`, 11 px au lieu de 13 ; chez elle, la chevelure plaquée sur le dos) — la feuille des poses
+  aussi, pour que le buste ne change pas de largeur en s'asseyant.
+- **Les MAINS JOINTES** (sa décision : « quand on reste immobile quelques secondes, joueurs et habitants ») : après `CLASP_AFTER_MS` (4 s)
+  immobile, les mains libres, une image de passage (avant-bras à mi-course, 140 ms) puis les mains jointes ; au premier pas, la marche
+  reprend. Une petite feuille à part (`getCharHD(…, "clasp")`, 2 images par vue). L'arrêt se date sur chaque machine, dans la mémoire du
+  visage (`exprMemOf`) — rien ne circule ; marcher, tourner sur place, s'asseoir, monter, glisser, creuser, pêcher, une torche, mon coup
+  d'outil, dormir remettent le compte à zéro. De dos, on ne voit que les coudes pliés. Vu en jeu (lui : face, profil, le départ) ; **pas vu**
+  chez un habitant (la partie locale n'en a pas) ni chez un joueur distant. **Gardé pour plus tard** : la maquette 2, « une super danse »
+  (docs/PROJETS.md §10).
+- **Vu** : en jeu aux crans 4 et 3 (droite, gauche en miroir, face, dos, l'arrêt) ; planches `render-perso-hd`, `render-pnj-hd`,
+  `render-garderobe-hd`, `render-poses-hd` (les poses inchangées, profil mince compris), `render-skatepark` (23/23). **Pas vu** : elle en
+  jeu (seulement les feuilles), les habitants qui marchent en ville, à deux, l'iPad.
+
+## 2026-10-24 (suite) — QUATRE RETOURS EN JEU SUR LES PERSONNAGES FINS : LA MARCHE, LES BRAS DES RIDERS, LE DOS, LA CAPELINE
+
+Ses mots, en jouant : « la marche n'est pas accurate : mouvements de bras pas cohérents avec la marche » ; « le chapeau de paille est
+mou » ; « le dos ressemble à une carapace / backpack, mauvaise anatomie » ; « les bras doivent être correctement articulés / orientés sur
+le BMX, scooter, etc. ». Avant / après animé, à juger : https://claude.ai/artifact/5UEWzmJDQe7MeUKRtM2UGP. **Supabase : rien. Réseau : rien.**
+- **La marche** (⚠️ remplacée le soir même par la marche à huit images, plus haut) : de face et de dos, la main montait du côté du pied levé (tout un côté montait, un pas
+  qui boite) → le pas se lit en croix (la main du côté du pied levé descend et rentre, l'autre remonte) ; chez lui, le bras qui descendait
+  se DÉCOLLAIT (une rangée vide entre manche et revers à chaque pas) → la manche s'étire jusqu'au revers ; de profil, le bras glissait en
+  bloc de 2 px, épaule comprise → il pivote à l'épaule (main à 4 px, une rangée d'avant-bras tombe au bout du geste). La feuille des poses
+  garde l'ancienne phase et le bras droit (`ARM_POSE.swing` faux) : ses poses découpent ces images. Règle de dessin : DESSIN.md.
+- **Les bras des riders** (`drawRiderBody`, montureArt.js) : en fin, le bras se recopiait par carreaux de 2 × 2 qui ne tournaient pas avec
+  l'os (ombres verticales et revers en travers sur un bras tendu) et une bande du bras fin restait collée au buste → `armHD` pose la bande
+  du bras pixel fin par pixel fin, sa largeur en travers de l'os, la main gardée 1 : 1 au bout ; le buste vient de la feuille nue SANS BRAS
+  (`__bare`, et le gabarit `__armRig` = `persoHdArmRig`). Le 16 × 24 (cran 1) ne change pas. Corollaire du piège « feuille de personnage ».
+- **Le dos** : lui, l'empiècement pleine largeur et ses trois plis droits (un rabat et des sangles de sac) → le col, les omoplates, la
+  colonne d'un pixel ; le crâne couvert plus bas, un cou de 10 px au lieu d'une bande de peau large comme la tête (`head`, de dos) ; elle,
+  la dalle de cheveux de 20 px jusqu'à la taille → une chevelure qui épouse la tête, se resserre à la nuque et tombe plus étroite que le
+  dos (épaules et manches ballon à l'air) ; de dos, avant-bras et mains éclairés comme de face (ils étaient gris-brun).
+- **La capeline** : agrandie du 16 × 24, un abat-jour aux pointes qui retombent → dessinée en 32 × 48 (`capelineHD`, `WEAR_HD`) :
+  calotte droite tressée, flanc droit dans l'ombre, ruban noué, grand bord PLAT vu d'en haut (on voit le bord du fond), avant éclairé et
+  épaisseur dessous, rien ne dépasse au-dessus du bord (« . » efface, `paintWear`). Le 16 × 24 ne change pas.
+- **Vu** : en jeu au cran 4 (marche de face, de dos, de profil) ; `app/audit-riders?hd=1` (mode neuf, la planche par le chemin du jeu) sur
+  BMX, trottinette, skate, rollers ; bancs `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd`, `render-poses-hd`, `render-skatepark`
+  (23/23), `verify-expressions` (31/31), `verify-skatepark` (14/14), `verify-monture` (50/50). **Pas touché** : de profil au repos, le bras
+  nu de la fermière se lit comme une fente claire dans la robe (dessin d'origine) ; les coupes longues du salon, de dos, restent agrandies.
+
 ## 2026-10-24 — LES ÉPAULES : MOINS HAUTES, MOINS CRISPÉES (VARIANTE C)
 
 Sa demande : « les épaules un peu moins hautes et crispées, une cohérence anatomique plus réaliste » — d'abord en maquettes, sans toucher

@@ -59,14 +59,14 @@ export function persoHdPalette({ skin = "#f0c8a0", hair = "#2a2a2a", top = "#d44
 function buf() { return Array.from({ length: PERSO_HD_H }, () => Array(PERSO_HD_W).fill(".")); }
 /* `dy` : un décalage vertical (le rebond du pas) ; `behind` : ne peint que les cases VIDES — ce qui passe derrière ce qui est déjà
    posé (les cheveux longs derrière les épaules, peints après que l'épaule a été taillée). `shift` et `behind()` en dérivent. */
-function mk(b, dy = 0, behind = false) {
-  const set = (x, y, c) => { y += dy; if (x >= 0 && y >= 0 && x < PERSO_HD_W && y < PERSO_HD_H && (!behind || b[y][x] === ".")) b[y][x] = c; };
-  const get = (x, y) => { y += dy; return x >= 0 && y >= 0 && x < PERSO_HD_W && y < PERSO_HD_H ? b[y][x] : "."; };
+function mk(b, dy = 0, behind = false, dx = 0) {
+  const set = (x, y, c) => { y += dy; x += dx; if (x >= 0 && y >= 0 && x < PERSO_HD_W && y < PERSO_HD_H && (!behind || b[y][x] === ".")) b[y][x] = c; };
+  const get = (x, y) => { y += dy; x += dx; return x >= 0 && y >= 0 && x < PERSO_HD_W && y < PERSO_HD_H ? b[y][x] : "."; };
   const rect = (x, y, w, h, c) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) set(x + i, y + j, c); };
   // Un motif : « . » ne peint rien (on voit ce qui est dessous).
   const pat = (x, y, rows) => rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] !== ".") set(x + i, y + j, r[i]); });
   const swap = (x, y, w, h, from, to) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (from.includes(get(x + i, y + j))) set(x + i, y + j, to); };
-  return { set, get, rect, pat, swap, shift: (k) => mk(b, dy + k, behind), behind: () => mk(b, dy, true) };
+  return { set, get, rect, pat, swap, shift: (k) => mk(b, dy + k, behind, dx), behind: () => mk(b, dy, true, dx) };
 }
 
 /* ─── Le visage (face et profil) ──────────────────────────────────────────
@@ -160,6 +160,14 @@ function clearFrontSide(d, facePx) {
 function head(d, dir) {
   d.rect(8, 4, 16, 16, "S"); d.set(8, 19, "."); d.set(23, 19, ".");
   if (dir === 2) { d.rect(8, 5, 1, 14, "s"); d.rect(9, 19, 14, 1, "s"); d.rect(9, 18, 3, 1, "s"); return; }
+  if (dir === 1) {
+    /* 2026-10-24 — DE DOS, LA NUQUE (« LE DOS », `torsoFront`). Le bas de la tête était une bande de peau aussi large qu'elle : un
+       cou de 16 px, la tête posée comme un couvercle sur le buste. Les coins s'arrondissent sous le crâne et le cou (10 px) descend
+       au col, son ombre à droite ; les cheveux couvrent le crâne plus bas (`hair`). */
+    for (const [y, x0, x1] of [[18, 8, 10], [18, 21, 23], [19, 8, 10], [19, 21, 23]]) for (let x = x0; x <= x1; x++) d.set(x, y, ".");
+    d.rect(23, 5, 1, 13, "s"); d.rect(19, 18, 2, 2, "s"); d.set(11, 19, "s"); d.set(8, 17, "s");
+    return;
+  }
   d.rect(23, 5, 1, 14, "s"); d.rect(22, 15, 1, 4, "s"); d.rect(9, 19, 14, 1, "s"); d.rect(9, 9, 1, 6, "T");
 }
 
@@ -186,9 +194,10 @@ function hair(d, dir, gender, layer) {
         "...HHHHHHHHHHHHHH...", ".HHHHHJJJJJJHHHHHhh.", "HHHHJJJHHHHHJJHHHhhh", "HHHJJHHHHHHHHHHHHhhh",
         "HHHHHHHhHHHHHhHHHHhh", "HHHHHHhHHHHHhHHHHhhh", "HHHHHhHHHHHhHHHHhHhh", "HHHHhHHHHHhHHHHhHHhh",
         "HHHhHHHHHhHHHHhHHHhh", "HHHHHHHHhHHHHhHHHHhh", "HhHHHHHhHHHHhHHHHHhh", "hHHHHHhHHHHhHHHHHhhh",
-        "..HhHHH.hHHH.HHhHh..", "..h.Hh...hH...hH.h.."]);
+        // de dos, le crâne couvert jusqu'à la nuque (« LA NUQUE », `head`) : les pointes tombent sur le cou, pas au milieu de la tête
+        "..HHHHhHHHHhHHHHhh..", "..hHHhHHHHhHHHHhHh..", "...hHh.hHHh.hHHh.h.."]);
       d.pat(7, 11, ["S", "s", "S"]); d.pat(24, 11, ["s", "Z", "s"]);
-      for (let x = 8; x <= 23; x++) for (let y = 14; y <= 16; y++) if (d.get(x, y) === "S") d.set(x, y, "s");
+      for (let x = 8; x <= 23; x++) for (let y = 16; y <= 17; y++) if (d.get(x, y) === "S") d.set(x, y, "s");
     } else {
       d.pat(5, 2, [
         "....HHHHHHHHHHHHHH...", "..HHHHHHHJJJJJHHHHHh.", ".HHHHHHJJJHHHHHHHHHhh", "HHHHHHJJHHHHHHHHHHHhh",
@@ -214,15 +223,21 @@ function hair(d, dir, gender, layer) {
     d.pat(23, 4, BOW);
   } else if (dir === 1) {
     if (layer === "back") return;
-    cap(); d.rect(6, 8, 20, 17, "H"); d.rect(24, 4, 2, 21, "h");
+    /* ⚠️ 2026-10-24 (« LE DOS », `torsoFront`) : au premier jet, une dalle de 20 px de large de la tête à la taille, plus large que
+       les épaules — une carapace, les manches ballon cachées dessous, les bras sortant d'en dessous. La chevelure épouse la tête,
+       se resserre sur la nuque et tombe sur le dos plus étroite que lui ; les épaules et les manches restent à l'air. */
+    cap(); d.rect(6, 8, 20, 10, "H"); d.rect(7, 18, 18, 2, "H"); d.rect(8, 20, 16, 2, "H"); d.rect(9, 22, 14, 3, "H");
+    d.rect(24, 4, 2, 14, "h"); d.rect(23, 18, 2, 2, "h"); d.rect(22, 20, 2, 2, "h"); d.rect(21, 22, 2, 3, "h");
     d.pat(10, 3, ["JJJJJJJJJJJJ"]); d.pat(8, 4, ["JJJ..........JJ"]); d.pat(9, 5, ["J.............J"]);
-    // Des mèches de longueurs différentes (les rayures régulières du premier jet faisaient grille).
+    // Des mèches de longueurs différentes (les rayures régulières du premier jet faisaient grille) — dans la chevelure seulement.
     for (const [x, y0, y1, c] of [[8, 9, 19, "h"], [10, 7, 15, "h"], [12, 11, 23, "h"], [14, 6, 13, "J"], [15, 14, 24, "h"], [17, 8, 18, "h"],
-      [19, 12, 24, "h"], [21, 7, 16, "h"], [22, 15, 22, "G"]]) d.rect(x, y0, 1, y1 - y0 + 1, c);
-    d.pat(6, 25, ["HHH.HHHhHH.HHHhHH.HH"]); d.pat(6, 26, [".H...hH...hH...H..h."]);
+      [19, 12, 24, "h"], [21, 7, 16, "h"], [22, 15, 21, "G"]]) for (let y = y0; y <= y1; y++) if (isHair(d.get(x, y))) d.set(x, y, c);
+    d.pat(9, 25, ["HHhH.HHhHH.HhH"]); d.pat(9, 26, [".H..hH...hH.H."]);
     d.pat(4, 4, BOW);
   } else {
-    if (layer === "back") { d.rect(5, 14, 10, 12, "H"); d.rect(5, 14, 2, 12, "h"); d.pat(5, 26, ["HH.HHh.H.H"]); d.rect(9, 16, 1, 9, "h"); d.rect(12, 18, 1, 7, "h"); return; }
+    // ⚠️ 2026-10-24 (« on dirait des bossus ») : une bande de 4 px de la nuque à la taille, derrière le dos, en faisait une bosse.
+    // La chevelure tombe de la nuque et se plaque sur le haut du dos, de plus en plus fine, jusqu'aux omoplates.
+    if (layer === "back") { d.rect(5, 14, 4, 6, "H"); d.rect(5, 14, 1, 6, "h"); d.rect(7, 20, 4, 3, "H"); d.rect(7, 20, 1, 3, "h"); d.pat(8, 23, ["HHh", "H.h", "h.."]); d.rect(9, 16, 1, 6, "h"); return; }
     d.pat(5, 2, [
       "....HHHHHHHHHHHHHH...", "..HHHHHHHJJJJJJHHHHh.", ".HHHHHHJJJHHHHHHHHHHh", "HHHHHJJHHHHHHHHHHHHHh",
       "HHHHJHHHHHHhHHHHhHHHh", "HHHHHHHhHHHhHHHHHhhHh", "hHHHHHhHHHhHHHHhHhHhH", "hHHHHhHHHhHHHH........",
@@ -239,7 +254,7 @@ function hair(d, dir, gender, layer) {
    - `SHOULDER_DROP` : les bras pendent deux pixels plus bas, le haut de la manche arrondi (le deltoïde) ;
    - `SHOULDER_INSET` : rentrés d'un pixel — ils tombent alors PILE sur les colonnes de bras du 16 × 24 (x 3-4 et 11-12, ×2), ce qui
      garde alignés les vêtements de Garfield agrandis et les découpes des poses ;
-   - `ARM_LONG` : deux pixels de plus à l'avant-bras — la main tombe en haut de la cuisse, plus à la ceinture ;
+   - `ARM_LONG` : un pixel de plus à l'avant-bras (deux au premier jet, voir plus bas) — la main sur la cuisse, plus à la ceinture ;
    - `SHOULDER_FRONT` / `SHOULDER_SIDE` : l'ENVELOPPE des épaules, [rangée, x min, x max] — tout ce qui en dépasse est taillé APRÈS le
      torse, les costumes et les vêtements (une veste à épaulettes, une robe agrandie), avant les bras ; de profil, seule la pente du
      trapèze, à l'arrière du cou. L'anatomie reste carrée, la tête ne bouge pas.
@@ -249,9 +264,14 @@ function hair(d, dir, gender, layer) {
    suivait les JAMBES (une main à côté des pieds dans la glissade), et la manche découpée n'avait plus de main — vu au banc
    `render-poses-hd`. Elles repositionnent toutes leurs bras (levés, en balancier, sur les genoux) : la feuille des poses prend
    les épaules tombantes et les bras rentrés, pas leur chute ni leur longueur. */
-const SHOULDER_DROP = 2, SHOULDER_INSET = 1, ARM_LONG = 2;
+/* ⚠️ 2026-10-24, le soir — `ARM_LONG` 2 → 1 (« est-ce que tu crois pas que les bras sont trop longs de face ? »). Mesuré : le bras était
+   le même de face et de profil (14 px de l'épaule au bout des doigts, la main au même endroit à chaque image), mais le bout des doigts
+   tombait un pixel au-dessus du genou — long pour des jambes de 14 px ; de face, le bras entier se détache sur le fond et la main
+   détendue se pose sur la cuisse, ça se voit. Un pixel de moins : le bout des doigts à mi-cuisse, toujours plus bas que la ceinture. */
+const SHOULDER_DROP = 2, SHOULDER_INSET = 1, ARM_LONG = 1;
 const ARM_POSE = { drop: 0, long: 0 }, ARM_STAND = { drop: SHOULDER_DROP, long: ARM_LONG };
-const SHOULDER_FRONT = [[20, 10, 21], [21, 9, 22], [22, 8, 23]], SHOULDER_SIDE = [[20, 11, 31], [21, 10, 31]];
+const ARM_BARE = { ...ARM_POSE, none: true };
+const SHOULDER_FRONT = [[20, 10, 21], [21, 9, 22], [22, 8, 23]], SHOULDER_SIDE = [[20, 13, 31], [21, 12, 31]];   // de profil : le buste mince (`torsoSide`)
 function shoulders(d, side) {
   for (const [y, x0, x1] of side ? SHOULDER_SIDE : SHOULDER_FRONT) for (let x = 0; x < PERSO_HD_W; x++) if (x < x0 || x > x1) d.set(x, y, ".");
   // le nouveau bord du tissu prend la lumière à gauche, l'ombre à droite (comme le haut du torse)
@@ -264,8 +284,11 @@ function shoulders(d, side) {
 }
 
 /* ─── Le corps de face et de dos ──────────────────────────────────────────
-   `st` : le pas (−1, 0, +1, comme `drawCharFrame`). Le pied qui avance se lève de 2 px, raccourci (on voit sa semelle), la main
-   opposée avance (plus basse, rentrée d'un pixel), l'autre recule (plus haute). */
+   `st` : le pas (−1, 0, +1, comme `drawCharFrame`). Le pied du côté `st` se lève de 2 px, raccourci (on voit sa semelle).
+   ⚠️ Depuis la marche à huit images (2026-10-24, « LA MARCHE À HUIT IMAGES »), seule la feuille des POSES passe par `legsFront`,
+   `armsFront` et `bodySide` : ses quatre images, ses poses les découpent ; la marche a `legsFront2`, `armsFront2`, `bodySide2`. Le bras
+   qui descend s'ÉTIRE depuis l'épaule : la manche suit le revers (elle s'arrêtait à sa place, une rangée vide la séparait du revers
+   à chaque image de pas — le piège « un membre déplacé en bloc », docs/PIEGES.md). */
 function legsFront(d, gender, st, back, plain) {
   const lift = (side) => (st !== 0 && st === side ? 2 : 0);
   const shoe = (x, w, side, sh) => {
@@ -304,8 +327,14 @@ function torsoFront(d, gender, dir, plain) {
     d.rect(8, 20, 16, 10, "C"); d.rect(9, 20, 14, 1, "D"); d.rect(9, 21, 2, 7, "D"); d.rect(21, 21, 2, 8, "c"); d.rect(23, 21, 1, 8, "F");
     if (plain) { d.rect(8, 29, 16, 1, "c"); d.rect(10, 30, 12, 2, "c"); return; }   // un costume couvre tout (combinaison, cape, gilet)
     if (back) {
-      d.rect(9, 22, 14, 1, "c"); d.rect(10, 21, 12, 1, "D");                 // l'empiècement
-      d.rect(15, 23, 2, 5, "c"); d.rect(12, 24, 1, 4, "c"); d.rect(19, 24, 1, 4, "c");   // le pli creux, deux plis de dos
+      /* ⚠️ LE DOS (2026-10-24, Guillaume en jeu : « le dos ressemble à une carapace / un sac à dos, mauvaise anatomie »). Au premier
+         jet, un empiècement clair sur toute la largeur, son trait sombre dessous et un pli creux flanqué de deux plis droits : le
+         rabat et les sangles d'un sac. Ici le dos d'une chemise sur un dos : le col autour de la nuque, les omoplates (la gauche
+         prend la lumière, la droite garde son ombre), la colonne d'un pixel qui se perd vers la taille. */
+      d.rect(12, 20, 8, 1, "D"); d.rect(13, 21, 6, 1, "c");                   // le col, et son ombre sur le dos
+      d.pat(10, 22, ["DDD", "DDDD", ".DD"]); d.pat(11, 25, ["cc"]);            // l'omoplate gauche, sa pointe
+      d.pat(19, 23, [".cc", "ccc"]); d.pat(20, 25, ["c"]);                     // l'omoplate droite, dans l'ombre
+      d.rect(16, 23, 1, 3, "c"); d.set(16, 27, "c");                           // la colonne
     } else {
       d.pat(12, 20, ["DDDSSDDD", ".cDSSDc.", "..cZZc.."]);
       d.rect(15, 23, 1, 6, "c"); d.set(16, 24, "U"); d.set(16, 27, "U");
@@ -335,7 +364,8 @@ function torsoFront(d, gender, dir, plain) {
 function armsFront(d, gender, st, dir, A, LONG = ARM_LONG) {
   const back = dir === 1;
   const arm = (x, side, right) => {
-    const dy = st === 0 ? 0 : st === side ? -1 : 1, inward = st !== 0 && st !== side ? (right ? -1 : 1) : 0;
+    const fwd = st !== 0 && st !== side;   // la main qui avance : plus basse, rentrée d'un pixel
+    const dy = st === 0 ? 0 : fwd ? 1 : -1, inward = fwd ? (right ? -1 : 1) : 0, reach = Math.max(0, dy);
     const out = right ? 1 : -1;
     if (A) {
       // 2026-10-23 — LA MANCHE PLEINE D'UN COSTUME (`A` : ses lettres [lumière, base, ombre], son poignet, sa main) : jusqu'au
@@ -346,7 +376,6 @@ function armsFront(d, gender, st, dir, A, LONG = ARM_LONG) {
       d.rect(x, 28 + dy + LONG, 4, 1, A.cuff || S0);
       const [H0, H1] = A.hand || ["S", "s"], hx = x + inward, hy = 29 + dy + LONG;
       d.pat(hx, hy, right ? [H0 + H0 + H0 + H1, H0 + H0 + H1 + H1, "." + H1 + H1 + "."] : [H0 + H0 + H0 + H0, H0 + H0 + H0 + H1, "." + H1 + H1 + "."]);
-      if (back && H0 === "S") d.swap(hx, hy, 4, 3, "S", "s");
       // l'ombre du bras sur le torse : dans la couleur de ce qui est dessous (la tenue de Garfield, sinon la chemise)
       if (!back) d.rect(right ? 22 - SHOULDER_INSET : 9 + SHOULDER_INSET, 24, 1, 5, A.shadow ? A.shadow[right ? 1 : 0] : right ? "F" : "c");
       d.set(right ? x + 3 : x, 21, ".");   // le haut de la manche, arrondi
@@ -354,27 +383,66 @@ function armsFront(d, gender, st, dir, A, LONG = ARM_LONG) {
       return;
     }
     if (gender === "m") {
-      // Manche retroussée : la manche, le revers clair, l'avant-bras, la main.
-      d.rect(x, 21, 4, 5, "C"); d.rect(x, 21, 4, 1, "D");
-      if (right) d.rect(x + 2, 22, 2, 4, "c"); else d.rect(x, 22, 1, 4, "D");
+      // Manche retroussée : la manche (jusqu'au revers, `reach`), le revers clair, l'avant-bras, la main.
+      d.rect(x, 21, 4, 5 + reach, "C"); d.rect(x, 21, 4, 1, "D");
+      if (right) d.rect(x + 2, 22, 2, 4 + reach, "c"); else d.rect(x, 22, 1, 4 + reach, "D");
       d.rect(x, 26 + dy, 4, 1, "U"); d.rect(x, 27 + dy, 4, 1, "D");
-      d.rect(x + inward, 28 + dy, 4, 2 + LONG, back ? "s" : "S"); if (right) d.rect(x + 3 + inward, 28 + dy, 1, 2 + LONG, "s");
+      d.rect(x + inward, 28 + dy, 4, 2 + LONG, "S"); if (right) d.rect(x + 3 + inward, 28 + dy, 1, 2 + LONG, "s");
     } else {
       // Manche ballon froncée, puis le bras nu, plus fin.
       d.rect(x - (right ? 0 : 1), 20, 5, 4, "C"); d.rect(x - (right ? 0 : 1), 20, 5, 1, "D");
       d.pat(x - (right ? 0 : 1), 21, right ? [".c.c.", "cc.cc"] : ["D.c.c", ".Dc.c"]); d.rect(x - (right ? 0 : 1), 23, 5, 1, "U");
-      d.rect(x + (right ? 0 : 1) + inward, 24, 3, 5 + dy + LONG, back ? "s" : "S"); d.rect(x + (right ? 2 : 1) + inward, 24, 1, 5 + dy + LONG, "s");
+      d.rect(x + (right ? 0 : 1) + inward, 24, 3, 5 + dy + LONG, "S"); d.rect(x + (right ? 2 : 1) + inward, 24, 1, 5 + dy + LONG, "s");
     }
     // La main : arrondie, le pouce tourné vers le corps.
     const hx = x + inward + (gender === "m" ? 0 : (right ? 0 : 1)), hy = (gender === "m" ? 30 : 29) + dy + LONG;
     d.pat(hx + (right ? 0 : 0), hy, gender === "m" ? (right ? ["SSSs", "SSss", ".ss."] : ["SSSS", "SSSs", ".ss."]) : (right ? ["SSs", ".s."] : ["SSS", ".s."]));
-    if (back) d.swap(hx, hy, 4, 3, "S", "s");
     // L'ombre que le bras pose sur le torse : c'est elle qui le détache du corps.
     if (!back) d.rect(right ? 22 - SHOULDER_INSET : 9 + SHOULDER_INSET, 24, 1, 5, right ? "F" : "c");
     if (gender === "m") d.set(right ? x + 3 : x, 21, "."); else d.set(right ? x + 4 : x - 1, 20, ".");   // le haut de la manche, arrondi
     void out;
   };
   arm(5 + SHOULDER_INSET, -1, false); arm(23 - SHOULDER_INSET, 1, true);
+}
+
+/* 2026-10-24 — LE BRAS DES POSES, POUR CEUX QUI LE REDESSINENT (les riders du park, `drawRiderBody`, montureArt.js). Guillaume :
+   « les bras doivent être correctement articulés / orientés sur le BMX, la trottinette… ». Les poses tirent le bras de la feuille
+   par cases du 16 × 24 : en 32 × 48, chaque case est un carreau de 2 × 2 qui ne tourne pas avec l'os (un bras à l'horizontale
+   gardait ses ombres verticales et son revers en travers), et le bras d'ici, rentré d'un pixel (`SHOULDER_INSET`), chevauche la
+   colonne que la pose croit être le torse — une bande de bras restait collée au buste. Elles reçoivent donc la feuille SANS BRAS
+   (`paint(…, "bare")`, sous `__bare` de la feuille nue, fermeArt.js) et ce gabarit : la bande du bras dans la feuille des poses
+   (image 0) — ses colonnes de face (gauche, droite) et de profil, sa largeur, et les rangées de la main (gardées 1 : 1 au bout de
+   l'os, comme la chaussure d'une jambe). ⚠️ Mêmes nombres que `armsFront` / `bodySide` en pose (`ARM_POSE`) : les changer ici
+   avec eux. */
+export function persoHdArmRig(gender, cos) {
+  const wd = (cos && cos.wd) || {};
+  const A = costumeArms(cos) || (wd.outfit ? wearArms(wd.outfit, wd.tint || null) : null);
+  const bodyG = cos && cos.worker && gender === "f" ? "m" : gender;
+  return { front: [5 + SHOULDER_INSET, 23 - SHOULDER_INSET], side: 14, w: 4, hand: A ? [29, 31] : bodyG === "m" ? [30, 32] : [29, 30] };
+}
+
+/* ─── Le buste de profil, commun à la marche et aux poses ─────────────────
+   ⚠️ 2026-10-24 (« le dos est toujours trop massif dans la vue de profil, on dirait des bossus ») : il était aussi profond (13 px) que la
+   tête est large, quand il en fait 16 de face, et son dos tombait à l'aplomb de la nuque — une épaule ronde, une bosse. Il fait 11 px,
+   le dos bien en dedans de l'arrière du crâne ; la pente du trapèze est taillée par `SHOULDER_SIDE` ; chez elle, le nœud contre les
+   reins et la chevelure plaquée sur le dos (`hair`, profil). `sway` : l'ourlet de la robe suit le pas d'un pixel (la feuille des poses ;
+   en marche, c'est `w2skirt` qui l'anime). */
+function torsoSide(d, gender, plain, sway = 0) {
+  if (gender === "m") {
+    d.rect(11, 20, 11, 10, "C"); d.rect(11, 20, 11, 1, "D"); d.rect(11, 21, 2, 8, "D"); d.rect(20, 21, 2, 8, "c");
+    if (plain) { d.rect(11, 29, 11, 1, "c"); d.rect(11, 30, 11, 2, "c"); return; }
+    d.pat(18, 20, ["DDSS", ".cDS", "..cc"]); d.set(20, 24, "U"); d.set(20, 27, "U");
+    d.pat(11, 28, ["D.c..cD..c"]); d.rect(11, 29, 11, 1, "c");
+    d.rect(11, 30, 11, 2, "V"); d.pat(19, 30, ["YY", "Yb"]);
+    return;
+  }
+  d.rect(11, 20, 11, 8, "C"); d.rect(11, 20, 11, 1, "D"); d.rect(11, 21, 2, 5, "D"); d.rect(19, 21, 2, 5, "c");
+  d.rect(19, 20, 3, 1, "s"); d.pat(19, 21, ["UUU", ".U."]);
+  d.rect(11, 26, 11, 2, "c"); d.pat(9, 25, ["KK", "kK", "KK", ".k", ".k"]);
+  d.rect(11, 28, 11, 4, "C"); d.rect(10, 32, 13, 4, "C"); d.rect(8, 36, 16, 4, "C");
+  for (const x of [13, 16, 19]) { d.rect(x, 29, 1, 4, "c"); d.rect(x + (x > 16 ? 1 : x < 16 ? -1 : 0), 33, 1, 3, "c"); d.rect(x + (x > 16 ? 2 : x < 16 ? -2 : 0) + sway, 36, 2, 4, "c"); d.rect(x - 1, 30, 1, 3, "D"); }
+  d.rect(8, 36, 1, 4, "D"); d.rect(22, 32, 1, 4, "c"); d.rect(23, 36, 1, 4, "c");
+  d.rect(8 + sway, 40, 16, 1, "U"); d.pat(8 + sway, 41, ["U.UU.UU.UU.UU.UU"]);
 }
 
 /* ─── De profil (tourné vers la droite) ───────────────────────────────────
@@ -401,45 +469,323 @@ function bodySide(d, gender, st, A, plain, mid, ARM = { drop: SHOULDER_DROP, lon
     // (dx > 0), pas toujours la plus proche, qui attaque du talon.
     const dn = st === 0 ? 1 : sw, df = st === 0 ? -1 : -sw;
     leg(df, "O", false, df > 0); leg(dn, "P", true, dn > 0);
-    d.rect(9, 20, 13, 10, "C"); d.rect(9, 20, 13, 1, "D"); d.rect(9, 21, 2, 8, "D"); d.rect(20, 21, 2, 8, "c");
-    if (plain) { d.rect(9, 29, 13, 1, "c"); d.rect(10, 30, 12, 2, "c"); }
-    else {
-      d.pat(18, 20, ["DDSS", ".cDS", "..cc"]); d.set(20, 24, "U"); d.set(20, 27, "U");
-      d.pat(10, 28, ["D..c..cD..c"]); d.rect(9, 29, 13, 1, "c");
-      d.rect(10, 30, 12, 2, "V"); d.pat(19, 30, ["YY", "Yb"]);
-    }
+    torsoSide(d, "m", plain);
   } else {
     { const dn = st === 0 ? 1 : sw, df = st === 0 ? -1 : -sw; footSide(df, "b", df > 0); footSide(dn, "B", dn > 0); }
     d.rect(16 - sw, 42, 2, 1, "s"); d.rect(17 + sw, 42, 2, 1, "S");
-    d.rect(9, 20, 13, 8, "C"); d.rect(9, 20, 13, 1, "D"); d.rect(9, 21, 2, 5, "D"); d.rect(19, 21, 2, 5, "c");
-    d.rect(19, 20, 3, 1, "s"); d.pat(19, 21, ["UUU", ".U."]);
-    d.rect(9, 26, 13, 2, "c"); d.pat(7, 25, ["KK", "kK", "KK", ".k", ".k"]);
-    d.rect(9, 28, 13, 4, "C"); d.rect(8, 32, 15, 4, "C"); d.rect(7, 36, 17, 4, "C");
-    const sway = st;   // l'ourlet suit le pas d'un pixel
-    for (const x of [11, 15, 19]) { d.rect(x, 29, 1, 4, "c"); d.rect(x + (x > 15 ? 1 : x < 15 ? -1 : 0), 33, 1, 3, "c"); d.rect(x + (x > 15 ? 2 : x < 15 ? -2 : 0) + sway, 36, 2, 4, "c"); d.rect(x - 1, 30, 1, 3, "D"); }
-    d.rect(7, 36, 1, 4, "D"); d.rect(22, 32, 1, 4, "c"); d.rect(23, 36, 1, 4, "c");
-    d.rect(7 + sway, 40, 17, 1, "U"); d.pat(7 + sway, 41, ["U.UU.UU.UU.UU.UU."]);
+    torsoSide(d, "f", plain, st);   // l'ourlet suit le pas d'un pixel
   }
   if (mid) mid(d);   // un costume (gilet, tablier, manteau…) : sur le flanc, sous le bras
-  // Le bras, devant le flanc, à contretemps des jambes — plus bas et plus long (`SHOULDER_DROP`, `ARM_LONG`) : un tiroir décalé.
-  const ax = 14 - st * 2, L2 = ARM.long;
+  if (ARM.none) return;   // la feuille des poses sans bras (`persoHdArmRig`) : le flanc nu, sans l'ombre du bras
+  /* Le bras, devant le flanc, à contretemps des jambes, décalé de 2 px en bloc : seule la feuille des POSES passe ici, et ses poses le
+     découpent ; la marche a son bras articulé (`bodySide2`). */
+  const L2 = ARM.long, sh = -st * 2, ax = 14 + sh, T = buf();
+  bodySideArmStraight(mk(T), gender, A, L2);
   d = d.shift(ARM.drop);
+  for (let y = 0; y < PERSO_HD_H; y++) for (let x = 0; x < PERSO_HD_W; x++) if (T[y][x] !== ".") d.set(x + sh, y, T[y][x]);
+  // La robe juste derrière le bras nu prend l'ombre ; puis l'ombre du bras sur le flanc, devant lui.
+  if (!A && gender !== "m") for (let y = 24; y <= 29 + L2; y++) if ("CD".includes(d.get(ax - 1, y))) d.set(ax - 1, y, "c");
+  for (let y = 22; y <= 29 + L2; y++) if (A && A.shadow ? d.get(ax + 4, y) !== "." : "CD".includes(d.get(ax + 4, y))) d.set(ax + 4, y, A && A.shadow ? A.shadow[1] : "F");
+}
+
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ LA MARCHE À HUIT IMAGES (2026-10-24)
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume, en jouant : « le mouvement de bras doit être plus naturel, l'articulation… pousse au max le réalisme de la démarche —
+   fluide, fun et réaliste, mais toujours bien stylisé sur les formes ». Jugée sur cinq maquettes (https://claude.ai/artifact/L4mrNwQSKMBGVnNyVK9tEA).
+   La feuille de MARCHE (`pose` faux) a NEUF images par vue (`PERSO_HD_WALK_FRAMES`) : 0 debout — ce qui montre un personnage immobile
+   (portraits, miroirs, cabine d'essayage) lit l'image 0 et n'a rien vu changer —, 1 à 8 la foulée, à la cadence de pas d'avant
+   (`drawCharacter`, FermeGame.js : `1 + ⌊(animT mod 4) × 2⌋`) : contact, amorti, passage, poussée, puis l'autre pied. La feuille des
+   POSES garde ses quatre images (ses poses la découpent). Chaque membre est peint DROIT sur une grille à part, puis recopié os par os
+   (`w2bone`) : la hanche et l'épaule restent au corps, le genou se place par cinématique inverse (le pied d'appui reste au sol quand le
+   bassin descend), le coude plie. Ce que les maquettes ont appris — chaque ligne a été une maquette refusée :
+   - LA TÊTE suit le corps de haut en bas et reste en bas une image de plus après l'amorti : du poids. Collée au buste : « plus figée
+     que l'actuelle » ; plus libre (elle avançait de profil, ballottait de côté avec une image de retard, descendait d'un pixel de plus
+     que le corps) : « on dirait un pigeon ». Jamais au-dessus du col : le cou ne s'étire pas, la tête s'enfonce.
+   - LE POIDS passe d'un pied sur l'autre (face, dos) : bassin, buste et tête glissent ENSEMBLE d'un pixel vers la jambe d'appui.
+   - LES BRAS sont un pendule court (±12° à l'épaule, deux images au bout du geste), le coude presque constant, le second bras à 70 % :
+     ±19° et un avant-bras qui dépassait au retour faisaient « mou », la symétrie parfaite « systématique ». De face et de dos, un bras
+     ne fait que RACCOURCIR en balançant (`armsFront2`), détendu ; de dos, l'avant-bras qui part en avant passe derrière la hanche.
+   - LA JUPE vit (`w2skirt`), le PANTALON d'une tenue est celui des jambes (`W2_TROUSER_Y`), les PIEDS de face ne montrent jamais leur
+     semelle (`w2shoeFront`), le PROFIL est mince (`torsoSide`). */
+export const PERSO_HD_WALK_FRAMES = 9;
+/* LES MAINS JOINTES (2026-10-24 ; « quand on reste immobile quelques secondes, joueurs et habitants ») : une petite feuille à part
+   (`paint(…, "clasp")`, `PERSO_HD_CLASP_FRAMES` images par vue : 0 les mains jointes, 1 l'image de passage, avant-bras à mi-course) que
+   `drawCharacter` (FermeGame.js) prend après quelques secondes d'immobilité, les mains libres. Rien ne circule : chaque machine date
+   elle-même l'arrêt. */
+export const PERSO_HD_CLASP_FRAMES = 2;
+// par demi-foulée (contact, amorti, passage, poussée) ; la seconde est la même, de l'autre côté
+const W2_BOB = [0, 1, 0, -1], W2_HEAD_DY = [0, 1, 1, -1], W2_SWAY = [0, -1, -1, 0];
+const W2_TROUSER_Y = 34;   // la rangée où la grille d'une tenue passe de la veste au pantalon (le costume : 17 du 16 × 24)
+// profil : [pied (x par rapport à la hanche), levée, forme] pour la jambe qui mène à la première image ; l'autre est en retard de 4
+const W2_SIDE_LEG = [[5, 0, "heel"], [3, 0, "flat"], [0, 0, "flat"], [-3, 0, "toe"], [-5, 1, "toe"], [-3, 4, "air"], [0, 5, "air"], [4, 2, "air"]];
+// [épaule, coude] en degrés (+ : vers l'avant) pour le bras du côté de la jambe qui mène — au bout de son recul au contact ; le second à 70 %
+const W2_ARM = [[-12, 9], [-12, 9], [-5, 10], [5, 12], [12, 14], [12, 14], [5, 12], [-5, 10]], W2_ARM_K = [1, 0.7];
+const w2armAt = (f, k) => { const [ts, te] = W2_ARM[(f + (k ? 4 : 0)) % 8], q = W2_ARM_K[k ? 1 : 0]; return [ts * q, 9 + (te - 9) * q]; };
+// face / dos : [allongement (+ : plus bas), levée, forme, rentrée du pied]
+const W2_FRONT_LEG = [[1, 0, "heel", 0], [0, 0, "flat", 0], [0, 0, "flat", 0], [0, 1, "toe", 0], [0, 1, "toe", 0], [0, 3, "air", 0], [0, 4, "air", 1], [0, 1, "heel", 0]];
+const W2_BACK_LEG = [[-1, 0, "flat", 0], [0, 0, "flat", 0], [0, 0, "flat", 0], [0, 1, "sole", 0], [1, 0, "sole", 0], [0, 3, "sole", 0], [0, 4, "sole", 1], [0, 2, "flat", 0]];
+const RAD = Math.PI / 180;
+// le bras du fond, de profil : un cran plus sombre
+const W2_DARK = { D: "C", C: "c", c: "F", U: "D", S: "s", T: "S", P: "O", Q: "P", p: "O", B: "b", b: "V", N: "B" };
+
+function w2put(d, x, y, c, o) {
+  if (o.behind && d.get(x, y) !== ".") return;
+  d.set(x, y, o.map && o.map[c] ? o.map[c] : c);
+  if (o.track) { const r = o.track[y] || (o.track[y] = [x, x]); if (x < r[0]) r[0] = x; if (x > r[1]) r[1] = x; }
+}
+/* Un os : les rangées source [r0, r1) de la bande `src` (le membre peint droit, son axe à la colonne `ax`), posées de J0 à J1.
+   Plutôt vertical : rangée par rangée, chacune décalée le long de l'os. Plutôt couché : colonne par colonne, la largeur de la bande
+   EN TRAVERS de l'os (sa colonne claire, à gauche, passe en haut : la lumière reste en haut à gauche). */
+function w2bone(d, src, r0, r1, ax, J0, J1, o = {}) {
+  if (r1 <= r0) return;
+  const dx = J1[0] - J0[0], dy = J1[1] - J0[1];
+  if (Math.abs(dy) >= Math.abs(dx) * 0.75) {
+    const y0 = Math.round(J0[1]), n = Math.max(1, Math.abs(Math.round(J1[1]) - y0)), sg = dy >= 0 ? 1 : -1;
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n, r = r0 + Math.min(r1 - r0 - 1, Math.floor(t * (r1 - r0)));
+      const off = Math.round(J0[0] + dx * t - ax);
+      for (let x = 0; x < PERSO_HD_W; x++) { const c = src[r][x]; if (c !== ".") w2put(d, x + off, y0 + sg * k, c, o); }
+    }
+    return;
+  }
+  let xa = PERSO_HD_W, xb = -1;
+  for (let r = r0; r < r1; r++) for (let x = 0; x < PERSO_HD_W; x++) if (src[r][x] !== ".") { if (x < xa) xa = x; if (x > xb) xb = x; }
+  if (xb < 0) return;
+  const x0 = Math.round(J0[0]), n = Math.max(1, Math.abs(Math.round(J1[0]) - x0)), sg = dx >= 0 ? 1 : -1, mid = (xa + xb) / 2;
+  for (let k = 0; k < n; k++) {
+    const t = (k + 0.5) / n, r = r0 + Math.min(r1 - r0 - 1, Math.floor(t * (r1 - r0))), yc = J0[1] + dy * t;
+    for (let x = xa; x <= xb; x++) { const c = src[r][x]; if (c !== ".") w2put(d, x0 + sg * k, Math.round(yc + x - mid), c, o); }
+  }
+}
+// la bande du bras peinte droite (rangées source, avant `drop`) : [haut, épaule, coude, main, fin]
+function w2armRig(gender, A, LONG) {
+  if (A) return [21, 22, 26, 29 + LONG, 31 + LONG];
+  if (gender === "m") return [21, 22, 28, 30 + LONG, 32 + LONG];
+  return [20, 22, 27, 29 + LONG, 30 + LONG];
+}
+/* Un bras articulé : épaule `S`, puis le haut du bras, l'avant-bras et la main, chacun vers son point. `proj(v, L)` rend le
+   déplacement à l'écran d'un segment de longueur L dans la direction v (l'angle, ou un point imposé). Les rangées au-dessus de
+   l'épaule (la coiffe de la manche) ne bougent pas. `hideFore` : l'avant-bras et la main passent DERRIÈRE le corps. */
+function w2arm(d, T, rig, ax, drop, E, W, H, o, hideFore) {
+  const [top, piv, elb, hnd, end] = rig;
+  const S = [ax, piv + drop];
+  for (let r = top; r < piv; r++) for (let x = 0; x < PERSO_HD_W; x++) if (T[r][x] !== ".") w2put(d, x, r + drop, T[r][x], o);
+  w2bone(d, T, piv, elb, ax, S, E, o);
+  if (hideFore === "none") return;   // de dos, mains jointes : l'avant-bras et la main sont devant le corps, invisibles
+  const of = hideFore ? { ...o, behind: true } : o;
+  w2bone(d, T, elb, hnd, ax, E, W, of);
+  w2bone(d, T, hnd, end + 1, ax, W, H, of);
+}
+const w2pt = (P, L, a, kx = 1, ky = 1) => [P[0] + L * Math.sin(a) * kx, P[1] + L * Math.cos(a) * ky];
+
+/* ─── De profil ─────────────────────────────────────────────────────────── */
+function w2shoeSide(d, x0, y0, c, shape) {
+  if (shape === "heel") { d.rect(x0, y0, 6, 3, c); d.rect(x0 + 6, y0 - 1, 2, 3, c); d.rect(x0, y0 + 3, 6, 1, "V"); d.set(x0 + 7, y0 + 2, "V"); return; }
+  if (shape === "toe") { d.rect(x0 + 1, y0 + 1, 6, 2, c); d.rect(x0, y0, 3, 2, c); d.rect(x0 + 2, y0 + 3, 5, 1, "V"); return; }
+  if (shape === "air") { d.rect(x0, y0, 6, 3, c); d.rect(x0 + 6, y0 + 1, 1, 2, c); d.rect(x0 + 1, y0 + 3, 5, 1, "V"); return; }
+  d.rect(x0, y0, 7, 3, c); d.rect(x0, y0 + 3, 7, 1, "V"); if (c === "B") d.pat(x0 + 4, y0, ["NN"]);
+}
+function bodySide2(b, gender, f, A, plain, mid, ARM, clasp, wearSkirt = false, still = false) {
+  const stand = f >= 8, p = f % 4, bob = stand ? 0 : W2_BOB[p];
+  const low = mk(b), up = mk(b, bob);
+  const legOf = (k) => (stand ? (k ? [-1, 0, "flat"] : [1, 0, "flat"]) : W2_SIDE_LEG[(f + (k ? 4 : 0)) % 8]);
+  const armOf = (k) => (stand || still ? [0, 4] : w2armAt(f, k));   // `still` : Léo porte ses cartons
+  const LONG = ARM.long, rig = w2armRig(gender, A, LONG), ax = 15.5;
+  // les bras peints droits, sur une grille à part
+  const T = buf();
+  bodySideArmStraight(mk(T), gender, A, LONG);
+  const placeArm = (k) => {
+    const [ts, te] = clasp ? [0, 4] : armOf(k), a1 = ts * RAD, a2 = (ts + te) * RAD;
+    const S = [ax, rig[1] + ARM.drop], E = w2pt(S, rig[2] - rig[1], a1), W = w2pt(E, rig[3] - rig[2], a2), H = w2pt(W, rig[4] - rig[3] + 1, a2);
+    if (!clasp) return [E, W, H];
+    // mains jointes (« LES MAINS JOINTES ») : le haut du bras tombe, l'avant-bras à l'horizontale, les mains devant le ventre ; `clasp` < 1,
+    // l'image de passage — chaque point à mi-chemin entre le bras qui pend et le bras replié
+    const Ec = w2pt(S, rig[2] - rig[1], 6 * RAD), Wc = [Ec[0] + 5, Ec[1] - 1], Hc = [Wc[0] + 2, Wc[1]];
+    const mix = (P, Q) => [P[0] + (Q[0] - P[0]) * clasp, P[1] + (Q[1] - P[1]) * clasp];
+    return [mix(E, Ec), mix(W, Wc), mix(H, Hc)];
+  };
+  const farArm = (o) => { const [E, W, H] = placeArm(1); w2arm(up, T, rig, ax, ARM.drop, E, W, H, { map: W2_DARK, ...o }, false); };
+  // les jambes d'homme : le genou par cinématique inverse (deux os de 5), la hanche portée par le bassin ; `acc` : sous une jupe, dessous
+  const legsM = (acc) => {
+    for (const k of [1, 0]) {
+      const [fx, lift, shape] = legOf(k), c = k ? "O" : "P", crease = !k && !plain;
+      const L = buf(), t = mk(L), x = 13;
+      t.rect(x, 32, 6, 10, c); t.rect(x, 40, 6, 1, crease ? "Q" : "p"); if (plain) t.rect(x, 40, 6, 1, c); if (crease) t.rect(x + 4, 33, 1, 7, "Q");
+      const H = [15.5, 32 + bob], An = [15.5 + fx, 42 - lift], v = [An[0] - H[0], An[1] - H[1]], dd = Math.hypot(v[0], v[1]);
+      const h = dd < 10 ? Math.sqrt(25 - (dd * dd) / 4) : 0, K = [H[0] + v[0] / 2 + (v[1] / dd) * h, H[1] + v[1] / 2 - (v[0] / dd) * h];
+      w2bone(acc, L, 32, 37, 15.5, H, K, {}); w2bone(acc, L, 37, 42, 15.5, K, An, {});
+      w2shoeSide(acc, Math.round(An[0] - 2.5), Math.round(An[1]), k ? "b" : "B", shape);
+    }
+  };
+  const skirted = gender !== "m" || wearSkirt;
+  if (!skirted) { farArm({}); legsM(low); }   // le bras du fond derrière tout, puis les jambes
+  torsoSide(up, gender, plain);
+  if (mid) mid(up);   // la pente du trapèze y est taillée (`shoulders`, `SHOULDER_SIDE`)
+  if (skirted) {
+    // la jupe vit (`w2skirt`), puis ce qui passe dessous : le bras du fond, les jambes ou les pieds
+    w2skirt(b, 29 + bob, w2skirtParams(f, 2));
+    farArm({ behind: true });
+    const lb = mk(b, 0, true);
+    if (gender === "m") legsM(lb);
+    else for (const k of [1, 0]) {
+      const [fx, lift, shape] = legOf(k), x0 = Math.round(15.5 + fx - 2.5), y0 = 42 - lift;
+      w2shoeSide(lb, x0, y0, k ? "b" : "B", shape);
+      lb.rect(x0 + 2, y0 - 1, 2, 1, k ? "s" : "S");   // la cheville sous l'ourlet
+    }
+  }
+  // 3. le bras proche, articulé, puis son ombre sur le flanc (à droite de lui, rangée par rangée)
+  const track = [];
+  { const [E, W, H] = placeArm(0); w2arm(up, T, rig, ax, ARM.drop, E, W, H, { track }, false); }
+  if (clasp >= 1) { const [, W] = placeArm(0); up.pat(Math.round(W[0]) + 1, Math.round(W[1]) - 1, gender === "m" ? ["SSs", "SSs", "ss."] : ["SSs", "ss."]); }
+  for (let y = 0; y < PERSO_HD_H; y++) { const r = track[y]; if (!r) continue; const x = r[1] + 1; if (A && A.shadow ? b[y][x] !== "." && y > 22 + bob : "CD".includes(b[y][x]) && y > 22 + bob) b[y][x] = A && A.shadow ? A.shadow[1] : "F"; }
+  return { bob, st: stand ? 0 : (p <= 1 ? (f < 4 ? 1 : -1) : 0) };
+}
+// le bras de profil, droit (la bande que `w2arm` recopie) — le dessin de `bodySide`, à la colonne 14
+function bodySideArmStraight(t, gender, A, L2) {
+  const ax = 14;
   if (A) {
     const [L, C0, S0] = A.sl, [H0, H1] = A.hand || ["S", "s"];
-    d.rect(ax, 21, 4, 8 + L2, C0); d.rect(ax, 21, 4, 1, L); d.rect(ax, 22, 1, 7 + L2, L); d.rect(ax + 3, 22, 1, 7 + L2, S0); d.rect(ax, 28 + L2, 4, 1, A.cuff || S0);
-    d.pat(ax, 29 + L2, [H0 + H0 + H1, H0 + H0 + H1, "." + H1 + "."]);
-    d.set(ax + 3, 21, ".");
+    t.rect(ax, 21, 4, 8 + L2, C0); t.rect(ax, 21, 4, 1, L); t.rect(ax, 22, 1, 7 + L2, L); t.rect(ax + 3, 22, 1, 7 + L2, S0); t.rect(ax, 28 + L2, 4, 1, A.cuff || S0);
+    t.pat(ax, 29 + L2, [H0 + H0 + H1, H0 + H0 + H1, "." + H1 + "."]); t.set(ax + 3, 21, ".");
   } else if (gender === "m") {
-    d.rect(ax, 21, 4, 5, "C"); d.rect(ax, 21, 4, 1, "D"); d.rect(ax, 22, 1, 4, "D"); d.rect(ax + 3, 22, 1, 4, "c");
-    d.rect(ax, 26, 4, 1, "U"); d.rect(ax, 27, 4, 1, "D"); d.rect(ax, 28, 4, 2 + L2, "S"); d.rect(ax + 3, 28, 1, 2 + L2, "s");
-    d.pat(ax, 30 + L2, ["SSs", "SSs", ".s."]);
-    d.set(ax + 3, 21, ".");
+    t.rect(ax, 21, 4, 5, "C"); t.rect(ax, 21, 4, 1, "D"); t.rect(ax, 22, 1, 4, "D"); t.rect(ax + 3, 22, 1, 4, "c");
+    t.rect(ax, 26, 4, 1, "U"); t.rect(ax, 27, 4, 1, "D"); t.rect(ax, 28, 4, 2 + L2, "S"); t.rect(ax + 3, 28, 1, 2 + L2, "s");
+    t.pat(ax, 30 + L2, ["SSs", "SSs", ".s."]); t.set(ax + 3, 21, ".");
   } else {
-    d.pat(ax - 1, 20, [".DDD.", "DDCCc", "DCcCc", ".cccF"]);
-    d.rect(ax, 24, 3, 5 + L2, "S"); d.rect(ax + 2, 24, 1, 5 + L2, "s"); d.pat(ax, 29 + L2, ["SSs", ".s."]);
-    for (let y = 24; y <= 29 + L2; y++) if ("CD".includes(d.get(ax - 1, y))) d.set(ax - 1, y, "c");
+    t.pat(ax - 1, 20, [".DDD.", "DDCCc", "DCcCc", ".cccF"]);
+    t.rect(ax, 24, 3, 5 + L2, "S"); t.rect(ax + 2, 24, 1, 5 + L2, "s"); t.pat(ax, 29 + L2, ["SSs", ".s."]);
   }
-  for (let y = 22; y <= 29 + L2; y++) if (A && A.shadow ? d.get(ax + 4, y) !== "." : "CD".includes(d.get(ax + 4, y))) d.set(ax + 4, y, A && A.shadow ? A.shadow[1] : "F");
+}
+
+
+/* LA JUPE VIVANTE (2026-10-24, « la robe est trop rigide, on dirait un gnocchi… pas assez ample dans le mouvement »). La robe (de base,
+   de la Maison Garfield, le tailleur, celle d'une habitante) se peint DROITE, puis chaque rangée sous la taille se recopie : t va de 0
+   (taille) à 1 (ourlet) ; la rangée s'élargit de (eL, eR)·t et glisse de dx·t ; les deux rangées d'ourlet montent ou descendent de chaque
+   côté (hL, hR) — quand un côté descend, le tissu suit. Les pieds et le bras du fond se posent APRÈS, dessous (cases vides). */
+function w2skirtParams(f, dir) {
+  if (f >= 8) return null;
+  const p = f % 4, leadL = f < 4;
+  // de profil : la jupe s'ouvre quand les jambes s'écartent (une image après le contact), traîne d'un pixel derrière la marche, et le
+  // genou qui avance soulève l'avant de l'ourlet
+  if (dir === 2) { const fl = [1, 2, 1, 0][p]; return { eL: fl, eR: fl, dx: -1, hL: 0, hR: p === 3 || p === 0 ? -1 : 0 }; }
+  // de face, de dos : l'ourlet balance avec deux images de retard sur le bassin (±2 px, l'inertie du tissu) ; du côté de la jambe qui
+  // mène, il s'évase et descend (de face : elle vient vers nous) ou remonte (de dos : le genou le soulève)
+  const HEM = [2, 0, 0, -2, -2, 0, 0, 2], fl = p <= 1 ? 1 : 0, h = p <= 1 ? (dir === 0 ? 1 : -1) : 0;
+  return { eL: leadL ? fl : 0, eR: leadL ? 0 : fl, dx: HEM[f], hL: leadL ? h : 0, hR: leadL ? 0 : h };
+}
+function w2skirt(b, y0, P) {
+  if (!P) return;
+  const T = b.map((r) => r.slice());
+  let y1 = -1;
+  for (let y = PERSO_HD_H - 1; y >= y0 && y1 < 0; y--) if (T[y].some((c) => c !== ".")) y1 = y;
+  if (y1 < y0 + 3) return;
+  for (let y = y0; y < PERSO_HD_H; y++) b[y].fill(".");
+  for (let y = y0; y <= y1; y++) {
+    const t = Math.pow((y - y0 + 1) / (y1 - y0 + 1), 1.2);
+    let xa = -1, xb = -1;
+    for (let x = 0; x < PERSO_HD_W; x++) if (T[y][x] !== ".") { if (xa < 0) xa = x; xb = x; }
+    if (xa < 0) continue;
+    const na = Math.round(xa - P.eL * t + P.dx * t), nb = Math.round(xb + P.eR * t + P.dx * t);
+    const hem = y >= y1 - 1, last = y === y1 - 2;
+    for (let X = Math.max(0, na); X <= Math.min(PERSO_HD_W - 1, nb); X++) {
+      const sx = nb === na ? xa : Math.round(xa + ((X - na) * (xb - xa)) / (nb - na)), c = T[y][sx];
+      if (c === ".") continue;
+      const h = X < 16 ? P.hL : P.hR, Y = y + (hem ? h : 0);
+      if (Y >= 0 && Y < PERSO_HD_H) b[Y][X] = c;
+      if (last && h > 0) b[y + 1][X] = c;   // l'ourlet descend : le tissu suit
+    }
+  }
+}
+
+/* ─── De face et de dos ─────────────────────────────────────────────────── */
+/* ⚠️ Les pieds de face et de dos (« vérifier l'orientation des pieds de face et de dos »). Au premier jet, le pied qui avance montrait
+   sa SEMELLE de face (la pointe levée) : à l'écran, une semelle sous la chaussure se lit comme un pied vu de dos, tourné à l'envers.
+   De face, jamais de semelle : le pied qui avance a la pointe un peu plus haute (une rangée de plus, son reflet), celui qui pousse est
+   raccourci et dans l'ombre. De dos, la semelle ne se voit que sur le talon qui se lève. */
+function w2shoeFront(d, x0, G, w, shape, back, sh, fem) {
+  const tall = !back && shape === "heel" ? 1 : 0, short = shape === "toe" || shape === "air";
+  const sole = back && (shape === "sole" || shape === "toe" || shape === "air");
+  const top = G - (short ? 2 : 3) - tall;
+  if (fem) {
+    if (sole) { d.rect(x0, top + 1, w, 1, "B"); d.rect(x0, top + 2, w, 1, "V"); d.rect(x0 + 1, G, w - 2, 1, "V"); }
+    else { d.rect(x0, top + 1, w, G - top - 1, short && !back ? "b" : "B"); d.rect(x0, G, w, 1, "V"); if (!back && !short) { d.rect(x0 + 1, top + 1, 3, 1, "b"); d.set(x0 + 1, top + 2, "N"); } }
+    d.rect(x0 + 1, top, 3, 1, back ? "s" : "S");   // la cheville
+    return;
+  }
+  if (sole) { d.rect(x0, top, w, 1, "B"); d.rect(x0, top + 1, w, 1, "b"); d.rect(x0, top + 2, w, 1, "V"); d.rect(x0 + 1, G, w - 2, 1, "V"); return; }
+  d.rect(x0, top, w, G - top, short && !back ? "b" : "B"); d.rect(x0, G, w, 1, "V");
+  if (!short) { if (!back) d.pat(x0 + 1, top, ["NN"]); if (sh) d.rect(x0 + w - 2, top, 2, G - top, "b"); }
+}
+function legsFront2(b, gender, f, back, plain, sdx = 0, under = false) {
+  const stand = f >= 8, p = f % 4, bob = stand ? 0 : W2_BOB[p], low = mk(b, 0, under);
+  const TAB = back ? W2_BACK_LEG : W2_FRONT_LEG;
+  // l'image 0 : la jambe GAUCHE à l'écran mène
+  const legOf = (k) => (stand ? [0, 0, "flat", 0] : TAB[(f + (k ? 4 : 0)) % 8]);
+  if (gender === "m") {
+    const T = buf();
+    legsFront(mk(T), gender, 0, back, plain);
+    for (const k of [0, 1]) {
+      const [ext, lift, shape, inw] = legOf(k), x0 = k ? 16 : 10, G = 45 + ext - lift;
+      const shoeTop = G - (shape === "toe" || shape === "air" ? 2 : 3) - (!back && shape === "heel" ? 1 : 0), n = shoeTop - (32 + bob);
+      const L = T.map((r) => r.map((c, x) => (x >= x0 && x < x0 + 6 ? c : ".")));
+      for (let y = 42; y < PERSO_HD_H; y++) L[y] = Array(PERSO_HD_W).fill(".");
+      // le genou qui monte vers nous raccourcit la CUISSE ; le tibia garde ses rangées (le revers du jean reste)
+      const thigh = Math.max(1, n - 5), cx = x0 + 3, dxF = (k ? -1 : 1) * inw;
+      // la hanche suit le transfert de poids (`sdx`), le pied reste où il est posé
+      w2bone(low, L, 32, 37, cx, [cx + sdx, 32 + bob], [cx + sdx * 0.5, 32 + bob + thigh], {});
+      w2bone(low, L, 37, 42, cx, [cx + sdx * 0.5, 32 + bob + thigh], [cx + dxF, shoeTop], {});
+      w2shoeFront(low, x0 + dxF, G, 6, shape, back, k === 1, false);
+    }
+  } else {
+    for (const k of [0, 1]) {
+      const [ext, lift, shape, inw] = legOf(k), x0 = (k ? 17 : 10) + (k ? -1 : 1) * inw, G = 45 + ext - lift;
+      w2shoeFront(low, x0, G, 5, shape, back, false, true);
+    }
+  }
+  return { bob, st: stand ? 0 : (p <= 1 ? (f < 4 ? 1 : -1) : 0) };
+}
+function armsFront2(d, gender, f, dir, A, LONG, drop, clasp, still = false) {
+  const back = dir === 1, stand = f >= 8;
+  const T = buf();
+  armsFront(mk(T).shift(0), gender, 0, dir, A, LONG, true);
+  const rig = w2armRig(gender, A, LONG);
+  for (const k of [0, 1]) {
+    // l'image 0 : la jambe gauche mène, donc le bras GAUCHE recule (k = 0)
+    const L = T.map((r) => r.map((c, x) => ((k ? x >= 22 : x <= 9) ? c : ".")));
+    const inDir = k ? -1 : 1, ax = k ? 23.5 : 7.5, S = [ax, rig[1] + drop];
+    const Lu = rig[2] - rig[1], Lf = rig[3] - rig[2], Lh = rig[4] - rig[3] + 1;
+    const [ts, te] = clasp || stand || still ? [0, 6] : w2armAt(f, k), a1 = ts * RAD, a2 = (ts + te) * RAD;   // `still` : Léo et ses cartons
+    /* ⚠️ Cinquième passe (« la marche de face manque de naturel à cause des bras : on dirait qu'ils sont tendus vers le bas »). Le
+       bras qui avançait descendait à l'écran (« il vient vers nous ») : sur un balancier si court, ce décalage l'emportait sur le
+       raccourci, et le bras finissait PLUS LONG qu'au repos — tiré vers le bas. Et au repos, deux colonnes droites collées au buste.
+       Ici un bras ne fait que RACCOURCIR en balançant (de face comme de dos), et il est détendu : le coude s'écarte d'un pixel du
+       buste, l'avant-bras revient vers la cuisse ; en avançant, il plie et la main rentre devant la cuisse ; en reculant, elle s'écarte. */
+    const seg = (P, Ln, a, lat) => [P[0] + inDir * lat, P[1] + Ln * Math.cos(a)];
+    const latU = -0.9 + Math.max(0, Math.sin(a1)) * 0.4;
+    const latF = 1 + Math.max(0, Math.sin(a2)) * 1.6 - Math.max(0, -Math.sin(a2)) * 1;
+    const E = seg(S, Lu, a1, latU), W = seg(E, Lf, a2, latF), H = seg(W, Lh, a2, latF * Lh / Lf);
+    if (clasp) {
+      // mains jointes (« LES MAINS JOINTES ») : coudes un peu ouverts, avant-bras vers le milieu, mains réunies devant le ventre ; de dos,
+      // les avant-bras sont devant le corps, cachés. `clasp` < 1 : l'image de passage, à mi-chemin du bras qui pend.
+      const Ec = [S[0] - inDir * 1, S[1] + Lu], Wc = [16 - inDir * 2.5, Ec[1] + 1], Hc = [16 - inDir * 1, Wc[1]];
+      const mix = (P, Q) => [P[0] + (Q[0] - P[0]) * clasp, P[1] + (Q[1] - P[1]) * clasp];
+      const Em = mix(E, Ec);
+      w2arm(d, L, rig, ax, drop, Em, mix(W, Wc), mix(H, Hc), {}, back ? (clasp >= 1 ? "none" : true) : false);
+      // de dos, le coude plié : un bout d'avant-bras qui tourne vers l'avant, dans l'ombre
+      if (back && clasp >= 1) for (let i = 0; i < 2; i++) { const x = Math.round(Em[0]) + inDir * (i - 1), y = Math.round(Em[1]) + i; if (d.get(x, y) === ".") d.set(x, y, "s"); if (d.get(x + inDir, y) === ".") d.set(x + inDir, y, "s"); }
+      continue;
+    }
+    // de dos, l'avant-bras qui part en avant passe derrière la hanche : le bras paraît court
+    w2arm(d, L, rig, ax, drop, E, W, H, {}, back && ts + te > 14);
+  }
+  if (clasp >= 1 && !back) {
+    const y = Math.round(rig[2] + drop + 1);
+    d.pat(13, y - 1, gender === "m" ? [".SSSs.", "SSSSss", "SSSsss", ".ssss."] : [".SSs.", "SSSss", ".sss."]);
+  }
+  // l'ombre des bras sur le torse
+  if (!back) { d.rect(9 + SHOULDER_INSET, 24, 1, 4, A && A.shadow ? A.shadow[0] : "c"); d.rect(22 - SHOULDER_INSET, 24, 1, 4, A && A.shadow ? A.shadow[1] : "F"); }
 }
 
 /* ─── LES COSTUMES DES PNJ (2026-10-23, lot A) ─────────────────────────────
@@ -665,8 +1011,8 @@ function rowsGrid(rows) {
   return g;
 }
 // Pose une grille 32 × 48 : `dx` décale les rangées à partir de `swayY` (le pas), `only` filtre les cellules, `map` les traduit.
-function blitHDGrid(d, G, { dx = 0, swayY = 99, minY = 0, map = null, only = null } = {}) {
-  for (let y = minY; y < G.length; y++) for (let x = 0; x < G[y].length; x++) {
+function blitHDGrid(d, G, { dx = 0, swayY = 99, minY = 0, maxY = 99, map = null, only = null } = {}) {
+  for (let y = minY; y < Math.min(G.length, maxY); y++) for (let x = 0; x < G[y].length; x++) {
     const c = G[y][x];
     if (!c) continue;
     const v = map ? map(c) : c;
@@ -840,9 +1186,51 @@ function foldsHD(G, folds) {
     }
   }
 }
+/* ⚠️ LA CAPELINE, DESSINÉE EN 32 × 48 (2026-10-24, Guillaume en jeu : « le chapeau de paille est mou »). Agrandi du 16 × 24, son bord
+   descendait en pente de la calotte jusqu'à deux pointes qui retombaient (rangée 5 du 16 × 24) : un abat-jour qui fond, une paille
+   qui ne tient pas. Ici une calotte droite aux coins arrondis, tressée en bandes, le ruban noué ; un grand bord PLAT vu d'en haut
+   comme tout le monde du jeu — une ellipse dont on voit la moitié du fond de part et d'autre de la calotte —, son avant pris par la
+   lumière et son épaisseur dessous. Le bord avant s'arrête à la rangée 9 : les yeux commencent à la 10 (`faceFront`).
+   Lettres de `wardrobePal` : la paille h l m d o (du clair au sombre), le ruban r R (sa teinte suit « Couleurs »). */
+const CAPE_BRIM = [[4, 6, 25], [5, 2, 29], [6, 0, 31], [7, 0, 31]];
+function capelineHD(dir) {
+  const G = Array.from({ length: PERSO_HD_H }, () => Array(PERSO_HD_W).fill(null));
+  const put = (x, y, c) => { if (x >= 0 && x < PERSO_HD_W) G[y][x] = c; };
+  const DARKER = { h: "l", l: "m", m: "d", d: "o", o: "o" };
+  // le bord : clair à gauche, ombre à droite ; la tresse en rayons (un brin plus sombre tous les 4 px, qui tourne autour de la calotte)
+  for (const [y, x0, x1] of CAPE_BRIM) for (let x = x0; x <= x1; x++) {
+    const t = (x - x0) / (x1 - x0);
+    let c = t < 0.2 ? "h" : t < 0.68 ? "l" : t < 0.88 ? "m" : "d";
+    if (y >= 5 && (x + (x < 16 ? -y : y)) % 4 === 0) c = DARKER[c];
+    put(x, y, c);
+  }
+  for (let x = 2; x <= 29; x++) put(x, 8, x < 8 ? "h" : x < 21 ? "l" : x < 26 ? "m" : "d");   // l'avant du bord, dans la lumière
+  for (let x = 5; x <= 26; x++) put(x, 9, x < 22 ? "d" : "o");                              // son épaisseur, dessous
+  put(0, 7, "d"); put(31, 7, "o"); put(31, 6, "d");                                         // les bouts du bord, en ombre
+  for (const [x, y] of [[23, 4], [24, 4], [25, 4], [23, 5], [24, 5]]) put(x, y, "d");       // l'ombre de la calotte sur le bord du fond
+  // la calotte : plus étroite que la tête (le bord la porte), les coins du haut arrondis, une bande de tresse sur deux plus sombre ;
+  // son flanc droit dans l'ombre la détache du bord du fond, de la même paille
+  const crownC = (x) => (x === 9 ? "l" : x <= 12 ? "h" : x <= 18 ? "l" : x <= 20 ? "m" : x === 21 ? "d" : "o");
+  for (let y = 0; y <= 6; y++) for (let x = 9; x <= 22; x++) {
+    if ((y === 0 && (x < 11 || x > 20)) || (y === 1 && (x === 9 || x === 22))) continue;
+    let c = crownC(x);
+    if (y === 2 || y === 4) c = DARKER[c];
+    put(x, y, c);
+  }
+  // ce qui dépasserait au-dessus du bord du fond (les cheveux autour de la calotte, le nœud de la fermière) : effacé (« . », `paintWear`)
+  for (let y = 0; y <= 4; y++) for (let x = 0; x < PERSO_HD_W; x++) if (!G[y][x]) G[y][x] = ".";
+  // le ruban, noué : de face sur la droite (la gauche du porteur), de dos à gauche, de profil derrière la tête avec ses deux pans
+  for (let x = 9; x <= 22; x++) { put(x, 5, x >= 20 ? "R" : "r"); put(x, 6, x >= 19 ? "R" : "r"); }
+  if (dir === 0) { put(17, 5, "R"); put(18, 5, "R"); put(17, 6, "R"); put(18, 6, "r"); }
+  else if (dir === 1) { put(12, 5, "R"); put(13, 5, "R"); put(12, 6, "r"); put(13, 6, "R"); }
+  else { put(9, 5, "R"); put(10, 5, "R"); put(9, 6, "R"); put(8, 7, "r"); put(8, 8, "R"); put(9, 7, "R"); put(7, 9, "r"); put(7, 10, "R"); }
+  return G;
+}
+const WEAR_HD = { capeline: capelineHD };
 function wearHD(slot, id, dir, gender) {
   const k = slot + id + dir + gender;
   if (WEAR_CACHE.has(k)) return WEAR_CACHE.get(k);
+  if (WEAR_HD[id]) { const H = WEAR_HD[id](dir); WEAR_CACHE.set(k, H); return H; }
   const folds = [];
   const G = scale2x(wardrobeLayer(slot, id, dir, gender, 0, 0, folds), !SOFT.has(id));
   foldsHD(G, folds);
@@ -853,11 +1241,11 @@ function wearHD(slot, id, dir, gender) {
 }
 // à partir de quelle rangée (du 16 × 24) l'article suit le pas, face / dos / profil, et dans quel sens de profil
 const WEAR_SWAY = { gown: [19, 19, null], cape: [18, 18, 15], silk: [12, null, 12], feather: [12, null, 12], knit: [15, null, 15] };
-function paintWear(d, slot, id, dir, gender, st, base) {
+function paintWear(d, slot, id, dir, gender, st, base, maxY = 99) {
   const pal = wardrobePal(slot, id, base, "#000000", "#000000");
   const sw = WEAR_SWAY[id], y0 = sw && sw[dir];
   const dx = id === "cape" && dir === 2 ? -Math.abs(st) : dir === 2 ? -st : st;
-  const map = (c) => (c === "s" ? "S" : c === "S" ? "s" : pal[c] || null);
+  const map = (c) => (c === "." ? "." : c === "s" ? "S" : c === "S" ? "s" : pal[c] || null);   // « . » : une case à effacer (`capelineHD`)
   if (id === "poncho") {
     // les franges seules suivent le pas (les fils crème sous l'ourlet)
     const G = wearHD(slot, id, dir, gender), fringe = (x, y) => y >= 34 && G[y][x] === "W";
@@ -865,7 +1253,7 @@ function paintWear(d, slot, id, dir, gender, st, base) {
     blitHDGrid(d, G.map((r, y) => r.map((c, x) => (fringe(x, y) ? c : null))), { map, dx: st, swayY: 0 });
     return;
   }
-  blitHDGrid(d, wearHD(slot, id, dir, gender), { map, dx, swayY: y0 != null ? y0 * 2 : 99 });
+  blitHDGrid(d, wearHD(slot, id, dir, gender), { map, dx, swayY: y0 != null ? y0 * 2 : 99, maxY });
 }
 // La manche d'une tenue qui couvre le bras (robe, tailleur) ou le bras nu (tutu) : la `A` de `armsFront` / `bodySide`.
 function wearArms(id, base) {
@@ -894,13 +1282,23 @@ function tutuLegs(d, dir, st, base) {
 }
 
 /* ─── L'assemblage et le rendu ────────────────────────────────────────── */
+// `pose` : false (la marche), true (la feuille des poses), "bare" (la feuille des poses SANS BRAS — `persoHdArmRig`).
 function paint(gender, dir, frame, expr, cos, pose = false) {
   // Léo porte ses cartons à deux mains, de face et de profil : ses bras sont pliés, pas pendants — le bras long dépassait sous le
   // carton, une troisième main à côté des deux qui le tiennent.
-  const ARM = pose || (cos && cos.look === "leo" && dir !== 1) ? ARM_POSE : ARM_STAND;
+  // la feuille de MARCHE : l'image 0 debout, 1 à 8 la foulée ; « clasp », les MAINS JOINTES : 0 jointes, 1 l'image de passage
+  const W2 = pose === false || pose === "clasp", clasp = pose === "clasp" ? (frame === 1 ? 0.5 : 1) : 0;
+  const leoArms = !!(cos && cos.look === "leo" && dir !== 1);
+  const ARM = pose === "bare" ? ARM_BARE : pose === true || leoArms ? ARM_POSE : ARM_STAND;
   const b = buf();
-  const st = frame === 1 ? 1 : frame === 3 ? -1 : 0, bob = st !== 0 ? 1 : 0;
-  const low = mk(b), up = mk(b, bob);
+  const f8 = clasp ? 8 : W2 ? (frame === 0 ? 8 : frame - 1) : 0, p4 = f8 % 4;   // en interne, 0-7 la foulée et 8 debout
+  const st = W2 ? (f8 >= 8 ? 0 : p4 <= 1 ? (f8 < 4 ? 1 : -1) : 0) : frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  const bob = W2 ? (f8 >= 8 ? 0 : W2_BOB[p4]) : st !== 0 ? 1 : 0;
+  // le poids passe d'un pied sur l'autre (face, dos) ; la tête a son mouvement vertical (« LA MARCHE À HUIT IMAGES »)
+  const walking = W2 && f8 < 8, side8 = f8 < 4 ? 1 : -1;
+  const sdx = walking && dir !== 2 ? W2_SWAY[p4] * side8 : 0, hdx = sdx;
+  const hdy = walking ? W2_HEAD_DY[p4] : bob;
+  const low = mk(b), up = mk(b, bob, false, sdx), hd = mk(b, hdy, false, hdx);
   // Lot B : la coupe du salon (« long » et « court » sont les gabarits d'origine, quel que soit le genre), la barbe, les vêtements.
   const cut = cos && cos.cut, hairG = cut === "long" ? "f" : cut === "short" ? "m" : gender;
   const catCut = cut && cut !== "long" && cut !== "short" ? cut : null;
@@ -914,59 +1312,74 @@ function paint(gender, dir, frame, expr, cos, pose = false) {
   const hairFront = (dd, dr) => { if (catCut) paintCut(dd, catCut, dr, st); else hair(dd, dr, hairG, "front"); };
   let brows = null;
   if (dir === 2) {
-    bodySide(low, bodyG, st, A, plain, (dd) => {
+    const midFn = (dd) => {
       if (cos) { if (cos.plaid) plaidOver(dd); costumeBody(dd, low, 2, gender, cos, st); }
       if (outfit === "tutu") tutuLegs(low, 2, st, tint);
-      if (outfit && !overArms) paintWear(up, "outfit", outfit, 2, gender, st, tint);
-      shoulders(low, true);   // la pente du trapèze, avant le bras
-    }, ARM);
-    if (!noFace && !catCut) hair(up.behind(), 2, hairG, "back");
+      if (outfit && !overArms) paintWear(up, "outfit", outfit, 2, gender, st, tint, W2 && bodyG === "m" && outfit !== "gown" ? W2_TROUSER_Y : 99);
+      shoulders(W2 ? up : low, true);   // la pente du trapèze, avant le bras
+    };
+    if (W2) bodySide2(b, bodyG, f8, A, plain, midFn, ARM, clasp, outfit === "gown", leoArms);
+    else bodySide(low, bodyG, st, A, plain, midFn, ARM);
+    if (!noFace && !catCut) hair(hd.behind(), 2, hairG, "back");
     if (overArms) paintWear(up, "outfit", outfit, 2, gender, st, tint);
-    head(up, 2);
+    head(hd, 2);
     let facePx = null;
     if (!noFace) {
       // les pixels que le visage a posés (pour les retracer dans le front dégagé, après les cheveux : `clearFrontSide`)
-      const before = Array.from({ length: 22 }, (_, y) => Array.from({ length: PERSO_HD_W }, (_, x) => up.get(x, y)));
-      brows = faceSide(up, expr, gender, style);
+      const before = Array.from({ length: 22 }, (_, y) => Array.from({ length: PERSO_HD_W }, (_, x) => hd.get(x, y)));
+      brows = faceSide(hd, expr, gender, style);
       facePx = [];
-      for (let y = 0; y < 22; y++) for (let x = 0; x < PERSO_HD_W; x++) { const c = up.get(x, y); if (c !== before[y][x]) facePx.push([x, y, c]); }
+      for (let y = 0; y < 22; y++) for (let x = 0; x < PERSO_HD_W; x++) { const c = hd.get(x, y); if (c !== before[y][x]) facePx.push([x, y, c]); }
     }
     if (wd.scarf) paintWear(up, "scarf", wd.scarf, 2, gender, st, tint);
-    if (!noFace) { hairFront(up, 2); clearFrontSide(up, facePx); }
+    if (!noFace) { hairFront(hd, 2); clearFrontSide(hd, facePx); }
   } else {
-    legsFront(low, bodyG, st, dir === 1, plain);
+    // une jupe se peint droite puis vit (`w2skirt`), les pieds passent dessous ; le pantalon d'une tenue suit les jambes (fin de `paint`)
+    const skirtW2 = W2 && (bodyG === "f" || outfit === "gown");
+    if (W2 && !skirtW2) legsFront2(b, bodyG, f8, dir === 1, plain, sdx); else if (!W2) legsFront(low, bodyG, st, dir === 1, plain);
     torsoFront(up, bodyG, dir, plain);
     if (cos) costumeBody(up, low, dir, gender, cos, st);
     if (outfit === "tutu") tutuLegs(low, dir, st, tint);
-    if (outfit && !overArms) paintWear(up, "outfit", outfit, dir, gender, st, tint);
+    if (outfit && !overArms) paintWear(up, "outfit", outfit, dir, gender, st, tint, W2 && !skirtW2 && bodyG === "m" ? W2_TROUSER_Y : 99);
+    if (skirtW2) { w2skirt(b, 29 + bob, w2skirtParams(f8, dir)); legsFront2(b, bodyG, f8, dir === 1, plain, sdx, true); }
     shoulders(up, false);
     // les cheveux longs passent DERRIÈRE le corps : peints après lui, dans les seules cases vides (le creux de l'épaule compris)
-    if (dir === 0 && !noFace && !catCut) hair(up.behind(), 0, hairG, "back");
-    armsFront(up.shift(ARM.drop), bodyG, st, dir, A, ARM.long);
+    if (dir === 0 && !noFace && !catCut) hair(hd.behind(), 0, hairG, "back");
+    if (W2) armsFront2(up, bodyG, f8, dir, A, ARM.long, ARM.drop, clasp, leoArms);
+    else if (!ARM.none) armsFront(up.shift(ARM.drop), bodyG, st, dir, A, ARM.long);
     if (overArms) paintWear(up, "outfit", outfit, dir, gender, st, tint);
     if (cos && cos.plaid) plaidOver(up);
-    head(up, dir);
-    if (dir === 0 && !noFace) brows = faceFront(up, expr, gender, style);
+    head(hd, dir);
+    if (dir === 0 && !noFace) brows = faceFront(hd, expr, gender, style);
     if (wd.scarf) paintWear(up, "scarf", wd.scarf, dir, gender, st, tint);
-    if (!noFace) hairFront(up, dir);
+    if (!noFace) hairFront(hd, dir);
   }
-  if (cos && cos.beard && dir !== 1) paintBeardHD(up, cos.beard, dir);
+  if (cos && cos.beard && dir !== 1) paintBeardHD(hd, cos.beard, dir);
   // Les sourcils avant ce qui coiffe la tête : un bord de chapeau les cache, comme il cache le front.
-  if (brows) brows(up);
-  if (cos) costumeHead(up, dir, gender, cos);
-  if (wd.hat) paintWear(up, "hat", wd.hat, dir, gender, st, tint);
+  if (brows) brows(hd);
+  if (cos) costumeHead(hd, dir, gender, cos);
+  if (wd.hat) paintWear(hd, "hat", wd.hat, dir, gender, st, tint);
+  // Le pantalon d'une tenue (le costume) : la grille le peignait d'un bloc, figé, par-dessus les jambes articulées (« il faut animer les
+  // pantalons selon les mouvements des jambes »). Coupée aux hanches (`W2_TROUSER_Y`), elle laisse les jambes, qui prennent ses teintes.
+  if (W2 && bodyG === "m" && outfit && outfit !== "gown") {
+    const wp = wardrobePal("outfit", outfit, tint, "#000000", "#000000"), G = wearHD("outfit", outfit, dir, gender);
+    if (G.slice(W2_TROUSER_Y, 44).some((r) => r.some(Boolean))) {
+      const TR = { P: wp.m, Q: wp.l, p: wp.d, O: wp.o };
+      for (let y = 31; y < PERSO_HD_H; y++) for (let x = 0; x < PERSO_HD_W; x++) if (TR[b[y][x]]) b[y][x] = TR[b[y][x]];
+    }
+  }
   return b;
 }
 const CACHE = new Map();
 export function persoHdGrid(gender, dir, frame = 0, expr = "neutre", cos = null, pose = false) {
-  const k = gender + dir + frame + expr + (pose ? "|pose" : "") + (cos ? JSON.stringify(cos) : "");
+  const k = gender + dir + frame + expr + (pose ? "|" + pose : "") + (cos ? JSON.stringify(cos) : "");
   if (!CACHE.has(k)) CACHE.set(k, paint(gender, dir, frame, expr, cos, pose));
   return CACHE.get(k);
 }
 
 /* Dessine une vue à (ox, oy), un pixel d'art par pixel du contexte. `dir` : 0 face, 1 dos, 2 profil tourné vers la droite (la
    gauche par miroir à l'affichage, comme aujourd'hui) ; `frame` 0-3 comme `drawCharFrame` ; `pal` : persoHdPalette(...). */
-// `pose` : la feuille des poses (bras du gabarit, voir « LES ÉPAULES »).
+// `pose` : la feuille des poses (bras du gabarit, voir « LES ÉPAULES ») ; "bare" : la même, sans bras (`persoHdArmRig`).
 export function drawPersoHD(g, ox, oy, { gender = "f", dir = 0, frame = 0, expr = "neutre", pal, outline = true, costume = null, pose = false }) {
   const grid = persoHdGrid(gender, dir, frame, expr, costume, pose);
   const at = (x, y) => (x < 0 || y < 0 || x >= PERSO_HD_W || y >= PERSO_HD_H ? "." : grid[y][x]);

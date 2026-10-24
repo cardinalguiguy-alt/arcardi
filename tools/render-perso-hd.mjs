@@ -3,7 +3,7 @@
    ╚══════════════════════════════════════════════════════════════════════════
    Planches de `components/ferme/persoHdArt.js`, la fermière et le fermier par défaut (tenues 1 et 0) :
    - perso-hd-planche.png : l'ACTUEL (16 × 24 agrandi ×2, donc à la même taille à l'écran), face, dos, profil, puis la marche de
-     face (4 images) et de profil (4 images) ;
+     face (8 images) et de profil (8 images) ;
    - perso-hd-expressions.png : les expressions, de face puis de profil ;
    - perso-hd-bande.png : la bande brute (1 px d'art = 1 px), l'actuel ×2 puis les deux faces, pour la poser dans une capture.
    Usage : node tools/render-perso-hd.mjs */
@@ -38,23 +38,24 @@ function board(file, rows, cols, k) {
   writePNG(path.join(OUT, file), up.px, up.W, up.H);
   console.log("planche :", path.join("tools", "out", file), W + "×" + H, "×" + k);
 }
+// 2026-10-24 — la marche à huit images (persoHdArt, « LA MARCHE À HUIT IMAGES ») : l'image 0 debout, puis 1 à 8, de face et de profil
+const WALK = [1, 2, 3, 4, 5, 6, 7, 8];
 board("perso-hd-planche.png", ["f", "m"], [
   { old: true, dir: 0 }, { dir: 0 }, { dir: 1 }, { dir: 2 },
-  { dir: 0, frame: 0 }, { dir: 0, frame: 1 }, { dir: 0, frame: 2 }, { dir: 0, frame: 3 },
-  { dir: 2, frame: 0 }, { dir: 2, frame: 1 }, { dir: 2, frame: 2 }, { dir: 2, frame: 3 },
+  ...WALK.map((frame) => ({ dir: 0, frame })), ...WALK.map((frame) => ({ dir: 2, frame })),
 ], 4);
 board("perso-hd-expressions.png", ["f", "m"],
   HD.PERSO_HD_EXPRESSIONS.map((expr) => ({ dir: 0, expr })), 4);
 // La même, de profil (lignes 3 et 4 de la planche ci-dessus ne le montrent pas : une seconde planche).
 board("perso-hd-expressions-profil.png", ["f", "m"], HD.PERSO_HD_EXPRESSIONS.map((expr) => ({ dir: 2, expr })), 4);
-// La marche brute : 4 lignes (fermière face, profil ; fermier face, profil) × 4 images — à assembler en animation (9 images/s,
-// le rythme de `animT` dans FermeGame.js).
+// La marche brute : 6 lignes (fermière face, dos, profil ; fermier face, dos, profil) × 9 images (0 debout, 1 à 8 la foulée) — à
+// assembler en animation : 18 images/s, deux par pas de `animT` dans FermeGame.js.
 {
-  const B = makeCanvas(4 * 32, 4 * 48);
-  [["f", 0], ["f", 2], ["m", 0], ["m", 2]].forEach(([gender, dir], r) => {
-    for (let f = 0; f < 4; f++) HD.drawPersoHD(B.ctx, f * 32, r * 48, { gender, dir, frame: f, pal: PAL[gender] });
+  const NF = HD.PERSO_HD_WALK_FRAMES, B = makeCanvas(NF * 32, 6 * 48);
+  [["f", 0], ["f", 1], ["f", 2], ["m", 0], ["m", 1], ["m", 2]].forEach(([gender, dir], r) => {
+    for (let f = 0; f < NF; f++) HD.drawPersoHD(B.ctx, f * 32, r * 48, { gender, dir, frame: f, pal: PAL[gender] });
   });
-  writePNG(path.join(OUT, "perso-hd-marche-brute.png"), B.px, 4 * 32, 4 * 48);
+  writePNG(path.join(OUT, "perso-hd-marche-brute.png"), B.px, NF * 32, 6 * 48);
 }
 {
   const B = makeCanvas(3 * 32, 48);

@@ -169,6 +169,8 @@ function exprMemOf(id) {
   return m;
 }
 function exprEvent(id, kind) { if (id != null) EX.exprMark(exprMemOf(id), kind, performance.now()); }
+// 2026-10-24 — les MAINS JOINTES (`drawCharacter`) : après combien de temps immobile, les mains libres ; puis l'image de passage, sa durée
+const CLASP_AFTER_MS = 4000, CLASP_PASS_MS = 140;
 const HD_SCALED = new WeakMap();   // feuille 32 × 48 → Map("cran|miroir" → feuille cuite à la taille d'écran)
 function hdScaledSheet(hd, k, mirror) {
   let m = HD_SCALED.get(hd);
@@ -185,21 +187,23 @@ function hdScaledSheet(hd, k, mirror) {
   return out;
 }
 /* Pose l'image (`frame`, `row`) d'un joueur dans le rectangle MONDE (wx, wy, 16, 24) de la transformation courante — miroir compris
-   (le profil ouest arrive avec un `scale(-1, 1)` déjà posé). `old` : la feuille 16 × 24, pour le cran 1. */
-function drawCharHD(ctx, hd, old, frame, row, wx, wy) {
+   (le profil ouest arrive avec un `scale(-1, 1)` déjà posé). `old` : la feuille 16 × 24, pour le cran 1.
+   2026-10-24 — `fHD` : l'image dans la feuille FINE, qui a neuf images par vue (0 debout, 1 à 8 la foulée ; persoHdArt, « LA MARCHE À
+   HUIT IMAGES ») quand l'ancienne en a quatre ; le miroir compte les images de la feuille, plus « 3 − frame ». */
+function drawCharHD(ctx, hd, old, frame, row, wx, wy, fHD = frame) {
   const M = ctx.getTransform();
   const k = Math.hypot(M.a, M.b), kr = Math.round(k), whole = Math.abs(k - kr) < 1e-3 && Math.abs(M.b) < 1e-6 && Math.abs(Math.abs(M.d) - k) < 1e-3;
   if (k < 1.75) { ctx.drawImage(old, frame * 16, row * 24, 16, 24, wx, wy, 16, 24); return; }
   if (!whole) {
     ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(hd, frame * 32, row * 48, 32, 48, wx, wy, 16, 24); ctx.restore(); return;
+    ctx.drawImage(hd, fHD * 32, row * 48, 32, 48, wx, wy, 16, 24); ctx.restore(); return;
   }
-  if (kr % 2 === 0) { ctx.drawImage(hd, frame * 32, row * 48, 32, 48, wx, wy, 16, 24); return; }
+  if (kr % 2 === 0) { ctx.drawImage(hd, fHD * 32, row * 48, 32, 48, wx, wy, 16, 24); return; }
   const mirror = M.a < 0, sc = hdScaledSheet(hd, kr, mirror), fw = 16 * kr, fh = 24 * kr;
   const sx = M.a * wx + M.c * wy + M.e, sy = M.b * wx + M.d * wy + M.f;
   const left = Math.round(mirror ? sx - fw : sx), top = Math.round(sy);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(sc, (mirror ? 3 - frame : frame) * fw, row * fh, fw, fh, left, top, fw, fh);
+  ctx.drawImage(sc, (mirror ? hd.width / 32 - 1 - fHD : fHD) * fw, row * fh, fw, fh, left, top, fw, fh);
   ctx.restore();
 }
 /* ╔══════════════════════════════════════════════════════════════════════════
@@ -217,7 +221,9 @@ function drawCharHD(ctx, hd, old, frame, row, wx, wy) {
    3. la toile est posée à l'écran par la règle des crans de `drawCharHD` (entier tel quel, impair cuit au pixel d'écran entier,
       cran 1 : la pose ANCIENNE, rejouée sur la toile du jeu avec la feuille 16 × 24).
    ⚠️ Les pixels à demi transparents (le creux sous les genoux d'une pose assise, à 30 %) ne portent pas de contour : seul un pixel
-   plein (alpha ≥ 200) en appelle un, et seul un pixel entièrement vide en reçoit un. */
+   plein (alpha ≥ 200) en appelle un, et seul un pixel entièrement vide en reçoit un.
+   ⚠️ Une exception depuis le 2026-10-24 : les riders du park redessinent le BRAS au pixel fin (`armHD`, montureArt.js) — recopié par
+   cases du gabarit, il ne tournait pas avec l'os ; la feuille nue leur porte le buste sans bras (`__bare`) et le gabarit (`__armRig`). */
 const POSE_BOX = { x: -24, y: -48, w: 64, h: 88 };   // la boîte monde de la toile, autour de (px, py) : sauts, bras levés, planche
 const POSE_HD = { cv: null, g: null, up: null, ug: null, dn: null, dg: null };
 function hdCtxProxy(g) {
@@ -32574,6 +32580,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       };
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
+      // 2026-10-24 — la feuille fine : la même horloge de pas, deux images par image de l'ancienne (persoHdArt, « LA MARCHE À HUIT IMAGES »)
+      const frameHD = p.moving ? 1 + Math.floor(((p.animT || 0) % 4) * 2) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
       // comme le fermier (même pose assise, même galop), seule la robe du
       // cheval change. On passe une monture COSMÉTIQUE via p.mount (ex.
@@ -32735,6 +32743,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          dessus ; peint d'un bloc après, il a disparu. Le détail est dans
          `fermeArt` (`drawBoatBack`/`drawBoatFront`), qui porte aussi la hauteur
          d'assise — deux descriptions du même banc de nage divergeraient (§8). */
+      /* 2026-10-24 — LES MAINS JOINTES (persoHdArt, « LES MAINS JOINTES » ; « quand on reste immobile quelques secondes, joueurs et
+         habitants »). L'arrêt se date sur CETTE machine, dans la mémoire du visage (`exprMemOf`) — rien ne circule, chacun voit déjà qui
+         bouge. Tout ce qui occupe le corps ou les mains remet le compte à zéro : marcher, tourner sur place, s'asseoir, monter, glisser,
+         creuser, pêcher, une torche, un coup d'outil (le mien), dormir. Au bout de `CLASP_AFTER_MS`, l'image de passage (avant-bras à
+         mi-course) pendant `CLASP_PASS_MS`, puis les mains jointes ; au premier pas, la marche reprend. Seulement en 32 × 48. */
+      let claspSheet = null, claspF = 0;
+      if (hdSheet) {
+        const cm = exprMemOf(p.id || p.name), nowC = performance.now();
+        const busy = p.moving || p.sit || p.ride || p.skate || p.slip || p.cast || p.haul || p.dig || p.sleeping || riding || inBoat
+          || (p.scale && p.scale !== 1) || (isSelf ? torchOnRef.current || rodArmedRef.current || actAnimRef.current > 0 : p.torch || p.fishing);
+        if (busy || cm.claspDir !== p.dir || cm.claspSince == null) cm.claspSince = nowC;
+        cm.claspDir = p.dir;
+        const still = nowC - cm.claspSince;
+        if (still >= CLASP_AFTER_MS) {
+          claspSheet = sprites.getCharHD(p.gender, p.outfit, p.look, false, expr, npcHd, "clasp");
+          claspF = still < CLASP_AFTER_MS + CLASP_PASS_MS ? 1 : 0;
+        }
+      }
       if (inBoat && isPilot && sprites.drawBoatBack) sprites.drawBoatBack(ctx, basePx + 8, py + 14, T, p.dir);
       ctx.save();
       if (invisibleNow) ctx.globalAlpha = 0.35;
@@ -32946,13 +32972,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sc = p.scale, w2 = 16 * sc, h2 = 24 * sc;
         const bx2 = px + (16 - w2) / 2, by2 = (py - 8 - lift) + (24 - h2);
         // 2026-10-23 — en 32 × 48, la feuille fine à l'échelle de l'enfant (une échelle fractionnaire : `drawCharHD` la lisse).
-        if (hdSheet) { ctx.translate(flip ? bx2 + w2 : bx2, by2); ctx.scale(flip ? -sc : sc, sc); drawCharHD(ctx, hdSheet, sheet, frame, row, 0, 0); }
+        if (hdSheet) { ctx.translate(flip ? bx2 + w2 : bx2, by2); ctx.scale(flip ? -sc : sc, sc); drawCharHD(ctx, hdSheet, sheet, frame, row, 0, 0, frameHD); }
         else if (flip) { ctx.translate(bx2 + w2, by2); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, w2, h2); }
         else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, bx2, by2, w2, h2);
       } else if (hdSheet) {
         // 2026-10-23 — un JOUEUR en 32 × 48 (voir `drawCharHD`, en tête de fichier) : debout et en marche seulement, pour l'instant.
-        if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); drawCharHD(ctx, hdSheet, sheet, frame, row, 0, 0); }
-        else drawCharHD(ctx, hdSheet, sheet, frame, row, px, py - 8 - lift);
+        // (les mains jointes, s'il est immobile depuis assez longtemps : `claspSheet`, plus haut)
+        const hdS = claspSheet || hdSheet, fH = claspSheet ? claspF : frameHD;
+        if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); drawCharHD(ctx, hdS, sheet, frame, row, 0, 0, fH); }
+        else drawCharHD(ctx, hdS, sheet, frame, row, px, py - 8 - lift, fH);
       } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();

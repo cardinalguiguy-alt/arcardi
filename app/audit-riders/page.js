@@ -1,7 +1,7 @@
 "use client";
 // ÉCHAFAUDAGE JETABLE — 2026-10-13. À SUPPRIMER avant livraison (avec app/audit-tmp, app/audit-duo, app/api/audit-cap).
 // La planche des poses des riders (`MA.drawRide`) sur un VRAI canevas : le faux canevas des bancs ignore `scale(-1, 1)`, donc les
-// profils gauches et tout ce qui se dessine en miroir. ?k=monture&g=m|f&z=4
+// profils gauches et tout ce qui se dessine en miroir. ?k=monture&g=m|f&z=4 (&hd=1 : en 32 × 48, comme au jeu au cran 2)
 import { useEffect, useRef } from "react";
 import * as A from "../../components/ferme/fermeArt";
 import * as MA from "../../components/ferme/montureArt";
@@ -53,6 +53,47 @@ export default function AuditRiders() {
     }
     const S = A.buildSprites();
     const sheet = S.getChar(gender, 0, false, false, false, false, false, false, null);
+    /* ?hd=1 (2026-10-24) : la même planche en 32 × 48, par le chemin du jeu (`drawPoseHD`, FermeGame.js, recopié ici) — la feuille
+       fine NUE, les rectangles source ×2 (`hdCtxProxy`), le contour posé sur la pose finie (`outlineHD`). */
+    if (q.get("hd")) {
+      const naked = S.getCharHD(gender, 0, q.get("look") || null, true, "neutre", null);
+      const proxy = (g) => new Proxy(g, { get(t, k) {
+        if (k === "drawImage") return (img, ...a) => { const K = img && img.__hdK; return K && a.length === 8 ? t.drawImage(img, a[0] * K, a[1] * K, a[2] * K, a[3] * K, a[4], a[5], a[6], a[7]) : t.drawImage(img, ...a); };
+        const v = t[k]; return typeof v === "function" ? v.bind(t) : v; }, set(t, k, v) { t[k] = v; return true; } });
+      const outline = (g, W, H) => {
+        const im = g.getImageData(0, 0, W, H), d = new Uint32Array(im.data.buffer), src = d.slice();
+        for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
+          if (src[i] >>> 24) continue;
+          let n = 0;
+          if (y < H - 1 && src[i + W] >>> 24 >= 200) n = src[i + W]; else if (x > 0 && src[i - 1] >>> 24 >= 200) n = src[i - 1];
+          else if (x < W - 1 && src[i + 1] >>> 24 >= 200) n = src[i + 1]; else if (y > 0 && src[i - W] >>> 24 >= 200) n = src[i - W]; else continue;
+          const r = n & 255, gg = (n >>> 8) & 255, bb = (n >>> 16) & 255;
+          d[i] = (0xff000000 | (Math.round(bb + (30 - bb) * 0.74) << 16) | (Math.round(gg + (14 - gg) * 0.74) << 8) | Math.round(r + (28 - r) * 0.74)) >>> 0;
+        }
+        g.putImageData(im, 0, 0);
+      };
+      const poses = POSES[kind], cols = HEADS.length, rows = poses.length;
+      const big = document.createElement("canvas"); big.width = cols * CW * 2; big.height = rows * CH * 2;
+      const bg = big.getContext("2d"); bg.imageSmoothingEnabled = false;
+      const work = document.createElement("canvas"); work.width = CW * 2; work.height = CH * 2;
+      const wg = work.getContext("2d", { willReadFrequently: true });
+      poses.forEach(([, o], ri) => HEADS.forEach((th, ci) => {
+        const cx0 = ci * CW, cy0 = ri * CH, px = cx0 + 14, py = cy0 + 22, air = o.air || 0;
+        bg.fillStyle = (ri + ci) % 2 ? "rgb(170,166,160)" : "rgb(160,156,150)"; bg.fillRect(cx0 * 2, cy0 * 2, CW * 2, CH * 2);
+        bg.fillStyle = "rgba(20,20,30,0.28)"; bg.fillRect((px + 3) * 2, (py + 14) * 2, 20, 4);
+        const p = { x: px / T, y: py / T, gender, ride: { kind, th, air, mode: o.mode || (air ? "air" : "ground"), pose: o.pose || "stand", ph: o.ph || 0, color: 0, bend: o.bend || 0, lean: o.lean || 0,
+          back: !!o.back, flip: o.flip || 0, yaw: o.yaw || 0, bar: o.bar || 0, whip: o.whip || 0, grab: o.grab || 0, nohand: o.nohand || 0, xup: o.xup || 0, piro: !!o.piro, hand: o.hand || null } };
+        wg.setTransform(1, 0, 0, 1, 0, 0); wg.clearRect(0, 0, work.width, work.height);
+        wg.setTransform(2, 0, 0, 2, -2 * cx0, -2 * cy0); wg.imageSmoothingEnabled = false;
+        wg.save(); MA.drawRide(proxy(wg), naked, px, py - Math.round(air * T), p, gender === "f"); wg.restore();
+        wg.setTransform(1, 0, 0, 1, 0, 0); outline(wg, work.width, work.height);
+        bg.drawImage(work, cx0 * 2, cy0 * 2);
+      }));
+      const c = ref.current, zz = Math.max(1, Math.round(z / 2)); c.width = big.width * zz; c.height = big.height * zz;
+      const g = c.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(big, 0, 0, c.width, c.height);
+      window.__ridersReady = true;
+      return;
+    }
     window.__A = A; window.__MA = MA; window.__sheet = sheet; window.__S = S;
     const poses = POSES[kind], cols = HEADS.length, rows = poses.length;
     const small = document.createElement("canvas"); small.width = cols * CW; small.height = rows * CH;

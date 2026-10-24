@@ -22526,17 +22526,19 @@ house: house(),
      tenue de joueur (« carla », « ouvrier:3 »…) quand l'appelant n'est pas un PNJ.
      `naked` : la même feuille SANS contour, pour les poses — on l'assemble en morceaux, et le contour se pose sur la pose finie.
      `expr` : une expression de `PERSO_HD_EXPRESSIONS` (le dormeur : « sommeil ») ; une feuille par expression, en cache. */
-  S.getCharHD = (gender, outfit, look, naked, expr, npc) => {
+  // `variant` (2026-10-24) : "clasp", les MAINS JOINTES d'un personnage immobile (persoHdArt, « LES MAINS JOINTES ») — une petite feuille à part.
+  S.getCharHD = (gender, outfit, look, naked, expr, npc, variant) => {
     /* `npc` (2026-10-23, lot A) : { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker } — les drapeaux de `getChar` — ou `true`
        pour un habitant sans costume. Un PNJ prend le visage d'un PNJ (`persoHdArt`, `faceStyleOf`), jamais le sourire d'un joueur. */
     const fl = npc && typeof npc === "object" ? npc : {};
     const key = gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
-      + (npc ? ":pnj" + ["overalls", "cap", "beeSuit", "plaid", "cheeseHat", "sugarWorker"].map((k) => (fl[k] ? k[0] + k[1] : "")).join("") : "");
-    if (!(key in S.charsHD)) S.charsHD[key] = makeCharHD(gender, outfit, look, naked, expr, npc, fl);
+      + (npc ? ":pnj" + ["overalls", "cap", "beeSuit", "plaid", "cheeseHat", "sugarWorker"].map((k) => (fl[k] ? k[0] + k[1] : "")).join("") : "")
+      + (variant ? ":" + variant : "");
+    if (!(key in S.charsHD)) S.charsHD[key] = makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant);
     return S.charsHD[key];
   };
   // La fabrique de `getCharHD`, sans cache : la cabine d'essayage (`getCharFitting`) a le sien, borné.
-  function makeCharHD(gender, outfit, look, naked, expr, npc, fl) {
+  function makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant) {
     let sheet = null;
     const special = look === "carla" || look === "leo" || look === "froufrou" || look === "vandal" ? look : null, wk = workerLookOf(look);
     const rest = special || wk ? "" : typeof look === "string" ? look.replace(/~\d/, "").replace(/\^.*$/, "") : "";
@@ -22573,11 +22575,22 @@ house: house(),
       const base = { skin: tone ? tone.main : SKIN, hair: hl && hl.d ? C.HAIR_DYES[hl.d].col : HAIR_COLORS[outfit % HAIR_COLORS.length], top: tintCol || o.shirt, pants: o.pants };
       const cc = HD.persoHdCostume(cos, base);
       const pal = { ...HD.persoHdPalette(cc.args), ...cc.extra };
-      const [c, g] = cv(4 * HD.PERSO_HD_W, 3 * HD.PERSO_HD_H);
-      for (let dir = 0; dir < 3; dir++) for (let f = 0; f < 4; f++) HD.drawPersoHD(g, f * HD.PERSO_HD_W, dir * HD.PERSO_HD_H, { gender, dir, frame: f, pal, outline: !naked, pose: !!naked, expr: expr || "neutre", costume: cos });   // nue = la feuille des POSES (persoHdArt, « LES ÉPAULES »)
+      // 2026-10-24 — la feuille de MARCHE a neuf images par vue (0 debout, 1 à 8 la foulée : persoHdArt, « LA MARCHE À HUIT IMAGES ») ;
+      // la feuille NUE des poses garde ses quatre (ses poses la découpent avec les repères du 16 × 24).
+      const clasp = variant === "clasp" && !naked, NF = clasp ? HD.PERSO_HD_CLASP_FRAMES : naked ? 4 : HD.PERSO_HD_WALK_FRAMES;
+      const [c, g] = cv(NF * HD.PERSO_HD_W, 3 * HD.PERSO_HD_H);
+      for (let dir = 0; dir < 3; dir++) for (let f = 0; f < NF; f++) HD.drawPersoHD(g, f * HD.PERSO_HD_W, dir * HD.PERSO_HD_H, { gender, dir, frame: f, pal, outline: !naked, pose: clasp ? "clasp" : !!naked, expr: expr || "neutre", costume: cos });   // nue = la feuille des POSES (persoHdArt, « LES ÉPAULES »)
       // `__hdK` : « cette feuille est le gabarit 16 × 24 à ×2 ». Les poses (drawSeated, drawSkate…) la découpent avec les repères du
       // 16 × 24 ; c'est l'appelant (FermeGame.js, `hdCtxProxy`) qui multiplie leurs rectangles source par ce facteur.
       c.__hdK = 2;
+      /* 2026-10-24 — la feuille des poses porte aussi le buste SANS BRAS (image 0 de chaque rangée) et le gabarit du bras : ceux qui
+         redessinent le bras le long de son os (les riders, `drawRiderBody`) — voir `persoHdArmRig`, persoHdArt.js. */
+      if (naked) {
+        const [cb, gb] = cv(HD.PERSO_HD_W, 3 * HD.PERSO_HD_H);
+        for (let dir = 0; dir < 3; dir++) HD.drawPersoHD(gb, 0, dir * HD.PERSO_HD_H, { gender, dir, frame: 0, pal, outline: false, pose: "bare", expr: expr || "neutre", costume: cos });
+        cb.__hdK = 2;
+        c.__bare = cb; c.__armRig = HD.persoHdArmRig(gender, cos);
+      }
       sheet = c;
     }
     return sheet;

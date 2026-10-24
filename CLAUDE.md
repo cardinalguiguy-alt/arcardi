@@ -11,19 +11,19 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-23 — AUDIT « AAA » PUIS DEUX CHANTIERS DÉCIDÉS : CLORE LA LISTE D'ATTENTE, PASSER LES PERSONNAGES EN 32 × 48
+### 2026-10-24 — LES PERSONNAGES 32 × 48 EN JEU : SES RETOURS CORRIGÉS, LA MARCHE À HUIT IMAGES BRANCHÉE
 
-1. **Passe de clôture FAITE** : ses 61 verdicts sont dans `docs/A-JUGER.md` (en tête) ; ce qui est À CODER y est listé (zoom cran 3, cuisine,
-   rideaux Blender, feu, fondu d'étage, meubles « luxe », patinoire, ombre au saut, park, dettes) ; projets neufs : `docs/PROJETS.md` §7 à §9.
-2. **Le 32 × 48 est BRANCHÉ** derrière ⚙️ « Personnages fins » : joueurs (toutes poses, `drawPoseHD`), TOUS LES PNJ, vêtements Garfield,
-   coupes et barbes ; les VISAGES S'ANIMENT (`expressions.js`, aucun message neuf) ; ses ÉPAULES « variante C » (les poses gardent le bras du
-   gabarit, §4 « feuille de personnage ») — README ferme, journaux du 2026-10-23 nuit et du 2026-10-24.
-⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. Un nom se juge sur `__cap`, pas sur la
-capture du volet (réduite, elle brouille la police). ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**.
+1. **Le 32 × 48 est BRANCHÉ** derrière ⚙️ « Personnages fins » (joueurs, PNJ, poses, vêtements, coupes, visages animés, épaules C) ; ses
+   retours en jouant (riders, dos, capeline ; puis la marche à huit images, 9 images par vue, l'image 0 debout) : README ferme, journaux
+   du 2026-10-24.
+2. La passe de clôture est faite : ce qui est À CODER est en tête de `docs/A-JUGER.md` ; projets neufs : `docs/PROJETS.md` §7 à §9.
+⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. ⚠️ `app/audit-*`,
+`app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — LUI FAIRE REGARDER EN JEU LES VISAGES ET LES ÉPAULES, PUIS LA LISTE « À CODER » DE `docs/A-JUGER.md`
+### ⏭️ ACTION SUIVANTE — LUI FAIRE JOUER LA MARCHE À HUIT IMAGES ET LES MAINS JOINTES (elle, les habitants, à deux)
 
-Expressions jamais vues à l'écran (seulement leurs feuilles) ; épaules vues au cran 4. Quoi regarder : `docs/A-JUGER.md` (« À REGARDER »).
+Vues en jeu chez lui seulement (les mains jointes : après 4 s immobile) ; la danse attend (`docs/PROJETS.md` §10). Puis la liste
+« À CODER » de `docs/A-JUGER.md`.
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -73,7 +73,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Réseau, salons, sauvegardes | §3 ci-dessous ; `lib/gameSync.js`, `lib/realtimeQuota.js` ; `components/ferme/SECURITE.md` | (aucun banc réseau) `tools/fake-supabase.mjs` pour jouer à deux |
 | Textes, traduction | `components/ferme/fermeStrings.js` | `verify-strings` |
 | Noms au-dessus des personnages | `components/ferme/pixelFont.js` | `verify-noms` |
-| Personnages en 32 × 48, visages et expressions automatiques | `components/ferme/persoHdArt.js`, `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter` (FermeGame.js) ; README ferme (journaux du 2026-10-23) | `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd` |
+| Personnages en 32 × 48, visages et expressions automatiques, marche à huit images | `components/ferme/persoHdArt.js` (« LA MARCHE À HUIT IMAGES »), `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter`, `drawCharHD` (FermeGame.js) ; README ferme (journaux des 2026-10-23 et 24) | `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd` |
 | Dessin procédural d'un sprite | `components/ferme/DESSIN.md`, `fermeArt.js` | le `render-*` du sujet |
 | Autres jeux | `components/chess/`, `components/PetitsChevaux.js` + `ludoBot.js`, `public/candyluge/README.md` | `verify-echecs`, `verify-ludo`, `verify-ousthat` |
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |

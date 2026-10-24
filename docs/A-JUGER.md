@@ -56,6 +56,12 @@ elles découpent la manche aux repères du 16 × 24 — avec le bras long, la ma
 rentrés. Assis ou au patin, les bras sont donc un peu plus courts qu'à la marche (`tools/out/poses-hd.png`). Léo porte ses cartons bras
 pliés (de face et de profil). Pas vu en jeu : bateau, cheval, riders (le banc les couvre, sauf bateau et cheval).
 
+**À REGARDER EN JEU — LA MARCHE À HUIT IMAGES (2026-10-24, soir)** : branchée après cinq maquettes (https://claude.ai/artifact/L4mrNwQSKMBGVnNyVK9tEA),
+avec le balancement d'un pied sur l'autre (« sans » reste possible : `W2_SWAY` à zéro). Elle n'a été vue en jeu que chez lui ; elle, les
+habitants en ville, à deux : jamais. Les MAINS JOINTES (après 4 s immobile, joueurs et habitants : sa décision) : vues en jeu chez lui
+seulement — à regarder chez un habitant et chez l'autre joueur. Laissé tel quel sans son avis : le bras nu de la fermière de profil au repos
+(une fente claire dans la robe), les coupes longues du salon vues de dos.
+
 **À JOUER** : la séance À DEUX (visite, course, bonhomme, pigeons, scierie, navire, cratère) — Guillaume est seul pour l'instant, **le lui
 RAPPELER** quand un second joueur est là ; la séance iPad, plus tard (Xcode à mettre à jour).
 

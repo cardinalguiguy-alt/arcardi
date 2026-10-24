@@ -298,3 +298,13 @@ Ses notes sur la page d'arbitrage, pour la suite :
 - **Colère, tristesse, clin d'œil** : dessinés, aucun déclencheur — ils viendront avec les interactions entre personnages.
 - **Les cheveux de profil « font casque »** : « la position des cheveux peut changer un peu aussi, à revoir à l'avenir ». Le 2026-10-23, le
   front a seulement été dégagé au-dessus de l'œil (`FRONT_SIDE`, persoHdArt.js) ; la forme des coupes de profil n'a pas changé.
+
+## 10. La danse (idée du 2026-10-24, rien de codé)
+
+Sur la maquette 2 de la marche réaliste (https://claude.ai/artifact/L4mrNwQSKMBGVnNyVK9tEA, ligne « Maquette 2 », feuilles
+`img/maquette2-m.png` et `-f.png`), trop agitée pour une marche (« on dirait un pigeon ») : « de face, avec des extras mouvements de bras, ça
+fait une super danse, à garder pour en faire une danse ». Ses réglages, par demi-foulée de 4 images (contact, amorti, passage, poussée) :
+bassin `[0, 1, 0, −1]` px ; tête `[0, 2, 1, −1]` (elle s'enfonce d'un pixel de plus que le corps) ; balancement du buste `[0, −1, −1, 0]` px
+vers la jambe d'appui, la tête `[0, 0, −1, −1]` (une image de retard : elle ballotte) ; de profil, tête `[0, 1, 1, 0]` vers l'avant ; bras en
+pendule (épaule ±19°, coude 8 à 22°). À ajouter : des gestes de bras propres à la danse. Se joue sur place (les pieds marchent sans avancer).
+Une danse CHOISIE se diffuse comme une émote (§9, la roue d'émotes ; CLAUDE.md §3) : à cadrer avec lui avant de coder.

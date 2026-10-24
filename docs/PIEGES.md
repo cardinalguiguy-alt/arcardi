@@ -296,6 +296,13 @@ dépôt.
   laissaient la manche découpée sans main ; aucune erreur, et rien à voir debout. Parade : la feuille des POSES (la feuille nue) garde la
   hauteur et la longueur de bras du gabarit (`ARM_POSE`, persoHdArt.js), la marche a les siennes ; et toute retouche du gabarit passe par
   `render-poses-hd` (chaque pose, l'ancien à côté du fin) avant d'être livrée.
+  ⚠️ Corollaire (2026-10-24, les riders du park : « les bras doivent être correctement articulés / orientés sur le BMX, la trottinette »).
+  Une case du gabarit est un CARREAU de 2 × 2 de la feuille fine, qui ne tourne pas : un membre recopié case par case le long d'un os
+  qui change d'axe (le bras tendu vers le guidon) garde ses ombres et son revers dans le sens d'origine — un bras rayé. Et le bras fin,
+  rentré d'un pixel, chevauche la colonne que la découpe croit être le torse : une bande de bras restait collée au buste. Parade : un
+  membre qui change d'axe se redessine AU PIXEL FIN, sa largeur en travers de l'os (`armHD`, montureArt.js, avec `__armRig` de la feuille
+  nue), et le buste vient de la feuille SANS BRAS (`__bare`, fermeArt.js `makeCharHD`). Banc : `render-poses-hd` ; au navigateur,
+  `app/audit-riders?hd=1`.
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
@@ -517,6 +524,10 @@ dépôt.
   la hanche et l'épaule FIXES sur le corps, le membre copié rangée par rangée le long de l'os (hanche → genou → pied, épaule → main) ;
   la chaussure garde ses rangées, ce sont la cuisse et le tibia qui s'étirent. Et une proportion avant une dimension : sur des
   personnages trapus (tête de 10 px sur 24), un guidon à sa hauteur réelle arrive aux épaules — il se met à la taille DU PERSONNAGE.
+  ⚠️ Corollaire (2026-10-24, la marche à huit images) : un CALQUE peint d'un bloc par-dessus un membre articulé le fige. Le costume de la
+  Maison Garfield peignait son pantalon droit sur les jambes qui marchaient — elles ne dépassaient qu'au bord ; aucun banc ne le voit.
+  Parade : la grille d'une tenue est coupée aux hanches (`W2_TROUSER_Y`) et les jambes articulées prennent ses teintes ; une jupe se
+  peint droite puis se déforme avec les jambes (`w2skirt`), les pieds passent dessous.
 - ⚠️ **LE FAUX CANEVAS DES BANCS IGNORE `translate`, `scale` ET `rotate` : TOUT CE QUI SE DESSINE EN MIROIR Y DISPARAÎT** (2026-10-13).
   `lib-canvas.mjs` les accepte sans rien faire : une planche de poses tirée hors navigateur montre les profils gauches (dessinés sous
   `scale(-1, 1)`) VIDES, sans erreur — on croit à un défaut de dessin. Une planche de poses qui tourne se juge dans un vrai navigateur

@@ -338,12 +338,30 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
   const tx = Math.round(lean * 0.5), hx = Math.round(lean);
   /* ── UN BRAS : de l'épaule (le haut de la manche, 2 px de large) à la main. Chaque pas reprend la rangée de manche qui lui
      correspond, la main nue au bout ; un bras plutôt horizontal fléchit un rien au coude (vers le bas). */
+  /* ⚠️ 2026-10-24 — EN 32 × 48 (la feuille fine porte `__armRig`, persoHdArt.js `persoHdArmRig`). Guillaume : « les bras doivent
+     être correctement articulés / orientés sur le BMX, la trottinette… ». Le pas d'ici est un pixel du 16 × 24 : en 32 × 48, il
+     découpait le bras fin en carreaux de 2 × 2 qui ne tournaient pas avec l'os — un bras à l'horizontale (la main au guidon de
+     profil) gardait ses ombres VERTICALES et son revers en travers, un bras rayé. Ici, la bande du bras fin (4 px de large) se
+     pose rangée fine par rangée fine le long de l'os, sa largeur EN TRAVERS de l'os (de côté sur un bras qui descend, de haut en
+     bas sur un bras qui s'allonge : la lumière reste en haut à gauche) ; la manche et l'avant-bras s'étirent, la main garde ses
+     rangées au bout. Un pixel fin = ½ pixel monde : la toile des poses est à ×2 (`drawPoseHD`). */
+  const rig = sheet.__armRig || null, bare = sheet.__bare || null;
+  const armHD = (srcX, shX, shY, dx, dy, horiz, sag) => {
+    const x0 = side ? rig.side : srcX < 8 ? rig.front[0] : rig.front[1], top = 2 * ARM_TOP, [h0, h1] = rig.hand, hn = h1 - h0 + 1;
+    const N = Math.max(hn + 2, Math.ceil(2 * Math.max(Math.abs(dx), Math.abs(dy))) + 1), body = N - hn;
+    for (let k = 0; k < N; k++) {
+      const t = k / (N - 1), X = Math.round(2 * (shX + dx * t)), Y = Math.round(2 * (shY + dy * t + sag * Math.sin(Math.PI * t)));
+      const r = k < body ? top + Math.min(h0 - top - 1, Math.floor((k * (h0 - top)) / body)) : h0 + k - body;
+      for (let i = 0; i < rig.w; i++) ctx.drawImage(sheet, (x0 + i) / 2, sy + r / 2, 0.5, 0.5, (X + (horiz ? 0 : i)) / 2, (Y + (horiz ? i : 0)) / 2, 0.5, 0.5);
+    }
+  };
   const arm = (srcX, shX, shY, hdX, hdY) => {
     let dx = hdX - shX, dy = hdY - shY;
     const L0 = Math.hypot(dx, dy), LMAX = o.armMax || 8;   // 2026-10-15 : `armMax`, les bras tendus du handplant (au-delà de la tête)
     if (L0 > LMAX) { dx *= LMAX / L0; dy *= LMAX / L0; }
     const n = Math.max(2, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)))), horiz = Math.abs(dx) > Math.abs(dy);
     const sag = horiz ? Math.min(1, Math.hypot(dx, dy) * 0.12) : 0;
+    if (rig) return armHD(srcX, shX, shY, dx, dy, horiz, sag);
     for (let i = 0; i <= n; i++) {
       const t = i / n, X = Math.round(shX + dx * t), Y = Math.round(shY + dy * t + sag * Math.sin(Math.PI * t));
       const r = i === n ? HY : ARM_TOP + Math.min(HY - 1 - ARM_TOP, Math.floor(t * (HY - ARM_TOP)));
@@ -409,15 +427,23 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
   const TY = PS.TORSO_Y, armsOff = !side && ((o.hands && o.hands.length) || (o.arms && o.arms !== "down"));
   if (armsOff) {
     ctx.drawImage(sheet, 0, sy + TY, 16, ARM_TOP - TY, cx + tx, t0 + TY, 16, ARM_TOP - TY);
-    ctx.drawImage(sheet, 4, sy + ARM_TOP, 8, HY - ARM_TOP, cx + 4 + tx, t0 + ARM_TOP, 8, HY - ARM_TOP);
-    ctx.drawImage(sheet, 5, sy + HY, 6, 1, cx + 5 + tx, t0 + HY, 6, 1);
+    // en 32 × 48, le buste SANS BRAS (`bare`) : le bras fin, rentré d'un pixel, chevauche les colonnes x 4 et 11 que le 16 × 24
+    // gardait au buste — une bande de bras (revers, avant-bras) y restait collée pendant que le vrai bras partait au guidon
+    if (bare) ctx.drawImage(bare, 0, ARM_TOP + sy, 16, HY + 1 - ARM_TOP, cx + tx, t0 + ARM_TOP, 16, HY + 1 - ARM_TOP);
+    else {
+      ctx.drawImage(sheet, 4, sy + ARM_TOP, 8, HY - ARM_TOP, cx + 4 + tx, t0 + ARM_TOP, 8, HY - ARM_TOP);
+      ctx.drawImage(sheet, 5, sy + HY, 6, 1, cx + 5 + tx, t0 + HY, 6, 1);
+    }
     if (LY > HY + 1) ctx.drawImage(sheet, 0, sy + HY + 1, 16, LY - HY - 1, cx + tx, t0 + HY + 1, 16, LY - HY - 1);
   } else {
     // de profil, le bras lointain tient la poignée du fond : il passe DERRIÈRE le buste, seule sa main dépasse
     if (side && o.hands && o.hands.length > 1) armBack();
-    ctx.drawImage(sheet, 0, sy + TY, 16, LY - TY, cx + tx, t0 + TY, 16, LY - TY);
+    // de profil, le bras proche qui quitte le flanc (au guidon, en balancier) : en 32 × 48, le flanc nu (`bare`) — le bras fin s'y
+    // voyait en entier (manche, revers blanc, avant-bras) à côté de celui qui tient le guidon
+    const flank = side && bare && ((o.hands && o.hands.length) || o.swing);
+    ctx.drawImage(flank ? bare : sheet, 0, sy + TY, 16, LY - TY, cx + tx, t0 + TY, 16, LY - TY);
     // de profil, la main posée au guidon quitte le flanc : sa place reprend le tissu de la rangée (pas de trou dans le buste)
-    if (side && o.hands && o.hands.length) for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
+    if (side && o.hands && o.hands.length && !flank) for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
   }
   ctx.drawImage(sheet, 0, sy, 16, PS.HEAD_H, cx + hx, t0, 16, PS.HEAD_H);
   const shY = t0 + ARM_TOP;
@@ -425,7 +451,7 @@ function drawRiderBody(ctx, sheet, row, px, top, o) {
   /* 2026-10-13 (soir) — de profil, LE BRAS PROCHE QUI BALANCE (`swing` : de combien de pixels la main avance, + vers l'avant) : la
      foulée des rollers. Il part de l'épaule ; la main quitte le flanc, sa place reprend le tissu (comme la main posée au guidon). */
   if (side && o.swing) {
-    for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
+    if (!bare) for (const xx of [7, 8]) ctx.drawImage(sheet, 6, sy + HY, 1, 1, cx + xx + tx, t0 + HY, 1, 1);
     arm(7, cx + 7 + tx, shY, cx + 7 + tx + o.swing, t0 + HY);
   }
   if (armsOff) {

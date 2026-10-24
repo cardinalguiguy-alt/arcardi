@@ -218,6 +218,13 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   répartis en colonnes sur une rangée de 8 à 14 pixels font un CODE-BARRES ; un motif qui alterne pixel par pixel (côtes, tulle, plumes, maille)
   fait du POIVRE. Ce qui marche : un bord éclairé, la base, l'ombre, le dernier pixel au creux ; les plis comme des segments (creux + arête
   claire, un seul cran) ; les motifs par paires de pixels ou un tous les quatre. `garderobeArt.js`, `tools/render-garderobe.mjs`.
+- ⚠️⚠️ **UNE DÉMARCHE SE RÈGLE AU PIXEL PRÈS ENTRE LE FIGÉ ET LE PIGEON** (la marche à huit images, 2026-10-24 : cinq maquettes, chacune
+  refusée sur un mot). La tête collée au buste : « plus figée que l'actuelle » ; la tête qui avance de profil, ballotte de côté avec une
+  image de retard et descend plus que le corps : « on dirait un pigeon » — le bon réglage est entre les deux, la tête qui suit le corps
+  et reste en bas UNE image de plus après l'amorti. Un balancier de bras large au coude qui dépasse : « mou » ; deux bras en miroir :
+  « systématique » (le second à 70 %). De face, un bras qui balance ne fait que RACCOURCIR — le descendre parce qu'« il vient vers nous »
+  l'allonge, « tendu vers le bas » ; détendu, son coude s'écarte d'un pixel. Une jupe peinte d'un bloc : « un gnocchi ». Le profil : le
+  buste moins profond que la tête n'est large, sinon « bossu ». `persoHdArt.js` (« LA MARCHE À HUIT IMAGES »), `tools/render-perso-hd.mjs`.
 ---
 
 ## AUDIT 2026-09-12 — DEUX LEÇONS PAYÉES SUR LES ÉTOILES COMPAGNES
