@@ -308,3 +308,105 @@ bassin `[0, 1, 0, −1]` px ; tête `[0, 2, 1, −1]` (elle s'enfonce d'un pixel
 vers la jambe d'appui, la tête `[0, 0, −1, −1]` (une image de retard : elle ballotte) ; de profil, tête `[0, 1, 1, 0]` vers l'avant ; bras en
 pendule (épaule ±19°, coude 8 à 22°). À ajouter : des gestes de bras propres à la danse. Se joue sur place (les pieds marchent sans avancer).
 Une danse CHOISIE se diffuse comme une émote (§9, la roue d'émotes ; CLAUDE.md §3) : à cadrer avec lui avant de coder.
+
+## 11. Le boulodrome — la pétanque à Valley Town (décidé le 2026-10-25 ; lot 1 FAIT le 2026-10-28 ; lot 2, le terrain, FAIT le 2026-10-29 — on n'y joue pas encore)
+
+Retenu dans une liste d'idées : « la pétanque c'est super, le boulodrome avec une vraie mécanique de jeu et de points. Tour à tour : sans bug et
+sans latence, du coup. » Le jeu de soirée par excellence : on joue en parlant, au tour par tour, à deux ou trois, contre ou avec des habitants.
+Trente décisions posées sur une page à boutons (https://claude.ai/artifact/6eTgpNk4QnpNX1Q2H67d94) ; il n'y a rien changé et a donné **carte
+blanche le 2026-10-28** : toutes les recommandations font foi.
+
+**Décidé** — *le lieu* : derrière l'hôtel de ville (prairie x 84..108, y 37..50, entre l'avenue du nord, la rue x ≈ 81 et `TOWN_HALL` ; le puits
+reste au bord), deux pistes, des platanes par prompt Gemini (noyau §2). *La vue* : en ville, pas une scène à part (noyau §0.2) ; ×3 pendant la
+partie (un cran ENTIER) ; les boules à l'échelle du poing (3 px d'art ≈ 22 cm, au double de finesse ; le cochonnet la moitié). *La règle* : trois
+formats (tête-à-tête, doublette complétée par des habitants, à trois chacun pour soi), 13 points ou 7 au choix, le règlement gardé là où il
+change une décision. *Les gestes* : roulette, demi-portée, plombée, tir (le carreau) ; la DONNÉE puis une jauge à un temps ; accroupi pour
+pointer, debout pour tirer. *Le terrain* : posé à la main, fixe ; lourd après la pluie, fermé sous la neige ; une guirlande, ouvert la nuit. *Les
+habitants* : boulistes à heures fixes, un niveau selon leur caractère, on peut en défier un seul. *L'enjeu* : une prime plafonnée contre les
+habitants, rien entre joueurs ; l'ardoise, la gazette, un palmarès ; le concours plus tard. *Le folklore* : la mesure au mètre, Fanny dans sa
+boîte à volet, l'aimant pour ramasser, des sons synthétisés. *Le réseau* : ci-dessous.
+
+**Lot 1 FAIT (2026-10-28) : `components/ferme/petanque.js`, pur (n'importe rien), et `tools/verify-petanque.mjs` (80 contrôles, 1,3 s).** La
+piste (15 × 4 m, deux reliefs posés à la main dans `PISTES`, que le lot 2 dessinera depuis les mêmes nombres), le vol, l'atterrissage, le
+roulé sur le relief, les chocs au fer (3D) et à terre, le carreau ; la règle entière (le but, l'ordre de jeu, la boule et le but morts, le
+comptage, Fanny, les trois formats) ; l'arbitre (`verifier`) ; les aides (`arretPlat`, `donneePour`, `jauge`). Ce qu'il en disait au lot 1 (avant le couloir ci-dessous), mesuré contre
+un joueur simulé qui lâche à ±20 / 35 / 60 ms de la marque (habile, moyen, débutant) : sur le plat, la roulette est le geste sûr (28 / 35 /
+48 cm du but) ; sur la piste du platane, la plombée le devient (37 / 46 / 61 cm contre 63 / 63 / 69) ; au tir, 81 / 56 / 30 % au fer, un
+carreau sur six pour le moyen. **Rien à l'écran, aucun réseau, aucun habitant** ; rien n'importe ce fichier.
+
+**Ce qui s'écarte de la page, et pourquoi** :
+1. **La physique prend le rayon du DESSIN** (`BOULE_R` 11 cm, pas 3,75) : sinon deux boules qui se touchent à l'écran se recouvriraient.
+   Conséquence : si le lot 2 change la taille en la regardant, relancer `verify-petanque` §9 et retoucher `kL`/`kA`.
+2. **Le but sorti** : mène nulle si plusieurs camps ont encore des boules en main, mais un camp SEUL à en avoir marque ce qu'il lui reste (le
+   règlement) — sinon on sortirait le but pour annuler une mène perdue.
+3. **Le but se pose à 80 cm des côtés et 1,5 m du fond** (règlement : 50 cm et 1 m) : avec des boules trois fois trop grosses, il sortait au
+   premier contact. Il freine aussi cinq à six fois plus vite qu'une boule.
+4. **`lourd` (la pluie) est lu par l'hôte au lancer du but** et vaut pour la mène : aucun message de plus, mais il est dans l'état.
+5. **Les durées** (estimées : 8 s de visée par lancer, la simulation, 25 s par mène) : tête-à-tête en 13 **≈ 25 min** (la page disait 15 à 20),
+   en 7 ≈ 14 min ; doublette en 13 ≈ 40 min ; **à trois en 13 ≈ 46 min** (27 mènes : deux boules chacun) — **recommandé : 7 par défaut à trois**
+   (à lui confirmer au lot 3).
+
+**À voir en jouant** : en doublette, le but sort encore dans 29 % des mènes, parce que le joueur simulé tire une fois sur deux sans regarder si
+le but est derrière sa cible. **Les habitants (lot 4) devront lire leur ligne de tir.** Le tête-à-tête est à 10 %.
+
+**Réseau (§3), tel que le lot 3 l'écrira** (et l'en-tête de `petanque.js` le dit) : UNE `req` par lancer `{ coup, geste, donnee (mm), err (‰),
+lourd }`, l'hôte la passe à `verifier` puis `jouer`, et UN `apply` rediffuse l'entrée ET l'état qui en sort. Chaque client anime le lancer
+(`preparer`, `simPas`), puis adopte l'état de l'hôte, après avoir comparé son `empreinte` (un `console.warn` si elles diffèrent). Le lanceur
+n'attend pas. `coup` écarte la seconde de deux demandes parallèles. L'état (entiers en mm, JSON) va dans `shared` et survit à un changement d'hôte
+(banc §8 : une partie recopiée en JSON entre chaque lancer, ou rejouée depuis son seul journal, finit à l'identique). La visée ne voyage pas ;
+la posture passe dans le paquet de position qui part déjà.
+
+**Lot 2 — le terrain dans la ville : ses 17 verdicts du 2026-10-29** (https://claude.ai/artifact/3g7QNUgG7z7scwZdNMkXXz, base `verdicts/<id>`).
+Il a ajouté : **« je veux une qualité graphique bluffante »**. **Mesuré** (le vrai monde, `generateTownWorld`, et deux captures en jeu,
+`refs/lot-gemini/captures/cap-vt-13…`, `cap-vt-14…`) : la prairie est libre de x 83 à 121 et de y 36 à 48 ; le puits (86, 39), cinq massifs
+(91-93, 41-45), deux arbres (86 et 92, 37) ; **le toit de la mairie déborde au-dessus de la prairie jusqu'à y ≈ 46,5 pour x 87..98**.
+**Décidé** : deux pistes d'EST EN OUEST dans la moitié est (la hauteur de l'arc se lit vers le haut de l'écran, la longueur vers la droite) ;
+le puits, les massifs et les deux arbres de l'ouest restent (le jardin de l'entrée) ; au nord « la piste du platane » (relief `b`, les
+racines), au sud « la piste de la mairie » (relief `a`, ex-« du puits ») ; sol OCRE (sable stabilisé), relief DISCRET — sa note : « discret
+sauf quand il y a des lancers longs et forts par exemple ; pas systématique » ; madriers bas qu'on enjambe, une bande d'herbe entre les
+pistes ; **les arbres : une essence DÉJÀ DANS LE JEU** (ni platane par le code, ni Gemini — le prompt du platane reste dans
+`refs/lot-gemini/B-arbres.md` pour la famille B), plantés comme le plan A (quatre au nord, un au bout est, jamais au sud) ; bancs de
+planches au nord, entre les arbres, face aux pistes ; **pas de buvette pour l'instant** (l'ardoise du lot 5 cherchera une autre place) ;
+une guirlande en zigzag la nuit ; on marche librement sur les pistes — sa note : « pendant la partie, on aura une vue agrandie de la
+partie ; peut-être un fondu enchaîné ? » (lot 3) ; **à trois, 7 points par défaut** — sa note, qui vaut pour tout le boulodrome :
+« meilleur choix jouabilité (jeu pour tous âges mais réaliste et beau, comme le skatepark qui est plaisant et simple à employer) ».
+
+**Lot 2 FAIT le 2026-10-29 (README ferme, journal du jour ; à juger en jeu, `docs/A-JUGER.md`)** : `boulodrome.js` (pur : l'emprise
+x 101..113,7 × y 39..46,6, le repère des pistes `pisteVersMonde`, ce qu'est chaque pixel `bouloAt`, le relief local `reliefLocal`) ;
+`boulodromeArt.js` (le sable éclairé depuis la physique, les madriers, le banc de planches, le mât, la guirlande) ; une passe finale sans
+tirage dans `generateTownWorld` (`tw.boulo`, tout ou rien) ; l'essence (érable) et la taille (grand, si la place le permet — ils sont
+« adultes » : la clôture au nord de l'avenue est sous leur couronne) ; la neige et la pluie au pixel (`CL.SAND`) ; le plan ; `render-boulodrome`.
+Les bancs sont des `bench` de la ville (`boulo: 1`) : on s'y assoit, les habitants et les pigeons s'en servent. **Pour le lot 3** : `pisteVersMonde`
+place une boule ; la face du madrier du nord recouvre la première rangée de sable (une boule arrêtée contre lui y est dessinée par-dessus).
+**Sa note « pas systématique », TRANCHÉE le 2026-10-29** (« une roulette sur deux passe sans être déviée », son accord) : au lot 1, la
+roulette était déviée de plus de 15 cm (pointer à 6, 8, 10 m, 14 lignes) dans 71 / 100 / 100 % des lancers sur la piste du platane — sa pente
+de 0,8 % allongeait ou raccourcissait CHAQUE roulette, et ses deux reliefs couvraient toute la largeur. La moitié de pente prévue n'y
+suffisait pas (encore 100 % à 8 et 10 m) : **un quart de pente (0,2 %) et un couloir propre de 65 cm** entre les racines (x 0,75, r 0,65,
+h 3,5 cm) et le creux (x 3,05, r 0,7) → **29 / 50 / 50 %**. La piste de la mairie, moitié de pente (0,3 %) : 57 / 64 / 57 % (son ornière est
+faite pour être suivie ; à 10 m, la pente seule en déviait 93 %). La plombée reste peu déviée (0 à 43 %). `verify-petanque` (83/83) tient
+ces seuils, et que le couloir soit la meilleure ligne pour la roulette, la plombée celle qui passe le relief. Le dessin a suivi seul ; les
+racines se déduisent désormais de la bosse.
+
+**Lot 3 — jouer : 15 décisions de forme posées le 2026-10-29** (https://claude.ai/artifact/TJ9wMuSQqTQfrzqMiuS1YX, base `verdicts/<id>`,
+`meta/fin` ; maquettes sur le vrai sable). Le premier tour avait réglé la partie en ville, le ×3, les gestes, la donnée puis la jauge, les
+postures et le réseau ; la page demande : ouvrir une partie (E au cercle), qui commence (une pièce), le départ d'un joueur (pause 10 min),
+**jouer seul en attendant le lot 4** (une partie d'entraînement — sans elle, il ne pourrait pas l'essayer sans ami connecté), le fondu
+enchaîné vers ×3, qui voit l'agrandi, les places des joueurs, les commandes, le guide de visée (arc + roulé sur le plat + boule fantôme ;
+le relief reste à lire), la jauge au-dessus du joueur, la bande de couleur des boules, le cochonnet orange, l'ardoise et l'anneau du point,
+la fin de mène sur le terrain, la revanche. Recommandations cochées ; rien n'est codé du lot 3.
+
+**Lots suivants (un changement visuel par livraison, noyau §2)** : (3) jouer à deux (visée, jauge, ×3 — sa note : « une vue agrandie de la partie, peut-être un fondu enchaîné » —, gestes en 32 × 48,
+réseau) ; (4) les habitants boulistes et leur bot ; (5) la mesure, Fanny, l'aimant, les sons, la gazette, l'ardoise.
+
+**Pièges prévisibles** : la carte se regénère depuis sa graine — poser l'emprise sans AUCUN tirage de plus, et l'interdit de placement des deux
+côtés (noyau §4) ; une proportion n'est pas une dimension (boule, main, piste se jugent ensemble, sur l'écran) ; tout ce qui touche une position
+reste en `+ − × ÷` et `sqrt` (`verify-petanque` §1 le lit) ; un gain d'or rejouable à volonté est un robinet.
+
+## 12. Les personnages « ressemblent à des jouets » : plus de détail, et l'ancien dessin à la demande (dit le 2026-10-29, APRÈS le boulodrome)
+
+Sa phrase, en répondant à la page du terrain du boulodrome : « on reviendra ensuite (après ce chantier) sur le niveau de détail des persos
+qui ressemblent à des jouets actuellement ; on cherchera un moyen de toggle on and off les anciens graphismes de persos ». **Rien de codé.**
+Ce qui existe : les joueurs en 32 × 48 derrière ⚙️ « Personnages fins » (`PERSO_HD`, FermeGame.js ; `persoHdArt.js`), vus en jeu chez lui
+seulement (`docs/A-JUGER.md`) ; les habitants restent dans l'ancien gabarit. À cadrer avec lui AVANT de dessiner (noyau §2) : ce qui fait
+« jouet » à ses yeux (la tête trop grosse — noyau §4, « un personnage chibi a la hauteur d'un adulte et la carrure de deux » —, les aplats,
+les membres), si l'interrupteur actuel suffit à « garder l'ancien » ou s'il en faut un par joueur, et si les habitants suivent.

@@ -11,19 +11,18 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-24 — LES PERSONNAGES 32 × 48 EN JEU : SES RETOURS CORRIGÉS, LA MARCHE À HUIT IMAGES BRANCHÉE
+### 2026-10-29 — LE BOULODROME : LE TERRAIN EST DANS LA VILLE (LOT 2), ON N'Y JOUE PAS ENCORE
 
-1. **Le 32 × 48 est BRANCHÉ** derrière ⚙️ « Personnages fins » (joueurs, PNJ, poses, vêtements, coupes, visages animés, épaules C) ; ses
-   retours en jouant (riders, dos, capeline ; puis la marche à huit images, 9 images par vue, l'image 0 debout) : README ferme, journaux
-   du 2026-10-24.
-2. La passe de clôture est faite : ce qui est À CODER est en tête de `docs/A-JUGER.md` ; projets neufs : `docs/PROJETS.md` §7 à §9.
+1. **Lot 2 FAIT** (ses 17 verdicts, « une qualité graphique bluffante ») : derrière la mairie, deux pistes dessinées depuis la physique,
+   madriers, érables, bancs de planches, guirlande de nuit ; pluie et neige au pixel ; `render-boulodrome` 15/15. À juger en jeu :
+   `docs/A-JUGER.md`. Sa note « pas systématique » TRANCHÉE (un quart de pente, un couloir : une roulette sur deux passe) : `docs/PROJETS.md` §11.
+2. **Ensuite, dit par lui** : les personnages « ressemblent à des jouets » — plus de détail, l'ancien dessin à la demande (`docs/PROJETS.md` §12).
 ⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. ⚠️ `app/audit-*`,
 `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — LUI FAIRE JOUER LA MARCHE À HUIT IMAGES ET LES MAINS JOINTES (elle, les habitants, à deux)
+### ⏭️ ACTION SUIVANTE — LIRE SES VERDICTS DU LOT 3 (JOUER) ET LES REPORTER DANS `docs/PROJETS.md` §11, PUIS LE CODER
 
-Vues en jeu chez lui seulement (les mains jointes : après 4 s immobile) ; la danse attend (`docs/PROJETS.md` §10). Puis la liste
-« À CODER » de `docs/A-JUGER.md`.
+`ArtifactData` `list` sur `verdicts` de https://claude.ai/artifact/TJ9wMuSQqTQfrzqMiuS1YX (un point absent = ma recommandation).
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -55,6 +54,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Course de la patinoire, contre-la-montre | `components/ferme/course.js`, `CourseHud.js` ; `hostRinkReq` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Rink`) ; README ferme (journal 2026-10-05 nuit, fin ter) | `verify-course`, `render-patinoire` ; à deux : `app/audit-duo` |
+| **Boulodrome**, pétanque (règle, physique au pas fixe, déterminisme, arbitre, format réseau prévu ; le terrain dans la ville : emprise, sable, madriers, bancs, guirlande, météo) | `components/ferme/petanque.js` (en-tête : les trois règles de construction), `boulodrome.js`, `boulodromeArt.js` ; `docs/PROJETS.md` §11 | `verify-petanque`, `render-boulodrome` |
 | Ombres portées du soleil (heure, saison, ciel) | `components/ferme/ombres.js` ; `sunShadowPass` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js sunShadowPass`) | `verify-ombres` |
 | Marché (en haut TOUTE l'année), mondes de saison de la ville (calque : marché + patinoire l'hiver), ancienne place vide | `townSeasonWorld` (`townMarketWorld`, `townWinterWorld`) dans fermeEngine.js ; `getTownWorldCached` dans FermeGame.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journaux 2026-10-06 suite et 2026-10-05 nuit fin) | `verify-vallee`, `render-marche-hiver` |
 | Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |

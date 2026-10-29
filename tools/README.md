@@ -1973,6 +1973,34 @@ porte est déjà à côté d'elle). ⚠️ Rouge sur de vrais défauts à l'écr
 l'emprise du futur quarter : aucun chemin n'en sortait), un porteur planté dans la mini-rampe qu'on soudait autour de lui. ⚠️ Ni dessin, ni son :
 ça se regarde en jeu (menu dev, « Skatepark et chantier » ; ou `?chantier=<minute>&chantierv=<vitesse>&chantiert=demontage`, `__chantier(m, v, type)`).
 
+## `verify-petanque.mjs` — LE BOULODROME SE JOUE-T-IL, SANS BUG ET SANS LATENCE ? (2026-10-28 ; 83 contrôles au 2026-10-29)
+
+Joue `components/ferme/petanque.js` (pur, le lot 1 du boulodrome, `docs/PROJETS.md` §11) : §1 aucun nom laissé aux moteurs dans le fichier
+(`sin`, `atan2`, `pow`, `hypot`, `**`, `random`, `Date`…), le même lancer deux fois au bit près, le pas à pas de l'écran = l'arbitre, l'état en
+millimètres entiers ; §2 les portées sur le plat (la roulette touche le sol à 36 % du chemin, la demi-portée à 57 %, la plombée à 91 %), le
+guide de visée à 2 cm de la simulation, le terrain détrempé retient ; §3 le relief dévie la roulette (22 cm en moyenne) trois fois plus que la
+plombée (7 cm), la pente raccourcit la montée, **pas systématique** (sa note du 2026-10-29 : une roulette sur deux au plus déviée de plus
+de 15 cm sur la piste du platane, deux sur trois sur celle de la mairie — 29 / 50 / 50 % et 57 / 64 / 57 %), aucune pente que le roulement ne retienne hors des cailloux ; §4 le tir parfait fait carreau, court il
+touche devant, long il passe, le cochonnet part plus loin qu'une boule ; §5 le comptage sur des positions construites (égalités en entiers, but
+mort, boules mortes, à trois, Fanny) ; §6 l'ordre de jeu et l'arbitre (demandes parallèles, entrées absurdes) ; §7 le but (6 à 10 m, trois
+essais puis posé, le cercle suivant) ; §8 cent parties entières entre joueurs simulés (trois formats, 13 et 7) : elles finissent, les
+invariants tiennent à chaque lancer, une partie recopiée en JSON entre chaque lancer ou rejouée depuis son journal finit à l'identique — et
+leur durée ESTIMÉE (tête-à-tête en 13 ≈ 25 min) ; §9 la difficulté contre un joueur plausible (±20 / 35 / 60 ms au lâcher) ; sur la piste du platane, le couloir est la meilleure ligne pour la
+roulette, la plombée celle qui passe le relief. **Falsifié** :
+`FALSIFY=sin` (1 échec), `FALSIFY=tour` (le camp qui a le point rejoue : 19), `FALSIFY=points` (l'égalité marque : 1). Une section qui plante
+rougit au lieu d'arrêter le banc. ⚠️ Ce qu'il ne voit pas : l'écran, le réseau à deux clients, ni si c'est agréable. Les chiffres du §8
+(le but sort dans 29 % des mènes de doublette) dépendent d'un joueur simulé naïf qui tire sans lire sa ligne.
+
+## `render-boulodrome.mjs` — LE TERRAIN DU BOULODROME, SEC, MOUILLÉ, SOUS LA NEIGE (2026-10-29, 15 contrôles)
+
+Le vrai morceau de la ville (x 98..118, y 34..48) avec le vrai sol (`drawTownGrassTile`, `drawTownRoadTile`), la part du boulodrome
+(`BA.drawBouloTile`), ses bancs et ses mâts, puis la pluie et la neige du jeu sur les parcelles qui lisent le sable au pixel. Planche
+`tools/out/boulodrome.png` (×2 : sec, humide, premières flaques, orage, 3 cm, 12 cm) et une loupe à ×4. Contrôles : le dessin est le même à
+chaque construction (et coûte ~60 ms, une fois), le sable est plein, la bande d'herbe transparente, la lumière suit la pente de la physique
+(flanc nord-ouest d'une bosse plus clair), la météo lit sable / bois / herbe, **les flaques comblent les creux de la piste (aucune sur une
+bosse)**, 12 cm couvrent, le banc de planches a la hauteur du banc de la ville. ⚠️ Ne voit ni les arbres (un rond à leur pied), ni la
+guirlande, ni la lumière de la scène : en jeu (`app/audit-tmp`, `__scene("town", 106.5, 42, 2, 22, …)`).
+
 ## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11 ; 23 contrôles au 2026-10-13 nuit)
 
 Le vrai relief et son vrai dessin (`skateparkArt.js`) sur le dallage du monde de printemps, à 8 h 30, 13 h, 18 h 30 (le contact au sol, l'ombre du soleil sur le dallage passée comme dans le jeu, les

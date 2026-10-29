@@ -42,6 +42,7 @@ import * as PT from "./patin";   // 2026-10-05 (fin quater) : les couleurs et le
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
 import { drawFarmBuis } from "./buis";
 import { drawCivicHDTile, drawCivicHDBorder } from "./solHD";   // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution
+import * as BD from "./boulodrome";   // 2026-10-29 — le boulodrome : ses arbres (essence, taille) et sa lecture par la neige
 import * as FL from "./feuilles";   // 2026-09-30 — les feuilles mortes : la chute au pixel des couronnes d'automne
 import { treeSnowMix, CL as SNOW_CL, blueNoise as snowBlueNoise } from "./neige";   // 2026-09-28 (phase 12a) — les trois états d'un arbre d'hiver ; 2026-09-29 : les classes du sol (la neige de la ferme)
 export { drawTownGate, drawTownPlot, townFenceConf } from "./clotures";
@@ -3281,6 +3282,9 @@ export function townTreeKind(tw, x, y, obj) {
      jamais, §1467) : le saule procédural reste dessinable par `render-arbres`,
      simplement plus aucune case du monde ne le désigne. */
   if (wet) { const k = h % 3; return k < 2 ? TT.REF_WILLOW : TT.BIRCH; }
+  /* 2026-10-29 — LES ARBRES DU BOULODROME (`boulodrome.js`) : son verdict, « un arbre déjà dans le jeu », et l'érable est celui
+     dont la feuille est celle du platane (cinq lobes) — l'arbre des boulodromes du Midi, que la famille B des arbres peindra. */
+  if (BD.isBouloTree(tw, x, y)) return TT.MAPLE;
   if (TT_IN(C.TOWN_ORCHARD, x, y)) return (h % 3) === 0 ? TT.REF_APPLE : TT.APPLE;
   if (TT_IN(C.TOWN_PARK, x, y)) {
     const k = h % 12;
@@ -3370,7 +3374,8 @@ function treeSizeRaw(tw, x, y, k, lampAt) {
   const h = waterHash(x * 61 + 29, y * 17 + 43) % 100;
   const inCem = TT_IN(C.TOWN_CEMETERY, x, y) || TT_IN(C.TOWN_UPPER, x, y);
   let pick;
-  if (TT_IN(C.TOWN_ORCHARD, x, y)) pick = h < 40 ? "short" : h < 60 ? "young" : "adult";
+  if (BD.isBouloTree(tw, x, y)) pick = "tall";   // 2026-10-29 : le boulodrome, des arbres qu'on a laissés vieillir (la place sous la couronne décide)
+  else if (TT_IN(C.TOWN_ORCHARD, x, y)) pick = h < 40 ? "short" : h < 60 ? "young" : "adult";
   else if (TT_IN(C.TOWN_PARK, x, y)) pick = h < 28 ? "tall" : h < 42 ? "short" : h < 56 ? "young" : "adult";
   else if (k === TT.CYPRESS && inCem) pick = h < 38 ? "tall" : h < 52 ? "young" : "adult";
   else pick = h < 20 ? "young" : h < 42 ? "tall" : h < 56 ? "short" : "adult";
@@ -3740,6 +3745,9 @@ export function townSnowEnv(tw, S, waterAt) {
     roadAt: (x, y, lx, ly) => townRoadPixel(tw, x, y, lx, ly, roadMemo),
     /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver, au pixel (`townDuckPixel`, la lecture du dessin). */
     duckAt: tw.duck ? (x, y, lx, ly) => townDuckPixel(tw, x, y, lx, ly) : null,
+    /* 2026-10-29 — le boulodrome, au pixel (`BD.bouloAt`, la lecture du dessin) ; `bouloCm` : le relief du dernier pixel de sable lu. */
+    bouloAt: tw.boulo ? (wx, wy) => BD.bouloAt(wx, wy) : null,
+    bouloCm: BD.bouloHitCm,
     /* 2026-10-05 (nuit) — la glace de la patinoire, au pixel (`rinkSD`, la figure de la collision) : pas de neige dessus. */
     // 2026-10-12 : pas au chantier de la place — la glace y fond, et l'eau de la fonte (`pluie.js`) mouille le dallage dessous
     rinkAt: tw.rink && !tw.chantier ? (wx, wy) => rinkSD(wx + 0.5, wy + 0.5) <= 0 : null,

@@ -118,3 +118,36 @@ nu est INCLUS dans l'enveloppe feuillue (sinon des branches dépasseraient du fe
 au pixel (déjà en place pour la neige) en fondant feuillu → mi-chute → nu ; garder le vent (cisaillement) tel qu'il est ;
 dériver la neige, la pluie et la glace des mêmes images ; garder l'ancien dessin comme repli tant qu'une essence n'est pas
 branchée. Ordre d'intégration : chêne, érable, bouleau (les plus fréquents), puis le reste.
+
+## LE PLATANE — l'arbre du boulodrome (ajouté le 2026-10-29, `docs/PROJETS.md` §11)
+
+Une essence NEUVE : il n'existe pas de platane « actuel » à repeindre. Même cadrage, même lumière, même fond que le maître de l'ÉTAPE 1 ;
+seul le paragraphe des références change (image 1 = un arbre du jeu d'une AUTRE essence, pour le cadrage seulement). ⚠️ Le brancher en
+peint fait de lui le PREMIER arbre peint de Valley Town : ce qui l'intègre (crans de zoom, cinq états, chute par bouquets, neige, vent)
+n'existe pas encore — c'est une décision de Guillaume (page du lot 2), pas un détail.
+
+**Références, dans cet ordre (une conversation neuve)** : 1. `arbres-ref/arbre-erable-ete-actuel.png` ; 2. `refs/maison-s1.jpg` ;
+3. `captures/cap-vt-13-arbre-personnage-z3.png` (le personnage à côté d'un arbre, au cran ×3) ; 4. *facultatif* — une photo de vrai
+platane que vous aimez (l'écorce) : ajouter alors à la fin `Image 4 is a photograph of a real plane tree: use it only for the bark pattern and the leaf shape; keep the painted pixel-art finish of image 2.`
+
+**ÉTAPE 1 — l'ancre d'été (à coller tel quel)** :
+```
+Detailed pixel-art painting of ONE tree, for a 2D top-down village game.
+
+REFERENCES: image 1 is a CURRENT low-detail tree of the same game, of a DIFFERENT species: copy only its framing (its size in the frame and the height of its trunk base), nothing of its species. Image 2 is a finished painted house of the same game: match it exactly for painting finesse, edge sharpness, outline thickness, colour richness and lighting. Image 3 is an in-game screenshot with a character standing next to a tree: use it ONLY for the real camera and scale, copy nothing else from it.
+
+CAMERA: the same as image 2: a front elevation of the tree with only a slight top-down tilt (you see a little of the crown's upper surface). Vertical trunk, no perspective distortion, not isometric, not seen from a corner.
+
+FRAMING (very important, the tree will be placed by measurement): portrait 3:4 canvas. The tree is exactly centred horizontally. The crown is about 80% of the image width and never touches an edge; its top is about 10% below the top edge. The trunk base, with its root flare, sits at 90% of the image height, centred. Below it: flat magenta, nothing else. A person would reach about 40% of the tree's height (do not draw a person).
+
+LIGHT: daytime, neutral light from the upper left. Soft self-shading inside the crown: leaf clumps lit on their upper-left side and darker underneath. NO cast shadow on the ground, no ground, no grass, no roots spreading on a floor.
+
+BACKGROUND: flat, uniform, pure magenta #FF00FF everywhere around the tree, also in any gap between branches or leaves. No gradient, no floor, no shadow. No magenta or saturated pink anywhere on the tree itself. No text. Highest resolution.
+
+THE TREE (this description wins over everything above): a mature London plane tree, the shade tree of every French village square and boulodrome. A tall, straight, smooth trunk with its unmistakable camouflage bark, peeling in large jigsaw patches of cream, pale olive, grey-green and soft fawn, the patches clearly readable even at small size. The trunk forks at about 40% of the tree's height into three or four strong ascending limbs, mottled like the trunk and partly visible through the lower crown. A broad, high, rounded crown, wider than tall and slightly irregular, made of overlapping clumps of large five-lobed leaves (like maple leaves, but bigger and softer), medium and deep green, lighter yellow-green on the sunlit tops; a few spiky round seed balls hanging on long stalks at the edge of the crown. A natural, untrimmed crown.
+```
+*Variante « taillé en tête de chat »* (si elle est choisie, remplacer les deux dernières phrases) : `The limbs are pollarded: each ends in a knobbly fist from which a dense rounded mass of straight young leafy shoots grows; the crown is compact and boxy, a classic trimmed village-square plane tree.`
+
+**Puis, dans la MÊME conversation, l'ordre de l'ÉTAPE 4** (le squelette d'abord) : **4a NU** (le texte commun de 4a, puis :
+`Pale mottled limbs, smooth and sinuous, dividing again and again into a high dome of fine zigzag twigs; brown seed balls still hanging alone on long stalks all over the crown — the winter signature of the plane tree.`) ; **4b MI-CHUTE** (le texte commun de 4b, couleur : `ochre, butterscotch yellow, tan and rusty brown leaves`) ; **ÉTAPE 3 AUTOMNE** (`Large leaves turned ochre, butterscotch yellow, tan and rusty brown, a few still green; the seed balls brown. Fully dense.`) ; **ÉTAPE 2 PRINTEMPS** (`Small, fresh, bright yellow-green young leaves, sparse enough to show the mottled limbs; tiny green flower balls on long stalks.`).
+Rangement : `refs/lot-gemini/arbres/platane/arbre-platane-<ete|nu|michute|automne|printemps>-a.png` (et `-b`).

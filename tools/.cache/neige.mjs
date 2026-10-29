@@ -535,14 +535,17 @@ export const SZ = CH + 2;
    l'herbe qui repousse). Guillaume : « neige fine, sillons lisibles » — la neige
    remplit le creux des sillons et laisse la crête de terre à nu, jamais plus de
    quelques centimètres (§6) : on voit toujours où l'on a travaillé. */
-export const CL = { NONE: 0, GRASS: 1, LAWN: 2, SOFT: 3, STONE: 4, STREET: 5, STAIR: 6, DECK: 7, RAIL: 8, SHORE: 9, TILLED: 10 };
+/* 2026-10-29 — `SAND` : le sable stabilisé des pistes du boulodrome (`boulodrome.js`, lu au pixel par `env.bouloAt`). La neige
+   l'épouse (son ondulation `und` est le VRAI relief de la piste, celui qui dévie la boule) ; la pluie le fonce en brun et
+   remplit ses creux (`pluie.js`, `basin`). Ni brins d'herbe qui percent, ni herbe dormante l'hiver. */
+export const CL = { NONE: 0, GRASS: 1, LAWN: 2, SOFT: 3, STONE: 4, STREET: 5, STAIR: 6, DECK: 7, RAIL: 8, SHORE: 9, TILLED: 10, SAND: 11 };
 const Q_RECV = 100;
 export const Q_AUX = 32;
 /* La marge des ombres portées au nord-ouest : 40 px × SHADOW_K, plus la pénombre. */
 const MG = 24, MA = 5;
 /* Le relief du sol sous la neige, par classe (cm) : la prairie est bosselée,
    la pelouse l'est à peine, une dalle ne l'est pas. */
-const LUMP_CM = [0, 3.2, 1.3, 1.6, 0, 0, 0, 0, 0, 2.4, 0];
+const LUMP_CM = [0, 3.2, 1.3, 1.6, 0, 0, 0, 0, 0, 2.4, 0, 0.6];
 /* Les débris : brindille sombre, brindille, feuille brune, feuille fauve,
    aiguilles sombres, aiguilles, cône, pompon de mimosa, rameau de bouleau. */
 const DEBRIS = ["", "#3d3029", "#584536", "#83582f", "#a37744", "#2a4030", "#3c593a", "#5a3e28", "#e0bb33", "#7a4335"].map((s) => (s ? [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)] : null));
@@ -613,7 +616,7 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     if (only) { gut[o] = 0; aux[o] = 0; }
     if (x < 0 || y < 0 || x >= W || y >= H) { cls[o] = CL.NONE; continue; }
     const i = y * W + x, g = tw.ground[i], lx = wx - x * T, ly = wy - y * T;
-    let c = CL.GRASS, r = 1, ax = 0, rp = null;
+    let c = CL.GRASS, r = 1, ax = 0, rp = null, sandCm = null;
     if (env.classify) {
       const k = env.classify(x, y, i, g, lx, ly, wx, wy);
       if (!k) { cls[o] = CL.NONE; continue; }
@@ -635,7 +638,15 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     const dkP = env.duckAt ? env.duckAt(x, y, lx, ly) : null;
     /* balayé : rien au milieu, la neige poussée contre les deux bords (`edge`, px jusqu'au bord libre) — c'est ce
        qui le dessine propre au lieu de le semer de taches (premier jet, au banc : une poussière partout faisait du bruit). */
-    if (dkP) { c = CL.DECK; ax = dkP.board ? 2 : 3; r = dkP.edge < 2 ? 0.6 : dkP.edge < 4 ? 0.25 : dkP.edge < 6 ? 0.06 : 0; }   // `ax` ≥ 2 : un plancher BALAYÉ (le rendu ne le détrempe pas)
+    /* 2026-10-29 — LE BOULODROME (`env.bouloAt`, la lecture du dessin) : le sable des pistes (sa classe, son relief), le chêne des
+       madriers (un tablier : il fonce, il ne retient pas l'eau, la neige s'y pose en ligne). L'herbe entre les pistes reste l'herbe. */
+    const bk = env.bouloAt ? env.bouloAt(wx, wy) : 0;
+    if (bk === 1) { c = CL.SAND; sandCm = env.bouloCm(); }
+    // le dessus du madrier garde la neige ; sa FACE (verticale, un pixel au sud du dessus) n'en tient pas : sous la neige, le
+    // cadre des pistes reste lisible — un trait blanc souligné de bois sombre (vu au banc : 3 cm effaçaient tout le cadre)
+    else if (bk === 2) { c = CL.DECK; ax = 1; r = 0.95; }
+    else if (bk === 3) { c = CL.DECK; ax = 1; r = 0.04; }
+    else if (dkP) { c = CL.DECK; ax = dkP.board ? 2 : 3; r = dkP.edge < 2 ? 0.6 : dkP.edge < 4 ? 0.25 : dkP.edge < 6 ? 0.06 : 0; }   // `ax` ≥ 2 : un plancher BALAYÉ (le rendu ne le détrempe pas)
     else if (rp && rp.inside) {
       c = CL.STREET;
       /* Les ornières à 0,28 et 0,72 de la voie, comme `drawTownRoadTile` — comptées depuis le bord le PLUS PROCHE
@@ -724,6 +735,8 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
                      : vnoise(wx, wy, 2.5, 13) * 0.6 + vnoise(wx, wy, 6, 14) * 0.4;
     fine[o] = Math.round((fn * 2 - 1) * 127);
     und[o] = Math.round(((vnoise(wx, wy, 22, 15) * 0.65 + vnoise(wx, wy, 9, 16) * 0.35) * 2 - 1) * 127);
+    // le sable du boulodrome : son ondulation est son relief (± 3 cm à fond d'échelle), plus un rien du bruit fin
+    if (sandCm !== null) und[o] = Math.max(-127, Math.min(127, Math.round(sandCm / 3 * 127 + (vnoise(wx, wy, 5, 16) - 0.5) * 14)));
     /* LES MOTTES : une bosse douce au plus par maille de 7 px (une sur deux),
        rayon 1,6 à 3,8 px — les touffes de la prairie, les cailloux, les mottes
        de terre, que la neige épouse. */
@@ -754,6 +767,10 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     const pk2 = vnoise(wx, wy, 13, 71) * 0.6 + vnoise(wx, wy, 5, 72) * 0.4;
     const ramp = Math.max(0, Math.min(1, (pk2 - 0.2) / 0.6));   // plus de contraste : des plaques, pas un semis
     cov[o] = Math.round(Math.max(0, Math.min(1, ramp * 0.74 + (BN[(wy & 63) * 64 + (wx & 63)] / 256) * 0.16 + (1 - fn) * (blade ? 0.12 : 0.06))) * 255);
+    /* le sable : l'ordre de couverture (et de séchage, `pluie.js`) suit son RELIEF — la neige prend d'abord dans les creux, les
+       bosses percent les dernières ; à la pluie, les bosses sèchent d'abord, le creux en dernier. Les grandes plaques du pré
+       (au banc : un camouflage sur la piste humide) n'y sont plus qu'un tiers. */
+    if (sandCm !== null) cov[o] = Math.round(Math.max(0, Math.min(1, 0.5 + Math.max(-1, Math.min(1, sandCm / 2.5)) * 0.4 + (ramp - 0.5) * 0.25 + (BN[(wy & 63) * 64 + (wx & 63)] / 256 - 0.5) * 0.3)) * 255);
   }
   if (only) return P0;
   /* ── LES OMBRES PORTÉES ET L'OCCLUSION ──────────────────────────────────
@@ -995,7 +1012,7 @@ export function renderChunk(st, pack, P, imp, out) {
      tiennent) à COV0 + COVR (les dessus de dalle, les plaques tardives) ; la
      pierre, qui garde la chaleur, demande plus que l'herbe. À la fonte, le même
      ordre à l'envers : les plaques s'ouvrent, s'élargissent, se rejoignent. */
-  const COV0 = 0.06, COVR = 2.5, CLS_COV = [1, 1, 1.05, 1.1, 1.5, 1, 1.35, 0.85, 1, 1.1, 0.7];
+  const COV0 = 0.06, COVR = 2.5, CLS_COV = [1, 1, 1.05, 1.1, 1.5, 1, 1.35, 0.85, 1, 1.1, 0.7, 1.05];
   const falling = !!P.falling;
   const dout = out;
   const glints = [];

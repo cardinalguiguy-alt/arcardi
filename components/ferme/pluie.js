@@ -184,6 +184,10 @@ export function wetCls(st, o) {
 const gutAt = (st, o) => (st.gut ? st.gut[o] : 0);
 export function basin(st, o) {
   const c = wetCls(st, o);
+  /* 2026-10-29 — LE SABLE DU BOULODROME : l'eau va où la PISTE est creuse (`und` y porte son relief, `neige.js`) — le creux de la
+     piste du platane d'abord, puis l'ornière de la piste de la mairie, puis le pied des madriers ; jamais sur une bosse. */
+  // (les mottes, `lump` : le bord d'une flaque de sable mord autour des gravillons — sans elles, une flaque ronde comme sa cuvette)
+  if (c === CL.SAND) return (-st.und[o] / 127) * 0.95 + (st.fine[o] / 127) * 0.22 - (st.lump[o] / 255) * 0.34 + (st.ao[o] / 255) * 0.14 + (st.cast[o] / 255) * 0.1;
   if (c !== CL.STREET && c !== CL.STONE) return -9;
   const ax = st.aux[o] / Q_AUX;
   let b = (-st.und[o] / 127) * (c === CL.STONE ? 0.62 : 0.85) + (st.fine[o] / 127) * 0.1;
@@ -248,6 +252,7 @@ export function renderWetChunk(st, wp, out, mask) {
   const rip = [], flow = [];
   const wx0 = st.cx * CH, wy0 = st.cy * CH;
   const pudColor = mix(DARK, sky, 0.3), rimDark = mix(DARK, [0, 0, 8], 0.5), rimLight = mix(sky, [255, 255, 255], 0.3), skyStreak = mix(sky, [255, 255, 255], 0.2);
+  const sandPud = mix([70, 52, 36], sky, 0.32), sandDeep = mix([52, 38, 26], sky, 0.26), sandRim = mix([150, 120, 88], sky, 0.35);
   for (let y = 0; y < CH; y++) for (let x = 0; x < CH; x++) {
     const o = (y + 1) * SZ + (x + 1), q = (y * CH + x) * 4, c = wetCls(st, o);
     out[q + 3] = 0;
@@ -263,6 +268,18 @@ export function renderWetChunk(st, wp, out, mask) {
     if (pm[o]) {
       const N = pm[o - SZ], S = pm[o + SZ];
       let col, a;
+      /* 2026-10-29 — LA FLAQUE DE SABLE (le boulodrome) : une eau trouble, brune, où le ciel ne revient qu'à moitié, une
+         lèvre sombre et une berge à peine plus claire (au banc : la flaque grise cerclée de blanc des dallages, posée sur du
+         sable, se lisait comme une plaque d'égout). */
+      if (c === CL.SAND) {
+        if (!N) { col = [44, 30, 18]; a = 150; }
+        else if (!S) { col = sandRim; a = 92; }
+        else { col = pm[o] === 2 ? sandDeep : sandPud; a = 150; if ((h32(wx >> 2, wy, 81) % 9) === 0 && b2 < 0.75) { col = skyStreak; a = 96; } }
+        if (N && S && rip.length < 140 && (h32(wx, wy, 77) % 41) === 0) rip.push([wx, wy, h32(wx, wy, 78)]);
+        out[q] = col[0]; out[q + 1] = col[1]; out[q + 2] = col[2]; out[q + 3] = a;
+        if (mask) mask[y * CH + x] = 1;
+        continue;
+      }
       if (!N) { col = rimDark; a = 150; }                                       // l'ombre de la lèvre, au nord
       else if (!S) { col = rimLight; a = 104; }                                 // la berge claire, au sud
       else {
@@ -304,6 +321,9 @@ export function renderWetChunk(st, wp, out, mask) {
       out[q] = DARK[0]; out[q + 1] = DARK[1]; out[q + 2] = DARK[2]; out[q + 3] = a + (ax === 1 ? 18 : 0);
     } else if (c === CL.DECK) {
       out[q] = 30; out[q + 1] = 20; out[q + 2] = 16; out[q + 3] = level === 2 ? 66 : 34;
+    } else if (c === CL.SAND) {
+      // le sable mouillé fonce franchement, en brun (un sable trempé perd la moitié de sa clarté), jamais en bleu-noir
+      out[q] = 58; out[q + 1] = 38; out[q + 2] = 20; out[q + 3] = level === 2 ? 98 : 52;
     } else {
       /* Un dallage : le joint est plus sombre. ⚠️ 2026-09-29 (audit) — le reflet de ciel des
          creux larges était tramé une case sur deux au bruit bleu : vu en jeu, les dalles

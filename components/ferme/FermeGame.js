@@ -93,6 +93,8 @@ import * as PT from "./patin";
 import * as DU from "./duo"; // 2026-10-06 (soir) — les figures à deux sur la glace (pur)
 import * as EX from "./expressions"; // 2026-10-23 — les expressions automatiques des personnages en 32 × 48 (pur)
 import * as SPK from "./skatepark";      // 2026-10-11 — le skatepark de la place (printemps) : son relief, ses garde-corps, la marche (pur)
+import * as BD from "./boulodrome";      // 2026-10-29 — le boulodrome : son emprise, ses arbres, ses fils (pur)
+import * as BA from "./boulodromeArt";   // 2026-10-29 — le boulodrome : son sol (sable éclairé, madriers), ses bancs, ses mâts, sa guirlande
 import * as SPA from "./skateparkArt";   // 2026-10-11 — son dessin : le relief projeté en 3/4, éclairé, découpé en tranches de tri
 import * as MO from "./monture";       // 2026-10-11 — la physique des montures du park (skate, rollers, trottinette, BMX), pure
 import * as MA from "./montureArt";    // 2026-10-11 — leur dessin (le véhicule en 3D sur la surface, le corps du rider)
@@ -24247,6 +24249,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-10-05 (nuit) — le caillebotis du marché d'hiver (`tw.duck`, monde d'hiver seulement), SOUS la
          neige de la case : elle n'y laisse qu'une poussière et garde ses flocons dans les jours. */
       if (tw.duck && tw.duck[y * tw.w + x]) A.drawTownDuckboardTile(ctx, tw, x, y, px, py);
+      /* 2026-10-29 — LE BOULODROME (`boulodromeArt.js`) : sa part de la case, cuite par-dessus le gazon (transparente hors des
+         pistes et des madriers), SOUS la neige et la pluie, qui le lisent au pixel (`townSnowEnv.bouloAt`). Fixe : il se cuit. */
+      if (tw.boulo) BA.drawBouloTile(ctx, x, y, px, py);
       /* 2026-10-05 (nuit) — la glace de la patinoire (monde d'hiver) : toute case de son rectangle, au pixel près
          (`A.drawRinkIceTile` ne pose que ce qui est dans l'arrondi — les coins de la bande restent de la pierre). */
       if (dyn && tw.rink && x >= C.TOWN_RINK.x0 && x <= C.TOWN_RINK.x1 && y >= C.TOWN_RINK.y0 && y <= C.TOWN_RINK.y1) {
@@ -26760,7 +26765,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
         // (le buis taillé, la boule et le massif en nuage sont dessinés plus haut : `BU.BUIS_KINDS`)
         let img = pr.kind === "lamp" ? townLampImg(pr)
-                  : pr.kind === "bench" ? sprites.plazaBench
+                  : pr.kind === "bench" ? (pr.boulo ? BA.bouloBenchCanvas() : sprites.plazaBench)   // 2026-10-29 : les bancs de planches du boulodrome
+                  : pr.kind === "bouloPole" ? BA.bouloPoleCanvas()
                   /* 2026-09-28 (soir) — les quatre lignes des anciens buis (5969306),
                      rendues par `C.TOWN_BUIS_LEGACY` : leurs sprites n'existent que si
                      l'interrupteur est actif ; sinon la branche des buis les prend plus
@@ -26924,7 +26930,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              l'objet), pas une ellipse. En rajouter une par-dessus donne deux
              ombres décalées sous chaque objet — le genre de défaut qu'on ne
              nomme pas en jouant mais qui fait dire « ça fait sale ». */
-          if (!PLANCHE_PROPS.has(pr.kind) && !(pr.kind === "lamp" && C.townLampArtAt(pr.x, pr.y))) {
+          if ((!PLANCHE_PROPS.has(pr.kind) || pr.boulo) && !(pr.kind === "lamp" && C.townLampArtAt(pr.x, pr.y))) {   // `boulo` : un banc dessiné par le code, sans ombre peinte
             ctx.fillStyle = groundSnowK > 0.5 ? "rgba(34,50,98,0.24)" : "rgba(20,26,16,0.22)";   // bleue sur la neige (phase 12a)
             fillPixEllipse(ctx, cxp, by - 2, img.width * 0.28, 3.5);   // FIX-003
           }
@@ -28765,6 +28771,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const litG = LUM.lampLit(Math.floor(gx), Math.floor(gy), lampNa) ? Math.min(1, lampNa * 3) : 0;
         try { A.drawRinkGarland(ctx, g, now, litG, litG > 0.05 ? rinkBulbs : null, snowF ? Math.max(0, Math.min(1, (snowPk.g - 0.5) / 5)) : 0); } catch (e) { console.error("[FERME] guirlande ignorée", e); }   // 2026-10-06 : la neige se pose sur la branche
       }
+      /* 2026-10-29 — LA GUIRLANDE DU BOULODROME (`BA.bouloGarlands`) : du tronc des arbres du nord aux mâts du sud, en zigzag
+         au-dessus des pistes ; après le monde trié (elle pend à 3 m, au-dessus des joueurs), avant la lumière ; allumée avec les
+         lanternes (le même prédicat, lu au milieu du fil). Un arbre abattu emporte ses deux fils. */
+      const bouloBulbs = [], bouloSpans = tw.boulo ? BA.bouloGarlands((t) => { const bt = BD.BOULO_TREES[t]; return E.townTreeStanding(tw, sharedRef.current.townChop, bt.y * tw.w + bt.x); }) : [];
+      for (const g of bouloSpans) {
+        if (Math.max(g.y0, g.y1) / T < y0 - 4 || Math.min(g.y0, g.y1) / T > yBot + 4 || Math.max(g.x0, g.x1) / T < xL - 2 || Math.min(g.x0, g.x1) / T > xR + 2) continue;
+        g.lit = LUM.lampLit(Math.floor((g.gx0 + g.gx1) / 2 / T), Math.floor((g.gy0 + g.gy1) / 2 / T), lampNa) ? Math.min(1, lampNa * 3) : 0;
+        try { BA.drawGuinguette(ctx, g, now, g.lit, g.lit > 0.05 && !reflecting ? bouloBulbs : null, snowF ? Math.max(0, Math.min(1, (snowPk.g - 0.5) / 5)) : 0); } catch (e) { console.error("[FERME] guirlande du boulodrome ignorée", e); }
+      }
       /* 2026-09-30 — LES FEUILLES QUI TOMBENT ET QUI VOLENT (`FL.makeLeafFlurry`),
          LOCALES : après le monde (une feuille passe devant tout), avant la lumière
          (la nuit les assombrit comme le reste). Le vent des épisodes (`W.wind`) les
@@ -28913,6 +28928,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (sf.moving ? (Math.floor(now / 260) & 1) : (Math.floor(now / 1300) & 1)) heads.push({ x: Math.round(sf.x * T) + (sf.dir === 3 ? 5 : sf.dir === 2 ? -5 : 1.5), y: Math.round(sf.y * T) + 4 - 33.5, r: 1.4, k: 0.9 });
           }
         }
+        /* 2026-10-29 — sous la guirlande du boulodrome, des flaques douces posées au SOL sous le fil (il passe à 3 m : la lumière
+           tombe sous lui, pas là où il se dessine), serrées pour faire une bande sur le sable plutôt que des pois. */
+        for (const g of bouloSpans) {
+          if (!(g.lit > 0.05)) continue;
+          // ⚠️ larges et faibles (vu en jeu : à r 2,1, des bandes en V et des coins noirs entre deux fils — des projecteurs de scène)
+          for (let k = 1; k <= 7; k++) { const u = k / 8; lights.push({ x: (g.gx0 + (g.gx1 - g.gx0) * u) / T, y: (g.gy0 + (g.gy1 - g.gy0) * u) / T, r: 3.0, c: "lamp", k: 0.24 * g.lit }); }
+        }
+        for (const b of bouloBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.75 * (b.k || 1) });
         for (const b of rinkBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 * (b.k || 1) });   // 2026-10-06 : le chenillard règle aussi l'éclat du verre
         for (const b of buntingBulbs) heads.push({ x: b.x + 0.5, y: b.y + 1, r: 1, k: 0.8 });
         for (const wl of townWinLights) lights.push(wl);

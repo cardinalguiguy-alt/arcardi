@@ -24,6 +24,7 @@ import * as PT from "./patin";   // 2026-10-05 (nuit, fin quater) : le matériel
 import * as WX from "./meteo";   // 2026-10-05 : l'étiquette de la saison (`seasonTagAt`, fin de saison — meteo.js § 0 bis)
 import * as SPK from "./skatepark";   // 2026-10-11 : le relief du skatepark (pur, il n'importe que les constantes)
 import * as MO from "./monture";     // 2026-10-11 : la location des montures (`rideKitNorm`, `rideKitPrice`) — pure, elle n'importe que le relief
+import * as BD from "./boulodrome";  // 2026-10-29 : l'emprise du boulodrome (pure : les constantes et la physique de la pétanque)
 /* ⚠️⚠️ ZIP 444 — LE MOTEUR N'IMPORTE PLUS AUCUNE QUÊTE, ET C'EST UNE RÉPARATION
    AUTANT QU'UN RETRAIT. Le 442 lui faisait emprunter `enqMarketMod` : une issue
    d'enquête déplaçait la cote du marché. Le 442 avait pris la peine d'écrire
@@ -7902,6 +7903,44 @@ export function generateTownWorld() {
     }
   }
 
+  /* 2026-10-29 — LE BOULODROME (`boulodrome.js` : l'emprise, les arbres, les bancs, les mâts), EN PASSE FINALE ET SANS UN
+     TIRAGE (§4 de CLAUDE.md : la ville se regénère depuis sa graine). Les pistes ne changent RIEN à la carte : le sol reste
+     de l'herbe (on y marche, on enjambe les madriers — son verdict), le dessin les cuit par-dessus (`paintTownGroundTile`) et
+     la neige et la pluie les lisent au pixel (`townSnowEnv.bouloAt`). Ce qui s'y tient debout est posé ici :
+     · les ARBRES : des feuillus de la ville (son verdict : « un arbre déjà dans le jeu »), au nord seulement — l'essence et la
+       taille se déduisent de la case (`townTreeKind`, `townTreeSize` : érable, grand) ; posés en clair, sans `plantTree`
+       (qui tire l'essence dans `rnd()`), comme les trois arbres de l'étang ;
+     · les BANCS : des bancs de la ville (on s'y assoit, les habitants s'y arrêtent, les pigeons s'y posent : tout ce que
+       `bench` porte déjà) qui se dessinent en planches (`boulo`) ;
+     · les MÂTS de la guirlande.
+     ⚠️ TOUT OU RIEN, ET L'INTERDIT SE TIENT DES DEUX CÔTÉS : si une case de l'emprise n'est pas de l'herbe libre, rien n'est
+     posé (`boulo` reste nul, et le dessin, la neige, la pluie et le plan le lisent). Les seuls décors qu'on retire d'abord
+     sont ceux du semis de prairie (`gard` : un buisson cède à un ouvrage) — aujourd'hui, il n'y en a aucun. */
+  let boulo = null;
+  {
+    const BT = BD.BOULO_TILES;
+    const inFoot = (x, y) => x >= BT.x0 && x <= BT.x1 && y >= BT.y0 && y <= BT.y1;
+    for (let k = props.length - 1; k >= 0; k--) {
+      const p = props[k];
+      if (p.gard && inFoot(p.x, p.y)) { solid[id(p.x, p.y)] = 0; props.splice(k, 1); }
+    }
+    const taken = new Set(props.map((p) => p.y * W + p.x));
+    const freeTile = (x, y) => {
+      if (!inMap(x, y)) return false;
+      const i = id(x, y);
+      return !solid[i] && !hedge[i] && objects[i] === C.O_NONE && ground[i] === C.G_GRASS && !propCover(x, y) && !taken.has(i);
+    };
+    let ok = true;
+    for (let y = BT.y0; y <= BT.y1; y++) for (let x = BT.x0; x <= BT.x1; x++) if (!freeTile(x, y)) ok = false;
+    for (const q of [...BD.BOULO_TREES, ...BD.BOULO_BENCHES, ...BD.BOULO_POLES]) if (!freeTile(q.x, q.y)) ok = false;
+    if (ok) {
+      for (const t of BD.BOULO_TREES) { const i = id(t.x, t.y); objects[i] = C.O_TREE; objHp.set(i, C.TREE_HP); }
+      for (const b of BD.BOULO_BENCHES) { props.push({ x: b.x, y: b.y, kind: "bench", boulo: 1 }); solid[id(b.x, b.y)] = 1; }
+      for (const p of BD.BOULO_POLES) { props.push({ x: p.x, y: p.y, kind: "bouloPole" }); solid[id(p.x, p.y)] = 1; }
+      boulo = { tiles: BT };
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════
      HORS-ZIP 2026-09-02 — `soft` : LES CASES QU'ON TRAVERSE EN COUCHANT LE
      FEUILLAGE. Dérivée, jamais posée.
@@ -8778,7 +8817,7 @@ export function generateTownWorld() {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY, gates, plots };
+  return { w: W, h: H, ground, objects, objHp, elev, deck, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY, gates, plots, boulo };
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════

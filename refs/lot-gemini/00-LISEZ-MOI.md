@@ -76,6 +76,8 @@ références pour Gemini (l'échelle et la caméra réelles du jeu) et pour moi 
 | `cap-vf-03-arbres-ferme-{ete,automne,michute,hiver}.png` | les chênes et pins de la ferme, quatre saisons (4 fichiers) | — | B, E |
 | `cap-vf-04-batiments.png` | maison, grange, moulin, puits | été | E |
 | `cap-vf-05-verger.png` | un verger (citronnier ou fraisiers, si vous en avez de plantés) | été | E |
+| `cap-vt-13-arbre-personnage-z3.png` | **déjà prise (2026-10-29, par Claude)** : un arbre de la prairie de la mairie, le personnage à côté, cran ×3 | été | B (le platane) |
+| `cap-vt-14-prairie-mairie-z2.png` | **déjà prise (2026-10-29, par Claude)** : la prairie derrière la mairie, où va le boulodrome, cran ×2 | été | C (la buvette) |
 
 ## 3. Nommage et rangement
 

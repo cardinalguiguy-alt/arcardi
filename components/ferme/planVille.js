@@ -35,6 +35,7 @@
    ========================================================================== */
 
 import * as C from "./fermeConstants";
+import * as BD from "./boulodrome";   // 2026-10-29 — les pistes du boulodrome, au pixel
 
 export const PLAN_S = 8;   // pixels de plan par case de la ville (224 × 168 cases → 1792 × 1344 px)
 
@@ -187,6 +188,18 @@ export function buildTownPlan(tw, makeCanvasEl) {
     }
   }
   g.putImageData(im, 0, 0);
+  /* 2026-10-29 — LE BOULODROME : ses deux pistes de sable ocre dans leur cadre de chêne, à leur place au pixel (`boulodrome.js`) —
+     le sol de la carte reste de l'herbe, le dessin est posé par-dessus, comme en jeu. */
+  if (tw.boulo) {
+    const k = S / C.TILE;
+    for (const pk of BD.BOULO_PISTES) {
+      const fx = (pk.sx - BD.BOULO.M) * k, fy = (pk.sy - BD.BOULO.M) * k, fw = (BD.BOULO.LP + 2 * BD.BOULO.M) * k, fh = (BD.BOULO.WP + 2 * BD.BOULO.M) * k;
+      g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(fx + 0.8, fy + 1, fw, fh);
+      g.fillStyle = "rgb(122,104,86)"; g.fillRect(fx, fy, fw, fh);
+      g.fillStyle = "rgb(206,170,118)"; g.fillRect(pk.sx * k, pk.sy * k, BD.BOULO.LP * k, BD.BOULO.WP * k);
+      g.fillStyle = "rgba(255,240,210,0.22)"; g.fillRect(pk.sx * k, pk.sy * k, BD.BOULO.LP * k, 1);
+    }
+  }
 
   /* ───────────── 3 — RIVES, BORDURES ET LIGNES MÉDIANES ───────────── */
   for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
@@ -318,6 +331,7 @@ export function buildTownPlan(tw, makeCanvasEl) {
       case "mailboxIron": case "mailboxRed": case "mailboxTin": dot(cx, cy, 1.5, p.kind === "mailboxRed" ? [214, 70, 60] : [70, 74, 84]); break;
       case "birdbath": dot(cx, cy, 2.6, [178, 176, 170]); dot(cx, cy, 1.5, [120, 176, 214]); break;
       case "bench": case "stoneBench": g.fillStyle = "rgba(0,0,0,0.22)"; g.fillRect(cx - 4 + 0.8, cy - 1.5 + 1, 8, 3); g.fillStyle = p.kind === "bench" ? "rgb(128,92,60)" : "rgb(170,168,160)"; g.fillRect(cx - 4, cy - 1.5, 8, 3); g.fillStyle = "rgba(255,255,255,0.18)"; g.fillRect(cx - 4, cy - 1.5, 8, 0.8); break;
+      case "bouloPole": dot(cx + 0.5, cy + 0.6, 1.1, "rgba(0,0,0,0.25)"); dot(cx, cy, 1, [72, 58, 48]); break;   // 2026-10-29 : les mâts de la guirlande du boulodrome
       case "townWell": dot(cx + 0.7, cy + 0.9, 4, "rgba(0,0,0,0.22)"); dot(cx, cy, 4, [160, 156, 148]); dot(cx, cy, 2.6, [64, 110, 160]); dot(cx - 0.6, cy - 0.7, 0.9, [160, 206, 236]); break;
       case "statue": dot(cx + 0.9, cy + 1, 3.6, "rgba(0,0,0,0.25)"); dot(cx, cy, 3.4, [176, 174, 168]); dot(cx, cy, 1.8, [128, 126, 120]); break;
       /* 2026-10-04 — le chalet des patins : son emprise de 4 × 2 cases (l'ancre est la
@@ -463,7 +477,7 @@ function collectBuildings(tw, C) {
   // Tout ce qui bloque sans être connu (la scierie, l'atelier de verre, les remises…) : un bâtiment générique par
   // composante connexe de cases pleines, hors eau, arbres, haies et décor de sol.
   const W = tw.w, H = tw.h, lump = new Uint8Array(W * H);
-  const knownProp = new Set(["skateChalet", "lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass", "brazier", "rinkBoards", "rinkPole"]);
+  const knownProp = new Set(["skateChalet", "lamp", "bench", "topiary", "goldBush", "clump", "shrub", "tallGrass", "stall", "townWell", "crate", "barrel", "sacks", "kiosk", "flowerCart", "marketArch", "grave", "stoneBench", "stoneBlock", "boulder", "planter", "flowerTrough", "roseBox", "bonsai", "pier", "statue", "mailboxIron", "mailboxRed", "mailboxTin", "birdbath", "herbPots", "gardenTable", "swing", "clothesline", "woodpileRoofed", "woodpileAxe", "wheelbarrow", "hutch", "rainBarrel", "archBridge", "table", "streetSign", "hangLamp", "oilLamp", "lavender", "stairPost", "stairBalus", "stairSide", "stairRail", "stairPot", "starKiln", "starRack", "starShutter", "starNestTree", "newsBoard", "telescope", "urn", "ruinGate", "rod", "bucket", "chest", "potPink", "hedgeRow", "lily", "reedsWater", "reedTuft", "grassTuft", "flatStone", "stepStones", "brambleSmall", "bramble", "wildGrass", "brazier", "rinkBoards", "rinkPole", "bouloPole"]);
   const propAt = new Set(); for (const p of tw.props) if (knownProp.has(p.kind)) propAt.add(p.y * W + p.x);
   for (let i = 0; i < W * H; i++) {
     if (!tw.solid[i] || seen.has(i) || tw.ground[i] === C.G_WATER) continue;

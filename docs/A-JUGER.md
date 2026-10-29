@@ -62,6 +62,12 @@ habitants en ville, à deux : jamais. Les MAINS JOINTES (après 4 s immobile, jo
 seulement — à regarder chez un habitant et chez l'autre joueur. Laissé tel quel sans son avis : le bras nu de la fermière de profil au repos
 (une fente claire dans la robe), les coupes longues du salon vues de dos.
 
+**À REGARDER EN JEU — LE TERRAIN DU BOULODROME (2026-10-29)** : derrière la mairie (`docs/PROJETS.md` §11, lot 2). Le sable éclairé depuis la
+physique (racines, creux, ornière, plombées, tassé des cercles), les madriers, les érables (adultes : la clôture de l'avenue est sous leur
+couronne), les bancs de planches (s'y asseoir), la guirlande en zigzag le jour (discrète) et la nuit (le boulodrome baigne dans une lueur
+chaude), la pluie (les flaques dans les vrais creux) et la neige (au banc `render-boulodrome` seulement). Vu en jeu en automne, de jour, au
+soir, la nuit, sous la pluie ; **pas vu : l'été, le printemps, l'hiver en jeu, l'iPad.**
+
 **À JOUER** : la séance À DEUX (visite, course, bonhomme, pigeons, scierie, navire, cratère) — Guillaume est seul pour l'instant, **le lui
 RAPPELER** quand un second joueur est là ; la séance iPad, plus tard (Xcode à mettre à jour).
 

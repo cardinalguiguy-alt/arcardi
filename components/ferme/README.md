@@ -1,4 +1,43 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-24
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-29
+
+## 2026-10-29 — LE BOULODROME, LOT 2 : LE TERRAIN DANS LA VILLE (ON NE JOUE PAS ENCORE)
+
+Ses 17 verdicts de la page du terrain (`docs/PROJETS.md` §11), et : « je veux une qualité graphique bluffante ». Derrière la mairie, deux
+pistes d'est en ouest (x 101 à 113,7 ; y 39 à 46,6), quatre érables au nord et un au bout est, trois bancs de planches, trois mâts et une
+guirlande de guinguette en zigzag ; on y marche, on s'assoit sur les bancs. **Supabase : rien. Réseau : rien** (rien ne bouge qui se diffuse).
+Fichiers : `boulodrome.js` (pur : l'emprise, le repère des pistes, ce qu'est chaque pixel), `boulodromeArt.js` (le dessin), une passe finale
+de `generateTownWorld` (sans tirage), `paintTownGroundTile`, la guirlande et sa lumière dans `drawTownFrame`, la classe `SAND` de `neige.js` et
+`pluie.js`, l'essence et la taille des arbres (`townTreeKind`, `treeSizeRaw`), le plan. Banc : `render-boulodrome` (15/15). Ce qui a appris :
+- **Le sable est la physique éclairée** : chaque pixel prend la pente de `petanque.js` (racines, creux, ornière, cailloux), tramé au bruit bleu
+  entre deux tons (le grain), et ce qui s'y raconte est posé où le jeu le met : le tassé des deux cercles, les plombées du milieu, le meuble
+  contre les madriers, les racines de l'arbre du nord qui soulèvent la bosse, le limon craquelé du creux. Des racines en Bézier se lisaient en
+  bâtons posés sur le sable : ce sont des cylindres enterrés par tronçons, sortis de sous le madrier.
+- **La pluie remplit les VRAIS creux** (`und` porte le relief local, sans la pente d'ensemble : une piste à 0,8 % se draine) : 45 pixels de
+  flaque sur 45 dans le creux du platane aux premières gouttes, l'ornière sous l'orage, aucune sur une bosse. Une flaque de dallage posée sur
+  du sable (grise, cerclée de blanc) se lisait comme une plaque d'égout : eau trouble, brune, bord mordu par les gravillons. Le sable sèche
+  d'abord sur les bosses (l'ordre de couverture suit le relief) au lieu d'un camouflage de plaques.
+- **Sous la neige, la face d'un madrier ne tient rien** : sinon 3 cm effaçaient le cadre des pistes.
+- **La guirlande se montre la nuit** : de jour, six fils chargés de globes de 3 px faisaient une tente de perles par-dessus le jeu — fil fin et
+  transparent, un globe d'un pixel tous les 11 px, le fil cuit une fois. La nuit, des flaques de lumière LARGES et faibles sous le fil (au sol,
+  pas où il se dessine) : étroites, elles faisaient des projecteurs de scène.
+- **Sa note « pas systématique », tranchée avec lui** (`petanque.js`, PISTES) : un quart de pente sur la piste du platane, un couloir de
+  65 cm entre racines et creux, moitié de pente sur celle de la mairie — une roulette sur deux passe (`verify-petanque` §3, 83/83). Les
+  racines se DÉDUISENT de la bosse : posées en coordonnées, elles seraient restées dessinées sur du sable plat après le déplacement.
+⚠️ Pas vu : le printemps, l'hiver enneigé en jeu (la neige est jugée au banc), l'iPad, à deux.
+
+## 2026-10-28 — LE BOULODROME, LOT 1 : LA RÈGLE ET LA PHYSIQUE (PUR, RIEN À L'ÉCRAN)
+
+« Poursuivons : t'as carte blanche sur cette passe. » La page des trente décisions du boulodrome n'avait reçu aucun verdict : toutes les
+recommandations font foi (`docs/PROJETS.md` §11, avec les cinq écarts et leur raison). Livré : `petanque.js`, pur, et `verify-petanque`
+(80/80, falsifié trois fois). **Supabase : rien. Réseau : rien encore** (le format de la `req` et de l'`apply` est écrit, rien ne l'envoie).
+**Rien n'importe ce fichier : aucun joueur ne voit de différence.** Ce que les parties simulées ont appris, et que le code garde en commentaire :
+- **Le choc au fer se fait entre masses LIBRES.** Une boule frappée « tenue par le sol » devient un mur : le tir parfait revenait de 1,2 m.
+- **Le cochonnet ne reçoit au fer que la part horizontale** : sinon une plombée posée dessus le faisait gicler à 8 m/s, et la moitié des mènes
+  du tête-à-tête finissaient « but mort ». Il freine six fois plus vite qu'une boule et se pose à 80 cm des côtés, 1,5 m du fond.
+- **L'écart en travers vaut presque l'écart en long** : à moitié, les boules pointées s'alignaient sur l'axe du but et le premier tir le chassait.
+- **La physique prend le rayon du DESSIN** (22 cm) : la difficulté en dépend, et le §9 du banc la mesure.
+- **Une ornière à flancs de 16 % gardait une boule en équilibre impossible** : élargie à 35 cm ; une bosse qui la chevauchait, écartée.
+
 
 ## 2026-10-24 (nuit) — LES REFLETS DES CORPS FINS ET LA LUMIÈRE ; LES NOMS DES MAISONS APRÈS ELLE
 
