@@ -11,6 +11,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
 const { fermeArt: A } = await loadFerme(ROOT, ["fermeConstants", "fermeArt"]);
 const S = A.buildSprites();
+S.persoStyle = "detaille";   // 2026-10-31 : ce banc rend le 32 × 48 DÉTAILLÉ (le jeu part maintenant du trait simple, `persoSimpleArt.js`)
 // [nom, genre, tenue, look, drapeaux de getChar]
 const ROWS = [
   ["habitante", "f", 5, null, {}], ["habitant", "m", 7, null, {}],

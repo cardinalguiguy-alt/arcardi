@@ -136,7 +136,7 @@ export function paintHair(g, P, x, o) {
   const cut = CUTS[o.cut];
   if (!cut) return;
   const R = wardrobeRamp(o.col), pal = { ...R, r: "#d94f6e", R: "#9a2a44" };
-  const dir = o.dir, minY = o.minY | 0, bob = o.bob | 0;
+  const dir = o.dir, minY = o.minY | 0, bob = o.bob || 0;   // 2026-10-31 : pas de `| 0` — le trait simple passe des demi-pas (0,5)
   const dx = dir === 2 ? -(o.step | 0) : (o.step | 0);
   const swayY = cut.sway && cut.sway[dir] != null ? cut.sway[dir] : 99;
   paintRows(g, P, x, cut[dir] || [], pal, bob, minY, dx, swayY);
@@ -163,7 +163,7 @@ export function paintBeard(g, P, x, o) {
   const rows = B && BEARD_ROWS[B.id] && BEARD_ROWS[B.id][o.dir];
   if (!rows) return;
   const R = wardrobeRamp(o.col);
-  paintRows(g, P, x, rows, { l: R.m, m: R.d, d: R.o, o: R.o }, o.bob | 0, o.minY | 0);
+  paintRows(g, P, x, rows, { l: R.m, m: R.d, d: R.o, o: R.o }, o.bob || 0, o.minY | 0);
 }
 
 /* 2026-10-23 — LES RANGÉES SEULES, pour le 32 × 48 (`persoHdArt.js`) : il les agrandit (Scale2x) au lieu de recopier le dessin. Une coupe :

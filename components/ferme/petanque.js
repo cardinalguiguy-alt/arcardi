@@ -118,6 +118,10 @@ export const MODES = {
   tat:       { camps: 2, joueurs: 1, boules: 3 },
   doublette: { camps: 2, joueurs: 2, boules: 3 },
   trois:     { camps: 3, joueurs: 1, boules: 2 },
+  /* 2026-10-31 (lot 3) — L'ENTRAÎNEMENT, seul sur la piste (son verdict : « une partie d'entraînement » en attendant les habitants
+     du lot 4) : le but, puis ses trois boules, et la mène suivante repart d'où le but a fini. La règle n'a rien à y changer — un
+     seul camp tient toujours le point et joue toutes ses boules (`campSuivant`) — sauf qu'on ne la gagne jamais (`finirMene`). */
+  solo:      { camps: 1, joueurs: 1, boules: 3 },
 };
 
 /* LES DEUX PISTES, POSÉES À LA MAIN (décision « un terrain qui se lit » : fixe, il s'apprend ; tiré au hasard, il
@@ -607,7 +611,7 @@ function finirMene(s) {
   m.fini = r;
   if (!r.nulle) s.camps[r.gagnant].score += r.points;
   s.historique.push({ n: m.n, gagnant: r.gagnant, points: r.points, raison: r.raison });
-  for (let c = 0; c < s.camps.length; c++) if (s.camps[c].score >= s.cible) s.gagnant = c;
+  if (s.mode !== "solo") for (let c = 0; c < s.camps.length; c++) if (s.camps[c].score >= s.cible) s.gagnant = c;   // l'entraînement ne finit pas
   if (s.gagnant !== null) {
     // Fanny : un perdant à zéro. La boîte à volet ne s'ouvre que pour ça (lot 5), la gazette le raconte.
     const perdants = [];

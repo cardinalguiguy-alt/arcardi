@@ -395,6 +395,17 @@ enchaîné vers ×3, qui voit l'agrandi, les places des joueurs, les commandes, 
 le relief reste à lire), la jauge au-dessus du joueur, la bande de couleur des boules, le cochonnet orange, l'ardoise et l'anneau du point,
 la fin de mène sur le terrain, la revanche. Recommandations cochées ; rien n'est codé du lot 3.
 
+**Lot 3 FAIT le 2026-10-31** (sa page n'a reçu aucun verdict : les 15 recommandations font foi). `bouloJeu.js` (pur : sessions, placement,
+guide, ardoise, pause), `bouloJeuArt.js` (boules d'acier à bande rouge/bleu/or, cochonnet orange, guide, jauge, anneau du point, « +n »,
+au pixel d'écran), `BouloHud.js` (ouvrir, salle, ardoise, gestes, revanche, abandon), `A.drawBouloPose` (accroupi / debout, le bras qui
+balance), le mode `solo` de `petanque.js` (l'entraînement). Réseau : une requête par geste, un `apply` (session + entrée du lancer +
+empreinte) ; la posture dans le paquet de position (`bp`) ; aucune migration. Bancs : `verify-boulo-jeu` 32/32 (dont 600+ lancers animés à
+60 i/s qui concluent l'état de l'hôte au bit près), `render-boulo-jeu`, `verify-petanque` 83/83. Vu en jeu (harnais) : entraînement ; à
+deux, salle, invitation, tours, pause et reprise, fin 7-6, revanche, abandon ; aucune erreur, aucun écart d'empreinte.
+**Pas fait / pas vu** : le doigt sur iPad (un toucher pose la donnée et la valide d'un coup, pas de glisser) ; le spectateur ne voit pas
+d'ardoise au-dessus de la piste ; la nuit, la pluie (`lourd`) et la fermeture sous la neige pas vues en jeu ; le fondu enchaîné pas jugé à
+l'œil ; le bras du geste est fin à ×2 ; une partie entière jouée à la main (la fin a été testée en forçant 6-6).
+
 **Lots suivants (un changement visuel par livraison, noyau §2)** : (3) jouer à deux (visée, jauge, ×3 — sa note : « une vue agrandie de la partie, peut-être un fondu enchaîné » —, gestes en 32 × 48,
 réseau) ; (4) les habitants boulistes et leur bot ; (5) la mesure, Fanny, l'aimant, les sons, la gazette, l'ardoise.
 
@@ -402,11 +413,38 @@ réseau) ; (4) les habitants boulistes et leur bot ; (5) la mesure, Fanny, l'aim
 côtés (noyau §4) ; une proportion n'est pas une dimension (boule, main, piste se jugent ensemble, sur l'écran) ; tout ce qui touche une position
 reste en `+ − × ÷` et `sqrt` (`verify-petanque` §1 le lit) ; un gain d'or rejouable à volonté est un robinet.
 
-## 12. Les personnages « ressemblent à des jouets » : plus de détail, et l'ancien dessin à la demande (dit le 2026-10-29, APRÈS le boulodrome)
+## 12. Les personnages au TRAIT SIMPLE — BRANCHÉ le 2026-10-31, style par défaut (dit les 2026-10-29 et 30, jugé le 31)
 
-Sa phrase, en répondant à la page du terrain du boulodrome : « on reviendra ensuite (après ce chantier) sur le niveau de détail des persos
-qui ressemblent à des jouets actuellement ; on cherchera un moyen de toggle on and off les anciens graphismes de persos ». **Rien de codé.**
-Ce qui existe : les joueurs en 32 × 48 derrière ⚙️ « Personnages fins » (`PERSO_HD`, FermeGame.js ; `persoHdArt.js`), vus en jeu chez lui
-seulement (`docs/A-JUGER.md`) ; les habitants restent dans l'ancien gabarit. À cadrer avec lui AVANT de dessiner (noyau §2) : ce qui fait
-« jouet » à ses yeux (la tête trop grosse — noyau §4, « un personnage chibi a la hauteur d'un adulte et la carrure de deux » —, les aplats,
-les membres), si l'interrupteur actuel suffit à « garder l'ancien » ou s'il en faut un par joueur, et si les habitants suivent.
+Ses phrases : « on reviendra ensuite sur le niveau de détail des persos qui ressemblent à des jouets ; on cherchera un moyen de toggle on and
+off les anciens graphismes » (2026-10-29) ; « le graphisme actuel s'écarte trop du style simple des anciens dessins originaux. Même si on veut
+améliorer le nbre de pixels […], il faudrait garder au maximum la simplicité formelle » (2026-10-30).
+
+**Ses verdicts (2026-10-31, page https://claude.ai/artifact/LQZXwr6nSchVo53dHS7ccP, collection `verdicts`)** : la colonne **Habit**, puis,
+la page lui ayant mal expliqué que « Habit » = « Visage » + les signes de vêtement : « on détaille au mieux pour que les habits soient
+beaux ». Marche à **huit images**, **tout le monde** (joueurs et habitants) — points non touchés, donc ma recommandation. L'interrupteur va
+au **menu dev** et non dans ⚙️ : « le plus important est que le changement se fasse pour tout le monde sur toute la session ».
+
+**Fait** :
+- `drawCharFrame` (fermeArt.js) sait se peindre à ×2 (`fine` : son `P` double les rectangles) au DEMI-PAS (`step`, `bob` à 0,5) — la marche
+  à huit images (`PERSO_SIMPLE_WALK`) — et y pose les **signes du vêtement** (`paintHabitFine`, persoSimpleArt.js) APRÈS les costumes et
+  AVANT la garde-robe : col en V (ses pointes viennent du liseré de l'épaule), boutons, ceinture de cuir à boucle de laiton, poignets,
+  poches, languettes et brides des souliers ; la robe : taille, nœud et boutons du dos, ourlet en liseré ; la salopette de Greg (boutons de
+  métal, poche, revers roulés), la casquette (bouton, coutures), le carreau buffalo de Tristan au pixel fin, le tablier d'Ingrid (cordon,
+  poche), le manteau de Carla (col en V à revers, boucle, fente), le gilet des ouvriers. Règles : aucune couleur inventée (±30 du vêtement,
+  le cuir des souliers, un pixel de laiton ou de métal), des traits jamais des volumes, aucun pixel hors de la silhouette (banc).
+- `persoSimpleArt.js` retouche ensuite l'image fine : coins arrondis (Scale2x « contre le vide », écrit au pixel fin), liserés, visage
+  d'encre et ses onze expressions, semelles. Feuille : `makeCharSimple` (fermeArt.js), au gabarit `__hdK = 2` — 9 images de marche, 4 de
+  poses, `__simple` (`drawPoseHD` ne lui pose pas de contour).
+- Le style est un **état partagé** (`sharedRef.persoStyle` : "simple" par défaut, "detaille", "ancien") : menu dev → « Personnages (pour
+  tous les joueurs) », requête `devPersoStyle`, l'hôte pose, persiste, diffuse dans `p.state`, le dit au chat ; l'arrivant le reçoit dans
+  l'instantané. Aucune migration (un champ du JSON de la sauvegarde). L'ancien « ✨ Personnages fins » de ⚙️ (par appareil) est retiré.
+- Bancs : `verify-perso-simple` (10/10 : le mode fin aux pas entiers = l'ancien ×2 au pixel près pour 88 tenues ; « net » = Scale2x ; aucun
+  signe hors silhouette ; la feuille ; la marche), `render-perso-simple` (+ `perso-simple-habits.png`), `STYLE=simple render-poses-hd`.
+  Vu en jeu le 2026-10-31 (harnais `audit-tmp`, `audit-duo`) : les trois styles basculent chez les deux joueurs dans les deux sens, l'arrivant
+  reçoit le style, la ligne de chat, les habitants en costume, la nuit.
+
+**Pas fait** : les expressions de profil (seuls l'œil ouvert et fermé) ; les mains jointes au repos (le détaillé les a, le simple non) ;
+le bras des riders redessiné le long de l'os (ils recopient le bras par cases, comme l'ancien) ; les vêtements de la Maison Garfield
+gardent leur drapé à quatre tons du 2026-10-21 (plus modelés que le reste : à reprendre au trait simple si ça détonne en jeu) ; Léo, Froufrou,
+l'apiculteur et le vandale n'ont pas de signes neufs ; pas vu sous la pluie ni au cran 3 sur une capture du jeu (le cran 3 sur une capture
+fixe : `perso-simple-ecran-*`). ⚠️ Écarté : le Scale2x complet (il arrondit aussi les frontières intérieures et fait bouder toutes les bouches).

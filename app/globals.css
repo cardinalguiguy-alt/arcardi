@@ -9304,3 +9304,32 @@ body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
 .ferme-fit-pastille{ display:inline-block; width:10px; height:10px; margin-right:4px; border-radius:3px; border:1px solid rgba(0,0,0,0.35); vertical-align:-1px; }
 .ferme-fit-fiche{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:8px 10px; border:2px solid var(--f-paper-d); border-radius:8px; background:#fffaf0; }
 .ferme-fit-tarif{ font-weight:700; font-size:16px; }
+
+/* ═══ 2026-10-31 — LE BOULODROME, LOT 3 : L'ÉCRAN D'UNE PARTIE (`components/ferme/BouloHud.js`). L'ardoise à la craie en haut, le
+   panneau d'ouverture et la salle d'attente (le papier de la ferme), les gestes en bas, la revanche et l'abandon dans un coin. ═══ */
+.ferme-boulo-ardoise{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:30; padding:6px 14px 7px; min-width:min(420px, 92vw); max-width:94vw;
+  background:#2c3530; color:#f1ede2; border:3px solid #6b4f33; border-radius:6px; box-shadow:0 3px 0 rgba(0,0,0,.25); font-family:inherit; text-align:center; }
+.ferme-boulo-ardoise .line{ display:flex; gap:14px; justify-content:center; align-items:center; flex-wrap:wrap; font-size:14px; }
+.ferme-boulo-ardoise .camp{ display:inline-flex; align-items:center; gap:6px; padding:1px 6px; border-radius:4px; }
+.ferme-boulo-ardoise .camp.moi{ background:rgba(255,255,255,.08); }
+.ferme-boulo-ardoise .camp.gagne{ box-shadow:0 0 0 2px #e8c45a; }
+.ferme-boulo-ardoise .camp em{ font-style:normal; font-weight:bold; }
+.ferme-boulo-ardoise .score{ font-size:20px; min-width:20px; }
+.ferme-boulo-ardoise .mene{ font-size:12px; opacity:.75; }
+.ferme-boulo-ardoise .sub{ margin-top:3px; font-size:13px; color:#e9e2c8; min-height:17px; }
+.ferme-boulo-ardoise .dots{ display:inline-flex; gap:2px; }
+.ferme-boulo-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; border:2px solid; box-sizing:border-box; }
+.ferme-boulo-dot.vide{ opacity:.45; }
+.ferme-boulo-open{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:31; padding:8px 16px 10px; text-align:center; width:min(520px, 94vw); }
+.ferme-boulo-open .ttl{ font-weight:900; font-size:16px; }
+.ferme-boulo-open .row{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:7px; }
+.ferme-boulo-open .row.small{ font-size:12px; opacity:.8; }
+.ferme-boulo-slot{ display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border:2px dashed #9a8a70; border-radius:6px; font-size:12px; opacity:.55; }
+.ferme-boulo-slot.on{ border-style:solid; opacity:1; font-weight:bold; background:var(--f-paper-d); }
+.ferme-boulo-slot.me{ box-shadow:0 0 0 2px var(--f-gold); }
+.ferme-boulo-invite{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:29; padding:6px 14px; font-size:13px; max-width:min(560px, 94vw); text-align:center; }
+.ferme-boulo-gestes{ position:fixed; bottom:96px; left:50%; transform:translateX(-50%); z-index:30; display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:center; padding:6px 10px; max-width:94vw; }
+.ferme-boulo-gestes .hint{ font-size:13px; }
+.ferme-boulo-gestes .geste{ font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:var(--f-paper-d); }
+.ferme-boulo-coin{ position:fixed; right:14px; top:120px; z-index:30; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+@media (max-width:1000px){ .ferme-boulo-ardoise, .ferme-boulo-open, .ferme-boulo-invite{ top:96px; } .ferme-boulo-coin{ top:200px; } }

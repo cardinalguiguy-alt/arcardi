@@ -18,6 +18,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
 const { fermeArt: A, chantierArt: CA, montureArt: MA, fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "chantierArt", "montureArt"]);
 const S = A.buildSprites();
+// 2026-10-31 : le 32 × 48 DÉTAILLÉ par défaut ; `STYLE=simple node …` rend le TRAIT SIMPLE (`persoSimpleArt.js`, le style du jeu) — sans
+// contour, comme `drawPoseHD` pour une feuille `__simple` — dans tools/out/poses-simple.png.
+const SIMPLE = process.env.STYLE === "simple";
+S.persoStyle = SIMPLE ? "simple" : "detaille";
 const CHARS = { m: ["m", 0, null], f: ["f", 1, null] };
 const PX = 12, PY = 14, CW = 40, CH = 48;   // la case (unités du monde), le coin haut-gauche du personnage debout
 // [nom, personnage, rangée, pose(ctx, sheet, row)]
@@ -97,7 +101,7 @@ rows.forEach(([, who, row, fn], ri) => {
   [[old, false], [naked, true]].forEach(([sheet, hd], ci) => {
     const cell = makeCanvas(CW * K2, CH * K2);
     fn(poseCtx(cell.ctx, K2), sheet, row);
-    if (hd) outline(cell.px, CW * K2, CH * K2);
+    if (hd && !SIMPLE) outline(cell.px, CW * K2, CH * K2);
     const x0 = P + ci * (CW * K2 + P) + (ci ? GAP : 0), y0 = P + ri * (CH * K2 + P);
     bg.fillStyle = ci ? "#ece6d8" : "#dcd5c6"; bg.fillRect(x0, y0, CW * K2, CH * K2);
     for (let y = 0; y < CH * K2; y++) for (let x = 0; x < CW * K2; x++) {
@@ -107,5 +111,6 @@ rows.forEach(([, who, row, fn], ri) => {
   });
 });
 const up = scale(board.px, W, H, +(process.env.K || 3));   // K=6 node … : pour regarder une pose de près
-writePNG(path.join(ROOT, "tools", "out", "poses-hd.png"), up.px, up.W, up.H);
-console.log("planche : tools/out/poses-hd.png —", rows.map((r) => r[0] + " " + r[1]).join(", "));
+const OUTF = SIMPLE ? "poses-simple.png" : "poses-hd.png";
+writePNG(path.join(ROOT, "tools", "out", OUTF), up.px, up.W, up.H);
+console.log("planche : tools/out/" + OUTF + " —", rows.map((r) => r[0] + " " + r[1]).join(", "));

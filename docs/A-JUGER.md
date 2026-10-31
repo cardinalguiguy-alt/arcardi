@@ -45,22 +45,17 @@ les détails : mèches fines sur les coupes du catalogue, plis d'un pixel (robe,
 de rondeur systématique, parfois plus d'angles », un agrandissement qui garde les coins droits (frange, bout de carré, bords de chapeau,
 épaules) — l'arrondi reste aux boucles, macarons, boa, fourrure, béret. `tools/out/garderobe-hd-coupes.png`, `garderobe-hd-vetements.png`.
 
-**À REGARDER — LES VISAGES (2026-10-23)** : le profil réparé (yeux avancés d'un pixel, front dégagé, sourcils sur la peau, bouches qui
-entaillent le bord) — `tools/out/perso-hd-expressions-profil.png` ; et EN JEU les expressions automatiques (clignement, joie, rire, surprise,
-gêne, assoupi) : jamais vues à l'écran, seulement vérifiées par les feuilles demandées (volet masqué). Ses notes pour la suite : PROJETS §9.
+**À REGARDER EN JEU — LE TRAIT SIMPLE (2026-10-31), LE STYLE DU JEU PAR DÉFAUT** (`docs/PROJETS.md` §12) : l'ancien dessin peint à ×2,
+son visage d'encre et ses expressions, la marche à huit images au demi-pas, les signes du vêtement (col, boutons, ceinture et boucle, poches,
+poignets, souliers ; robe : taille, nœud et boutons du dos ; Greg, Soan, Tristan, Ingrid, Carla, les ouvriers) — `tools/out/perso-simple-habits.png`,
+`perso-simple-ecran-rue-loupe.png`. Vu en jeu chez moi (harnais), de jour et de nuit, aux crans 1 et 2, à deux pour l'interrupteur ; **pas
+vu : sous la pluie, l'iPad**. À juger surtout : les vêtements de la Maison Garfield, restés au drapé à quatre tons du 2026-10-21, à côté du
+reste au trait simple.
 
-**À REGARDER — LES ÉPAULES (2026-10-24)** : sa variante C posée (épaules tombantes, bras rentrés, deux pixels plus bas et plus longs,
-la main en haut de la cuisse), vêtements et costumes suivis (`perso-hd-planche.png`, `pnj-hd-planche.png`, `garderobe-hd-vetements.png`).
-**Une décision technique à juger** : les POSES gardent la hauteur et la longueur de bras du gabarit (assis, patin, park, cratère, ouvriers :
-elles découpent la manche aux repères du 16 × 24 — avec le bras long, la main suivait les jambes) ; elles prennent la pente et les bras
-rentrés. Assis ou au patin, les bras sont donc un peu plus courts qu'à la marche (`tools/out/poses-hd.png`). Léo porte ses cartons bras
-pliés (de face et de profil). Pas vu en jeu : bateau, cheval, riders (le banc les couvre, sauf bateau et cheval).
-
-**À REGARDER EN JEU — LA MARCHE À HUIT IMAGES (2026-10-24, soir)** : branchée après cinq maquettes (https://claude.ai/artifact/L4mrNwQSKMBGVnNyVK9tEA),
-avec le balancement d'un pied sur l'autre (« sans » reste possible : `W2_SWAY` à zéro). Elle n'a été vue en jeu que chez lui ; elle, les
-habitants en ville, à deux : jamais. Les MAINS JOINTES (après 4 s immobile, joueurs et habitants : sa décision) : vues en jeu chez lui
-seulement — à regarder chez un habitant et chez l'autre joueur. Laissé tel quel sans son avis : le bras nu de la fermière de profil au repos
-(une fente claire dans la robe), les coupes longues du salon vues de dos.
+**LE STYLE DÉTAILLÉ (2026-10-23 et 24), désormais au menu dev** : les visages de profil, les épaules de la variante C (les poses gardent les
+bras du gabarit : assis ou au patin, ils sont un peu plus courts qu'à la marche), sa marche à huit images et les mains jointes — jugés chez
+lui seulement, jamais chez un habitant ni à deux. Laissés tels quels sans son avis : le bras nu de la fermière de profil au repos, les coupes
+longues vues de dos. Les détails ne sont plus à l'ordre du jour tant que le trait simple tient.
 
 **À REGARDER EN JEU — LE TERRAIN DU BOULODROME (2026-10-29)** : derrière la mairie (`docs/PROJETS.md` §11, lot 2). Le sable éclairé depuis la
 physique (racines, creux, ornière, plombées, tassé des cercles), les madriers, les érables (adultes : la clôture de l'avenue est sous leur

@@ -49,8 +49,11 @@ console.log("\n=== 1. la carte d'avant le branchement sort au bit près ===\n");
 /* ⚠️ 2026-10-05 : RENOUVELÉE (2935e656 → 6b9b07f7) — les bois des coins ouest (`TOWN_WOODS_WEST`)
    plantent des arbres sur des cases qui étaient vides : la carte change VOLONTAIREMENT. Vérifié :
    à `d23cc74` (avant les bois) ce banc sort 2935e656 au bit près ; à `9bf75c3` (avec), 6b9b07f7.
-   Seul `generateTownWorld` a bougé (trois blocs, tous les bois). */
-const HEAD_FP = "6b9b07f7";
+   Seul `generateTownWorld` a bougé (trois blocs, tous les bois).
+   ⚠️ 2026-10-30 : RENOUVELÉE (6b9b07f7 → 3c1cc04) — le boulodrome (`032d88e`, `boulodrome.js`) plante ses CINQ érables
+   (`BOULO_TREES`) dans `objects` : la carte change VOLONTAIREMENT. Vérifié : les mêmes cases remises à `O_NONE`, l'empreinte
+   redevient 6b9b07f7 au bit près — rien d'autre n'a bougé (ses bancs et ses mâts sont des `props`, hors empreinte). */
+const HEAD_FP = "3c1cc04";
 function fingerprint(w) {
   let h = 0x811c9dc5 >>> 0;
   const f = (v) => { h ^= v & 255; h = Math.imul(h, 16777619) >>> 0; };

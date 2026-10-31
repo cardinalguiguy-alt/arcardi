@@ -95,6 +95,10 @@ import * as EX from "./expressions"; // 2026-10-23 — les expressions automatiq
 import * as SPK from "./skatepark";      // 2026-10-11 — le skatepark de la place (printemps) : son relief, ses garde-corps, la marche (pur)
 import * as BD from "./boulodrome";      // 2026-10-29 — le boulodrome : son emprise, ses arbres, ses fils (pur)
 import * as BA from "./boulodromeArt";   // 2026-10-29 — le boulodrome : son sol (sable éclairé, madriers), ses bancs, ses mâts, sa guirlande
+import * as PQ from "./petanque";      // 2026-10-31 — la règle et la physique de la pétanque (⚠️ `PT` est le patin)
+import * as BJ from "./bouloJeu";        // 2026-10-31 — le boulodrome, lot 3 : jouer (les sessions, le guide, le placement ; pur)
+import * as BJA from "./bouloJeuArt";    // 2026-10-31 — les boules, le cochonnet, le guide, la jauge, l'anneau du point (au pixel d'écran)
+import BouloHud from "./BouloHud";       // 2026-10-31 — l'ardoise, l'ouverture d'une partie, la salle, les gestes, la revanche
 import * as SPA from "./skateparkArt";   // 2026-10-11 — son dessin : le relief projeté en 3/4, éclairé, découpé en tranches de tri
 import * as MO from "./monture";       // 2026-10-11 — la physique des montures du park (skate, rollers, trottinette, BMX), pure
 import * as MA from "./montureArt";    // 2026-10-11 — leur dessin (le véhicule en 3D sur la surface, le corps du rider)
@@ -134,7 +138,7 @@ const ZOOM = 3;
    monuments, jamais un second nombre qui pourrait diverger de lui. */
 const ZOOM_LEVELS = [1, 2, 3, 4, 5];
 /* ╔══════════════════════════════════════════════════════════════════════════
-   ║ 2026-10-23 — LES JOUEURS EN 32 × 48, DERRIÈRE UN INTERRUPTEUR (⚙️ → « Personnages fins »)
+   ║ 2026-10-23 — LES JOUEURS EN 32 × 48, DERRIÈRE UN INTERRUPTEUR (⚙️ → « Personnages fins » ; 2026-10-31 : MENU DEV, PARTAGÉ, voir `PERSO_HD`)
    ╚══════════════════════════════════════════════════════════════════════════
    Décision de Guillaume : même taille à l'écran que l'ancien 16 × 24, deux fois plus de pixels (`persoHdArt.js`, `S.getCharHD`),
    « joueurs d'abord » (les résidents gardent l'ancien), un interrupteur pour revenir à l'ancien dessin. Réglage LOCAL (chaque
@@ -148,18 +152,17 @@ const ZOOM_LEVELS = [1, 2, 3, 4, 5];
      ENTIER, comme les maisons (`drawScreenExactBitmap`) ; une feuille miroir pour le profil ouest ;
    · cran 1 → un demi-pixel : l'ancien 16 × 24, dessiné POUR cette taille, reste le bon dessin (un niveau de détail, pas un repli) ;
    · une échelle fractionnaire (le fondu du zoom, l'enfoncement du cratère) → la feuille fine lissée, le temps du fondu. */
-const PERSO_HD = { on: true, _read: false };
-function persoHdOn() {
-  if (!PERSO_HD._read) {
-    PERSO_HD._read = true;
-    try { const v = localStorage.getItem("arcardi.persoHd"); if (v === "0") PERSO_HD.on = false; } catch (e) { /* stockage refusé : on garde le réglage par défaut */ }
-  }
-  return PERSO_HD.on;
-}
-function setPersoHd(on) {
-  PERSO_HD.on = !!on; PERSO_HD._read = true;
-  try { localStorage.setItem("arcardi.persoHd", on ? "1" : "0"); } catch (e) { /* idem */ }
-}
+/* 2026-10-31 — LE STYLE DES PERSONNAGES, PARTAGÉ : "simple" (le TRAIT SIMPLE, `persoSimpleArt.js` — le défaut), "detaille" (le
+   32 × 48 de `persoHdArt.js`) ou "ancien" (le 16 × 24 à tous les crans). Verdicts de Guillaume (2026-10-31, docs/PROJETS.md §12) :
+   l'interrupteur quitte ⚙️ pour le MENU DEV, et « le plus important est que le changement se fasse pour tout le monde sur toute la
+   session ». C'est donc un ÉTAT PARTAGÉ — `sharedRef.persoStyle`, posé par l'hôte (requête `devPersoStyle`), voyageant dans `p.state`
+   et dans l'instantané comme la météo forcée (aucun message dédié, §3 ; un champ de plus dans le JSON de la sauvegarde, AUCUNE migration)
+   — et non plus un réglage d'appareil (`localStorage` « arcardi.persoHd », abandonné). Ici sa copie de MODULE, que la boucle de rendu
+   lit à chaque image sans closure figée ; `applyPersoStyle` (dans le composant) est le seul à l'écrire. Les deux styles fins passent
+   par `getCharHD` (`S.persoStyle` choisit la fabrique), d'où `persoHdOn()` : « un dessin fin », simple ou détaillé. */
+const PERSO_STYLES = ["simple", "detaille", "ancien"];
+const PERSO_HD = { style: "simple" };
+function persoHdOn() { return PERSO_HD.style !== "ancien"; }
 /* 2026-10-23 — LES EXPRESSIONS AUTOMATIQUES (`expressions.js`) : la mémoire de chaque visage, par identifiant. Une Map de MODULE : la
    boucle de rendu (qui choisit le visage) et les réceptions réseau (qui datent un événement) la partagent sans passer par React.
    L'horloge est `performance.now()` de CETTE machine : seules des durées comptent (§3, on ne compare jamais deux horloges). */
@@ -246,12 +249,15 @@ function hdCtxProxy(g) {
 // Le contour posé sur la pose finie ; rend la boîte des pixels peints (pour ne mettre à l'échelle que ce qui sert), ou null.
 // ⚠️ Mesuré au premier jet (une fonction par voisin, octet par octet) : 1,4 ms par pose et par image — dix habitants assis sur des
 // bancs en auraient coûté 14. Lu en mots de 32 bits (petit-boutiste : l'alpha est l'octet de poids fort), les voisins en ligne.
-function outlineHD(g, W, H) {
-  const im = g.getImageData(0, 0, W, H), d = new Uint32Array(im.data.buffer), src = d.slice();
+// `noLine` (2026-10-31) : la boîte seule, sans contour — le TRAIT SIMPLE n'en a pas (l'ancien 16 × 24 non plus) : une pose jouée avec sa
+// feuille (`__simple`) reste en aplats, comme quand elle marche.
+function outlineHD(g, W, H, noLine) {
+  const im = g.getImageData(0, 0, W, H), d = new Uint32Array(im.data.buffer), src = noLine ? d : d.slice();
   let x0 = W, y0 = H, x1 = -1, y1 = -1;
   for (let y = 0, i = 0; y < H; y++) for (let x = 0; x < W; x++, i++) {
     const v = src[i];
     if (v >>> 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; continue; }
+    if (noLine) continue;
     // le voisin d'en bas d'abord (il pose la silhouette sur ses pieds), puis les côtés, puis le haut — comme `persoHdArt`
     let n = 0;
     if (y < H - 1 && src[i + W] >>> 24 >= 200) n = src[i + W];
@@ -263,7 +269,7 @@ function outlineHD(g, W, H) {
     d[i] = (0xff000000 | (Math.round(b + (30 - b) * 0.74) << 16) | (Math.round(gg + (14 - gg) * 0.74) << 8) | Math.round(r + (28 - r) * 0.74)) >>> 0;
     if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  g.putImageData(im, 0, 0);
+  if (!noLine) g.putImageData(im, 0, 0);
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 /* Pose la partie `b` (px de la toile ×2) de la toile `cv`, qui couvre le rectangle monde (wx, wy, ww, wh). */
@@ -312,7 +318,7 @@ function drawPoseHD(ctx, naked, old, px, py, fn, key) {
   let ret;
   try { ret = fn(hdCtxProxy(g), naked); } finally { g.restore(); }
   g.setTransform(1, 0, 0, 1, 0, 0);
-  const b = outlineHD(g, W, H);
+  const b = outlineHD(g, W, H, !!naked.__simple);
   if (per) {
     let cv = null;
     if (b) { cv = document.createElement("canvas"); cv.width = b.w; cv.height = b.h; cv.getContext("2d").drawImage(P.cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h); }
@@ -2766,16 +2772,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
   const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, homes: {}, star: Q.newStar() });
-  // 2026-10-23 — le libellé de l'interrupteur « Personnages fins » (⚙️). L'état qui compte est `PERSO_HD` (module) ; celui-ci ne sert
-  // qu'à redessiner le bouton. ⚠️ Déclaré APRÈS `sharedRef` : le harnais `app/audit-tmp` vise les crochets d'avant par leur distance.
-  const [persoHdUi, setPersoHdUi] = useState(() => (typeof window === "undefined" ? true : persoHdOn()));
+  // 2026-10-23 — le style des personnages, pour l'interface (boutons du menu dev, portraits). L'état qui compte est `PERSO_HD` (module),
+  // posé par `applyPersoStyle` ; celui-ci ne sert qu'à redessiner. 2026-10-31 : une chaîne ("simple", "detaille", "ancien"), plus un booléen.
+  // ⚠️ Déclaré APRÈS `sharedRef` : le harnais `app/audit-tmp` vise les crochets d'avant par leur distance.
+  const [persoHdUi, setPersoHdUi] = useState("simple");
+  /* 2026-10-31 — LE SEUL ÉCRIVAIN DU STYLE (voir `PERSO_HD`) : l'état partagé, sa copie de module, la fabrique des feuilles, l'interface.
+     Appelée partout où l'état partagé arrive (chargement, instantané d'un arrivant, `p.state`) et chez l'hôte par `devPersoStyle`.
+     Une valeur inconnue ou absente (une sauvegarde d'avant) = "simple", le défaut voulu. */
+  function applyPersoStyle(v) {
+    const st = PERSO_STYLES.includes(v) ? v : "simple";
+    sharedRef.current.persoStyle = st;
+    PERSO_HD.style = st;
+    if (spritesRef.current) spritesRef.current.persoStyle = st === "detaille" ? "detaille" : "simple";
+    setPersoHdUi((u) => (u === st ? u : st));
+  }
+  /* 2026-10-31 — LE BOULODROME, LOT 3 : ce que CE client sait d'une partie (voir « LE BOULODROME, LOT 3 : JOUER », plus bas). `view` : la
+     session AFFICHÉE de chaque piste (elle retarde sur `sharedRef.boulo` le temps d'une animation) ; `anims` : le lancer qu'on anime ;
+     `fx` : la fin d'une mène ou de la partie ; `coin` : la pièce ; `host` : les échéances de l'hôte (durées locales) ; `visee` : ma
+     visée ; `panel` : le panneau d'ouverture. ⚠️ Déclaré APRÈS `sharedRef` : le harnais `app/audit-tmp` vise les crochets d'avant. */
+  const bouloRef = useRef({ view: { a: null, b: null }, anims: { a: null, b: null }, fx: { a: null, b: null }, coin: { a: null, b: null }, pauseEnd: {},
+    host: { pauseAt: {}, finAt: {}, last: 0 }, visee: null, panel: null, lastGeste: null, lastMouse: { x: 0, y: 0 }, camOn: false, camX: null, snap: null, fadeUntil: 0 });
   /* 2026-10-23 (lot A) — LES PORTRAITS DE L'INTERFACE (panneaux des résidents, création du personnage, salon…) : la feuille fine
      quand l'interrupteur le veut — `Sprite` découpe une feuille `__hdK` à son échelle, les découpes des appelants ne changent pas.
      Mêmes arguments que `getChar` ; `uiCharJ` pour un JOUEUR (son visage de joueur), `uiChar` pour un PNJ. Lit `persoHdUi` :
      basculer l'interrupteur redessine les portraits. */
   const uiChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look, joueur) => {
     const S2 = spritesRef.current, old = S2.getChar(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look);
-    if (!persoHdUi || !S2.getCharHD) return old;
+    if (persoHdUi === "ancien" || !S2.getCharHD) return old;
     const any = overalls || cap || beeSuit || plaid || cheeseHat || sugarWorker;
     if (joueur && any) return old;
     const fl = any ? { overalls: !!overalls, cap: !!cap, beeSuit: !!beeSuit, plaid: !!plaid, cheeseHat: !!cheeseHat, sugarWorker: !!sugarWorker } : true;
@@ -3569,6 +3592,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (typeof document === "undefined") return;
     setMounted(true);
     spritesRef.current = buildSprites();
+    spritesRef.current.persoStyle = PERSO_HD.style === "detaille" ? "detaille" : "simple";   // 2026-10-31 : le style a pu arriver avant les sprites
     setSpritesReady(true);
     // AUDIT 2026-10 (FIX-004) : le dallage civique haute résolution se fabrique par tranches dès maintenant
     // (solHD.js) — prêt bien avant qu'on arrive sur la place ; l'ancienne tuile en attendant.
@@ -3732,7 +3756,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // 2026-09-16 : repousse des buissons taillés — même chemin que townChop
         // (426)/wardrobe (427) : un champ de plus dans le JSON, aucune migration.
         bushTrim: (saved && saved.bushTrim) || {},
-        rinkRec: (saved && saved.rinkRec) || null, rink: null,   // 2026-10-05 (nuit) : les records de la patinoire (la session, elle, ne survit pas)
+        rinkRec: (saved && saved.rinkRec) || null, rink: null, boulo: null,   // 2026-10-05 (nuit) : les records de la patinoire (la session, elle, ne survit pas)
         /* 2026-10-05 — LES BONSHOMMES DE NEIGE (`bonhomme.js`) : un champ de plus dans le JSON
            de `ferme_saves`, comme `townChop`. AUCUNE MIGRATION. `snowRoll` (ce que chacun
            pousse) repart vide : une boule qu'on roulait au moment de la sauvegarde est perdue. */
@@ -3851,6 +3875,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // la variable de module du moteur serait restée sur l'ancien forçage.
     applyForcedWorld(saved && saved.forcedWorld);
     applyForcedSky(saved && saved.forcedWeather, saved && saved.forcedSeason, saved && saved.forcedSeasonP); // 2026-09-26, même raison que la ligne du dessus
+    applyPersoStyle(saved && saved.persoStyle);   // 2026-10-31 : le style des personnages (menu dev), même chemin, même raison
+    bouloRef.current.view = { a: null, b: null };   // 2026-10-31 : une ferme rechargée n'a aucune partie de boules en cours
     minimapDirtyRef.current = true;
     restoredRef.current = true;
     // Filet identique à applySnapshot (non-hôte) : l'hôte est aussi un joueur
@@ -4047,7 +4073,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
-      rinkRec: payload.rinkRec || null, rink: payload.rink || null,   // 2026-10-05 (nuit) : la patinoire
+      rinkRec: payload.rinkRec || null, rink: payload.rink || null, boulo: payload.boulo || null,   // 2026-10-05 (nuit) : la patinoire
       snowmen: BN.normalizeSnowmen(payload.snowmen), snowRoll: payload.snowRoll || {},   // 2026-10-05
       wardrobe: payload.wardrobe || {},  // zip 427
       homes: HM.migrateHomes(payload.homes),   // 2026-10-16 (lot 2a) ; 2026-10-17 : recalées si écrites sur le plan de 7 cases
@@ -4061,6 +4087,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // à jour, et que sharedRef.current vient tout juste d'être remplacé.
     applyForcedWorld(payload.forcedWorld);
     applyForcedSky(payload.forcedWeather, payload.forcedSeason, payload.forcedSeasonP); // 2026-09-26 ; 2026-10-05 : + l'avancée
+    applyPersoStyle(payload.persoStyle);   // 2026-10-31 : le style des personnages (menu dev)
+    bouloRef.current.view = { a: (payload.boulo && payload.boulo.a) || null, b: (payload.boulo && payload.boulo.b) || null };   // 2026-10-31 : un arrivant voit la partie en cours
     // Chantier "sucrerie déplaçable" : même conversion qu'à loadFarmByCode
     // (voir ce commentaire), au cas où ce snapshot proviendrait encore d'un
     // état pré-chantier (reprise/rejoin sur une ferme jamais rechargée
@@ -4380,7 +4408,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.tx === undefined) { r.tx = payload.x; r.ty = payload.y; r.x = payload.x; r.y = payload.y; }
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.fishing = !!payload.fishing; r.zone = payload.zone || "farm";
-      r.starFocus = payload.starFocus || null;   // hors-zip — le focus personnel de CE camarade, pour l'indice discret de chevauchement
+      r.starFocus = payload.starFocus || null;
+      r.bp = payload.bp | 0;   // 2026-10-31 — la posture d'un bouliste au cercle (`bouloPoseOf`)   // hors-zip — le focus personnel de CE camarade, pour l'indice discret de chevauchement
       /* ⚠️ ZIP SUIVANT — L'ASSISE ÉTAIT ÉMISE ET JAMAIS LUE. `pubMe` pose
          `pub.sit = [x, y, place]` depuis le 428 (« à deux, personne n'aurait
          jamais vu personne s'asseoir », dit sa note) — mais ce handler ne la
@@ -4716,7 +4745,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
       bushTrim: s.bushTrim || {},
-      rinkRec: s.rinkRec || null, rink: s.rink || null,   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
+      rinkRec: s.rinkRec || null, rink: s.rink || null, boulo: s.boulo || null,   // 2026-10-31 : les parties de boules, pour un arrivant (une sauvegarde rechargée les oublie)   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
       rinkIce: iceSnapshot(),   // 2026-10-06 : l'usure de la glace et l'âge de la passe, pour un arrivant (jamais relus au chargement d'une sauvegarde)
       // 2026-10-05 : les bonshommes de neige, par le même chemin (et ce que chacun pousse, pour un invité qui arrive).
       snowmen: s.snowmen || [], snowRoll: s.snowRoll || {},
@@ -4742,6 +4771,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       forcedWeather: s.forcedWeather || null,
       forcedSeason: s.forcedSeason || null,
       forcedSeasonP: s.forcedSeasonP == null ? null : s.forcedSeasonP,   // 2026-10-05 : l'avancée de la saison forcée — même chemin, aucune migration
+      persoStyle: s.persoStyle || null,   // 2026-10-31 : le style des personnages (menu dev, pour tous) — même chemin, aucune migration
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -5056,6 +5086,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if ("weather" in req) broadcastChat("🛠️", L.devWeatherChat(f.name, s.forcedWeather ? s.forcedWeather.kind : null));
       if ("season" in req) broadcastChat("🛠️", L.devSeasonChat(f.name, s.forcedSeason));
       if ("seasonP" in req) broadcastChat("🛠️", L.devSeasonPChat(f.name, s.forcedSeasonP));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ═══ 2026-10-31 — LE DESSIN DES PERSONNAGES, POUR TOUT LE MONDE (menu dev). ═══════
+       Même famille que `devSky` : l'invité demande, l'hôte pose, persiste et diffuse dans `p.state` (aucun message dédié, §3). Ce n'est
+       pas un forçage qu'on oublie (§4, « un forçage du menu dev est une dette ») : il se voit sur chaque personnage, et ne touche ni à la
+       règle, ni au sol, ni à personne — il n'entre donc pas dans « tout remettre » (`devReset`). Rien ne change : rien ne part. */
+    if (req.kind === "devPersoStyle") {
+      if (!PERSO_STYLES.includes(req.style) || req.style === (s.persoStyle || "simple")) return;
+      applyPersoStyle(req.style);
+      dirtyRef.current = true;
+      persistFnRef.current && persistFnRef.current();
+      out.state = shareState();
+      broadcastChat("🛠️", L.devPersoChat(f.name, req.style));
       hostFlushOut(out, f, null);
       return;
     }
@@ -6727,6 +6771,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostDuo(req, f, out);   // 2026-10-06 (soir) : les figures à deux — l'hôte arbitre l'offre et l'acceptation
     } else if (req.kind === "rinkSmooth") {
       hostRinkSmooth(req, f, s, out);   // 2026-10-06 : la surfaceuse, demandée au chalet
+    } else if (typeof req.kind === "string" && req.kind.startsWith("boulo")) {
+      hostBouloReq(req, f, s, out);   // 2026-10-31 — le boulodrome : l'hôte tient les sessions et rejoue chaque lancer
     } else if (req.kind === "rinkBook" || req.kind === "rinkJoin" || req.kind === "rinkLeave" || req.kind === "rinkGo" || req.kind === "rinkFinish") {
       /* 2026-10-05 (nuit) — LA COURSE DE LA PATINOIRE (`hostRinkReq`) : l'hôte tient la session, rien d'autre. */
       hostRinkReq(req, f, s, out);
@@ -9978,7 +10024,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      un scalaire partagé qui change rarement. Un canal à lui coûterait un
      `send` de plus par changement (§3 : seul le NOMBRE de send est facturé),
      un champ de plus à réconcilier, et un point de divergence de plus. */
-  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0, forcedWeather: s.forcedWeather || null, forcedSeason: s.forcedSeason || null, forcedSeasonP: s.forcedSeasonP == null ? null : s.forcedSeasonP }; }
+  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0, forcedWeather: s.forcedWeather || null, forcedSeason: s.forcedSeason || null, forcedSeasonP: s.forcedSeasonP == null ? null : s.forcedSeasonP, persoStyle: s.persoStyle || null }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
   // -------- Tous : application des deltas reçus --------
@@ -10158,7 +10204,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // le moteur à jour ; le changement d'index qui en découle est ensuite
     // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
     // qui purge les breloques, les monstres et le cache de carte toute seule.
-    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason, p.state.forcedSeasonP); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); applyForcedSky(p.state.forcedWeather, p.state.forcedSeason, p.state.forcedSeasonP); if ("persoStyle" in p.state) applyPersoStyle(p.state.persoStyle); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     // 2026-10-04 — leurs patins, pour la pose qu'on leur voit sur la glace (`remoteHasSkates`).
     if (p.farmer && p.farmer.id !== me.id && p.farmer.inv) {
       const rs = playersRef.current.get(p.farmer.id);
@@ -10274,6 +10320,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
     if (p.rink !== undefined) rinkApply(p.rink || null, p.rinkT || null);   // 2026-10-05 (nuit) — la session de course
+    if (p.boulo !== undefined) bouloApply(p.boulo, p.bouloLancer || null, p.bouloT || null, p.bouloNon || null);   // 2026-10-31 — une partie de boules
     if (p.duoAsk) duoAskApply(p.duoAsk);   // 2026-10-06 (soir) — une main tendue
     if (p.duo) duoApply(p.duo);            // 2026-10-06 (soir) — la figure à deux part (des noms et une durée, aucune position)
     if (p.ice) iceApply(p.ice);   // 2026-10-06 — l'usure de la glace / la passe de la surfaceuse
@@ -10455,6 +10502,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // tels quels via "n" (clé "raw"), plutôt que de forcer toastMsg à gérer
     // un deuxième paramètre nommé pour ce seul cas.
     if (key === "raw") return String(n);
+    if (typeof key === "string" && key.startsWith("boulo")) { const v = L[key]; return typeof v === "function" ? v(n) : v || ""; }   // 2026-10-31 — le boulodrome
     if (key === "berriesPicked") return L.toastBerriesPicked(n | 0);
     if (key === "fruitPicked")   return L.toastFruitPicked(n | 0);
     if (key === "fruitCooldown") return L.toastFruitCooldown;
@@ -11404,6 +11452,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, fishing: !!rodArmedRef.current, zone: m.zone || "farm", pets: petIdsPub() };
     pub.starEngaged = starPlayerEngaged();
     pub.starFocus = myStarFocusRef.current || null;   // hors-zip — confort de lecture, jamais arbitré
+    pub.bp = bouloMyPosture();   // 2026-10-31 — au boulodrome, ma posture au cercle (1 accroupi pour pointer, 2 debout pour tirer) : la visée, elle, ne voyage pas
     // ------------------------------------------------------------------
     // Zip 365 — RÉPLICATION PAR INTENTION (correctif flottement/saccades).
     //
@@ -11538,7 +11587,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        rotation en l'air, son cap au seizième de tour (un virage au sol se voit). */
     const rdK = rideRef.current, rk = rdK && m && (m.zone || "farm") === "town"
       ? "r" + rdK.kind[0] + rdK.mode[0] + (rdK.mode === "air" ? Math.sign(rdK.om || 0) + (rdK.trick ? rdK.trick.name : "") : "") + Math.round(rdK.th / (Math.PI / 8)) : "";
-    return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + (tk ? "t" + tk : "") + rk + active;
+    return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + (tk ? "t" + tk : "") + rk + (bouloMyPosture() ? "b" + bouloMyPosture() : "") + active;
   }
   /* ⚠️ 2026-10-05 (nuit) — `pubMe` lit `meRef.current` sans garde : appelé avant que le joueur existe
      (un `join` reçu pendant le chargement), il levait une TypeError dans le gestionnaire réseau. Sans
@@ -13368,6 +13417,491 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     for (const q of rinkBotsNow()) { const p = CO.botAt(q.run, tR); if (p) out.push({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, tumble: p.tumble, done: p.done, fin: q.run.finishMs, b: q.b }); }
     return out;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-10-31 — LE BOULODROME, LOT 3 : JOUER (`bouloJeu.js` pur, `bouloJeuArt.js` le dessin, `BouloHud.js` l'écran,
+     ║ `A.drawBouloPose` le geste). Les quinze décisions de forme : aucun verdict sur leur page — les recommandations font foi.
+     ╚══════════════════════════════════════════════════════════════════════
+     QUI TIENT QUOI.
+     · L'HÔTE tient les sessions (`sharedRef.boulo` : { a, b }, une par piste) et arbitre chaque geste (`hostBouloReq`) : il rejoue
+       le lancer (`PQ.jouer`) et diffuse UN `apply` — la session, l'ENTRÉE du lancer (`bouloLancer`) et l'empreinte de l'état d'après.
+       Sa lecture de la pluie va dans l'entrée du but (`lourd`). Ses échéances (la pause) restent des durées locales (`hostBouloTick`).
+     · CHACUN rejoue le lancer reçu depuis l'état qu'il AFFICHE (`bouloRef.view`), l'anime au pas fixe, puis ADOPTE l'état de l'hôte
+       et compare l'empreinte (un `console.warn`, jamais une partie cassée). La vue affichée retarde donc sur l'état partagé pendant
+       une animation : c'est elle — pas `sharedRef.boulo` — que lisent le dessin, l'ardoise, le placement, le tour et la caméra.
+     · Le LANCEUR n'attend pas l'hôte : il anime son lancer en lâchant ; la réponse n'apporte que l'état à adopter.
+     ⚠️ Tout ceci est lu par la boucle (closure à deps vides) et par les écouteurs du clavier : des REFS, jamais un état React
+       (noyau §4, « un effet monté une fois voit pour toujours l'état de son premier rendu »). */
+  const BOULO_LANCER_MS = 700;   // la durée du geste du bouliste ; la boule part à `A.BOULO_LACHER` de ce geste
+  const BJK = BJ.BJ;
+  function bouloSess() { const s = sharedRef.current; return s.boulo || (s.boulo = { a: null, b: null }); }
+  function bouloLourdNow() { const w = (wetPackNow() || {}).w || 0; return w < 0.15 ? 0 : w < 0.4 ? 1 : w < 0.7 ? 2 : 3; }
+  function bouloEnneige() { try { return ((snowPackNow("town") || {}).g || 0) > 1; } catch (e) { return false; } }
+  /* L'HÔTE : un geste d'un joueur. `out.boulo` porte la session de la piste (ou null) ; `out.bouloLancer`, l'entrée d'un lancer. */
+  function hostBouloReq(req, f, s, out) {
+    const ss = bouloSess(), k = req.k === "a" || req.k === "b" ? req.k : null, H = bouloRef.current.host, nowP = performance.now();
+    const no = (key) => { out.toast = { id: f.id, key }; };
+    if (!k) return;
+    let r = null;
+    if (req.kind === "bouloOpen") {
+      if (bouloEnneige()) return no("bouloSnow");
+      s.bouloSeq = (s.bouloSeq | 0) + 1;
+      r = BJ.hoteOuvrir(ss, s.bouloSeq, k, f.id, f.name, req.mode, req.cible | 0);
+    } else if (req.kind === "bouloJoin") r = BJ.hoteRejoindre(ss, k, f.id, f.name);
+    else if (req.kind === "bouloLeave") r = BJ.hoteQuitter(ss, k, f.id);
+    else if (req.kind === "bouloGo") r = BJ.hoteLancerPartie(ss, k, f.id, (Math.random() * 4294967296) >>> 0);
+    else if (req.kind === "bouloRevanche") r = BJ.hoteRevanche(ss, k, f.id, (Math.random() * 4294967296) >>> 0);
+    else if (req.kind === "bouloClose") {
+      const se = ss[k];
+      if (!se || !BJ.estDans(se, f.id) || !(se.closable || se.etat === "fin")) return no("bouloNotOpen");
+      ss[k] = null;
+    } else if (req.kind === "bouloThrow") {
+      const res = BJ.hoteLancer(ss, k, f.id, req, bouloLourdNow());
+      if (res.raison) { out.toast = { id: f.id, key: res.raison }; out.boulo = { k, sess: ss[k] }; out.bouloNon = { k, pid: f.id }; return; }
+      out.boulo = { k, sess: res.s }; out.bouloLancer = { k, pid: f.id, input: res.input, emp: res.emp };
+      if (res.s.etat === "fin") H.finAt[k] = nowP;
+      return;
+    } else return;
+    if (r) return no(r);
+    const se = ss[k];
+    if (se && se.etat === "fin") H.finAt[k] = nowP;
+    if (!se || se.etat !== "jeu") delete H.pauseAt[k];
+    out.boulo = { k, sess: se };
+  }
+  /* L'HÔTE, deux fois par seconde : qui est encore en ville. Un joueur parti met la partie EN PAUSE (dix minutes, puis on peut la
+     clore) ; la salle d'attente perd ceux qui partent (et se ferme si c'est celui qui l'a ouverte) ; une partie finie sans revanche
+     se ferme. Un `apply` seulement quand quelque chose change. */
+  function hostBouloTick() {
+    const H = bouloRef.current.host, nowP = performance.now();
+    if (nowP - (H.last || 0) < 500) return;
+    H.last = nowP;
+    const ss = sharedRef.current.boulo, m = meRef.current;
+    if (!ss) return;
+    const present = (id) => {
+      if (id === me.id) return !!m && (m.zone || "farm") === "town";
+      const p = playersRef.current.get(id);
+      return !!p && (p.zone || "farm") === "town";
+    };
+    for (const k of ["a", "b"]) {
+      const se = ss[k];
+      if (!se) continue;
+      let changed = false, T = null;
+      if (se.etat === "salle") {
+        if (!present(se.owner)) { ss[k] = null; changed = true; }
+        else { const keep = se.ent.filter((e) => present(e.id)); if (keep.length !== se.ent.length) { se.ent = keep; changed = true; } }
+      } else if (se.etat === "jeu") {
+        if (BJ.hotePresence(se, present)) { changed = true; if (se.pause) H.pauseAt[k] = nowP; else delete H.pauseAt[k]; }
+        if (se.pause && H.pauseAt[k] == null) H.pauseAt[k] = nowP;   // une pause héritée (changement d'hôte) : elle repart d'ici
+        if (se.pause && !se.closable && nowP - H.pauseAt[k] >= BJK.PAUSE_MS) { se.closable = true; changed = true; }
+        if (se.pause && changed) T = { k, pauseLeft: Math.max(0, BJK.PAUSE_MS - (nowP - H.pauseAt[k])) };
+      } else if (se.etat === "fin") {
+        if (H.finAt[k] == null) H.finAt[k] = nowP;
+        if (nowP - H.finAt[k] > BJK.REVANCHE_MS) { ss[k] = null; delete H.finAt[k]; changed = true; }
+      }
+      if (changed) hostSend({ type: "broadcast", event: "apply", payload: { boulo: { k, sess: ss[k] }, bouloT: T } });
+    }
+  }
+  /* CHACUN : une session reçue. Un lancer s'anime depuis la vue affichée ; le reste s'adopte (ou attend la fin de l'animation). */
+  function bouloApply(msg, lancer, T, non) {
+    const R = bouloRef.current, k = msg && msg.k;
+    if (k !== "a" && k !== "b") return;
+    if (!isHost) bouloSess()[k] = msg.sess || null;   // l'hôte l'a déjà écrite (`hostBouloReq`)
+    if (T && T.k === k && T.pauseLeft != null) R.pauseEnd[k] = performance.now() + T.pauseLeft;
+    const an = R.anims[k];
+    if (non && non.pid === me.id && an && an.mine) { R.anims[k] = null; bouloAdopt(k, msg.sess); return; }
+    if (lancer) {
+      if (an && an.mine && !an.got && lancer.pid === me.id && an.a.input.coup === lancer.input.coup) { an.pending = msg.sess; an.emp = lancer.emp; an.got = true; return; }
+      if (an) { R.anims[k] = null; bouloAdopt(k, an.got ? an.pending : R.view[k]); }   // une animation encore en cours : on la clôt d'un coup
+      const base = R.view[k] && R.view[k].partie;
+      const a = base ? BJ.animer(base, lancer.pid, lancer.input) : { raison: "vue" };
+      if (a.raison) { bouloAdopt(k, msg.sess); return; }
+      R.anims[k] = { a, t0: performance.now(), pending: msg.sess, emp: lancer.emp, got: true, mine: false, base };
+      return;
+    }
+    if (an) { if (an.got) an.pending = msg.sess; return; }
+    bouloAdopt(k, msg.sess);
+  }
+  function bouloAdopt(k, sess) {
+    const R = bouloRef.current, old = R.view[k], nowP = performance.now();
+    /* ⚠️ UNE COPIE, JAMAIS L'OBJET PARTAGÉ : chez l'hôte, la session reçue EST celle de `sharedRef.boulo`, que le lancer suivant
+       modifie sur place (`hoteLancer`) dès la requête. Adoptée telle quelle, la vue « retardée » avançait avec elle : l'hôte voyait
+       la mène finie et marchait vers le cercle suivant pendant que la boule roulait encore (vu en jeu, 2026-10-31). */
+    sess = sess ? JSON.parse(JSON.stringify(sess)) : null;
+    R.view[k] = sess;
+    if (!sess) { R.fx[k] = null; R.coin[k] = null; return; }
+    const p = sess.partie;
+    // une partie qui commence (ou sa revanche) : la pièce, deux secondes et demie sur l'ardoise
+    if (sess.etat === "jeu" && p && p.coups === 0 && (!old || old.etat !== "jeu" || !old.partie || old.partie.coups > 0)) R.coin[k] = { t0: nowP, pid: BJ.piece(sess) };
+    // une mène qui finit : le « +n » sur le terrain, puis les boules qui reviennent (ou l'ardoise du vainqueur)
+    if (p && p.mene.fini && old && old.partie && !old.partie.mene.fini && old.partie.mene.n === p.mene.n) R.fx[k] = { t0: nowP, from: p, marque: BJ.quiMarque(p), fin: p.gagnant !== null };
+    const m = meRef.current;
+    if (sess.etat === "salle" && (!old || old.sid !== sess.sid) && !BJ.estDans(sess, me.id) && m && m.zone === "town")
+      pushToast(L.bouloInvite(sess.ent[0].name, L.bouloFmt(sess.mode), L.bouloPiste(k)));
+  }
+  /* Ma session (affichée), ou null. */
+  function bouloMine() {
+    const V = bouloRef.current.view;
+    for (const k of ["a", "b"]) if (V[k] && BJ.estDans(V[k], me.id)) return { k, sess: V[k] };
+    return null;
+  }
+  const bouloInGame = () => { const mi = bouloMine(); return !!mi && (mi.sess.etat === "jeu" || (mi.sess.etat === "fin" && !!bouloRef.current.fx[mi.k])); };
+  /* Où je dois me tenir, et y suis-je ? (la visée ne s'ouvre qu'arrivé au cercle) */
+  function bouloPlace(mi) {
+    const R = bouloRef.current, fx = R.fx[mi.k];
+    if (fx && performance.now() - fx.t0 < BJK.FIN_MENE_MS) return null;   // pendant le « +n », on reste où l'on est
+    return BJ.placeDe(mi.sess, mi.sess.partie, me.id);
+  }
+  function bouloAtPlace(mi) {
+    const m = meRef.current, pl = bouloPlace(mi);
+    if (!m || !pl) return false;
+    return Math.hypot(C.footX(m.x) * C.TILE - pl.wx, C.footY(m.y) * C.TILE - pl.wy) < 3;
+  }
+  function bouloMyTurn(mi) {
+    const R = bouloRef.current;
+    return BJ.monTour(mi.sess, me.id) && !R.anims[mi.k] && !R.fx[mi.k] && bouloAtPlace(mi);
+  }
+  /* La souris (px de la fenêtre) → le monde, par la caméra de la dernière image. */
+  function bouloMouseWorld(mo) {
+    const cv = canvasRef.current, sv = starViewRef.current;
+    if (!cv || !sv || !sv.cam || !mo) return null;
+    const r = cv.getBoundingClientRect();
+    if (mo.x < r.left || mo.x > r.right || mo.y < r.top || mo.y > r.bottom) return null;
+    return [sv.cam.x + ((mo.x - r.left) * (cv.width / r.width)) / sv.cam.z, sv.cam.y + ((mo.y - r.top) * (cv.height / r.height)) / sv.cam.z];
+  }
+  /* CHAQUE IMAGE : les animations, leur adoption, les effets de fin de mène, ma visée. */
+  function bouloTick() {
+    const R = bouloRef.current, nowP = performance.now();
+    for (const k of ["a", "b"]) {
+      const an = R.anims[k];
+      if (an) {
+        const t = (nowP - an.t0 - BOULO_LANCER_MS * A.BOULO_LACHER) / 1000;
+        an.st = t >= 0 ? BJ.animPas(an.a, t, an.corps || (an.corps = [])) : null;
+        if (an.st && an.st.fini) {
+          if (an.doneAt == null) an.doneAt = nowP;
+          if (an.got && nowP - an.doneAt > BJK.TENIR_MS) {
+            if (an.emp) { try { const e = PQ.empreinte(BJ.conclusion(an.base, an.a)); if (e !== an.emp) console.warn("[BOULO] l'état rejoué diffère de celui de l'hôte (empreinte " + e + " / " + an.emp + ") : on adopte celui de l'hôte."); } catch (e) { /* rien */ } }
+            R.anims[k] = null; bouloAdopt(k, an.pending);
+          } else if (!an.got && nowP - an.doneAt > 8000) R.anims[k] = null;   // la réponse ne vient pas : on garde l'état d'avant
+        }
+      }
+      const fx = R.fx[k];
+      if (fx && nowP - fx.t0 > (fx.fin ? BJK.FIN_PARTIE_MS : BJK.FIN_MENE_MS + BJK.RETOUR_MS)) R.fx[k] = null;
+    }
+    const mi = bouloMine();
+    if (R.panel && (mi || !bouloNear() || bouloNear().kind !== "open")) R.panel = null;
+    if (!mi || mi.sess.etat !== "jeu" || !bouloMyTurn(mi)) { R.visee = null; return; }
+    const s = PQ.avancer(mi.sess.partie), q = PQ.aQui(s);
+    if (!q) { R.visee = null; return; }
+    let v = R.visee;
+    if (!v || v.coup !== s.coups || v.k !== mi.k) {
+      const g = q.phase === "but" ? "but" : q.phase === "placer" ? "placer" : null;
+      v = R.visee = { k: mi.k, coup: s.coups, etape: g ? "donnee" : "geste", geste: g, donnee: g ? BJ.donneeDefaut(s.mene, g) : null, t0: 0 };
+      R.lastMouse = { x: (mouseRef.current || {}).x, y: (mouseRef.current || {}).y };
+    }
+    if (v.etape === "donnee") {
+      const mo = mouseRef.current;
+      if (mo && (mo.x !== R.lastMouse.x || mo.y !== R.lastMouse.y)) {
+        R.lastMouse = { x: mo.x, y: mo.y };
+        const w = bouloMouseWorld(mo);
+        if (w) v.donnee = BJ.mondeVersPiste(mi.k, w[0], w[1]);
+      }
+    }
+  }
+  function bouloGeste(g) {
+    const R = bouloRef.current, v = R.visee, mi = bouloMine();
+    if (!v || !mi || v.etape !== "geste" || !PQ.GESTES_BOULE.includes(g)) return;
+    v.geste = g; v.etape = "donnee"; v.donnee = BJ.donneeDefaut(PQ.avancer(mi.sess.partie).mene, g);
+    R.lastGeste = g; R.lastMouse = { x: (mouseRef.current || {}).x, y: (mouseRef.current || {}).y };
+    sendPos();   // la posture (accroupi, debout) part dans le paquet de position
+  }
+  function bouloBack() {
+    const v = bouloRef.current.visee;
+    if (!v) return;
+    if (v.etape === "jauge") v.etape = "donnee";
+    else if (v.etape === "donnee" && PQ.GESTES_BOULE.includes(v.geste)) { v.etape = "geste"; v.geste = null; v.donnee = null; }
+  }
+  function bouloValider() {
+    const v = bouloRef.current.visee, mi = bouloMine();
+    if (!v || !mi || v.etape !== "donnee" || !v.donnee) return;
+    const m = PQ.avancer(mi.sess.partie).mene;
+    if (v.geste === "placer") { if (!PQ.butValide(m, v.donnee.x, v.donnee.y)) { pushToast(L.bouloStepPlacer); return; } bouloSendThrow(0); return; }
+    const dx = v.donnee.x - m.cercle.x, dy = v.donnee.y - m.cercle.y;
+    if (dx * dx + dy * dy < (PQ.PETANQUE.DONNEE_MIN * 1000) ** 2) return;
+    v.etape = "jauge"; v.t0 = performance.now();
+  }
+  function bouloLacher() {
+    const v = bouloRef.current.visee;
+    if (!v || v.etape !== "jauge") return;
+    bouloSendThrow(PQ.jauge(performance.now() - v.t0, PQ.GESTES[v.geste].jauge));
+  }
+  function bouloSendThrow(err) {
+    const R = bouloRef.current, v = R.visee, mi = bouloMine();
+    if (!v || !mi) return;
+    const input = { coup: v.coup, geste: v.geste, donnee: { x: v.donnee.x, y: v.donnee.y }, err: err | 0 };
+    if (v.geste === "but") input.lourd = bouloLourdNow();
+    const base = mi.sess.partie, a = BJ.animer(base, me.id, input);
+    if (a.raison) { pushToast(L.bouloRefused); return; }
+    R.anims[v.k] = { a, t0: performance.now(), pending: null, emp: null, got: false, mine: true, base };
+    R.visee = null;
+    sendReq({ kind: "bouloThrow", k: v.k, coup: input.coup, geste: input.geste, donnee: input.donnee, err: input.err, lourd: input.lourd });
+  }
+  /* LE CLAVIER, pendant une partie (avant tout le reste du jeu) : les gestes, la donnée, la jauge. Pas mon tour : on ne marche pas
+     (le jeu nous place). Rend vrai si la touche est prise. */
+  function bouloKey(e) {
+    const mi = bouloMine();
+    if (!mi || mi.sess.etat !== "jeu") return false;
+    const R = bouloRef.current, v = R.visee, code = e.code;
+    const walk = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD", "KeyZ", "KeyQ", "Space", "ShiftLeft", "ShiftRight"].includes(code);
+    if (!v) return walk;
+    if (code === "Escape") { bouloBack(); return true; }
+    if (v.etape === "geste") {
+      if (code >= "Digit1" && code <= "Digit4") { bouloGeste(PQ.GESTES_BOULE[+code.slice(5) - 1]); return true; }
+      return walk || (code >= "Digit5" && code <= "Digit9");
+    }
+    if (v.etape === "donnee") {
+      if (code.startsWith("Arrow") && v.donnee) {
+        const st = Math.round(BJK.PAS_M * 1000 * (e.shiftKey ? 5 : 1));
+        v.donnee = BJ.borner({ x: v.donnee.x + (code === "ArrowDown" ? st : code === "ArrowUp" ? -st : 0), y: v.donnee.y + (code === "ArrowRight" ? st : code === "ArrowLeft" ? -st : 0) });
+        return true;
+      }
+      if ((code === "Enter" || code === "NumpadEnter" || code === "Space") && !e.repeat) { bouloValider(); return true; }
+      return walk;
+    }
+    if (v.etape === "jauge" && (code === "Space" || code === "Enter" || code === "NumpadEnter")) { if (!e.repeat) bouloLacher(); return true; }
+    return walk;
+  }
+  /* LE CLIC (et le toucher) sur le jeu, pendant une partie : poser la donnée, lâcher la jauge. Hors de mon tour, il ne fait rien. */
+  function bouloClick(e) {
+    const mi = bouloMine();
+    if (!mi || mi.sess.etat !== "jeu") return false;
+    const v = bouloRef.current.visee;
+    if (!v || e.button !== 0) return true;
+    if (v.etape === "donnee") { const w = bouloMouseWorld({ x: e.clientX, y: e.clientY }); if (w) v.donnee = BJ.mondeVersPiste(mi.k, w[0], w[1]); bouloValider(); }
+    else if (v.etape === "jauge") bouloLacher();
+    return true;
+  }
+  /* E : ouvrir (au cercle d'une piste libre), rejoindre (au bord d'une piste qui attend). Pendant une partie, E ne fait rien d'autre. */
+  function bouloNear() {
+    const m = meRef.current, tw = townWorldRef.current;
+    if (!m || m.zone !== "town" || !tw || !tw.boulo) return null;
+    const mi = bouloMine();
+    if (mi && mi.sess.etat !== "fin") return null;
+    const fx = C.footX(m.x) * C.TILE, fy = C.footY(m.y) * C.TILE, V = bouloRef.current.view, PXM = PQ.PETANQUE.PX_M;
+    for (const k of ["a", "b"]) {
+      const se = V[k];
+      if (se && se.etat === "salle" && !BJ.estDans(se, me.id) && se.ent.length < BJ.requis(se.mode)) {
+        const cd = BJ.cadre(k), mg = BJK.BORD_M * PXM;
+        if (fx > cd.x0 - mg && fx < cd.x1 + mg && fy > cd.y0 + 22 - mg && fy < cd.y1 + mg) return { kind: "join", k, name: se.ent[0].name };
+      }
+      if (!se || se.etat === "fin") {
+        const c = BJ.cercleLibre(), w = BJ.mmVersMonde(k, c.x, c.y);
+        if (Math.hypot(fx - w[0], fy - w[1]) < BJK.PROCHE_M * PXM) return { kind: bouloEnneige() ? "snow" : "open", k };
+      }
+    }
+    return null;
+  }
+  function bouloPromptKey() { const n = bouloNear(); return !n ? null : n.kind === "join" ? "bouloJoin:" + n.name : n.kind === "snow" ? "bouloSnow" : "bouloOpen"; }
+  function bouloTryE() {
+    if (bouloInGame()) return true;
+    const n = bouloNear();
+    if (!n) return false;
+    if (n.kind === "open") bouloRef.current.panel = { k: n.k };
+    else if (n.kind === "join") sendReq({ kind: "bouloJoin", k: n.k });
+    else pushToast(L.bouloSnow);
+    return true;
+  }
+  /* PENDANT LA PARTIE, LE JEU PLACE LE JOUEUR, EN MARCHANT (la décision « placés par le jeu ») : le lanceur au cercle, les autres
+     derrière, au bord ; entre deux mènes, tout le monde suit le cochonnet jusqu'au cercle suivant. Rien de plus ne voyage : la
+     position part déjà. Rend vrai quand c'est le jeu qui mène. */
+  function bouloSteer(m, dt) {
+    const mi = bouloMine();
+    if (!mi || mi.sess.etat !== "jeu" || mi.sess.pause) return false;
+    const pl = bouloPlace(mi);
+    m.sitOn = null;
+    if (!pl) { m.moving = false; m.vx = 0; m.vy = 0; m.animT = 0; return true; }
+    const tx = pl.wx / C.TILE - C.footX(0), ty = pl.wy / C.TILE - C.footY(0);
+    const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy), sp = C.PLAYER_SPEED * 0.85;
+    if (d > 0.03) {
+      const st = Math.min(d, sp * dt);
+      m.x += (dx / d) * st; m.y += (dy / d) * st; m.vx = (dx / d) * sp; m.vy = (dy / d) * sp;
+      m.moving = true; m.animT += dt * 9;
+      m.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 2 : 3) : dy > 0 ? 0 : 1;
+    } else { m.x = tx; m.y = ty; m.vx = 0; m.vy = 0; m.moving = false; m.animT = 0; m.dir = pl.dir; }
+    return true;
+  }
+  /* LA CAMÉRA DE LA PARTIE : le cran ×3, la piste cadrée ; une piste plus large que l'écran suit la boule qui roule (ou le lanceur).
+     null hors partie. Le fondu enchaîné se fait autour (`bouloFadeCheck`, `bouloFadeDraw`), jamais un zoom glissé. */
+  function bouloCamera(cv) {
+    const mi = bouloMine();
+    if (!mi || !cv) return null;
+    const R = bouloRef.current, se = mi.sess, fx = R.fx[mi.k];
+    if (!(se.etat === "jeu" || (se.etat === "fin" && fx && fx.fin))) return null;
+    const z = BJK.ZOOM, vw = cv.width / z, vh = cv.height / z, cd = BJ.cadre(mi.k);
+    let cx = cd.cx;
+    if (vw < cd.x1 - cd.x0) {
+      let f = null;
+      const an = R.anims[mi.k];
+      if (an && an.st) { const mov = an.st.corps.filter((c) => c.vivant); const last = mov[mov.length - 1]; if (last) f = BJ.versMonde(mi.k, last.x, last.y)[0]; }
+      if (f == null) { const q = BJ.tour(se); const pl = q && BJ.placeDe(se, se.partie, q.joueurs[0]); if (pl) f = pl.wx + (BJ.sensMene(PQ.avancer(se.partie).mene)[1] >= 0 ? vw * 0.3 : -vw * 0.3); }
+      const want = Math.max(cd.x0 + vw / 2, Math.min(cd.x1 - vw / 2, f != null ? f : cd.cx));
+      R.camX = R.camX == null ? want : R.camX + (want - R.camX) * 0.08;
+      cx = R.camX;
+    } else R.camX = null;
+    return { x: cx - vw / 2, y: cd.cy - vh / 2, vw, vh, z };
+  }
+  function bouloFadeCheck(cv) {
+    const R = bouloRef.current, on = !!bouloCamera(cv);
+    if (on === !!R.camOn) return;
+    R.camOn = on;
+    try {
+      const c = R.snap || (R.snap = document.createElement("canvas"));
+      c.width = cv.width; c.height = cv.height;
+      c.getContext("2d").drawImage(cv, 0, 0);
+      R.fadeUntil = performance.now() + BJK.FONDU_MS;
+    } catch (e) { R.fadeUntil = 0; }
+  }
+  function bouloFadeDraw(ctx) {
+    const R = bouloRef.current, left = (R.fadeUntil || 0) - performance.now();
+    if (left <= 0 || !R.snap) return;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = left / BJK.FONDU_MS; ctx.drawImage(R.snap, 0, 0); ctx.restore();
+  }
+  /* LA POSE D'UN BOULISTE (`A.drawBouloPose`) : le geste qu'on anime, ou la boule en main au cercle, quand c'est son tour. La posture
+     d'un autre joueur arrive dans son paquet de position (`bp`) ; la mienne se lit dans ma visée. */
+  function bouloMyPosture() {
+    const R = bouloRef.current, v = R.visee;
+    if (!v || v.geste === "placer") return 0;
+    const g = v.geste || R.lastGeste || "roulette";
+    return (PQ.GESTES[g] || {}).posture === "accroupi" ? 1 : 2;
+  }
+  function bouloPoseOf(p, isSelf) {
+    if (!p || (p.zone || "farm") !== "town") return null;
+    const R = bouloRef.current, nowP = performance.now();
+    for (const k of ["a", "b"]) {
+      const se = R.view[k];
+      if (!se || se.etat === "salle" || !BJ.estDans(se, p.id)) continue;
+      const an = R.anims[k];
+      const base = an ? an.base : se.partie;
+      if (!base) return null;
+      const kx = BJ.sensMene(PQ.avancer(base).mene)[1] >= 0 ? 1 : -1;
+      if (an && an.a.pid === p.id) {
+        const ph = (nowP - an.t0) / BOULO_LANCER_MS;
+        if (ph > 1.3 || an.a.geste === "placer") return null;
+        return { acc: (PQ.GESTES[an.a.geste] || {}).posture === "accroupi", ph: Math.min(1, ph), kx, col: BJ.couleurDe(se, p.id), but: an.a.geste === "but" };
+      }
+      if (an || R.fx[k] || se.pause || se.etat !== "jeu" || p.moving) return null;
+      const q = BJ.tour(se);
+      if (!q || q.joueurs[0] !== p.id) return null;
+      const bp = isSelf ? bouloMyPosture() : p.bp | 0;
+      if (!bp) return null;
+      return { acc: bp === 1, ph: -1, kx, col: BJ.couleurDe(se, p.id), but: q.phase !== "boule" };
+    }
+    return null;
+  }
+  /* LES BOULES AFFICHÉES d'une piste : [{ wx, wy, z, col, but, a (opacité) }] — celles de l'animation en cours, sinon celles de la
+     mène affichée ; pendant la fin de mène, le « +n » puis les boules qui glissent jusqu'au cercle suivant en s'effaçant. */
+  function bouloBalls(k) {
+    const R = bouloRef.current, se = R.view[k], out = [], an = R.anims[k], fx = R.fx[k], nowP = performance.now();
+    if (!se || !se.partie) return out;
+    const w = [0, 0], col = (pid) => BJ.couleurDe(se, pid);
+    const pushMene = (m, to, f) => {
+      const at = (x, y) => (to ? [x + (to.x - x) * f, y + (to.y - y) * f] : [x, y]);
+      if (m.but && !m.butMort) { const q = at(m.but.x, m.but.y); BJ.mmVersMonde(k, q[0], q[1], w); out.push({ wx: w[0], wy: w[1], z: 0, col: null, but: true, a: to ? 1 - f : 1 }); }
+      for (const b of m.boules) if (!b.mort) { const q = at(b.x, b.y); BJ.mmVersMonde(k, q[0], q[1], w); out.push({ wx: w[0], wy: w[1], z: 0, col: col(b.j), but: false, a: to ? 1 - f : 1 }); }
+    };
+    if (an) {
+      if (an.st) for (const c of an.st.corps) { if (!c.vivant) continue; BJ.versMonde(k, c.x, c.y, w); out.push({ wx: w[0], wy: w[1], z: c.z, col: col(c.j), but: c.but, a: 1 }); }
+      else pushMene(PQ.avancer(an.base).mene);
+      return out;
+    }
+    if (fx) {
+      const tr = (nowP - fx.t0 - BJK.FIN_MENE_MS) / BJK.RETOUR_MS;
+      if (!fx.fin && tr > 0) pushMene(fx.from.mene, PQ.avancer(fx.from).mene.cercle, Math.min(1, tr));
+      else pushMene(fx.from.mene);
+      return out;
+    }
+    pushMene(PQ.avancer(se.partie).mene);
+    return out;
+  }
+  /* LE DESSIN, DANS LE MONDE TRIÉ DE LA VILLE : les cercles, les boules au sol (triées avec les personnages), l'anneau du point. */
+  function bouloDrawPush(ctx, draws) {
+    const tw = townWorldRef.current;
+    if (!tw || !tw.boulo) return;
+    const R = bouloRef.current;
+    for (const k of ["a", "b"]) {
+      const se = R.view[k];
+      if (!se || se.etat === "salle" || (se.etat === "fin" && !R.fx[k])) {
+        const c = BJ.cercleLibre(), w = BJ.mmVersMonde(k, c.x, c.y);
+        draws.push({ y: -1e9, fn: () => BJA.dessinerCercle(ctx, BJA.repere(ctx), w[0], w[1], true) });
+      }
+      if (!se || !se.partie || se.etat === "salle") continue;
+      const an = R.anims[k], fx = R.fx[k];
+      const m = an ? PQ.avancer(an.base).mene : fx ? fx.from.mene : PQ.avancer(se.partie).mene;
+      if (!fx) { const w = BJ.mmVersMonde(k, m.cercle.x, m.cercle.y); draws.push({ y: -1e9, fn: () => BJA.dessinerCercle(ctx, BJA.repere(ctx), w[0], w[1], false) }); }
+      for (const b of bouloBalls(k)) if (b.z < 0.06) draws.push({ y: b.wy + 0.5, fn: () => BJA.dessinerBoule(ctx, BJA.repere(ctx), b.wx, b.wy, 0, b.col, b.but, b.a) });
+      if (!an && !fx && !m.fini) {
+        const pb = BJ.bouleDuPoint({ ...se.partie, mene: m });
+        if (pb) { const w = BJ.mmVersMonde(k, pb.x, pb.y); draws.push({ y: w[1], fn: () => BJA.dessinerPoint(ctx, BJA.repere(ctx), w[0], w[1]) }); }
+      }
+    }
+  }
+  /* … PUIS PAR-DESSUS TOUT : les boules en vol, mon guide de visée et ma jauge, le « +n » de la fin de mène. */
+  function bouloDrawPost(ctx) {
+    const tw = townWorldRef.current;
+    if (!tw || !tw.boulo) return;
+    const R = bouloRef.current, nowP = performance.now(), Rp = BJA.repere(ctx);
+    for (const k of ["a", "b"]) {
+      const se = R.view[k];
+      if (!se || !se.partie) continue;
+      for (const b of bouloBalls(k)) if (b.z >= 0.06) BJA.dessinerBoule(ctx, Rp, b.wx, b.wy, b.z, b.col, b.but, b.a);
+      const fx = R.fx[k];
+      if (fx && fx.marque.camp >= 0 && nowP - fx.t0 < BJK.FIN_MENE_MS) {
+        const q = fx.marque.boules[0] || fx.from.mene.but || fx.from.mene.cercle, w = BJ.mmVersMonde(k, q.x, q.y);
+        const pid = fx.from.camps[fx.marque.camp].joueurs[0], tt = (nowP - fx.t0) / BJK.FIN_MENE_MS;
+        if (fx.marque.points > 0) BJA.dessinerPoints(ctx, Rp, w[0], w[1] - tt * 4, "+" + fx.marque.points, BJ.couleurDe(se, pid), Math.min(1, (1 - tt) * 4));
+      }
+    }
+    const v = R.visee, mi = bouloMine(), m = meRef.current;
+    if (!v || !mi || !m) return;
+    const mene = PQ.avancer(mi.sess.partie).mene, col = BJ.couleurDe(mi.sess, me.id);
+    if (v.etape !== "geste" && v.donnee) {
+      if (v.geste === "placer") { const w = BJ.mmVersMonde(mi.k, v.donnee.x, v.donnee.y); BJA.dessinerBoule(ctx, Rp, w[0], w[1], 0, null, true, 0.6); }
+      else BJA.dessinerGuide(ctx, Rp, BJ.guide(mene, v.geste, v.donnee, v.geste === "but" ? bouloLourdNow() : mene.lourd), (x, y, o) => BJ.versMonde(mi.k, x, y, o), col, v.geste === "but");
+    }
+    if (v.etape === "jauge") {
+      const head = C.footY(m.y) * C.TILE - 24 + (bouloMyPosture() === 1 ? 5 : 0);
+      BJA.dessinerJauge(ctx, Rp, C.footX(m.x) * C.TILE, head - 2, PQ.jauge(nowP - v.t0, PQ.GESTES[v.geste].jauge) / 1000);
+    }
+  }
+  /* LA VUE DE L'ÉCRAN DE LA PARTIE (`BouloHud`, ~20 images/s). */
+  function bouloVMGet() {
+    const R = bouloRef.current, nowP = performance.now(), m = meRef.current;
+    if (!m || m.zone !== "town") return null;
+    const mi = bouloMine();
+    if (!mi) {
+      const vm = { panel: R.panel ? { k: R.panel.k, piste: L.bouloPiste(R.panel.k) } : null, invite: null, sess: null };
+      for (const k of ["a", "b"]) { const se = R.view[k]; if (se && se.etat === "salle" && se.ent.length < BJ.requis(se.mode)) vm.invite = { k, name: se.ent[0].name, mode: se.mode, piste: L.bouloPiste(k) }; }
+      return vm;
+    }
+    const se = mi.sess, k = mi.k, an = R.anims[k], fx = R.fx[k], v = R.visee;
+    const partie = an ? an.base : fx ? fx.from : se.partie;
+    return { panel: null, invite: null, sess: {
+      k, etat: se.etat, mode: se.mode, cible: se.cible, owner: se.owner === me.id, requis: BJ.requis(se.mode),
+      ent: se.ent.map((e) => ({ id: e.id, name: e.name, col: BJ.couleurDe(se, e.id), me: e.id === me.id })),
+      ardoise: partie ? BJ.ardoise(se, partie, me.id, !!fx && !fx.fin) : null,
+      visee: v ? { etape: v.etape, geste: v.geste } : null,
+      coin: R.coin[k] && nowP - R.coin[k].t0 < 2600 ? BJ.nomDe(se, R.coin[k].pid) : null,
+      pauseNames: se.pause ? se.pause.qui.map((id) => BJ.nomDe(se, id)) : null,
+      pauseLeft: se.pause && R.pauseEnd[k] ? Math.max(0, R.pauseEnd[k] - nowP) : BJK.PAUSE_MS, closable: !!se.closable,
+      busy: !!an || (!!fx && !fx.fin),
+    } };
+  }
+  // les gestes de l'écran (un objet neuf à chaque rendu : `BouloHud` ne le lit qu'au clic, jamais dans un effet)
+  const bouloAct = {
+    open: (k, mode, cible) => { bouloRef.current.panel = null; sendReq({ kind: "bouloOpen", k, mode, cible }); },
+    cancelPanel: () => { bouloRef.current.panel = null; },
+    go: (k) => sendReq({ kind: "bouloGo", k }), leave: (k) => sendReq({ kind: "bouloLeave", k }),
+    revanche: (k) => sendReq({ kind: "bouloRevanche", k }), close: (k) => sendReq({ kind: "bouloClose", k }),
+    geste: (g) => bouloGeste(g), back: () => bouloBack(),
+  };
   /* LA VUE DE L'ÉCRAN DE COURSE (`CourseHud`, qui la lit à ~20 images/s) : rien n'y est calculé deux fois — le
      classement en direct vient de la passe de dessin (`rinkLocalRef.live`), les tours et le chrono du pas du coureur. */
   function raceVM() {
@@ -16866,6 +17400,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      n'aurait changé le monde de personne — c'est la leçon du 385 (« un
      garde-fou côté client ne protège pas un état qui compte »), prise par
      l'autre bout : un POUVOIR côté client ne change pas un état partagé. */
+  /* 2026-10-31 — le dessin des personnages pour tous (voir `PERSO_HD`) : une requête, comme la météo du menu (`devSky`) — l'hôte se
+     l'adresse aussi, et la requête `devPersoStyle` l'applique, la persiste, la diffuse dans `p.state` et le dit au chat. Le menu reste
+     ouvert : on compare les trois sans le rouvrir. */
+  function devSetPersoStyle(v) { sendReq({ kind: "devPersoStyle", style: v }); }
   function devSetWorld(key) {
     if (!isHost) { sendReq({ kind: "devWorld", key: key || null }); setDevMenuOpen(false); return; }
     const applied = applyForcedWorld(key);
@@ -18912,6 +19450,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (touchUiRef.current) { touchUiRef.current = false; setTouchUi(false); }
       // 2026-10-16 (lot 2a) — chez soi, B ouvre le mode déco ; dedans, ses touches passent avant tout le reste.
       if (meRef.current && meRef.current.zone === "home" && homeDecoKey(e)) { e.preventDefault(); return; }
+      // 2026-10-31 — EN PARTIE DE BOULES, le clavier vise d'abord (`bouloKey`) : les gestes, la donnée, la jauge ; on ne marche pas.
+      if (!devMenuOpenRef.current && bouloKey(e)) { e.preventDefault(); return; }
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         const idx = +e.code.slice(5) - 1;
@@ -19058,6 +19598,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onDown(e) {
       // 2026-10-16 (lot 2a) — en mode déco, le clic prend, pose ou choisit une pièce ; le clic droit tourne.
       if (homeDecoRef.current.on && meRef.current && meRef.current.zone === "home") { e.preventDefault(); homeDecoClick(e.button); return; }
+      if (bouloClick(e)) { e.preventDefault(); return; }   // 2026-10-31 — en partie de boules : poser la donnée, lâcher la jauge
       onDownJeu(e);
     }
     function onCtxMenu(e) { if (homeDecoRef.current.on) e.preventDefault(); }
@@ -19161,6 +19702,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
       if (isHost) hostRinkTick();   // 2026-10-05 (nuit) : les échéances de la course de la patinoire
+      if (isHost) hostBouloTick();   // 2026-10-31 : qui est encore en ville pendant une partie de boules (la pause)
+      bouloTick();                   // 2026-10-31 : les lancers qu'on anime, leur adoption, ma visée
       if (isHost) hostIceTick(dt);   // 2026-10-06 : l'usure de la glace, et la fin de la passe de la surfaceuse
       lakeWatchTick();   // 2026-10-06 : le message du gel du lac du sud (chacun, sans réseau)
       if (isHost) updateWolves(dt);
@@ -19300,7 +19843,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            couper la PEINTURE ne doit jamais couper le MONDE (règle du 425). */
         updateTaxi(dt);
         if (overlayUp) return;   // zip 425, même raison exactement
+        bouloFadeCheck(canvas);   // 2026-10-31 : l'entrée et la sortie d'une partie de boules se font en fondu enchaîné
         drawTownFrame(now, dt);
+        bouloFadeDraw(ctx);
         groundSnowK = 0;   // 2026-09-28 (phase 12a) : la neige de la ville ne teinte jamais les ombres d'une autre carte
         if (mapOpenRef.current) drawFullMap();   // zip 426 : la carte marche enfin en ville
         const fa = zoneFadeAlpha();
@@ -22636,6 +23181,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return z.v;
     }
     function getCamTown() {
+      // 2026-10-31 — en partie de boules, la caméra est celle de la partie (le cran ×3, la piste cadrée) : `bouloCamera`
+      const bc = bouloCamera(canvas);
+      if (bc) { starViewRef.current = { cam: bc, zoom: bc.z }; return bc; }
       const tw = townWorldRef.current, m = meRef.current;
       const zm = townZoomRef.current.v || manualZoomRef.current; // 2026-09-22 ter
       const vw = canvas.width / zm, vh = canvas.height / zm;
@@ -23236,6 +23784,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cette closure, aucun banc n'aurait pu la rejouer — et c'est en la
          rejouant que `verify-vallee` a trouvé les deux verrous qui collaient le
          joueur à la berge et la coque qui s'échouait en virant sur place. */
+      // 2026-10-31 — EN PARTIE DE BOULES, LE JEU PLACE LE JOUEUR (`bouloSteer`) : comme le taxi, il mène, et la position part telle quelle.
+      if (bouloSteer(m, dt)) { maybeSendPos(); return; }
       const bt0 = sharedRef.current.boat;
       if (bt0 && (bt0.pilot === me.id || bt0.crew === me.id)) {
         if (bt0.pilot === me.id) {
@@ -28727,6 +29277,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         };
       }
       if (parkStripQ) for (const pc of SPA.parkDrawPieces(parkStripQ.pk, parkCuts, parkStripQ.wy0, parkStripQ.wy1)) pushE(pc.key, 0, () => pc.draw(ctx));
+      bouloDrawPush(ctx, draws);   // 2026-10-31 — le boulodrome : les cercles, les boules au sol (triées avec les personnages), le point
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -28737,6 +29288,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
       BITMAP_LOG.fn = null;   // 2026-10-05 : le relevé des bâtiments ne vaut que pour le monde de la ville, cette image
+      bouloDrawPost(ctx);   // 2026-10-31 — par-dessus le monde : les boules en vol, mon guide et ma jauge, le « +n »
       /* 2026-10-11 — LA FLÈCHE DE LA GRUE ET SA CHARGE, au-dessus du monde trié (elles passent au-dessus de tout ce qui est au sol) :
          le crochet vise sa cible (`CH.machinesAt`), le chalet ou le conteneur y pend par le toit. */
       { const cc = chantierCraneRef.current; if (cc && cc.tr.crane) { try {
@@ -29041,6 +29593,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          426 s'est juré de ne plus commettre, à chaque carrefour. */
       if (tw2 && (tw2.phase === "riding" || tw2.phase === "asking")) tpk = null;
       else if (rideRef.current) tpk = null;   // 2026-10-13 (soir) — monté : les boutons de la monture disent tout ; E ne fait rien en roulant
+      else if (bouloInGame()) tpk = null;   // 2026-10-31 — en partie de boules : l'ardoise dit tout, E ne fait rien
+      else if (bouloNear()) tpk = bouloPromptKey();   // … et au boulodrome, ouvrir ou rejoindre une partie (même ordre que la touche E)
       else if (tw2 && (tw2.phase === "waiting" || tw2.phase === "parked") && Math.hypot(m.x - tw2.x, m.y - tw2.y) <= C.TAXI_BOARD_R + 0.9) tpk = "taxiBoard";
       else if (m.sitOn) tpk = "townStand";
       else if (canTownJumpNow()) tpk = "townJump";
@@ -32823,6 +33377,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           c.fillRect(10, 19, 4, 3);
           c.restore();
         }, "cheval|" + row + "|" + (flip ? 1 : 0) + "|" + Math.round(seatY - py));
+      } else if (bouloPoseOf(p, isSelf)) {
+        /* 2026-10-31 — LE BOULISTE (`A.drawBouloPose`) : accroupi pour pointer, debout pour tirer, la boule en main jusqu'au lâcher. Toujours
+           de profil, tourné vers le jeu (le miroir suit le sens de la mène, pas `p.dir`). La pose rend la main : la boule s'y dessine,
+           au pixel d'écran, une fois la pose posée (hors de son save/restore, qui rendrait la transformation du miroir). */
+        const bq = bouloPoseOf(p, isSelf);
+        ctx.save();
+        const hand = pose((c, sh) => {
+          if (bq.kx < 0) { c.translate(px + 16, 0); c.scale(-1, 1); const h = A.drawBouloPose(c, sh, 2, 0, py, bq.ph, -1, bq.acc); return h ? { x: px + 16 - h.x, y: h.y } : h; }
+          return A.drawBouloPose(c, sh, 2, px, py, bq.ph, 1, bq.acc);
+        });
+        ctx.restore();
+        if (hand && bq.ph < A.BOULO_LACHER) BJA.dessinerBouleMain(ctx, BJA.repere(ctx), hand.x, hand.y, bq.col, bq.but);
       } else if (p.cast) {
         /* 2026-09-03 (lot C) — LE LANCER SPÉCIAL. Même contrat que p.dig/p.slip
            juste en dessous : le dessin vit dans fermeArt (drawStarCast), ici
@@ -39691,6 +40257,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* 2026-10-05 — LA BOULE QU'ON POUSSE SE POSE AVANT TOUT : E est la touche qui l'a prise,
        et la laisser tomber dans la suite ouvrirait la vitrine d'à côté au lieu de la poser. */
     if (snowRollRef.current && snowAct()) return;
+    // 2026-10-31 — LE BOULODROME : ouvrir une partie au cercle d'une piste libre, en rejoindre une au bord ; en partie, E ne fait rien d'autre.
+    if (m0 && m0.zone === "town" && bouloTryE()) return;
     /* ---- INTÉRIEUR DU TRIBUNAL (zip 426). Sortie anticipée, comme la carte
        maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
@@ -41045,7 +41613,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
-        <button className="ferme-btn ferme-btn-ghost" title={L.btnPersoHdTip} onClick={() => { const v = !persoHdOn(); setPersoHd(v); setPersoHdUi(v); }}>{L.btnPersoHd(persoHdUi)}</button>
         {/* 2026-09-21 bis (correctif de Guillaume, même jour) — LA PREMIÈRE
             VERSION DE CE BOUTON (voir l'historique juste ici) renvoyait à la
             page d'accueil Arcardi (`onChangeFarm`=`leaveRoom`, quitter le
@@ -41067,7 +41634,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "bouloOpen" ? L.bouloPromptOpen : promptKey.startsWith("bouloJoin:") ? L.bouloPromptJoin(promptKey.slice(10)) : promptKey === "bouloSnow" ? L.bouloSnow : promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -43367,6 +43934,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       })()}
       {/* 2026-10-05 (nuit) — L'ÉCRAN DE LA COURSE DE LA PATINOIRE (`CourseHud.js`) : il se redessine seul. */}
       <SkateHelp getVM={skateHelpGet} L={L} />
+      {/* 2026-10-31 — LE BOULODROME, LOT 3 (`BouloHud.js`) : l'ardoise, l'ouverture d'une partie, la salle, les gestes. Il se redessine seul. */}
+      <BouloHud getVM={bouloVMGet} L={L} act={bouloAct} />
       <CourseHud getVM={raceVMGet} L={L} onJoin={() => sendReq({ kind: "rinkJoin" })} onLeave={() => sendReq({ kind: "rinkLeave" })}
         onGo={() => sendReq({ kind: "rinkGo" })} onCloseResults={() => { rinkLocalRef.current.resultsOpen = false; }} />
       {/* 2026-10-11 — LA CABANE DU SKATEPARK : choisir une monture et sa couleur, louer (une `req` arbitrée par l'hôte, `rentRide`).
@@ -45662,7 +46231,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cand = {};
         for (const sl of C.WARDROBE_SLOTS) cand[sl] = fitTry[sl] !== undefined ? fitTry[sl] : wornOf(sl);
         const candSkin = fitTry.skin !== undefined ? fitTry.skin : skinNow;
-        const sheetOf = (worn, skin) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn, skin, hair: wr.hair }), persoHdUi) : null;   // la coiffure du salon suit
+        const sheetOf = (worn, skin) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn, skin, hair: wr.hair }), persoHdUi !== "ancien") : null;   // la coiffure du salon suit
         const tryOn = (sl, idx) => setFitTry((t) => ({ ...t, [sl]: idx }));
         const nameOf = (sl, idx) => idx === 0 ? L.boutiqueNothing : (lang === "en" ? C.wardrobeCatalog(sl)[idx - 1].nameEn : C.wardrobeCatalog(sl)[idx - 1].name);
         const tabLabel = { hat: L.boutiqueSlotHat, scarf: L.boutiqueSlotScarf, outfit: L.boutiqueSlotOutfit, tint: L.boutiqueSlotTint, skin: L.boutiqueSlotSkin };
@@ -45777,7 +46346,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const hh = wr.hair || {}, cur = { c: hh.c | 0, d: hh.d | 0, b: hh.b | 0 };
         const cand = { ...cur, ...salonTry };
         const gold = sharedRef.current.money | 0;
-        const sheetOf = (h) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn: wr.worn, skin: wr.skin, hair: h }), persoHdUi) : null;   // lot B : en 32 × 48 si « Personnages fins »
+        const sheetOf = (h) => spritesReady ? spritesRef.current.getCharFitting(mc.gender, mc.outfit, C.playerLook({ worn: wr.worn, skin: wr.skin, hair: h }), persoHdUi !== "ancien") : null;   // lot B : en 32 × 48 si « Personnages fins »
         const nm = (it) => lang === "en" ? it.nameEn : it.name;
         const cutName = (i) => i ? nm(C.HAIR_CUTS[i]) : L.salonOrigin;
         const dyeName = (i) => i ? nm(C.HAIR_DYES[i]) : L.salonNatural;
@@ -46262,6 +46831,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-dev-grid" style={{ marginTop: 6 }}>
                   {[null, 0.3, 0.6, 0.72, 0.84, 0.97].map(v => (
                     <button key={"devseasonp-" + v} className={"ferme-dev-btn" + ((forcedSkyUi.seasonP == null ? null : forcedSkyUi.seasonP) === v ? " on" : "")} onClick={() => sendReq({ kind: "devSky", seasonP: v })}>{L.devSeasonP(v)}</button>
+                  ))}
+                </div>
+                {/* 2026-10-31 — LE DESSIN DES PERSONNAGES, PARTAGÉ (`devSetPersoStyle` → requête `devPersoStyle`, l'hôte décide) :
+                    sa phrase, « le changement se fait pour tout le monde sur toute la session ». */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devPersoSection}</div>
+                <div className="ferme-dev-hint">{L.devPersoHint}</div>
+                <div className="ferme-dev-grid">
+                  {PERSO_STYLES.map(v => (
+                    <button key={"devperso-" + v} className={"ferme-dev-btn" + (persoHdUi === v ? " on" : "")} disabled={persoHdUi === v} onClick={() => devSetPersoStyle(v)}>{L.devPersoBtn(v)}</button>
                   ))}
                 </div>
                 {/* AUDIT 2026-10 (FIX-004) — LE DALLAGE CIVIQUE HAUTE RÉSOLUTION, LOCAL (`HD.civicHD.on`) :

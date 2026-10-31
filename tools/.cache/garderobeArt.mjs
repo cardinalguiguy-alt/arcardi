@@ -368,6 +368,11 @@ function layerOf(slot, id, dir, gender, step, bob) {
    tint }, indices décalés de 1) }. `P` est le `fillRect` de fermeArt (aucune transformation : le faux canevas des bancs les ignore). */
 export function paintWardrobe(g, P, x, o) {
   const { gender, dir, step, bob, skin, skinD, wd } = o;
+  /* 2026-10-31 — le trait simple peint ce même dessin à ×2, au demi-pas (`drawCharFrame`, `fine`) : `step` et `bob` peuvent valoir 0,5.
+     Les grilles de lettres (le balancement d'une jupe, d'une écharpe ; le rebond du tutu) prennent le pas ENTIER (`stepI`, `bobI`) ;
+     les rectangles, le pas tel quel. `clr` : le `clearRect` à la même échelle que `P`. */
+  const stepI = o.stepI != null ? o.stepI : step, bobI = Math.floor(bob);
+  const clr = o.clr || ((gg, a, b, w, h) => gg.clearRect(a, b, w, h));
   const base = wd.tint ? C.WARDROBE_TINTS[wd.tint - 1].col : null;
   const shared = SHARED(skin, skinD);
 
@@ -376,13 +381,13 @@ export function paintWardrobe(g, P, x, o) {
   if (gar) {
     const id = gar.id, R = wardrobeRamp(base || OUTFIT_COL[id]);
     const pal = wardrobePal("outfit", id, base, skin, skinD);
-    const L = wardrobeLayer("outfit", id, dir, gender, step, bob);
+    const L = wardrobeLayer("outfit", id, dir, gender, stepI, bobI);
     if (id === "tutu") {
       // les collants et les chaussons : on efface la jupe ou le pantalon de base sous le tulle, puis on repeint les jambes
-      g.clearRect(x + 3, 18 + bob, 10, H - 18 - bob);
+      clr(g, x + 3, 18 + bob, 10, H - 18 - bob);
       const tp = "#f3e2e6", tps = "#d6bec6", sl = R.m, sld = R.d;
       P(g, x + 5, 18 + bob, 2, 3, tp); P(g, x + 9, 18 + bob, 2, 3, tps);
-      const lx = gender === "f" ? x + 5 + (step > 0 ? 1 : 0) : x + 5 + step, rx = gender === "f" ? x + 9 - (step < 0 ? 1 : 0) : x + 9 - step;
+      const lx = gender === "f" ? x + 5 + Math.max(0, step) : x + 5 + step, rx = gender === "f" ? x + 9 + Math.min(0, step) : x + 9 - step;
       if (2 - bob > 0) { P(g, lx, 21 + bob, 2, 2 - bob, tp); P(g, rx, 21 + bob, 2, 2 - bob, tps); }
       P(g, lx, 23, 2, 1, sl); P(g, rx, 23, 2, 1, sld);
     }
@@ -398,7 +403,7 @@ export function paintWardrobe(g, P, x, o) {
 
   // 2. L'ÉCHARPE
   const sc = wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1] : null;
-  if (sc) emit(g, P, x, wardrobeLayer("scarf", sc.id, dir, gender, step, bob), wardrobePal("scarf", sc.id, base, skin, skinD), bob, false);
+  if (sc) emit(g, P, x, wardrobeLayer("scarf", sc.id, dir, gender, stepI, bobI), wardrobePal("scarf", sc.id, base, skin, skinD), bob, false);
 
   // 3. CE QUI RETOMBE SUR LES ÉPAULES (cheveux longs, tresses, barbe) repasse devant le col — `drawCharFrame` sait quelle coupe on porte
   if ((gar || sc) && o.hairOver) o.hairOver();
@@ -451,7 +456,7 @@ export function paintFroufrou(g, P, x, o) {
     // le pan du foulard flotte au pas : sa propre couche (balancer toute la veste découvrait la chemise de base)
     const F = blank();
     patch(F, 11, "...........Yy..."); patch(F, 12, "............n..."); patch(F, 13, "...........y....");
-    sway(F, 11, -step);
+    sway(F, 11, -(o.stepI != null ? o.stepI : step));   // 2026-10-31 : le pas entier (le trait simple passe des demi-pas)
     for (let y = 11; y <= 13; y++) for (let k = 0; k < W; k++) if (F[y][k]) L[y][k] = F[y][k];
   } else {
     drape(L, [[10, 3, 12], [11, 3, 12], [12, 3, 12], [13, 3, 12], [14, 3, 12], [15, 4, 11], [16, 4, 11]]);

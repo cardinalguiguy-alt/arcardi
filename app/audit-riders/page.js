@@ -52,6 +52,7 @@ export default function AuditRiders() {
       return;
     }
     const S = A.buildSprites();
+    S.persoStyle = q.get("style") === "simple" ? "simple" : "detaille";   // 2026-10-31 : ?style=simple pour le trait simple ; le détaillé sinon
     const sheet = S.getChar(gender, 0, false, false, false, false, false, false, null);
     /* ?hd=1 (2026-10-24) : la même planche en 32 × 48, par le chemin du jeu (`drawPoseHD`, FermeGame.js, recopié ici) — la feuille
        fine NUE, les rectangles source ×2 (`hdCtxProxy`), le contour posé sur la pose finie (`outlineHD`). */

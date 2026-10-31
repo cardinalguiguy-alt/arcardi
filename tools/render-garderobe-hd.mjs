@@ -12,6 +12,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 installFakeDOM();
 const { fermeArt: A, fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants", "fermeArt"]);
 const S = A.buildSprites();
+S.persoStyle = "detaille";   // 2026-10-31 : ce banc rend le 32 × 48 DÉTAILLÉ (le jeu part maintenant du trait simple, `persoSimpleArt.js`)
 const idx = (tab, id) => tab.findIndex((t) => t && t.id === id);
 const hl = (c, d, b) => C.hairLook({ c: c ? idx(C.HAIR_CUTS, c) : 0, d: d ? idx(C.HAIR_DYES, d) : 0, b: b ? idx(C.BEARDS, b) : 0 });
 const wl = (hat, scarf, outfit, tint) => C.wardrobeLook({ hat: hat ? idx(C.WARDROBE_HATS, hat) + 1 : 0, scarf: scarf ? idx(C.WARDROBE_SCARVES, scarf) + 1 : 0,

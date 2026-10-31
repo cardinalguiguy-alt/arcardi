@@ -365,9 +365,21 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   source ×2, contour sur la pose finie), l'ancien 16 × 24 à gauche, le fin à droite → `poses-hd.png` (×3 ; `K=6` dans l'environnement pour
   regarder de près ; un argument filtre). ⚠️ À relancer pour TOUTE retouche du gabarit 32 × 48 (§4 « feuille de personnage »). Ni miroir ni
   rotation (faux canevas) : bateau, cheval et profils gauches se regardent en jeu.
+  2026-10-31 : `STYLE=simple node tools/render-poses-hd.mjs` rend les poses au TRAIT SIMPLE, sans contour (`poses-simple.png`) ; le détaillé sinon.
 - **`tools/render-garderobe-hd.mjs` (2026-10-23, lot B)** : les coupes, couleurs et barbes du salon, puis les chapeaux, écharpes, tenues (deux genres) et teintes
   de la Maison Garfield, en 32 × 48 (`S.getCharHD`, le chemin du jeu) à côté du 16 × 24 ×2 : face / dos / profil, puis deux images de marche →
   `garderobe-hd-coupes.png`, `garderobe-hd-vetements.png` (×3). Un argument filtre les rangées (⚠️ il réécrit alors les deux planches filtrées). Se juge à l'œil.
+- **`tools/verify-perso-simple.mjs` (2026-10-31)** : le TRAIT SIMPLE, style du jeu par défaut (`components/ferme/persoSimpleArt.js`, `S.getCharHD`
+  quand `S.persoStyle === "simple"`). Tient : (1) `drawCharFrame` peinte à ×2 (`fine`), aux pas entiers et sans les signes du vêtement, = l'ancienne
+  image ×2 au pixel près pour 88 tenues (tenues, peaux, coupes, barbes, Maison Garfield, PNJ, ouvriers) × 3 vues × 4 images ; (2) les coins au
+  pixel fin = Scale2x « contre le vide » ; (3) aucun signe du vêtement hors de la silhouette, à toutes les images de marche ; (4) la feuille —
+  jamais nulle, 9 + 4 images, `__hdK` 2, `__simple`, pas de mains jointes, un cache par style ; (5) la marche : pieds au sol, tête descendue de
+  2 × bob pixels fins. 10/10 au 2026-10-31.
+- **`tools/render-perso-simple.mjs` (2026-10-30, mis à jour le 2026-10-31)** : le TRAIT SIMPLE contre l'ancien et le détaillé →
+  `perso-simple-spectre.png` (neuf colonnes, le détaillé ramené facteur par facteur), `perso-simple-visages.png`, `perso-simple-pnj.png`,
+  `perso-simple-ecran-{rue,herbe}[-loupe].png` (au cran 3, sur la capture `maison-cartons-rue.png`, le fin cuit comme `drawCharHD`),
+  `perso-simple-marche-*.png` (« habit » = la feuille du jeu, 9 images), `perso-simple-habits.png` (les signes du vêtement, chaque tenue sans
+  puis avec, face / dos / profil). « Habit » est le dessin du jeu (`S.charFrameFine` puis la retouche). Se juge à l'œil (`docs/PROJETS.md` §12).
 - **`tools/render-perso-hd.mjs` (2026-10-23)** : les personnages en 32 × 48 (`components/ferme/persoHdArt.js`), fermière et fermier : l'actuel agrandi ×2,
   face / dos / profil, la marche de face et de profil — huit images depuis le 2026-10-24 (`perso-hd-planche.png`), les expressions de face et de profil (`perso-hd-expressions*.png`), la marche brute
   (`perso-hd-marche-brute.png` : face, dos, profil × 9 images, l'image 0 debout ; une animation s'en fait à 18 images/s), et la bande brute.

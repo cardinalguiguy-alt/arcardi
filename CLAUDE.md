@@ -11,18 +11,16 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-29 — LE BOULODROME : LE TERRAIN EST DANS LA VILLE (LOT 2), ON N'Y JOUE PAS ENCORE
+### 2026-10-31 — LE BOULODROME, LOT 3 : ON JOUE (ENTRAÎNEMENT, TÊTE-À-TÊTE, À TROIS) ; LE TRAIT SIMPLE EST LE STYLE PAR DÉFAUT
 
-1. **Lot 2 FAIT** (ses 17 verdicts, « une qualité graphique bluffante ») : derrière la mairie, deux pistes dessinées depuis la physique,
-   madriers, érables, bancs de planches, guirlande de nuit ; pluie et neige au pixel ; `render-boulodrome` 15/15. À juger en jeu :
-   `docs/A-JUGER.md`. Sa note « pas systématique » TRANCHÉE (un quart de pente, un couloir : une roulette sur deux passe) : `docs/PROJETS.md` §11.
-2. **Ensuite, dit par lui** : les personnages « ressemblent à des jouets » — plus de détail, l'ancien dessin à la demande (`docs/PROJETS.md` §12).
+1. **Boulodrome, lot 3 fait** (aucun verdict sur sa page : ses 15 recommandations font foi) : `bouloJeu.js` (pur), `bouloJeuArt.js`,
+   `BouloHud.js`, `A.drawBouloPose` ; l'hôte tient `sharedRef.boulo`, chacun rejoue le lancer et adopte. `verify-boulo-jeu` 32/32, vu en
+   jeu à deux (salle, tours, pause, fin, revanche, abandon). Pas fait et à juger : `docs/PROJETS.md` §11.
+2. **Personnages** : trait simple par défaut, interrupteur partagé au menu dev (`docs/PROJETS.md` §12).
 ⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. ⚠️ `app/audit-*`,
 `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — LIRE SES VERDICTS DU LOT 3 (JOUER) ET LES REPORTER DANS `docs/PROJETS.md` §11, PUIS LE CODER
-
-`ArtifactData` `list` sur `verdicts` de https://claude.ai/artifact/TJ9wMuSQqTQfrzqMiuS1YX (un point absent = ma recommandation).
+### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE LOT 3 EN JEU PAR GUILLAUME (ENTRAÎNEMENT PUIS À DEUX), PUIS LE LOT 4 (LES HABITANTS BOULISTES)
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -54,7 +52,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Course de la patinoire, contre-la-montre | `components/ferme/course.js`, `CourseHud.js` ; `hostRinkReq` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Rink`) ; README ferme (journal 2026-10-05 nuit, fin ter) | `verify-course`, `render-patinoire` ; à deux : `app/audit-duo` |
-| **Boulodrome**, pétanque (règle, physique au pas fixe, déterminisme, arbitre, format réseau prévu ; le terrain dans la ville : emprise, sable, madriers, bancs, guirlande, météo) | `components/ferme/petanque.js` (en-tête : les trois règles de construction), `boulodrome.js`, `boulodromeArt.js` ; `docs/PROJETS.md` §11 | `verify-petanque`, `render-boulodrome` |
+| **Boulodrome**, pétanque (règle, physique au pas fixe, déterminisme, arbitre, format réseau prévu ; le terrain dans la ville : emprise, sable, madriers, bancs, guirlande, météo) | `components/ferme/petanque.js` (en-tête : les trois règles de construction), `boulodrome.js`, `boulodromeArt.js` ; jouer : `components/ferme/bouloJeu.js`, `bouloJeuArt.js`, `BouloHud.js` ; `docs/PROJETS.md` §11 | `verify-petanque`, `render-boulodrome`, `verify-boulo-jeu`, `render-boulo-jeu` |
 | Ombres portées du soleil (heure, saison, ciel) | `components/ferme/ombres.js` ; `sunShadowPass` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js sunShadowPass`) | `verify-ombres` |
 | Marché (en haut TOUTE l'année), mondes de saison de la ville (calque : marché + patinoire l'hiver), ancienne place vide | `townSeasonWorld` (`townMarketWorld`, `townWinterWorld`) dans fermeEngine.js ; `getTownWorldCached` dans FermeGame.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journaux 2026-10-06 suite et 2026-10-05 nuit fin) | `verify-vallee`, `render-marche-hiver` |
 | Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |
@@ -73,7 +71,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Réseau, salons, sauvegardes | §3 ci-dessous ; `lib/gameSync.js`, `lib/realtimeQuota.js` ; `components/ferme/SECURITE.md` | (aucun banc réseau) `tools/fake-supabase.mjs` pour jouer à deux |
 | Textes, traduction | `components/ferme/fermeStrings.js` | `verify-strings` |
 | Noms au-dessus des personnages | `components/ferme/pixelFont.js` | `verify-noms` |
-| Personnages en 32 × 48, visages et expressions automatiques, marche à huit images | `components/ferme/persoHdArt.js` (« LA MARCHE À HUIT IMAGES »), `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter`, `drawCharHD` (FermeGame.js) ; README ferme (journaux des 2026-10-23 et 24) | `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd` |
+| Personnages : le TRAIT SIMPLE (style par défaut : l'ancien peint à ×2, signes du vêtement, marche au demi-pas ; style partagé `PERSO_HD`, `applyPersoStyle`), le détaillé en 32 × 48, visages et expressions automatiques | trait simple : `components/ferme/persoSimpleArt.js`, `makeCharSimple` et `drawCharFrame` (fermeArt.js), `docs/PROJETS.md` §12 ; détaillé : `components/ferme/persoHdArt.js`, `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter`, `drawCharHD`, `drawPoseHD` (FermeGame.js) ; README ferme (journaux des 2026-10-23, 24 et 31) | `verify-perso-simple`, `render-perso-simple`, `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd`, `render-poses-hd` (`STYLE=simple`) |
 | Dessin procédural d'un sprite | `components/ferme/DESSIN.md`, `fermeArt.js` | le `render-*` du sujet |
 | Autres jeux | `components/chess/`, `components/PetitsChevaux.js` + `ludoBot.js`, `public/candyluge/README.md` | `verify-echecs`, `verify-ludo`, `verify-ousthat` |
 | Jouer / vérifier à l'écran | `docs/VERIFICATION.md` (§10) | — |

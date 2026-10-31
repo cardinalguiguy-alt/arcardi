@@ -1,4 +1,26 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-29
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-31
+
+## 2026-10-31 — LES PERSONNAGES AU TRAIT SIMPLE : L'ANCIEN DESSIN, AFFINÉ, POUR TOUT LE MONDE (MENU DEV, PARTAGÉ)
+
+Ses verdicts sur la page des planches (`docs/PROJETS.md` §12) : la colonne Habit — « on détaille au mieux pour que les habits soient beaux » —,
+la marche à huit images, tout le monde, et l'interrupteur au menu dev, « pour tout le monde sur toute la session ». Le jeu part maintenant du
+TRAIT SIMPLE ; le détaillé du 2026-10-23 et l'ancien 16 × 24 restent à un clic (menu dev → « Personnages (pour tous les joueurs) »).
+**Supabase : rien** (un champ `persoStyle` de plus dans le JSON de la sauvegarde, comme la météo forcée). **Réseau : aucun message neuf** (une
+requête `devPersoStyle` au clic, le style voyage dans `p.state` et l'instantané). Ce qui a appris :
+- **On ne redessine pas : on peint l'ancien à ×2.** `drawCharFrame` reçoit `fine` et un `P` qui double ses rectangles ; un demi tombe sur
+  un pixel fin. D'où le demi-pas (la marche à huit images) et des signes de vêtement posés DANS le dessin, après le vêtement qu'ils
+  détaillent : ils suivent le pas, chaque pose et chaque costume sans rien détecter. `verify-perso-simple` tient la promesse inverse :
+  aux pas entiers et sans les signes, l'image fine est l'ancienne ×2 au pixel près, pour 88 tenues (les `step > 0 ? 1 : 0` des pieds de la
+  robe sont devenus `Math.max(0, step)`, identiques aux pas entiers).
+- **Une ligne à travers le buste ne passe qu'entre les bras.** Le buste x 4-11 est recouvert aux colonnes 4 et 11 par les bras et les mains :
+  tracée de bord à bord, la ceinture barrait les mains. Et l'épaule claire repeinte en liseré passait sur les cheveux longs, qui tombent
+  devant : c'est la retouche, qui lit les pixels, qui l'affine — le col en V y gagne ses deux pointes toutes seules.
+- **Une poche plaquée de 3 × 2 d'un ton sombre sur une jambe déjà dans l'ombre fait un trou noir** : de dos, une fente d'un pixel.
+- **Un dessin en grille de lettres ne sait pas le demi-pas** (le balancement d'une jupe, d'une écharpe, d'une mèche) : il prend le pas entier
+  `stepI`, qui bascule sur la demi-image qui suit le pas plein — chaque côté dure deux images sur huit, comme une sur quatre avant.
+- **Le style choisit sa fabrique, pas ses appelants** : `S.persoStyle` et un cache par style dans `getCharHD` ; les poses, les portraits,
+  la cabine d'essayage, les ouvriers suivent sans changer. `drawPoseHD` ne pose pas de contour sur une feuille `__simple`.
+⚠️ Pas vu : sous la pluie, l'iPad ; les expressions de profil, les mains jointes au repos et le bras des riders n'existent pas au trait simple.
 
 ## 2026-10-29 — LE BOULODROME, LOT 2 : LE TERRAIN DANS LA VILLE (ON NE JOUE PAS ENCORE)
 

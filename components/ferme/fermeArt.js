@@ -37,6 +37,7 @@ import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
 import { paintWardrobe, paintFroufrou } from "./garderobeArt";
 import { lookHair, paintHair, paintBeard } from "./coiffureArt";
+import * as PS from "./persoSimpleArt";   // 2026-10-31 — le TRAIT SIMPLE (S.getCharHD quand S.persoStyle === "simple")
 import * as HD from "./persoHdArt";   // 2026-10-23 — les joueurs en 32 × 48 (S.getCharHD)   // 2026-10-21 — le salon de coiffure   // 2026-10-21 — les vêtements de la Maison Garfield
 import * as PT from "./patin";   // 2026-10-05 (fin quater) : les couleurs et les lames du matériel de patin (pur)
 import { makeFenceCache, drawTownFenceTile, townFenceHeights, hedgeRowSpriteLegacy } from "./clotures";   // 2026-09-28 (soir) : l'ancienne haie du quai, `C.TOWN_BUIS_LEGACY`
@@ -6063,6 +6064,51 @@ export function drawStarCast(ctx, sheet, row, px, py, ph, kx) {
   //    dans les trois poses du cratère.
   ctx.fillStyle = "rgba(0,0,0,0.30)";
   ctx.fillRect(px + 3, py + 16 - legH, 10, 1);
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-31 — LE BOULISTE (lot 3 du boulodrome) : ACCROUPI POUR POINTER, DEBOUT POUR TIRER, LE BRAS QUI BALANCE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Les décisions du premier tour (docs/PROJETS.md §11) : « accroupi pour pointer, debout pour tirer ». Toujours de PROFIL (on lance
+   le long de la piste, d'ouest en est ou l'inverse : l'appelant passe la rangée 2 et le miroir, comme `drawStarCast`).
+   `ph` : < 0 — la boule en main, on vise (le bras un peu devant, la main à la hauteur du genou) ; 0..1 — le geste : le bras recule
+   (jusqu'à 0,35), revient en passant bas, LÂCHE la boule à `BOULO_LACHER` (0,6), et finit devant, la main ouverte vers la cible.
+   Un geste de pétanque se lance par en dessous, pointé comme tiré : le tir recule plus haut, c'est tout.
+   ⚠️ LE BRAS SE DESSINE LE LONG DE SON OS (noyau §4 : « un membre déplacé en bloc se détache ») : cinq pixels de manche et la main,
+   de l'épaule vers l'angle du moment — l'épaule ne quitte jamais le corps. La manche et la main sont DÉCOUPÉES dans la feuille
+   (x 7, y 12 la manche ; y 15 la main), au même gabarit que toutes les poses : le trait simple et le détaillé suivent seuls.
+   ⚠️ La manche de profil d'origine reste peinte avec le buste : elle se lit comme le bras proche, au repos ; celui-ci est le
+   bras qui lance. Rend la MAIN (px de l'appelant, avant son miroir) : la boule tenue s'y dessine. */
+export const BOULO_LACHER = 0.6;
+export function drawBouloPose(ctx, sheet, row, px, py, ph, kx, accroupi) {
+  const sy = row * 24, k = (+kx || 1) < 0 ? -1 : 1;
+  const acc = !!accroupi;
+  // le corps : accroupi, les jambes pliées en raccourci (8 → 5) et tout le haut descendu de cinq pixels ; debout, tel quel
+  const drop = acc ? 5 : 0, lean = acc ? 1 : 0;
+  if (acc) {
+    ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 19, 16, 5);
+  } else ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 16, 16, POSE_LEG_H);
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + lean, py + 10 + drop, 16, POSE_TORSO_H - (acc ? 1 : 0));
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + lean * 2, py + drop, 16, POSE_HEAD_H);
+  // l'angle du bras (degrés ; 0 pendant, + vers la cible, − en arrière)
+  let a;
+  const back = acc ? -70 : -110, fwd = acc ? 62 : 78;
+  if (!(ph >= 0)) a = acc ? 32 : 18;
+  else if (ph < 0.35) a = (acc ? 32 : 18) + (back - (acc ? 32 : 18)) * (ph / 0.35);
+  else if (ph < BOULO_LACHER) a = back + (fwd - back) * ((ph - 0.35) / (BOULO_LACHER - 0.35));
+  else a = fwd + (acc ? 8 : 14) * Math.min(1, (ph - BOULO_LACHER) / 0.25);
+  const r = (a * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
+  const shX = px + 8 + lean, shY = py + 11 + drop;           // l'épaule, sur le buste
+  let hx = shX, hy = shY;
+  for (let i = 0; i < 5; i++) {
+    const x = Math.round(shX + dx * i), y = Math.round(shY + dy * i);
+    ctx.drawImage(sheet, 7, sy + 12, 1, 1, x, y, 1, 1);
+    ctx.drawImage(sheet, 8, sy + 12, 1, 1, x + (Math.abs(dy) > 0.5 ? 1 : 0), y + (Math.abs(dy) > 0.5 ? 0 : 1), 1, 1);
+    hx = shX + dx * 5; hy = shY + dy * 5;
+  }
+  const mx = Math.round(hx), my = Math.round(hy);
+  ctx.drawImage(sheet, 7, sy + 15, 2, 1, mx, my, 2, 1);      // la main
+  return { x: mx + 1, y: my + 1, k };
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
@@ -18826,7 +18872,17 @@ export function buildSprites() {
     const mm = typeof look === "string" ? /^(ouvrier|chef|soudeur|conducteur):(\d+)$/.exec(look) : null;
     return mm ? { role: mm[1], v: +mm[2] } : null;
   }
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
+  /* 2026-10-31 — LE MÊME DESSIN À ×2 (le trait simple, `persoSimpleArt.js`). `P_FINE` multiplie les rectangles par deux : les
+     coordonnées du 16 × 24 restent celles qu'on lit ici, et un demi (le demi-pas, un signe de vêtement) tombe sur un pixel fin entier.
+     Des DÉCLARATIONS de fonction, pas des `const` : `drawCharFrame` est appelée plus haut dans le fichier que ces lignes. */
+  function P_ONE(g, x, y, w, h, col) { P(g, x, y, w, h, col); }
+  function P_FINE(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x * 2, y * 2, w * 2, h * 2); }
+  /* `fine` (2026-10-31) : null — l'image 16 × 24 de toujours ; ou { step, bob, stepI, habit } — la même, peinte à ×2 sur une toile
+     32 × 48 (`ox` 0), au pas donné (`step` −1..1 et `bob` 0..1 par demis, au lieu de les tirer de `frame` ; `stepI` le pas entier des
+     dessins en grille de lettres), avec les signes du vêtement si `habit` (`PS.paintHabitFine`). */
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look, fine) {
+    const P = fine ? P_FINE : P_ONE;
+    const CLR = fine ? (gg, a, b, w, h) => gg.clearRect(a * 2, b * 2, w * 2, h * 2) : (gg, a, b, w, h) => gg.clearRect(a, b, w, h);
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     /* 2026-10-21 — LE SALON : `hl` (coupe, couleur, barbe) se lit dans la chaîne `look` ; absent = la tête d'avant. `legacy` : la coupe
        d'origine dessinée ci-dessous au pixel près ("f" longs, "m" court), ou null quand c'est une coupe du catalogue (`coiffureArt.js`). */
@@ -18837,16 +18893,17 @@ export function buildSprites() {
     const tone = !sugarWorker && lookSkin(look) ? C.CHAR_SKIN_TONES[lookSkin(look)] : null;
     const skin = sugarWorker ? MARTIAL_SKIN : tone ? tone.main : SKIN;
     const skinD = sugarWorker ? MARTIAL_SKIN_D : tone ? tone.shade : SKIN_D;
-    const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
-    const bob = step !== 0 ? 1 : 0;
+    const step = fine ? fine.step : frame === 1 ? 1 : frame === 3 ? -1 : 0;
+    const bob = fine ? fine.bob : step !== 0 ? 1 : 0;
+    const stepI = fine ? fine.stepI : step;
     const x = ox;
 
     if (gender === "f") {
       P(g, x + 4, 14 + bob, 8, 7, o.shirt);
       P(g, x + 3, 17 + bob, 10, 4, o.shirt);
       P(g, x + 3, 20 + bob, 10, 1, shade(o.shirt));
-      P(g, x + 5 + (step > 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#6a4528");
-      P(g, x + 9 - (step < 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#6a4528");
+      P(g, x + 5 + Math.max(0, step), 21 + bob, 2, 3 - bob, "#6a4528");   // 2026-10-31 : `step > 0 ? 1 : 0` aux pas entiers, et le demi-pas
+      P(g, x + 9 + Math.min(0, step), 21 + bob, 2, 3 - bob, "#6a4528");
     } else {
       P(g, x + 5, 15 + bob, 3, 6, o.pants);
       P(g, x + 8, 15 + bob, 3, 6, shade(o.pants));
@@ -18864,7 +18921,7 @@ export function buildSprites() {
     }
     P(g, x + 4, 2 + bob, 8, 8, skin);
     P(g, x + 4, 9 + bob, 8, 1, skinD);
-    if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step });
+    if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step: stepI });
     else if (legacy === "f") {
       P(g, x + 3, 1 + bob, 10, 3, hair);
       P(g, x + 3, 3 + bob, 2, 8, hair); P(g, x + 11, 3 + bob, 2, 8, hair);
@@ -19089,8 +19146,8 @@ export function buildSprites() {
       P(g, x + 3, 20 + bob, 10, 1, SKIRT_D);
       // Bottines : coordonnées exactes des pieds du bloc féminin (step/bob
       // compris, sinon la démarche se désynchronise d'une frame sur deux).
-      P(g, x + 5 + (step > 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#0e0e12");
-      P(g, x + 9 - (step < 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#0e0e12");
+      P(g, x + 5 + Math.max(0, step), 21 + bob, 2, 3 - bob, "#0e0e12");
+      P(g, x + 9 + Math.min(0, step), 21 + bob, 2, 3 - bob, "#0e0e12");
       // Manteau jaune long : épaules -> hanches, ourlet marqué sur la jupe.
       P(g, x + 4, 10 + bob, 8, 8, COAT);
       P(g, x + 4, 10 + bob, 8, 1, COAT_L);
@@ -19139,7 +19196,7 @@ export function buildSprites() {
     // dit sa fonction en un coup d'œil, à 16 pixels de haut. Overlay sur le
     // skin masculin, mêmes coordonnées de base que Carla ci-dessus.
     // 2026-10-21 — Froufrou, le coiffeur (`garderobeArt.js`) : fuchsia et léopard, sur le fermier de base.
-    if (look === "froufrou" && !beeSuit) paintFroufrou(g, P, x, { dir, step, bob, skin });
+    if (look === "froufrou" && !beeSuit) paintFroufrou(g, P, x, { dir, step, stepI, bob, skin });
     if (look === "leo" && !beeSuit) {
       const SH = "#efe9dc", SH_D = shade(SH);
       const VEST = "#6a6a76", VEST_D = shade(VEST);
@@ -19302,14 +19359,14 @@ export function buildSprites() {
       const BOOT = "#2a231d", TOE = "#8a7a62";
       // 1. LE PANTALON DE TRAVAIL (et, chez une ouvrière, la jupe de base effacée hors des jambes)
       if (gender === "f") {
-        g.clearRect(x + 3, 14 + bob, 10, 7); g.clearRect(x + 3, 21 + bob, 10, 3 - bob);
+        CLR(g, x + 3, 14 + bob, 10, 7); CLR(g, x + 3, 21 + bob, 10, 3 - bob);
         P(g, x + 4, 14 + bob, 8, 1, TR);
       }
       P(g, x + 5, 15 + bob, 3, 6, TR); P(g, x + 8, 15 + bob, 3, 6, TR_D);
       P(g, x + 5, 15 + bob, 1, 6, tint(TR));
       if (dir === 0) { P(g, x + 5, 18 + bob, 3, 1, shade(TR_D)); P(g, x + 8, 18 + bob, 3, 1, shade(TR_D)); }   // les genouillères
       P(g, x + 5 + step, 21 + bob, 3, 3 - bob, BOOT); P(g, x + 8 - step, 21 + bob, 3, 3 - bob, BOOT);
-      if (dir !== 1 && bob === 0) { P(g, x + 5 + step, 23, 3, 1, TOE); P(g, x + 8 - step, 23, 3, 1, TOE); }   // le bout renforcé
+      if (dir !== 1 && bob < 1) { P(g, x + 5 + step, 23, 3, 1, TOE); P(g, x + 8 - step, 23, 3, 1, TOE); }   // le bout renforcé (2026-10-31 : et au demi-pas)
       // 2. LES MANCHES (longues : on ne travaille pas bras nus sur un chantier), les mains (des gants chez le soudeur)
       const HAND = welder ? "#8a6a42" : skin;
       if (dir === 2) { P(g, x + 7 + step, 11 + bob, 2, 4, SLV); P(g, x + 7 + step, 15 + bob, 2, 1, HAND); if (welder) P(g, x + 7 + step, 14 + bob, 2, 1, HAND); }
@@ -19335,6 +19392,17 @@ export function buildSprites() {
       if (welder) { P(g, x + 4, 0 + bob, 8, 2, "#2a2c33"); P(g, x + 5, 0 + bob, 6, 1, "#454a55"); }   // le masque relevé
     }
     const wd = parseWardrobeLook(look);
+    /* 2026-10-31 — LES SIGNES DU VÊTEMENT, au pixel fin (`PS.paintHabitFine`) : après tous les costumes, après la teinte de la
+       garde-robe (le col d'une chemise teinte cerise est cerise), AVANT sa tenue, son écharpe et son chapeau, qui les recouvrent. */
+    const habit = () => {
+      if (!fine || !fine.habit) return;
+      const tintCol = wd && wd.tint ? C.WARDROBE_TINTS[wd.tint - 1].col : null;
+      const topCol = sugarWorker ? "#c9302c" : tintCol || o.shirt;
+      const wkv = wk ? (wk.role === "chef" ? WORKER_VESTS.orange : WORKER_VESTS[WORKER_CREW[wk.v % WORKER_CREW.length].vest]) : null;
+      PS.paintHabitFine(g, P, x, { gender, dir, step, bob, skin, top: topCol, pants: o.pants, outfitOff: !!(wd && wd.outfit), vest: wkv,
+        flags: { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker }, look });
+    };
+    if (!wd) habit();
     if (wd) {
       const CT = wd.tint ? C.WARDROBE_TINTS[wd.tint - 1] : null;
       const base = CT ? CT.col : null;
@@ -19354,10 +19422,11 @@ export function buildSprites() {
       }
       // ---- 2. LA TENUE, L'ÉCHARPE, LE CHAPEAU : `garderobeArt.js` (2026-10-21 — redessinés : drapé éclairé, plis, matières, trois
       // vues, au pas ; le zip 427 les posait en aplats, les mêmes dans les trois vues).
-      paintWardrobe(g, P, x, { gender, dir, step, bob, skin, skinD, hair, wd, hairOver: () => {
+      habit();
+      paintWardrobe(g, P, x, { gender, dir, step, stepI, bob, skin, skinD, hair, wd, clr: CLR, hairOver: () => {
         // ce qui retombe sur les épaules repasse devant le col (les mèches d'origine, une coupe du catalogue, la barbe fournie)
         if (legacy === "f") { P(g, x + 3, 9 + bob, 2, 4, hair); P(g, x + 11, 9 + bob, 2, 4, hair); }
-        else if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step, minY: 9 });
+        else if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step: stepI, minY: 9 });
         if (hl && hl.b) paintBeard(g, P, x, { beard: hl.b, col: hair, dir, bob, minY: 9 });
       } });
     }
@@ -22535,16 +22604,49 @@ house: house(),
      `naked` : la même feuille SANS contour, pour les poses — on l'assemble en morceaux, et le contour se pose sur la pose finie.
      `expr` : une expression de `PERSO_HD_EXPRESSIONS` (le dormeur : « sommeil ») ; une feuille par expression, en cache. */
   // `variant` (2026-10-24) : "clasp", les MAINS JOINTES d'un personnage immobile (persoHdArt, « LES MAINS JOINTES ») — une petite feuille à part.
+  /* 2026-10-31 — `S.persoStyle` : "simple" (le trait simple, `persoSimpleArt.js` — le défaut) ou "detaille" (le 32 × 48 de
+     `persoHdArt.js`). FermeGame le pose depuis l'état PARTAGÉ (`sharedRef.persoStyle`, menu dev) ; « ancien » ne passe jamais ici (le
+     jeu n'appelle plus `getCharHD`). Les deux styles ont leur propre cache : basculer ne refabrique rien qu'on a déjà vu. */
+  S.persoStyle = "simple";
   S.getCharHD = (gender, outfit, look, naked, expr, npc, variant) => {
     /* `npc` (2026-10-23, lot A) : { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker } — les drapeaux de `getChar` — ou `true`
        pour un habitant sans costume. Un PNJ prend le visage d'un PNJ (`persoHdArt`, `faceStyleOf`), jamais le sourire d'un joueur. */
     const fl = npc && typeof npc === "object" ? npc : {};
-    const key = gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
+    const simple = S.persoStyle === "simple";
+    const key = (simple ? "s:" : "") + gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
       + (npc ? ":pnj" + ["overalls", "cap", "beeSuit", "plaid", "cheeseHat", "sugarWorker"].map((k) => (fl[k] ? k[0] + k[1] : "")).join("") : "")
       + (variant ? ":" + variant : "");
-    if (!(key in S.charsHD)) S.charsHD[key] = makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant);
+    if (!(key in S.charsHD)) S.charsHD[key] = simple ? makeCharSimple(gender, outfit, look, naked, expr, npc, fl, variant) : makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant);
     return S.charsHD[key];
   };
+  /* 2026-10-31 — LA FEUILLE AU TRAIT SIMPLE (`persoSimpleArt.js`, docs/PROJETS.md §12) : le gabarit des feuilles fines (`__hdK = 2`,
+     32 × 48 la case, trois rangées face / dos / profil), donc les poses la découpent sans changer une ligne. Chaque image est
+     `drawCharFrame` peinte à ×2 (`fine`, avec les signes du vêtement) puis retouchée (coins, liserés, visage, semelle).
+     · la feuille de MARCHE : neuf images, 0 debout et 1 à 8 la foulée au demi-pas (`PS.PERSO_SIMPLE_WALK`) ;
+     · la feuille NUE des poses : les quatre images de l'ancien, comme `charSheet` — ses repères sont ceux des poses ;
+     · pas de mains jointes (`variant` "clasp" → null : l'ancien dessin n'en a pas, l'appelant garde la marche) ; pas de `__bare` ni de
+       `__armRig` : les riders du park recopient le bras par cases, comme avec l'ancien (montureArt, `armHD` absent) ;
+     · `__simple` : ce dessin n'a PAS de contour — `drawPoseHD` ne lui en pose pas sur la pose finie.
+     Tout ce que l'ancien dessine (tenues, costumes de PNJ, ouvriers, coupes du salon, garde-robe) passe : jamais de `null` ici, sauf
+     un genre inconnu. */
+  function makeCharSimple(gender, outfit, look, naked, expr, npc, fl, variant) {
+    if (variant === "clasp" || (gender !== "f" && gender !== "m")) return null;
+    const NF = naked ? 4 : 1 + PS.PERSO_SIMPLE_WALK.length, W = PS.PERSO_SIMPLE_W, H = PS.PERSO_SIMPLE_H;
+    const [c, g] = cv(NF * W, 3 * H);
+    const [tc, tg] = cv(W, H);
+    for (let dir = 0; dir < 3; dir++) for (let f = 0; f < NF; f++) {
+      const ph = naked ? { step: f === 1 ? 1 : f === 3 ? -1 : 0 } : f === 0 ? { step: 0 } : PS.PERSO_SIMPLE_WALK[f - 1];
+      const fine = { step: ph.step, bob: Math.abs(ph.step), stepI: ph.stepI != null ? ph.stepI : ph.step, habit: true };
+      tg.clearRect(0, 0, W, H);
+      drawCharFrame(tg, 0, gender, outfit, dir, 0, !!fl.overalls, !!fl.cap, !!fl.beeSuit, !!fl.plaid, !!fl.cheeseHat, !!fl.sugarWorker, look || null, fine);
+      const px = PS.persoSimplePx(PS.persoSimpleGridFine(tg.getImageData(0, 0, W, H).data, { dir, bobF: Math.round(fine.bob * 2), niveau: 3, expr: expr || "neutre", pnj: !!npc }));
+      const im = g.createImageData ? g.createImageData(W, H) : { data: new Uint8ClampedArray(W * H * 4), width: W, height: H };
+      im.data.set(px);
+      g.putImageData(im, f * W, dir * H);
+    }
+    c.__hdK = 2; c.__simple = true;
+    return c;
+  }
   // La fabrique de `getCharHD`, sans cache : la cabine d'essayage (`getCharFitting`) a le sien, borné.
   function makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant) {
     let sheet = null;
@@ -22605,6 +22707,13 @@ house: house(),
   }
   /* 2026-10-21 — UNE IMAGE SEULE du personnage (direction, pas de marche), peinte à l'origine d'un canevas neuf : pour les bancs, dont le faux
      canevas ignore `translate` (la feuille de `charSheet` y superposerait ses trois rangées). `tools/render-garderobe.mjs`. */
+  /* 2026-10-31 — LA MÊME IMAGE À ×2 (le trait simple) : `fine` = { step, bob, stepI, habit } comme `drawCharFrame`. Pour les bancs
+     (`verify-perso-simple`, `render-perso-simple`) : une toile 32 × 48, avant la retouche de `persoSimpleArt`. */
+  S.charFrameFine = (gender, outfit, dir, fine, look, f) => {
+    const [c, g] = cv(32, 48), o = f || {};
+    drawCharFrame(g, 0, gender, outfit, dir, 0, !!o.overalls, !!o.cap, !!o.beeSuit, !!o.plaid, !!o.cheeseHat, !!o.sugarWorker, look || null, fine);
+    return c;
+  };
   S.charFrame = (gender, outfit, dir, frame, look, f) => {
     const [c, g] = cv(16, 24);
     // `f` (2026-10-23, planche des costumes de PNJ) : { overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker } — comme `getChar`.
@@ -22619,11 +22728,13 @@ house: house(),
   // `hd` (2026-10-23, lot B) : la feuille en 32 × 48 quand l'interrupteur « Personnages fins » le veut — même cache borné.
   S.getCharFitting = (gender, outfit, look, hd) => {
     const key = gender + ":" + outfit + (look ? ":" + look : "");
-    if (hd ? S.charsHD[key] : S.chars[key]) return hd ? S.charsHD[key] : S.chars[key];
-    const fk = (hd ? "hd:" : "") + key;
+    // 2026-10-31 — la feuille déjà portée se cherche sous la clé de `getCharHD`, celle du style courant (le trait simple a son préfixe)
+    const hk = (S.persoStyle === "simple" ? "s:" : "") + gender + ":" + outfit + ":" + (look || "");
+    if (hd ? S.charsHD[hk] : S.chars[key]) return hd ? S.charsHD[hk] : S.chars[key];
+    const fk = (hd ? "hd:" + S.persoStyle + ":" : "") + key;
     let c = fitCache.get(fk);
     if (c) { fitCache.delete(fk); fitCache.set(fk, c); return c; }   // la plus récente en dernier
-    c = (hd && makeCharHD(gender, outfit, look || null, false, "neutre", null, {})) || charSheet(gender, outfit, false, false, false, false, false, false, look || null);
+    c = (hd && (S.persoStyle === "simple" ? makeCharSimple : makeCharHD)(gender, outfit, look || null, false, "neutre", null, {})) || charSheet(gender, outfit, false, false, false, false, false, false, look || null);
     fitCache.set(fk, c);
     if (fitCache.size > FIT_MAX) fitCache.delete(fitCache.keys().next().value);
     return c;
