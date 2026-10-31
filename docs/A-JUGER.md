@@ -57,6 +57,11 @@ bras du gabarit : assis ou au patin, ils sont un peu plus courts qu'à la marche
 lui seulement, jamais chez un habitant ni à deux. Laissés tels quels sans son avis : le bras nu de la fermière de profil au repos, les coupes
 longues vues de dos. Les détails ne sont plus à l'ordre du jour tant que le trait simple tient.
 
+**À JOUER — LE BOULODROME, LOT 3 (2026-10-31)** : E au cercle de craie d'une piste (derrière la mairie) ; un entraînement seul, puis un
+tête-à-tête à deux (`docs/PROJETS.md` §11). À juger : le fondu vers ×3, le geste du lanceur (le bras est fin au cran 2), le guide (trop ou pas
+assez aidant ?), la jauge (sa vitesse), la durée d'une mène (les roulés sont en temps réel), l'ardoise, le placement des joueurs qui
+attendent. **Pas vu** : l'iPad (un toucher pose ET valide la visée), la nuit, le terrain lourd après la pluie, la fermeture sous la neige.
+
 **À REGARDER EN JEU — LE TERRAIN DU BOULODROME (2026-10-29)** : derrière la mairie (`docs/PROJETS.md` §11, lot 2). Le sable éclairé depuis la
 physique (racines, creux, ornière, plombées, tassé des cercles), les madriers, les érables (adultes : la clôture de l'avenue est sous leur
 couronne), les bancs de planches (s'y asseoir), la guirlande en zigzag le jour (discrète) et la nuit (le boulodrome baigne dans une lueur

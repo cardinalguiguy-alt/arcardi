@@ -1,5 +1,22 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-31
 
+## 2026-10-31 (suite) — LE BOULODROME, LOT 3 : ON JOUE AUX BOULES
+
+Sa page des 15 décisions de forme n'a reçu aucun verdict : les recommandations font foi (`docs/PROJETS.md` §11). E au cercle de craie d'une
+piste libre ouvre une partie (tête-à-tête, à trois, ou un entraînement seul), les autres la rejoignent par E au bord ; une pièce désigne qui
+commence ; fondu enchaîné vers ×3 ; le jeu place les joueurs en marchant ; gestes 1 à 4, visée à la souris ou aux flèches, jauge au-dessus du
+joueur ; ardoise, anneau du point, « +n », revanche, pause si quelqu'un quitte la ville. Fichiers : `bouloJeu.js` (pur), `bouloJeuArt.js`,
+`BouloHud.js`, `A.drawBouloPose`, le mode `solo` de `petanque.js`, le bloc « LE BOULODROME, LOT 3 : JOUER » de FermeGame.js.
+**Supabase : rien** (`boulo` voyage dans l'instantané ; une sauvegarde rechargée l'oublie). **Réseau** : une requête par geste, un `apply`
+qui porte la session, l'entrée du lancer et l'empreinte de l'état d'après ; la posture dans le paquet de position (`bp`). Ce qui a appris :
+- **Une vue « en retard » doit être une COPIE.** Chez l'hôte, la session reçue est l'objet de `sharedRef`, que le lancer suivant modifie sur
+  place : adoptée telle quelle, la vue avançait avec elle, et l'hôte marchait vers le cercle suivant pendant que la boule roulait (vu en jeu).
+- **`PT` est le patin dans FermeGame** : la pétanque y est `PQ`. Un alias pris ailleurs (fermeArt, les bancs) ne vaut pas pour ce fichier ;
+  l'erreur ne se voit qu'à l'exécution (« Cannot read PX_M »), et seulement là où le code passe.
+- **Une visée proposée doit être une visée acceptée** : la donnée par défaut (`donneeDefaut`) tombait parfois à moins de 50 cm du cercle ou
+  hors des bornes du but — l'arbitre la refusait. Elle vise maintenant toujours ce que `verifier` accepte.
+⚠️ Pas vu : l'iPad (un toucher pose et valide la visée d'un coup), la nuit, la pluie, la neige, une partie entière jouée à la main.
+
 ## 2026-10-31 — LES PERSONNAGES AU TRAIT SIMPLE : L'ANCIEN DESSIN, AFFINÉ, POUR TOUT LE MONDE (MENU DEV, PARTAGÉ)
 
 Ses verdicts sur la page des planches (`docs/PROJETS.md` §12) : la colonne Habit — « on détaille au mieux pour que les habits soient beaux » —,

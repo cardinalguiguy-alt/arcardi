@@ -6067,6 +6067,51 @@ export function drawStarCast(ctx, sheet, row, px, py, ph, kx) {
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-10-31 — LE BOULISTE (lot 3 du boulodrome) : ACCROUPI POUR POINTER, DEBOUT POUR TIRER, LE BRAS QUI BALANCE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Les décisions du premier tour (docs/PROJETS.md §11) : « accroupi pour pointer, debout pour tirer ». Toujours de PROFIL (on lance
+   le long de la piste, d'ouest en est ou l'inverse : l'appelant passe la rangée 2 et le miroir, comme `drawStarCast`).
+   `ph` : < 0 — la boule en main, on vise (le bras un peu devant, la main à la hauteur du genou) ; 0..1 — le geste : le bras recule
+   (jusqu'à 0,35), revient en passant bas, LÂCHE la boule à `BOULO_LACHER` (0,6), et finit devant, la main ouverte vers la cible.
+   Un geste de pétanque se lance par en dessous, pointé comme tiré : le tir recule plus haut, c'est tout.
+   ⚠️ LE BRAS SE DESSINE LE LONG DE SON OS (noyau §4 : « un membre déplacé en bloc se détache ») : cinq pixels de manche et la main,
+   de l'épaule vers l'angle du moment — l'épaule ne quitte jamais le corps. La manche et la main sont DÉCOUPÉES dans la feuille
+   (x 7, y 12 la manche ; y 15 la main), au même gabarit que toutes les poses : le trait simple et le détaillé suivent seuls.
+   ⚠️ La manche de profil d'origine reste peinte avec le buste : elle se lit comme le bras proche, au repos ; celui-ci est le
+   bras qui lance. Rend la MAIN (px de l'appelant, avant son miroir) : la boule tenue s'y dessine. */
+export const BOULO_LACHER = 0.6;
+export function drawBouloPose(ctx, sheet, row, px, py, ph, kx, accroupi) {
+  const sy = row * 24, k = (+kx || 1) < 0 ? -1 : 1;
+  const acc = !!accroupi;
+  // le corps : accroupi, les jambes pliées en raccourci (8 → 5) et tout le haut descendu de cinq pixels ; debout, tel quel
+  const drop = acc ? 5 : 0, lean = acc ? 1 : 0;
+  if (acc) {
+    ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 19, 16, 5);
+  } else ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 16, 16, POSE_LEG_H);
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + lean, py + 10 + drop, 16, POSE_TORSO_H - (acc ? 1 : 0));
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + lean * 2, py + drop, 16, POSE_HEAD_H);
+  // l'angle du bras (degrés ; 0 pendant, + vers la cible, − en arrière)
+  let a;
+  const back = acc ? -70 : -110, fwd = acc ? 62 : 78;
+  if (!(ph >= 0)) a = acc ? 32 : 18;
+  else if (ph < 0.35) a = (acc ? 32 : 18) + (back - (acc ? 32 : 18)) * (ph / 0.35);
+  else if (ph < BOULO_LACHER) a = back + (fwd - back) * ((ph - 0.35) / (BOULO_LACHER - 0.35));
+  else a = fwd + (acc ? 8 : 14) * Math.min(1, (ph - BOULO_LACHER) / 0.25);
+  const r = (a * Math.PI) / 180, dx = Math.sin(r), dy = Math.cos(r);
+  const shX = px + 8 + lean, shY = py + 11 + drop;           // l'épaule, sur le buste
+  let hx = shX, hy = shY;
+  for (let i = 0; i < 5; i++) {
+    const x = Math.round(shX + dx * i), y = Math.round(shY + dy * i);
+    ctx.drawImage(sheet, 7, sy + 12, 1, 1, x, y, 1, 1);
+    ctx.drawImage(sheet, 8, sy + 12, 1, 1, x + (Math.abs(dy) > 0.5 ? 1 : 0), y + (Math.abs(dy) > 0.5 ? 0 : 1), 1, 1);
+    hx = shX + dx * 5; hy = shY + dy * 5;
+  }
+  const mx = Math.round(hx), my = Math.round(hy);
+  ctx.drawImage(sheet, 7, sy + 15, 2, 1, mx, my, 2, 1);      // la main
+  return { x: mx + 1, y: my + 1, k };
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-04 — LE HALAGE : RAMENER LA SEPTIÈME SŒUR À LA RIVE.
    ╚════════════════════════════════════════════════════════════════════════════
    Demande de Guillaume : « on doit voir qu'on la drag out of the water slowly

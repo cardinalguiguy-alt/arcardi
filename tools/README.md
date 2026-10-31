@@ -2013,6 +2013,23 @@ chaque construction (et coûte ~60 ms, une fois), le sable est plein, la bande d
 bosse)**, 12 cm couvrent, le banc de planches a la hauteur du banc de la ville. ⚠️ Ne voit ni les arbres (un rond à leur pied), ni la
 guirlande, ni la lumière de la scène : en jeu (`app/audit-tmp`, `__scene("town", 106.5, 42, 2, 22, …)`).
 
+## `verify-boulo-jeu.mjs` — LE BOULODROME, LOT 3 : JOUER (2026-10-31, 32 contrôles)
+
+`components/ferme/bouloJeu.js` (pur) au-dessus de `petanque.js`. §1 l'entraînement (mode `solo`) : toujours mon tour, jamais de fin ; §2 la
+salle (ouvrir, rejoindre une fois, pas au-delà du format, lancer par celui qui a ouvert, deux pistes, pas deux parties à la fois, 7 points à
+trois, quitter, abandonner) ; **§3 le réseau : chaque lancer de huit parties entières, ANIMÉ comme à l'écran (`animer` puis `animPas` à
+60 i/s), conclut l'état de l'hôte au bit près** (642 lancers au 2026-10-31) ; §4 la pause (un absent, aucun lancer, le retour la lève) ;
+§5 le placement (le lanceur au cercle, les autres derrière, au bord, sur le sable) ; §6 le guide (sur le plat, sans erreur de jauge, la
+boule s'arrête sur la boule fantôme) ; §7 l'anneau du point et le « +n » (= `compter`). ⚠️ Ne voit ni l'écran, ni le clavier, ni le réseau
+réel : en jeu, `app/audit-tmp` (entraînement) et `app/audit-duo` (à deux).
+
+## `render-boulo-jeu.mjs` — CE QUI SE DESSINE PENDANT UNE PARTIE DE BOULES (2026-10-31)
+
+Sur le vrai sable de la piste du platane, au cran ×3 et au pixel d'écran comme en jeu : le cercle de craie, une mène à trois (bandes rouge,
+bleu, or ; cochonnet orange), l'anneau du point, une boule en vol et son ombre, le guide complet, la jauge, le « +2 ». Planches
+`tools/out/boulo-jeu.png` (taille d'écran) et `boulo-jeu-loupe.png` (×2). Se juge à l'œil ; le faux canevas ignore les transformations
+(on passe un repère d'écran explicite). ⚠️ Ni les personnages ni le geste du lanceur (`A.drawBouloPose`) : en jeu.
+
 ## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11 ; 23 contrôles au 2026-10-13 nuit)
 
 Le vrai relief et son vrai dessin (`skateparkArt.js`) sur le dallage du monde de printemps, à 8 h 30, 13 h, 18 h 30 (le contact au sol, l'ombre du soleil sur le dallage passée comme dans le jeu, les
