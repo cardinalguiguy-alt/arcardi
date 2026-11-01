@@ -1,4 +1,52 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-10-31
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-01
+
+## 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU)
+
+Ses 19 verdicts du matin (`docs/PROJETS.md` §11 ; un écart : TROIS PERSONNAGES NEUFS plutôt que des habitants du roster) ; le casting est
+le mien (« surprends-moi ») : Fernand, ancien géomètre (le fort), Mireille, institutrice (la moyenne, qui compte les points), Toinou,
+ancien pêcheur (le débutant, qui applaudit). De sortie de 14 h à 22 h de jeu, ils arrivent à pied du jardin de la mairie (en fondu, en file),
+s'assoient sur les bancs, et deux jouent une vraie partie en 7 pendant que le troisième attend ; E près d'un bouliste libre : tête-à-tête ou
+doublette (le club « finit la mène et arrive » s'il le faut ; un ami prend la place du partenaire par E au bord) ; prime 100 / 200 / 400 or,
+la première victoire du jour contre chacun (heure de Paris), le bilan retenu et dit au défi ; assis sur un banc du boulodrome, on regarde la
+partie à ×3 avec son ardoise ; des répliques rares, FR et EN, avec les mots du Sud. Fichiers : `bouloBot.js` (la tête, pure),
+`boulistes.js` (le club, pur), le bloc « LE BOULODROME, LOT 4 » de FermeGame.js, la doublette dans `bouloJeu.js`, `BouloHud.js` (le panneau
+du défi, le spectateur, « Valider »). **Supabase : rien** (`bouloBilan` est un champ de plus dans le JSON de la ferme). **Réseau** : un
+`apply` par boule d'habitant (comme une boule de joueur), un par partie du club qui s'ouvre ou se range — leurs places, postures et
+répliques se déduisent. Bancs : `verify-boulo-bot` 49/49 (≈ 10 s, la mesure comprise). Vu en jeu, seul puis à deux (`app/audit-duo`) : mêmes places, même
+décision au même lancer chez l'hôte et l'invité ; défi, doublette cédée puis rejointe, fin, primes, pause, départ de 22 h. Ce qui a appris :
+- **Une décision qui se calcule partout n'a pas besoin de voyager** : la posture de l'habitant qui réfléchit (accroupi, debout) se lit dans
+  `BB.decider`, pure, sur la partie que chacun a adoptée — tenue à la règle n°2 de `petanque.js` pour que Safari et Chrome décident pareil.
+- **Une annonce qui arrive avec le dernier lancer arrive AVANT que l'écran le montre** : le toast de la prime donnait le vainqueur pendant
+  que la boule roulait. Elle attend l'adoption de la fin (`primeWait`).
+- **La garde « pas de piste, pas de demande » coupait aussi les demandes qui n'en nomment pas** (le défi) : à l'hôte, une demande se lit
+  par son type AVANT les gardes des autres types.
+- **Le premier de la liste n'est pas le plus proche** : E visait Mireille en pleine partie, Toinou libre à côté.
+- **La dette iPad du lot 3** : un toucher arrive comme un clic, il visait ET validait d'un coup. Au doigt, le premier toucher pose la donnée,
+  le second au même endroit (ou « Valider ») lance.
+- **Et la part SONORE du lot 5** (`sonBoules.js`, synthétisée, le modèle de `sonPark.js`) : la chute dans le gravier (plus lourde pour une
+  plombée), le « clac » de l'acier au fer et entre deux boules (trois partiels inharmoniques, pas un « ding »), le « toc » du cochonnet en
+  buis, le tintement du carreau, le gravier qui crisse sous une roulette. Ce sont les événements que la simulation date déjà (`sim.ev`),
+  joués quand l'animation les atteint (à une image près, mesuré) : chacun les entend sur SA boule, sans message ; le volume décroît avec
+  la distance au terrain (muet à 16 cases). Pas encore entendus : le harnais coupe le son.
+- **Et LA MESURE (lot 5)** : quand le point se joue à moins de 3 cm (ou à égalité), on sort le mètre — le boîtier rouge posé près du
+  cochonnet, le ruban jaune gradué qui se déroule jusqu'au bord de chaque boule, les cotes sur une petite ardoise au-dessus (une ligne par
+  camp, au millimètre quand elles tiennent dans le même centimètre) ; Mireille, si elle joue, sort son mètre en le disant. `BJ.aMesurer`,
+  pure, sur la partie affichée : chacun la sort au même lancer, sans message ; le tour suivant (joueur ou habitant) attend le mètre, et
+  le « +n » d'une fin de mène aussi. À 5 cm (premier jet), il sortait après 13 % des boules ; à 3 cm, 7 % (`verify-boulo-bot` §11).
+  ⚠️ Premier dessin : les cotes au-dessus de chaque boule se chevauchaient (les boules mesurées sont collées au cochonnet) → l'ardoise.
+- **Un arrêt « 🎯 le boulodrome » au menu dev** (Se téléporter, groupe Valley Town à déplier) : sur l'herbe devant le banc du milieu.
+- **La neige ferme le boulodrome, le club aussi** : vu en jeu, Fernand et Mireille jouaient sous la tempête sur un terrain que l'invite
+  dit fermé. Le club range ses boules à la fin de la mène en cours et rentre (les parties des joueurs continuent : à eux de voir) ; celui
+  qui attendait sur le banc rentre aussitôt. La fermeture elle-même (l'invite, E qui n'ouvre rien) vue en jeu — une dette du lot 3.
+- **La succession d'hôte figeait la ferme** (trouvé en cherchant qui relance les boulistes quand l'hôte s'en va) : la boucle de rendu
+  gardait l'`isHost` de son montage, un invité promu ne simulait rien de ce qui y vit (résidents, visiteurs, loups, Greg, ateliers,
+  montgolfière, patinoire, boulodrome). Elle se remonte désormais quand `isHost` change (et réarme le réveil d'un dormeur) ; le minuteur du guide de la quête (qui force le
+  monde maléfique) aussi — un balayage des effets qui lisent `isHost` sans en dépendre n'en a pas trouvé d'autre. Vu au
+  harnais (`audit-duo`, l'hôte retiré, `__promote()` chez l'invité) : le club reprend ses lancers, six résidents bougent.
+- **En passant, une dette hors du boulodrome** : `orchardRefusal` comparait le sol à `C.G_SOIL`, qui n'a jamais existé (le serveur le
+  signalait à chaque compilation) — une case labourée ARROSÉE refusait un plant d'arbre. Le sol d'un moulin, comme l'en-tête le dit.
+⚠️ Pas vu : l'iPad réel ; une partie entière jouée à la main contre Fernand (les miennes ont été
+  automatiques, la fin forcée à 6-6) ; le jugement de Guillaume sur les répliques et le casting.
 
 ## 2026-10-31 (suite) — LE BOULODROME, LOT 3 : ON JOUE AUX BOULES
 

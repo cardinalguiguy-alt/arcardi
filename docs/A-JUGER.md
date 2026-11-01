@@ -60,7 +60,22 @@ longues vues de dos. Les détails ne sont plus à l'ordre du jour tant que le tr
 **À JOUER — LE BOULODROME, LOT 3 (2026-10-31)** : E au cercle de craie d'une piste (derrière la mairie) ; un entraînement seul, puis un
 tête-à-tête à deux (`docs/PROJETS.md` §11). À juger : le fondu vers ×3, le geste du lanceur (le bras est fin au cran 2), le guide (trop ou pas
 assez aidant ?), la jauge (sa vitesse), la durée d'une mène (les roulés sont en temps réel), l'ardoise, le placement des joueurs qui
-attendent. **Pas vu** : l'iPad (un toucher pose ET valide la visée), la nuit, le terrain lourd après la pluie, la fermeture sous la neige.
+attendent. **Pas vu** : l'iPad réel (depuis le 2026-11-01 : un premier toucher pose la visée, un second au même endroit ou « Valider » lance —
+vu au harnais seulement), la nuit, le terrain lourd après la pluie, la fermeture sous la neige.
+
+**À VÉRIFIER EN VRAI, À DEUX — LA SUCCESSION D'HÔTE (corrigée le 2026-11-01)** : l'hôte ferme son onglet en pleine partie ; au bout de
+~8 s, l'autre devient hôte (la page du salon). Avant la correction, la ferme se figeait chez lui sans erreur (résidents, visiteurs,
+loups, Greg, ateliers immobiles) ; elle doit continuer de vivre. Vu au harnais seulement (`audit-duo`, `__promote()`).
+
+**À JOUER — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (2026-11-01)** : de 14 h à 22 h de jeu, derrière la mairie ; E près d'un bouliste
+libre (`docs/PROJETS.md` §11). À juger : **le casting** (Fernand l'ancien géomètre, le fort ; Mireille l'institutrice, la moyenne ; Toinou le
+pêcheur, le débutant — leurs têtes : argent et moustache, chignon platine, barbe et casquette), **les répliques** (FR et EN, les mots du Sud :
+drôles ? trop rares, trop fréquentes ?), la force de Fernand (« pas invincible » : un joueur moyen plausible lui prend une partie sur
+quatre), leur rythme (3 à 6 s de réflexion), l'arrivée à 14 h et le départ à 22 h (à pied, en fondu), regarder une partie depuis un banc
+(×3), la doublette avec un ami ; **et À ÉCOUTER, les sons** (`sonBoules.js` : la chute dans le gravier, le clac au fer, le toc du
+cochonnet, le carreau, le crissement du roulé — jamais entendus : le harnais coupe le son) ; **et LA MESURE** (le mètre quand le point se
+joue à moins de 3 cm : le ruban, le boîtier, l'ardoise des cotes — sa durée, 2,6 s, et sa fréquence, une boule sur quinze). **Pas vu** : une partie entière à la main contre
+Fernand, l'iPad.
 
 **À REGARDER EN JEU — LE TERRAIN DU BOULODROME (2026-10-29)** : derrière la mairie (`docs/PROJETS.md` §11, lot 2). Le sable éclairé depuis la
 physique (racines, creux, ornière, plombées, tassé des cercles), les madriers, les érables (adultes : la clôture de l'avenue est sous leur

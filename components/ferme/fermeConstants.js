@@ -7921,6 +7921,7 @@ export const DEV_TELEPORTS = [
   { key: "townPark",      zone: "town" },  // 2026-10-12 : le skatepark de l'ancienne place (son entrée est) — le park n'y est que posé (menu dev) ou au printemps
   { key: "townPlaceEast", zone: "town" },  // 2026-10-12 : l'allée de l'est de l'ancienne place, d'où l'on regarde le chantier (la place est fermée)
   { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
+  { key: "townBoulo",     zone: "town" },  // 2026-11-01 : le boulodrome, devant le banc du milieu (le club, les parties) — derrière la mairie, loin de tout autre arrêt
   { key: "townHall",      zone: "town" },  // 2026-09-02 : le perron de l'hôtel de ville (test PNG) — pour juger le sprite/les marches/l'horloge sans traverser la ville à chaque rechargement
   { key: "townChurch",    zone: "town" },  // 2026-09-20 : le parvis de l'église (test PNG) — jusqu'ici seule sa nef avait un arrêt ; sans façade directe, un rechargement pour juger la nouvelle façade demandait de deviner sa dernière position en ville (§10 CLAUDE.md, la leçon payée sur townHall)
   { key: "townBelvedere", zone: "town" },  // le second palier

@@ -13777,7 +13777,9 @@ export function orchardRefusal(world, i) {
   if (world.objects[i] !== C.O_NONE) return "orchardBusy";
   if (world.crops && world.crops.has(i)) return "orchardBusy";
   const g = world.ground[i];
-  if (g !== C.G_GRASS && g !== C.G_SOIL && g !== C.G_TILLED) return "orchardGround";
+  /* 2026-11-01 — `C.G_SOIL` n'a jamais existé (le serveur le disait à chaque compilation : « 'G_SOIL' is not exported ») : il valait
+     undefined, si bien qu'une case labourée ARROSÉE refusait un plant qu'elle acceptait sèche. Le sol d'un moulin, comme le dit l'en-tête. */
+  if (g !== C.G_GRASS && g !== C.G_TILLED && g !== C.G_WATERED) return "orchardGround";
   return null;
 }
 export function orchardPlantable(world, i) { return orchardRefusal(world, i) === null; }

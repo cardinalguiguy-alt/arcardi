@@ -346,6 +346,9 @@ dépôt.
   que `H.current.x(...)`, des gestionnaires réassignés à chaque rendu ; ce qu'arbitre l'hôte vit
   dans des refs. Et un GESTE (glisser, tracé) se suit dans une ref : deux événements rapprochés
   lisent un état React en retard d'un rendu.
+  ⚠️ **La boucle de rendu de la ferme aussi** (2026-11-01) : montée sur `[phase, spritesReady]`, elle gardait l'`isHost` de son
+  montage — un invité PROMU hôte ne simulait ni résidents, ni visiteurs, ni loups, ni boulistes, et la ferme se figeait sans
+  erreur. Une valeur que la boucle lit et qui peut changer EN PARTIE est une dépendance de son effet (ou une ref lue à chaque image).
 - ⚠️⚠️⚠️ **UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE
   COMPOSANT** — payé au 430 (`tryTownJump`, saut de rebord mort) puis au 431
   (`canStandTown` appelée par `advanceRemote`, Valley Town injouable à deux). Le hissage des

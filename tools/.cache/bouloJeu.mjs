@@ -44,9 +44,13 @@ export const BJ = {
   PAS_M: 0.1,                                      // la donnée au clavier : 10 cm par flèche (×5 avec Maj)
   REVANCHE_MS: 90 * 1000,                          // une partie finie, sans revanche, se ferme
 };
-export const MODES_JEU = ["tat", "trois", "solo"];
-export const requis = (mode) => (mode === "trois" ? 3 : mode === "solo" ? 1 : 2);
-export const cibleDefaut = (mode) => (mode === "trois" ? 7 : 13);   // « 7 par défaut à trois » (lot 2, sa note)
+/* 2026-11-01 (lot 4) — "dbl", LA DOUBLETTE, n'existe qu'AVEC DES HABITANTS (son verdict : « doublette complétée jusqu'à deux contre
+   deux ») : elle s'ouvre en défiant un bouliste (`hoteDefi`), jamais au cercle. Ses équipes sont dans `sess.equipes`. */
+export const MODES_JEU = ["tat", "trois", "solo", "dbl"];
+export const requis = (mode) => (mode === "trois" ? 3 : mode === "solo" ? 1 : mode === "dbl" ? 4 : 2);
+export const cibleDefaut = (mode) => (mode === "trois" || mode === "dbl" ? 7 : 13);   // « 7 par défaut à trois » (lot 2, sa note) ; la doublette dure deux fois plus
+/** Un habitant (lot 4) : son identifiant commence par « pnj: » (`petanque.js` l'annonçait). */
+export const estHabitant = (id) => typeof id === "string" && id.startsWith("pnj:");
 
 /* ── LE REPÈRE ── (piste en mètres → monde en px d'art ; voir `boulodrome.js`) */
 export function versMonde(k, mx, my, out = [0, 0]) { return BD.pisteVersMonde(k, mx, my, out); }
@@ -75,12 +79,16 @@ export function nouvelleSession(sid, k, owner, name, mode, cible) {
   return { sid, k, mode: m, cible: c, owner, ent: [{ id: owner, name: name || "?" }], etat: "salle", partie: null, pause: null, closable: false, revanches: 0 };
 }
 export const estDans = (sess, pid) => !!sess && sess.ent.some((e) => e.id === pid);
-export const couleurDe = (sess, pid) => { const i = sess ? sess.ent.findIndex((e) => e.id === pid) : -1; return BJ.COULEURS[i < 0 ? 0 : i % BJ.COULEURS.length]; };
+export const couleurDe = (sess, pid) => {
+  // en doublette, la couleur est celle de l'ÉQUIPE : deux partenaires jouent les mêmes boules
+  if (sess && sess.mode === "dbl" && sess.equipes) { const c = sess.equipes.findIndex((eq) => eq.includes(pid)); return BJ.COULEURS[c < 0 ? 0 : c]; }
+  const i = sess ? sess.ent.findIndex((e) => e.id === pid) : -1; return BJ.COULEURS[i < 0 ? 0 : i % BJ.COULEURS.length];
+};
 export const nomDe = (sess, pid) => { const e = sess && sess.ent.find((q) => q.id === pid); return e ? e.name : "?"; };
 /** La partie se lance : les camps dans l'ordre d'arrivée, la graine tirée par l'hôte (la pièce : `graine % camps` lance le but). */
 export function demarrer(sess, graine) {
-  const camps = sess.mode === "solo" ? [[sess.ent[0].id]] : sess.ent.map((e) => [e.id]);
-  sess.partie = PT.nouvellePartie({ mode: sess.mode, cible: sess.cible, camps, graine: graine >>> 0, piste: sess.k });
+  const camps = sess.mode === "solo" ? [[sess.ent[0].id]] : sess.mode === "dbl" ? sess.equipes.map((eq) => eq.slice()) : sess.ent.map((e) => [e.id]);
+  sess.partie = PT.nouvellePartie({ mode: sess.mode === "dbl" ? "doublette" : sess.mode, cible: sess.cible, camps, graine: graine >>> 0, piste: sess.k });
   sess.etat = "jeu"; sess.pause = null; sess.closable = false;
   return sess;
 }
@@ -103,19 +111,32 @@ export function tour(sess) {
   if (!sess || sess.etat !== "jeu" || !sess.partie) return null;
   return PT.aQui(sess.partie);
 }
-export function monTour(sess, pid) { const q = tour(sess); return !!q && q.joueurs.includes(pid) && !sess.pause; }
+/** QUI lance, dans le camp qui joue (lot 4). La règle laisse jouer n'importe quel joueur du camp qui a encore des boules (`aQui`) ;
+    à l'écran il faut UN lanceur, sans quoi deux partenaires viseraient ensemble (et un habitant lancerait pendant que son partenaire
+    vise). Celui qui a le plus de boules en main, l'ordre de l'équipe à égalité : en doublette, les partenaires ALTERNENT. Au
+    tête-à-tête et à trois, c'est le seul joueur du camp. Rend null si personne. */
+export function lanceurDe(partie) {
+  const s = PT.avancer(partie), q = PT.aQui(s);
+  if (!q || !q.joueurs.length) return null;
+  if (q.phase !== "boule" || q.joueurs.length === 1) return q.joueurs[0];
+  let best = q.joueurs[0];
+  for (const j of q.joueurs) if (s.mene.reste[j] > s.mene.reste[best]) best = j;
+  return best;
+}
+export const lanceur = (sess) => (tour(sess) ? lanceurDe(sess.partie) : null);
+export function monTour(sess, pid) { return !!tour(sess) && lanceurDe(sess.partie) === pid && !sess.pause; }
 /** Où se tient `pid` (px du monde, le PIED), et vers où il regarde (2 droite, 3 gauche). Le lanceur dans le cercle ; les
     autres derrière lui, au bord de la piste, l'un au nord, l'autre au sud, le troisième un pas plus loin. Recalculé à chaque
     image depuis l'état : entre deux mènes, tout le monde marche jusqu'au cercle suivant sans que rien ne voyage. */
 export function placeDe(sess, partie, pid) {
   if (!sess || !partie) return null;
-  const s = PT.avancer(partie), m = s.mene, q = PT.aQui(s), u = sensMene(m);
+  const s = PT.avancer(partie), m = s.mene, lz = lanceurDe(s), u = sensMene(m);
   const dir = u[1] >= 0 ? 2 : 3;
   const C = [m.cercle.x / 1000, m.cercle.y / 1000];
   let mx, my;
-  if (q && q.joueurs.includes(pid) && q.joueurs[0] === pid) { mx = C[0]; my = C[1]; }
+  if (lz === pid) { mx = C[0]; my = C[1]; }
   else {
-    const autres = sess.ent.map((e) => e.id).filter((id) => !(q && q.joueurs[0] === id));
+    const autres = sess.ent.map((e) => e.id).filter((id) => id !== lz);
     const i = Math.max(0, autres.indexOf(pid));
     const recul = i < 2 ? 1.3 : 2.3;
     mx = i % 2 === 0 ? 0.45 : P.W - 0.45;
@@ -163,7 +184,7 @@ export function donneeDefaut(m, geste) {
   if (geste === "tir") return horsCercle(m, { x: m.but.x, y: m.but.y });
   return horsCercle(m, borner(PT.donneePour(geste, C, m.but, m.lourd)));
 }
-function horsCercle(m, d) {
+export function horsCercle(m, d) {   // exportée au lot 4 : les habitants (`bouloBot.js`) visent sous la même règle
   const dx = d.x - m.cercle.x, dy = d.y - m.cercle.y, L = Math.sqrt(dx * dx + dy * dy), min = (P.DONNEE_MIN + 0.1) * 1000;
   if (L >= min) return d;
   const u = L > 1 ? [dx / L, dy / L] : sensMene(m);
@@ -222,6 +243,35 @@ export function bouleDuPoint(partie) {
   }
   return best;
 }
+/* ── 2026-11-01 (lot 5) — LA MESURE ──
+   « Le folklore : la mesure au mètre » (premier tour). On sort le mètre quand le point se joue à moins de 3 cm entre deux camps (ou à
+   égalité) — 1,4 px d'art : là où l'œil ne tranche plus. À 5 cm (premier jet), il sortait après 13 % des boules, une fois par mène :
+   une corvée de 2,6 s, plus un moment (`verify-boulo-bot` §11) : la boule qui le tient et la meilleure d'en face, mesurées du cochonnet. Rend null, ou { but, a, b } — `a` tient le point
+   (à égalité : la première trouvée), chacun { x, y, j, camp, mm } où `mm` est l'écart de BORD À BORD (ce que lit un vrai mètre ; nos
+   boules ont le rayon du dessin, voir `petanque.js`), borné à 0. Pure, sur la partie AFFICHÉE : chaque écran la sort au même lancer,
+   rien ne voyage. */
+export const MESURE_MM = 30;
+export function aMesurer(partie) {
+  const m = partie && partie.mene;
+  if (!m || !m.but || m.butMort) return null;
+  const best = [];   // par camp : la boule vivante la plus proche
+  for (const q of m.boules) {
+    if (q.mort) continue;
+    const dx = q.x - m.but.x, dy = q.y - m.but.y, d2 = dx * dx + dy * dy;
+    if (!best[q.camp] || d2 < best[q.camp].d2) best[q.camp] = { q, d2 };
+  }
+  const tri = best.filter(Boolean).sort((u, v) => u.d2 - v.d2);
+  if (tri.length < 2) return null;
+  const da = Math.sqrt(tri[0].d2), db = Math.sqrt(tri[1].d2);
+  if (db - da >= MESURE_MM) return null;
+  const bord = Math.round((P.BOULE_R + P.BUT_R) * 1000);
+  const fiche = (t, d) => ({ x: t.q.x, y: t.q.y, j: t.q.j, camp: t.q.camp, mm: Math.max(0, Math.round(d) - bord) });
+  return { but: { x: m.but.x, y: m.but.y }, a: fiche(tri[0], da), b: fiche(tri[1], db) };
+}
+/** Une cote lisible : « 12 cm », et au millimètre quand deux cotes tiennent dans le même centimètre (« 12,4 cm » ; `sep` : la virgule
+    ou le point décimal de la langue). */
+export function cote(mm, fin, sep = ",") { return fin ? (Math.round(mm) / 10).toFixed(1).replace(".", sep) + " cm" : Math.round(mm / 10) + " cm"; }
+
 /** Les boules qui marquent, à la fin d'une mène (la règle de `compter`) : pour poser le « +n » à côté. */
 export function quiMarque(partie) {
   const m = partie && partie.mene;
@@ -253,7 +303,7 @@ export function ardoise(sess, partie, moi, finie = false) {
     if (b !== Infinity) meilleure = Math.round(Math.sqrt(b) / 10);   // cm
   }
   return { mode: sess.mode, cible: sess.cible, mene: src ? src.mene.n : 0, camps, gagnant: s ? s.gagnant : null, fanny: s ? s.fanny : false,
-           joue: q ? q.joueurs[0] : null, phase: q ? q.phase : null, moi: !!(q && q.joueurs.includes(moi)), meilleure, pause: sess.pause };
+           joue: q ? lanceurDe(s) : null, phase: q ? q.phase : null, moi: !!q && lanceurDe(s) === moi, meilleure, pause: sess.pause };
 }
 
 /* ── L'HÔTE ──
@@ -273,16 +323,77 @@ export function hoteRejoindre(sessions, k, pid, name) {
   if (!s || s.etat !== "salle") return "bouloNotOpen";
   if (estDans(s, pid)) return null;
   for (const kk of ["a", "b"]) if (kk !== k && estDans(sessions[kk], pid) && sessions[kk].etat !== "fin") return "bouloAlready";
+  /* 2026-11-01 (lot 4) — LA DOUBLETTE AVEC DES HABITANTS est toujours au complet : un joueur qui la rejoint PREND LA PLACE d'un
+     habitant — celle du partenaire de celui qui a ouvert d'abord (« à deux : ensemble contre deux habitants »), sinon une place en face
+     (« ou chacun avec un habitant »). L'habitant remplacé retourne au banc : il n'est plus dans la session, c'est tout. */
+  if (s.mode === "dbl" && s.equipes) {
+    const own = s.equipes.findIndex((eq) => eq.includes(s.owner));
+    const order = [own, 1 - own];
+    for (const c of order) {
+      const h = s.equipes[c].find((id) => estHabitant(id));
+      if (!h) continue;
+      s.equipes[c] = s.equipes[c].map((id) => (id === h ? pid : id));
+      s.ent = s.ent.map((e) => (e.id === h ? { id: pid, name: name || "?" } : e));
+      return null;
+    }
+    return "bouloFull";
+  }
   if (s.ent.length >= requis(s.mode)) return "bouloFull";
   s.ent.push({ id: pid, name: name || "?" });
   return null;
 }
+/* ── 2026-11-01 (lot 4) : LES PARTIES AVEC LES HABITANTS ──
+   `habs` : [{ id, name }] — les boulistes libres que l'hôte a choisis (le défié d'abord). Au TÊTE-À-TÊTE, la partie démarre aussitôt
+   (le défi est l'invitation) ; en DOUBLETTE, elle attend dans la salle, au complet — un autre joueur peut prendre la place du partenaire
+   (`hoteRejoindre`) avant que celui qui a défié la lance (`hoteLancerPartie`). */
+export function hoteDefi(sessions, sid, k, pid, name, habs, mode, cible, graine) {
+  if (!BD.pisteDe(k)) return "bouloNoPiste";
+  for (const kk of ["a", "b"]) if (estDans(sessions[kk], pid) && sessions[kk].etat !== "fin") return "bouloAlready";
+  const cur = sessions[k];
+  if (cur && cur.etat !== "fin") return "bouloBusy";
+  const m = mode === "dbl" ? "dbl" : "tat";
+  if (!habs || habs.length < (m === "dbl" ? 3 : 1)) return "bouloHabBusy";
+  const c = P.CIBLES.includes(cible) ? cible : cibleDefaut(m);
+  const s = { sid, k, mode: m, cible: c, owner: pid, ent: [{ id: pid, name: name || "?" }], etat: "salle", partie: null, pause: null, closable: false, revanches: 0, habs: true };
+  if (m === "tat") { s.ent.push({ id: habs[0].id, name: habs[0].name }); sessions[k] = s; demarrer(s, graine); return null; }
+  for (const h of habs.slice(0, 3)) s.ent.push({ id: h.id, name: h.name });
+  s.equipes = [[pid, habs[0].id], [habs[1].id, habs[2].id]];
+  sessions[k] = s;
+  return null;
+}
+/** La partie du CLUB : deux habitants, en 7, lancée aussitôt (le troisième attend sur le banc). Son « propriétaire » est le club. */
+export function hoteClub(sessions, sid, k, a, b, cible, graine) {
+  const cur = sessions[k];
+  if (cur && cur.etat !== "fin") return "bouloBusy";
+  const s = { sid, k, mode: "tat", cible, owner: "pnj:club", ent: [{ id: a.id, name: a.name }, { id: b.id, name: b.name }], etat: "salle",
+              partie: null, pause: null, closable: false, revanches: 0, habs: true, club: true };
+  sessions[k] = s;
+  demarrer(s, graine);
+  return null;
+}
+/** Les habitants pris par une partie (le club compris, ou non). */
+export function habitantsOccupes(sessions, avecClub = true) {
+  const out = new Set();
+  for (const k of ["a", "b"]) {
+    const s = sessions[k];
+    // une partie finie garde ses habitants le temps de la revanche ; celle du club se range, elle
+    if (!s || (s.club && s.etat === "fin") || (!avecClub && s.club)) continue;
+    for (const e of s.ent) if (estHabitant(e.id)) out.add(e.id);
+  }
+  return out;
+}
 /** Quitter la salle, ou abandonner une partie (sans vainqueur), ou fermer une partie finie : la session disparaît si c'est
     celui qui l'a ouverte, ou si la partie était lancée (on ne joue pas à trois avec deux camps). */
-export function hoteQuitter(sessions, k, pid) {
+export function hoteQuitter(sessions, k, pid, remplacant = null) {
   const s = sessions[k];
   if (!s || !estDans(s, pid)) return "bouloNotIn";
-  if (s.etat === "salle" && pid !== s.owner) { s.ent = s.ent.filter((e) => e.id !== pid); return null; }
+  // lot 4 : la doublette avec habitants reste au complet — un habitant libre reprend la place de celui qui s'en va
+  if (s.etat === "salle" && pid !== s.owner && s.mode === "dbl" && s.equipes && remplacant) {
+    s.equipes = s.equipes.map((eq) => eq.map((id) => (id === pid ? remplacant.id : id)));
+    s.ent = s.ent.map((e) => (e.id === pid ? { id: remplacant.id, name: remplacant.name } : e));
+    return null;
+  }
+  if (s.etat === "salle" && pid !== s.owner && s.mode !== "dbl") { s.ent = s.ent.filter((e) => e.id !== pid); return null; }
   sessions[k] = null;
   return null;
 }

@@ -2030,6 +2030,19 @@ bleu, or ; cochonnet orange), l'anneau du point, une boule en vol et son ombre, 
 `tools/out/boulo-jeu.png` (taille d'écran) et `boulo-jeu-loupe.png` (×2). Se juge à l'œil ; le faux canevas ignore les transformations
 (on passe un repère d'écran explicite). ⚠️ Ni les personnages ni le geste du lanceur (`A.drawBouloPose`) : en jeu.
 
+## `verify-boulo-bot.mjs` — LE BOULODROME, LOTS 4 ET 5 : LES HABITANTS BOULISTES, LA MESURE (2026-11-01, 49 contrôles, ≈ 10 s)
+
+`components/ferme/bouloBot.js` (la tête des habitants), `boulistes.js` (le club) et les parties avec habitants de `bouloJeu.js`. §1 la règle
+n°2 de `petanque.js` dans la décision (tous les écrans décident le même geste : la posture ne voyage pas) ; §2 le déterminisme (JSON
+compris) ; **§3 aucune décision refusée par l'arbitre** (≈ 17 000 lancers, trois niveaux, deux pistes, doublettes) ; §4 de 3 à 6 s de
+réflexion ; §5 la ligne de tir sale (le but juste derrière la boule visée) ; **§6 les niveaux en parties de 7, et sa note « le fort ne doit
+pas être invincible »** : un joueur plausible moyen (±35 ms) lui prend 20 à 50 % des parties (25 % au 2026-11-01), un habile 35 % au moins
+(48 %) ; §7 le but sorti en doublette (2 %, contre 29 % au lot 1) ; §8 le relief (le fort, qui essaie ses pointés, finit plus près que le
+débutant) ; §9 le défi, la doublette (équipes, couleur d'équipe, un joueur qui prend la place d'un habitant, le lanceur désigné qui
+ALTERNE), la partie du club ; §10 l'horaire (14 h–22 h, pas sous la neige), la prime et son plafond du jour, le bilan ; §11 la mesure (`aMesurer` : à moins de 3 cm ou à égalité,
+les cotes de bord à bord, pas entre deux boules d'un même camp ; et le mètre sort après 2 à 10 % des boules — 7 % au 2026-11-01). ⚠️ Ne voit ni la
+marche des boulistes, ni leurs répliques à l'écran, ni le réseau : en jeu (`app/audit-tmp`, `app/audit-duo`).
+
 ## `render-skatepark.mjs` — LE SKATEPARK DE LA PLACE, REGARDÉ HORS DU JEU (2026-10-11 ; 23 contrôles au 2026-10-13 nuit)
 
 Le vrai relief et son vrai dessin (`skateparkArt.js`) sur le dallage du monde de printemps, à 8 h 30, 13 h, 18 h 30 (le contact au sol, l'ombre du soleil sur le dallage passée comme dans le jeu, les

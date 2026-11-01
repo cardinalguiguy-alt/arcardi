@@ -309,7 +309,7 @@ vers la jambe d'appui, la tête `[0, 0, −1, −1]` (une image de retard : elle
 pendule (épaule ±19°, coude 8 à 22°). À ajouter : des gestes de bras propres à la danse. Se joue sur place (les pieds marchent sans avancer).
 Une danse CHOISIE se diffuse comme une émote (§9, la roue d'émotes ; CLAUDE.md §3) : à cadrer avec lui avant de coder.
 
-## 11. Le boulodrome — la pétanque à Valley Town (décidé le 2026-10-25 ; lot 1 FAIT le 2026-10-28 ; lot 2, le terrain, FAIT le 2026-10-29 — on n'y joue pas encore)
+## 11. Le boulodrome — la pétanque à Valley Town (décidé le 2026-10-25 ; lots 1 à 4 FAITS du 28 octobre au 1er novembre ; reste le lot 5)
 
 Retenu dans une liste d'idées : « la pétanque c'est super, le boulodrome avec une vraie mécanique de jeu et de points. Tour à tour : sans bug et
 sans latence, du coup. » Le jeu de soirée par excellence : on joue en parlant, au tour par tour, à deux ou trois, contre ou avec des habitants.
@@ -402,9 +402,41 @@ balance), le mode `solo` de `petanque.js` (l'entraînement). Réseau : une requ�
 empreinte) ; la posture dans le paquet de position (`bp`) ; aucune migration. Bancs : `verify-boulo-jeu` 32/32 (dont 600+ lancers animés à
 60 i/s qui concluent l'état de l'hôte au bit près), `render-boulo-jeu`, `verify-petanque` 83/83. Vu en jeu (harnais) : entraînement ; à
 deux, salle, invitation, tours, pause et reprise, fin 7-6, revanche, abandon ; aucune erreur, aucun écart d'empreinte.
-**Pas fait / pas vu** : le doigt sur iPad (un toucher pose la donnée et la valide d'un coup, pas de glisser) ; le spectateur ne voit pas
-d'ardoise au-dessus de la piste ; la nuit, la pluie (`lourd`) et la fermeture sous la neige pas vues en jeu ; le fondu enchaîné pas jugé à
-l'œil ; le bras du geste est fin à ×2 ; une partie entière jouée à la main (la fin a été testée en forçant 6-6).
+**Pas fait / pas vu** (repris le 2026-11-01 : au doigt, un premier toucher pose la donnée et un second la valide ; le spectateur assis sur un
+banc a son ardoise et le cadre ×3 ; la nuit, la pluie — `lourd` lu à 3 — et la fermeture sous la neige vues au harnais) : le
+fondu enchaîné pas jugé à l'œil ; le bras du geste est fin à ×2 ; un vrai iPad ; une partie entière jouée à la main (fin testée à 6-6).
+
+**Lot 4 — les habitants boulistes : ses 19 verdicts du 2026-11-01** (https://claude.ai/artifact/FjZkm6oWF1bGbDZs8vDRgd, base
+`verdicts/<id>`, `meta/fin` ; rien n'est codé). Le premier tour avait dit : boulistes à heures fixes, un niveau selon leur caractère, on en
+défie un seul, la doublette complétée, une prime plafonnée, rien entre joueurs. **Écart à ma recommandation** : le club n'est PAS fait
+d'habitants du roster, ce sont **trois personnages NEUFS, des retraités de la ville** — le point « lesquels » (pensé pour le roster :
+Gustave, Honoré, Sidonie) tombe ; noms, allure, anciens métiers et caractères sont À POSER avec lui au début du lot 4 (piste : ils habitent
+les maisons de ville qui ne sont à personne, `TOWN_TOWNHOUSES`). **Décidé** : présents chaque jour de 14 h à 22 h de jeu (un jour = 16 min
+réelles : l'heure ne fixe que l'ARRIVÉE ; ils finissent la partie commencée ; pas sous la neige, oui sous la pluie) ; E près d'un bouliste
+libre, « Une partie ? » (en partie, il finit la sienne) ; tête-à-tête, et doublette complétée jusqu'à deux contre deux (seul : toi et un
+habitant contre deux ; à deux : ensemble contre deux, ou chacun avec un habitant) — pas de « à trois » complété ; le partenaire joue à son
+idée ; le club n'occupe qu'une piste ; une adresse FIXE par personne (fort, moyen, débutant) — **sa note : « le fort ne doit pas être
+invincible, attention »** (à mesurer au banc : un joueur plausible moyen doit lui prendre des parties) ; une vraie tête (pointer ou tirer
+selon le jeu, la ligne de tir lue — pas de tir quand le but est juste derrière —, le relief lu selon le niveau) ; 3 à 6 s avant de lancer ;
+on ne voit pas sa visée (sa posture suffit) ; sans joueur, deux jouent une vraie partie (lancée par l'hôte, un message par boule, seulement
+quand un joueur est en ville) et le troisième attend sur le banc, libre pour un défi ; s'asseoir sur un banc du boulodrome cadre la partie à
+×3 ; des répliques rares, aux moments forts — **sa note : « ajoute de nouvelles répliques comiques, et même en anglais, avec des expressions
+du sud de la France »** ; un joueur parti : la pause de dix minutes du lot 3 ; la prime 100 / 200 / 400 or selon l'adversaire (en doublette,
+celle du plus fort des deux battus), la première victoire contre chacun chaque jour (heure de Paris), rien à perdre ; chacun retient ton
+bilan contre lui et le dit quand tu le défies (sauvegarde de la ferme, aucune manipulation Supabase).
+
+**Lot 4 FAIT le 2026-11-01** (README ferme, journal du jour ; à juger : `docs/A-JUGER.md`). **Le casting, tranché par moi** (« surprends-moi ») :
+FERNAND, l'ancien géomètre du cadastre (le fort, ±26 ms, il lit le relief et tire, bougon), MIREILLE, l'institutrice (la moyenne, ±38 ms,
+elle compte les points), TOINOU, l'ancien pêcheur du lac (le débutant, ±60 ms, il applaudit les beaux coups) ; ils habitent la ville et
+arrivent par le jardin de la mairie. `bouloBot.js` (la tête, pure et déterministe : la posture de celui qui réfléchit se déduit partout),
+`boulistes.js` (le club, l'horaire, la prime, le bilan, les répliques), la doublette dans `bouloJeu.js` (`dbl`, `equipes`, le lanceur
+désigné qui alterne), le bloc « LE BOULODROME, LOT 4 » de FermeGame.js, le panneau du défi et le spectateur dans `BouloHud.js`.
+`verify-boulo-bot` 49/49 (la mesure comprise). Le fort contre un joueur plausible moyen : 25 % pour le joueur (sa note : pas invincible), 48 % pour un habile.
+**La part sonore du lot 5 aussi** (`sonBoules.js`, sans effet visuel : la règle « un changement visuel par livraison » tient) : la chute,
+le clac de l'acier, le toc du buis, le carreau, le roulé — joués sur les événements datés de la simulation. **La mesure aussi** (2026-11-01 : le mètre sort quand le point se joue à moins de 3 cm, 7 %
+des boules ; le ruban, le boîtier, une ardoise de cotes). Reste du lot 5 : Fanny, l'aimant, la gazette, l'ardoise du palmarès.
+**Pas fait** : la nuit et la pluie avec le club vues au harnais seulement ; aucune partie entière jouée à la main contre Fernand ; les boulistes ne vont
+nulle part ailleurs en ville (ni marché, ni café) ; pas de son (lot 5).
 
 **Lots suivants (un changement visuel par livraison, noyau §2)** : (3) jouer à deux (visée, jauge, ×3 — sa note : « une vue agrandie de la partie, peut-être un fondu enchaîné » —, gestes en 32 × 48,
 réseau) ; (4) les habitants boulistes et leur bot ; (5) la mesure, Fanny, l'aimant, les sons, la gazette, l'ardoise.
@@ -448,3 +480,39 @@ le bras des riders redessiné le long de l'os (ils recopient le bras par cases, 
 gardent leur drapé à quatre tons du 2026-10-21 (plus modelés que le reste : à reprendre au trait simple si ça détonne en jeu) ; Léo, Froufrou,
 l'apiculteur et le vandale n'ont pas de signes neufs ; pas vu sous la pluie ni au cran 3 sur une capture du jeu (le cran 3 sur une capture
 fixe : `perso-simple-ecran-*`). ⚠️ Écarté : le Scale2x complet (il arrondit aussi les frontières intérieures et fait bouder toutes les bouches).
+
+## 13. Le réseau : jouer « à l'instant », sans se soucier des messages (proposé le 2026-11-01 — « pour plus tard », rien de codé)
+
+Sa demande : « un meilleur rendu multijoueur instant, et ne pas avoir à se soucier de limite de messages » (gênes citées : la latence des
+actions, les saccades, le quota). **Mesuré le 2026-11-01** (`app/audit-duo`, Supabase local, 20 résidents, deux joueurs qui marchent à la
+ferme) : l'hôte émet **8,5 messages/s** (les résidents en font 6,9 : `residentPaths` 3,8, `residentStops` 3,05), l'invité 0,9 ; le
+plafond client est de 10/s (`eventsPerSecond`) — on est au bord des messages jetés. Coût : ≈ 67 000 messages facturés par heure à deux
+(chaque envoi compte une fois, plus une fois par destinataire), soit **≈ 30 h de ferme à deux par mois sur les 2 M gratuits, ≈ 18 h à
+trois**. Immobiles : 3,9 messages/s. La ville n'est pas mesurée. **Vérifié** (docs Supabase) : Realtime est un réseau mondial, chacun se
+branche au nœud le plus proche et les messages prennent la dorsale — la région du projet compte pour la base, pas pour les messages ; **le projet Supabase d'Arcardi est à SINGAPOUR** (sa réponse du 2026-11-01) : la base (sauvegardes, salons) est près de ses amis
+d'Océanie et d'Asie de l'Est, à ~170 ms de l'Europe — à compter dans le chargement d'une ferme, pas dans les messages du jeu ; le
+gratuit plafonne aussi à 100 messages/s pour tout le projet (au-delà, Supabase déconnecte). Relais TURN de Cloudflare : 1 000 Go gratuits,
+puis 0,05 $/Go — facturable, donc hors du plan de base (noyau §0.3).
+**La piste proposée : une liaison directe entre joueurs (WebRTC, canaux de données), Supabase gardé pour se trouver, les salons, les
+sauvegardes et le REPLI** quand la liaison directe échoue (4G, réseaux d'entreprise). Messages directs gratuits, sans plafond ; un seul canal
+FIABLE ET ORDONNÉ (la même sémantique qu'aujourd'hui : un `req` ne doit jamais doubler le `pos` qui a rapproché le joueur — l'hôte mesure la
+proximité sur ce `pos`). Un module posé là où le canal est déjà enveloppé (`ch.send`, FermeGame.js, « Zip 364 — INSTRUMENTATION ») : les
+~96 envois du jeu ne changent pas. Signalisation sans « trickle » (une offre et une réponse complètes : deux messages par liaison).
+⚠️ Les pièges vus à l'étude, à régler AVANT d'écrire : (1) l'instantané part par Supabase pendant que la liaison directe s'ouvre — un `apply`
+direct arrivé AVANT lui serait écrasé : l'émetteur ne passe en direct qu'après un repère `p2pGo` envoyé par Supabase, et le récepteur
+retient les messages directs de cet émetteur jusqu'à ce repère (l'ordre d'un même émetteur est garanti sur chaque chemin, pas entre les
+deux) ; (2) un émetteur ne passe en direct que si TOUS ses pairs le sont (les messages Supabase ne disent pas qui les envoie : pas de
+dédoublonnage possible sans enveloppe) ; (3) un retour vers Supabase (liaison perdue, nouvel arrivant) se paie d'un instantané redemandé ;
+(4) les gros messages (l'instantané) se découpent en morceaux de 16 Ko sur le canal direct ; (5) l'adresse IP de chacun est visible des autres.
+**Ordre proposé** : R0 mesurer (un écran « Liaison » au menu dev : l'aller-retour réel par Supabase, la liaison directe tentée, son type et
+son aller-retour — à faire jouer à un ami d'Océanie et sur un téléphone en 4G) ; R1 le transport direct + repli ; R2 lever les freins une
+fois les messages gratuits (positions de 8 à 20 /s, tampon d'affichage plus court, résidents de 1,3 à 4 /s) ; R3 l'instantané : les gestes
+de l'invité affichés tout de suite puis confirmés ou défaits par l'hôte (certains le sont déjà : neige, blessure), et l'hôte choisi au
+centre (deux amis en Océanie et lui en Europe : l'hôte en Océanie). **Plan B** si le direct échoue souvent : regrouper les envois de l'hôte
+en un message par battement (de 8,5 à ≈ 4 /s, plus de messages jetés) — `components/ferme/SECURITE.md` §5 le décrivait déjà.
+
+## 14. La grande quête de l'étoile (les astéroïdes) : la rejouer pour voir comment elle tourne (dit le 2026-11-01, rien de fait)
+
+Sa phrase : « on retravaillera aussi la grande quête des astéroïdes pour vérifier comment elle tourne. » Point de départ :
+`components/ferme/QUETE.md` (l'AUTORITÉ du 2026-09-13 bis, D1–D15, et « ce qui reste codé mais n'a pas été vu en jeu ») ;
+`verify-quete`, `render-etoile`, `render-navire`.

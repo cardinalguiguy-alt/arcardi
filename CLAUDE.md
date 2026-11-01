@@ -11,16 +11,19 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-10-31 — LE BOULODROME, LOT 3 : ON JOUE (ENTRAÎNEMENT, TÊTE-À-TÊTE, À TROIS) ; LE TRAIT SIMPLE EST LE STYLE PAR DÉFAUT
+### 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU) ; LOT 5 : LES SONS, LA MESURE
 
-1. **Boulodrome, lot 3 fait** (aucun verdict sur sa page : ses 15 recommandations font foi) : `bouloJeu.js` (pur), `bouloJeuArt.js`,
-   `BouloHud.js`, `A.drawBouloPose` ; l'hôte tient `sharedRef.boulo`, chacun rejoue le lancer et adopte. `verify-boulo-jeu` 32/32, vu en
-   jeu à deux (salle, tours, pause, fin, revanche, abandon). Pas fait et à juger : `docs/PROJETS.md` §11.
-2. **Personnages** : trait simple par défaut, interrupteur partagé au menu dev (`docs/PROJETS.md` §12).
+1. **Boulodrome, lot 4 fait** (ses 19 verdicts, `docs/PROJETS.md` §11 ; le casting est le mien) : `bouloBot.js`, `boulistes.js` (purs),
+   la doublette dans `bouloJeu.js`, le bloc « LOT 4 » de FermeGame.js ; les sons (`sonBoules.js`) et la mesure du lot 5.
+   `verify-boulo-bot` 49/49, vu en jeu seul et à deux (la nuit, la pluie, la neige comprises). Au doigt, la visée se pose puis se valide en deux temps. À juger : `docs/A-JUGER.md` (lots 3 et 4).
+2. **La succession d'hôte figeait la ferme** (la boucle de rendu gardait l'`isHost` de son montage : un invité promu ne simulait rien) :
+   corrigé, vu au harnais ; à voir en vrai à deux (l'hôte ferme son onglet). Et le verger refusait une case arrosée (`C.G_SOIL` fantôme).
+3. **Notés pour plus tard** : le réseau « instantané, sans limite de messages » (`docs/PROJETS.md` §13, mesuré : ≈ 30 h de ferme à deux par
+   mois) ; rejouer la quête de l'étoile (même fichier, §14). Codex n'est plus disponible (§2).
 ⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. ⚠️ `app/audit-*`,
 `app/api/audit-cap` : **à supprimer avant déploiement**.
 
-### ⏭️ ACTION SUIVANTE — FAIRE JUGER LE LOT 3 EN JEU PAR GUILLAUME (ENTRAÎNEMENT PUIS À DEUX), PUIS LE LOT 4 (LES HABITANTS BOULISTES)
+### ⏭️ ACTION SUIVANTE — FAIRE JOUER LES LOTS 3 ET 4 À GUILLAUME (S'ENTRAÎNER, DÉFIER TOINOU, PUIS FERNAND), PUIS LA FIN DU LOT 5 (FANNY, L'AIMANT, LA GAZETTE)
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -52,7 +55,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Lumière, nuit, fenêtres, cheminées | `components/ferme/lumiere.js`, `fumee.js` ; README ferme (« PHASE 3 », 12c) | `verify-lumiere`, `verify-jour`, `render-fumee` |
 | Lampadaires, planche 3, jardins | README ferme (en tête) ; `tools/build-lampadaires.mjs`, `import-planche3.mjs` | `verify-planche3`, `verify-densite` |
 | Course de la patinoire, contre-la-montre | `components/ferme/course.js`, `CourseHud.js` ; `hostRinkReq` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Rink`) ; README ferme (journal 2026-10-05 nuit, fin ter) | `verify-course`, `render-patinoire` ; à deux : `app/audit-duo` |
-| **Boulodrome**, pétanque (règle, physique au pas fixe, déterminisme, arbitre, format réseau prévu ; le terrain dans la ville : emprise, sable, madriers, bancs, guirlande, météo) | `components/ferme/petanque.js` (en-tête : les trois règles de construction), `boulodrome.js`, `boulodromeArt.js` ; jouer : `components/ferme/bouloJeu.js`, `bouloJeuArt.js`, `BouloHud.js` ; `docs/PROJETS.md` §11 | `verify-petanque`, `render-boulodrome`, `verify-boulo-jeu`, `render-boulo-jeu` |
+| **Boulodrome**, pétanque (règle, physique au pas fixe, déterminisme, arbitre, format réseau prévu ; le terrain dans la ville : emprise, sable, madriers, bancs, guirlande, météo) | `components/ferme/petanque.js` (en-tête : les trois règles de construction), `boulodrome.js`, `boulodromeArt.js` ; jouer : `components/ferme/bouloJeu.js`, `bouloJeuArt.js`, `BouloHud.js` ; les habitants (le club, leur tête) : `components/ferme/boulistes.js`, `bouloBot.js` ; les sons : `sonBoules.js` ; `docs/PROJETS.md` §11 | `verify-petanque`, `render-boulodrome`, `verify-boulo-jeu`, `render-boulo-jeu`, `verify-boulo-bot` |
 | Ombres portées du soleil (heure, saison, ciel) | `components/ferme/ombres.js` ; `sunShadowPass` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js sunShadowPass`) | `verify-ombres` |
 | Marché (en haut TOUTE l'année), mondes de saison de la ville (calque : marché + patinoire l'hiver), ancienne place vide | `townSeasonWorld` (`townMarketWorld`, `townWinterWorld`) dans fermeEngine.js ; `getTownWorldCached` dans FermeGame.js ; `TOWN_WINTER_MARKET` dans fermeConstants.js ; README ferme (journaux 2026-10-06 suite et 2026-10-05 nuit fin) | `verify-vallee`, `render-marche-hiver` |
 | Météo, saisons, fin de saison, température, gelée, bourgeons | `components/ferme/meteo.js` (§ 0 bis, § 9, § 10), `neige.js` ; `makeWinterTrees` dans fermeArt.js | `verify-meteo`, `verify-neige` |
@@ -68,7 +71,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Maire, élections, audience | `components/ferme/maire.js`, `MaireScene.js`, `maireBureau.js` | `verify-maire`, `render-maire` |
 | Scierie de Tristan | `components/ferme/scierie.js`, `scierieAtelier.js`, `ScierieScene.js` | `verify-scierie`, `render-scierie` |
 | Marché, vente, économie | README ferme §14 ; `fermeEngine.js` | `verify-vallee` |
-| Réseau, salons, sauvegardes | §3 ci-dessous ; `lib/gameSync.js`, `lib/realtimeQuota.js` ; `components/ferme/SECURITE.md` | (aucun banc réseau) `tools/fake-supabase.mjs` pour jouer à deux |
+| Réseau, salons, sauvegardes | §3 ci-dessous ; `lib/gameSync.js`, `lib/realtimeQuota.js` ; `components/ferme/SECURITE.md` ; le plan « instantané, sans limite » (mesures, pièges, R0–R3) : `docs/PROJETS.md` §13 | (aucun banc réseau) `tools/fake-supabase.mjs` pour jouer à deux |
 | Textes, traduction | `components/ferme/fermeStrings.js` | `verify-strings` |
 | Noms au-dessus des personnages | `components/ferme/pixelFont.js` | `verify-noms` |
 | Personnages : le TRAIT SIMPLE (style par défaut : l'ancien peint à ×2, signes du vêtement, marche au demi-pas ; style partagé `PERSO_HD`, `applyPersoStyle`), le détaillé en 32 × 48, visages et expressions automatiques | trait simple : `components/ferme/persoSimpleArt.js`, `makeCharSimple` et `drawCharFrame` (fermeArt.js), `docs/PROJETS.md` §12 ; détaillé : `components/ferme/persoHdArt.js`, `components/ferme/expressions.js` ; `getCharHD` (fermeArt.js), `drawCharacter`, `drawCharHD`, `drawPoseHD` (FermeGame.js) ; README ferme (journaux des 2026-10-23, 24 et 31) | `verify-perso-simple`, `render-perso-simple`, `verify-expressions`, `render-perso-hd`, `render-pnj-hd`, `render-garderobe-hd`, `render-poses-hd` (`STYLE=simple`) |
@@ -175,20 +178,9 @@ l'un après l'autre, vérifier `git status`/`git diff`** : l'agent qui commence 
 comprendre ce qui est déjà là (souvent le travail non revu de l'agent précédent, décrit dans le
 bloc ⏭️ REPRISE) avant d'y toucher, jamais le nettoyer ou l'écraser sans le comprendre.
 
-⚠️ **CODEX COMME AGENT SECONDAIRE, DANS LA MÊME CONVERSATION — SEULEMENT SUR UN GROS CHANTIER.**
-Guillaume utilise ponctuellement Codex (GPT-5.1, dans le rôle Sol ou Terra) en appoint de Claude
-Code, pour délester des tests longs, de l'orchestration ou un audit indépendant et économiser des
-tokens côté Claude. **Sur un gros chantier** (audit large, batterie de tests, tâche parallélisable
-qui coûterait cher en tokens) : Claude DEMANDE si Codex est disponible avant de s'engager. **Sur
-tout le reste : Claude travaille seul, sans le demander** — ce n'est pas une question systématique
-en début de conversation. Si Guillaume confirme la disponibilité de Codex, Claude rédige lui-même
-le prompt de passation, avec précision : portée exacte, fichiers concernés, format de retour
-attendu — et il couvre le risque du paragraphe ci-dessus (arbre non commité partagé) pour que le
-travail circule sans accroc de Claude à Codex et de Codex à Claude.
-⚠️ **L'ASPECT GRAPHIQUE RESTE ENTRE LES MAINS DE CLAUDE CODE, MÊME SUR UN GROS CHANTIER.** Dessin
-procédural (`fermeArt.js`, `maireBureau.js`…), règles de `DESSIN.md`, tout jugement visuel : ne
-JAMAIS déléguer à Codex, quelle que soit la taille du chantier. Codex reste cantonné aux tests,
-à l'orchestration et à l'audit non visuel.
+⚠️ **CODEX COMME AGENT SECONDAIRE : PLUS DISPONIBLE DEPUIS LE 2026-11-01** (Guillaume n'y a plus accès) — ne pas le proposer. S'il
+revient : seulement sur un gros chantier, prompt de passation précis (portée, fichiers, format de retour, arbre non commité partagé), et
+JAMAIS le dessin ni un jugement visuel (Codex : tests, orchestration, audit non visuel).
 ⚠️ **SPRITE COMPLEXE NOUVEAU (végétation, infrastructures de ville…) : PROPOSER UN PROMPT GEMINI,
 JAMAIS L'APPELER SOI-MÊME.** Quand le décor à créer n'existe pas encore et sort du procédural
 simple (une haie, un pont, un bâtiment détaillé — pas une teinte ou un décalage de pose), Claude

@@ -98,6 +98,9 @@ import * as BA from "./boulodromeArt";   // 2026-10-29 — le boulodrome : son s
 import * as PQ from "./petanque";      // 2026-10-31 — la règle et la physique de la pétanque (⚠️ `PT` est le patin)
 import * as BJ from "./bouloJeu";        // 2026-10-31 — le boulodrome, lot 3 : jouer (les sessions, le guide, le placement ; pur)
 import * as BJA from "./bouloJeuArt";    // 2026-10-31 — les boules, le cochonnet, le guide, la jauge, l'anneau du point (au pixel d'écran)
+import * as BB from "./bouloBot";        // 2026-11-01 — le boulodrome, lot 4 : la tête des habitants boulistes (pur, déterministe)
+import * as SBO from "./sonBoules";      // 2026-11-01 — le boulodrome, lot 5 (sa part sonore) : la chute, le clac, le toc, le roulé (synthétisés)
+import * as BL from "./boulistes";       // 2026-11-01 — le boulodrome, lot 4 : le club (Fernand, Mireille, Toinou), son horaire, sa prime, ses répliques (pur)
 import BouloHud from "./BouloHud";       // 2026-10-31 — l'ardoise, l'ouverture d'une partie, la salle, les gestes, la revanche
 import * as SPA from "./skateparkArt";   // 2026-10-11 — son dessin : le relief projeté en 3/4, éclairé, découpé en tranches de tri
 import * as MO from "./monture";       // 2026-10-11 — la physique des montures du park (skate, rollers, trottinette, BMX), pure
@@ -3325,7 +3328,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       starSay("guide", L.star.guide.offer, 4200);
     }, 1000);
     return () => clearInterval(t);
-  }, [L]);                                                                             // zip 449
+    // 2026-11-01 — `isHost` aussi : ce minuteur force le monde maléfique « seul l'hôte écrit » ; avec [L] seul, un invité PROMU hôte ne
+    // l'aurait jamais fait (le même défaut que la boucle de rendu, voir ses dépendances).
+  }, [L, isHost]);                                                                     // zip 449
   /* ⚠️⚠️ ZIP 444 — LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, ET C'EST LA
      DIFFÉRENCE ENTRE UNE TRANSITION ET UN DIALOGUE. Une carte qu'il faut
      congédier oblige le joueur à agir pour continuer une phrase qui n'attend
@@ -3757,6 +3762,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // (426)/wardrobe (427) : un champ de plus dans le JSON, aucune migration.
         bushTrim: (saved && saved.bushTrim) || {},
         rinkRec: (saved && saved.rinkRec) || null, rink: null, boulo: null,   // 2026-10-05 (nuit) : les records de la patinoire (la session, elle, ne survit pas)
+        bouloBilan: (saved && saved.bouloBilan) || {},   // 2026-11-01 (lot 4) : le bilan de chaque joueur contre chaque bouliste, et le jour de sa dernière prime (`BL.solder`) — un champ de plus dans le JSON, aucune migration
         /* 2026-10-05 — LES BONSHOMMES DE NEIGE (`bonhomme.js`) : un champ de plus dans le JSON
            de `ferme_saves`, comme `townChop`. AUCUNE MIGRATION. `snowRoll` (ce que chacun
            pousse) repart vide : une boule qu'on roulait au moment de la sauvegarde est perdue. */
@@ -4073,7 +4079,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
-      rinkRec: payload.rinkRec || null, rink: payload.rink || null, boulo: payload.boulo || null,   // 2026-10-05 (nuit) : la patinoire
+      rinkRec: payload.rinkRec || null, rink: payload.rink || null, boulo: payload.boulo || null, bouloBilan: payload.bouloBilan || {},   // 2026-10-05 (nuit) : la patinoire
       snowmen: BN.normalizeSnowmen(payload.snowmen), snowRoll: payload.snowRoll || {},   // 2026-10-05
       wardrobe: payload.wardrobe || {},  // zip 427
       homes: HM.migrateHomes(payload.homes),   // 2026-10-16 (lot 2a) ; 2026-10-17 : recalées si écrites sur le plan de 7 cases
@@ -4745,7 +4751,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
       bushTrim: s.bushTrim || {},
-      rinkRec: s.rinkRec || null, rink: s.rink || null, boulo: s.boulo || null,   // 2026-10-31 : les parties de boules, pour un arrivant (une sauvegarde rechargée les oublie)   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
+      rinkRec: s.rinkRec || null, rink: s.rink || null, boulo: s.boulo || null, bouloBilan: s.bouloBilan || {},   // 2026-11-01 (lot 4) : le bilan contre les boulistes (sauvegardé : `persistFarm` écrit cet instantané)
+        // 2026-10-31 : les parties de boules, pour un arrivant (une sauvegarde rechargée les oublie)   // 2026-10-05 (nuit) : records persistés ; la session voyage avec l'instantané (un arrivant la voit)
       rinkIce: iceSnapshot(),   // 2026-10-06 : l'usure de la glace et l'âge de la passe, pour un arrivant (jamais relus au chargement d'une sauvegarde)
       // 2026-10-05 : les bonshommes de neige, par le même chemin (et ce que chacun pousse, pour un invité qui arrive).
       snowmen: s.snowmen || [], snowRoll: s.snowRoll || {},
@@ -10320,7 +10327,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.rinkRec) sharedRef.current.rinkRec = p.rinkRec;   // 2026-10-05 (nuit) — les records de la patinoire
     if (p.rink !== undefined) rinkApply(p.rink || null, p.rinkT || null);   // 2026-10-05 (nuit) — la session de course
+    if (p.bouloBilan) sharedRef.current.bouloBilan = p.bouloBilan;   // 2026-11-01 (lot 4) — le bilan contre les boulistes (avant la session : la fin de partie le lit)
     if (p.boulo !== undefined) bouloApply(p.boulo, p.bouloLancer || null, p.bouloT || null, p.bouloNon || null);   // 2026-10-31 — une partie de boules
+    if (p.bouloPrime) bouloPrimeShow(p.bouloPrime);   // 2026-11-01 (lot 4) — une prime gagnée contre un bouliste
+    if (p.bouloCede) bouloBark(p.bouloCede.hab, "cede", p.bouloCede.t | 0, null);   // 2026-11-01 (lot 4) — « on finit la mène et on arrive »
     if (p.duoAsk) duoAskApply(p.duoAsk);   // 2026-10-06 (soir) — une main tendue
     if (p.duo) duoApply(p.duo);            // 2026-10-06 (soir) — la figure à deux part (des noms et une durée, aucune position)
     if (p.ice) iceApply(p.ice);   // 2026-10-06 — l'usure de la glace / la passe de la surfaceuse
@@ -13440,6 +13450,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function hostBouloReq(req, f, s, out) {
     const ss = bouloSess(), k = req.k === "a" || req.k === "b" ? req.k : null, H = bouloRef.current.host, nowP = performance.now();
     const no = (key) => { out.toast = { id: f.id, key }; };
+    // 2026-11-01 (lot 4) — un défi ne nomme pas de piste : l'hôte la choisit (`hostBouloDefi`). AVANT la garde qui suit.
+    if (req.kind === "bouloDefi") { hostBouloDefi(req, f, s, out); return; }
     if (!k) return;
     let r = null;
     if (req.kind === "bouloOpen") {
@@ -13447,9 +13459,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       s.bouloSeq = (s.bouloSeq | 0) + 1;
       r = BJ.hoteOuvrir(ss, s.bouloSeq, k, f.id, f.name, req.mode, req.cible | 0);
     } else if (req.kind === "bouloJoin") r = BJ.hoteRejoindre(ss, k, f.id, f.name);
-    else if (req.kind === "bouloLeave") r = BJ.hoteQuitter(ss, k, f.id);
+    else if (req.kind === "bouloLeave") {
+      // 2026-11-01 (lot 4) : quitter la salle d'une doublette avec habitants — un bouliste libre reprend la place
+      const se = ss[k], rp = se && se.mode === "dbl" && se.etat === "salle" ? bouloHabLibre(ss) : null;
+      r = BJ.hoteQuitter(ss, k, f.id, rp);
+    }
     else if (req.kind === "bouloGo") r = BJ.hoteLancerPartie(ss, k, f.id, (Math.random() * 4294967296) >>> 0);
-    else if (req.kind === "bouloRevanche") r = BJ.hoteRevanche(ss, k, f.id, (Math.random() * 4294967296) >>> 0);
+    else if (req.kind === "bouloRevanche") {
+      const se = ss[k];
+      if (se && se.habs && !se.club && !bouloClubSortie()) return no("bouloHabGone");   // lot 4 : passé 22 h, ils finissent la partie, pas une autre
+      r = BJ.hoteRevanche(ss, k, f.id, (Math.random() * 4294967296) >>> 0);
+    }
     else if (req.kind === "bouloClose") {
       const se = ss[k];
       if (!se || !BJ.estDans(se, f.id) || !(se.closable || se.etat === "fin")) return no("bouloNotOpen");
@@ -13458,7 +13478,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const res = BJ.hoteLancer(ss, k, f.id, req, bouloLourdNow());
       if (res.raison) { out.toast = { id: f.id, key: res.raison }; out.boulo = { k, sess: ss[k] }; out.bouloNon = { k, pid: f.id }; return; }
       out.boulo = { k, sess: res.s }; out.bouloLancer = { k, pid: f.id, input: res.input, emp: res.emp };
-      if (res.s.etat === "fin") H.finAt[k] = nowP;
+      if (res.s.etat === "fin") { H.finAt[k] = nowP; hostBouloFin(res.s, out); }   // lot 4 : contre des habitants, le bilan et la prime
       return;
     } else return;
     if (r) return no(r);
@@ -13477,6 +13497,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ss = sharedRef.current.boulo, m = meRef.current;
     if (!ss) return;
     const present = (id) => {
+      if (BL.estMembre(id)) return true;   // 2026-11-01 (lot 4) : un bouliste est toujours là pour sa partie (il finit la partie commencée)
       if (id === me.id) return !!m && (m.zone || "farm") === "town";
       const p = playersRef.current.get(id);
       return !!p && (p.zone || "farm") === "town";
@@ -13492,7 +13513,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (BJ.hotePresence(se, present)) { changed = true; if (se.pause) H.pauseAt[k] = nowP; else delete H.pauseAt[k]; }
         if (se.pause && H.pauseAt[k] == null) H.pauseAt[k] = nowP;   // une pause héritée (changement d'hôte) : elle repart d'ici
         if (se.pause && !se.closable && nowP - H.pauseAt[k] >= BJK.PAUSE_MS) { se.closable = true; changed = true; }
-        if (se.pause && changed) T = { k, pauseLeft: Math.max(0, BJK.PAUSE_MS - (nowP - H.pauseAt[k])) };
+        /* 2026-11-01 (lot 4) — CONTRE DES HABITANTS, PERSONNE NE RESTE POUR CLORE : les dix minutes passées, le bouliste range ses boules
+           (« il t'attend dix minutes sur le banc, puis retourne jouer avec les siens »). Sans vainqueur, donc sans bilan. */
+        if (se.pause && se.closable && se.habs && se.ent.every((e) => BL.estMembre(e.id) || !present(e.id))) { ss[k] = null; delete H.pauseAt[k]; changed = true; }
+        if (ss[k] && se.pause && changed) T = { k, pauseLeft: Math.max(0, BJK.PAUSE_MS - (nowP - H.pauseAt[k])) };
       } else if (se.etat === "fin") {
         if (H.finAt[k] == null) H.finAt[k] = nowP;
         if (nowP - H.finAt[k] > BJK.REVANCHE_MS) { ss[k] = null; delete H.finAt[k]; changed = true; }
@@ -13533,9 +13557,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (sess.etat === "jeu" && p && p.coups === 0 && (!old || old.etat !== "jeu" || !old.partie || old.partie.coups > 0)) R.coin[k] = { t0: nowP, pid: BJ.piece(sess) };
     // une mène qui finit : le « +n » sur le terrain, puis les boules qui reviennent (ou l'ardoise du vainqueur)
     if (p && p.mene.fini && old && old.partie && !old.partie.mene.fini && old.partie.mene.n === p.mene.n) R.fx[k] = { t0: nowP, from: p, marque: BJ.quiMarque(p), fin: p.gagnant !== null };
+    /* 2026-11-01 (lot 5) — LA MESURE : un lancer adopté laisse le point à moins de 5 cm (ou à égalité) → on sort le mètre (`BJ.aMesurer`,
+       pure, sur la partie AFFICHÉE : chacun la sort au même lancer). À la fin d'une mène, le « +n » attend qu'elle soit finie. */
+    if (p && old && old.partie && old.sid === sess.sid && p.coups > old.partie.coups) {
+      const ms = BJ.aMesurer(p);
+      if (ms) {
+        (R.mesure || (R.mesure = {}))[k] = { t0: nowP, ms };
+        if (R.fx[k]) R.fx[k].t0 = nowP + BJA.MESURE_MS;
+        const hs = sess.ent.map((e) => e.id).filter((id) => BL.estMembre(id));
+        if (hs.length) bouloBark(hs.includes("pnj:mireille") ? "pnj:mireille" : hs[0], "mesure", BL.tirageReplique(p.graine, p.coups, 73), null);
+      }
+    }
+    if (p && p.gagnant !== null && R.primeWait) { const pw = R.primeWait; R.primeWait = null; bouloPrimeToast(pw.list); }   // lot 4 : la prime, quand la fin se voit
     const m = meRef.current;
     if (sess.etat === "salle" && (!old || old.sid !== sess.sid) && !BJ.estDans(sess, me.id) && m && m.zone === "town")
       pushToast(L.bouloInvite(sess.ent[0].name, L.bouloFmt(sess.mode), L.bouloPiste(k)));
+    // 2026-11-01 (lot 4) — UN DÉFI QUI COMMENCE : le bouliste défié répond (et dit le bilan, s'il y en a un)
+    if (sess.habs && !sess.club && (!old || old.sid !== sess.sid) && sess.ent[1] && BL.estMembre(sess.ent[1].id)) {
+      const pid = sess.ent[0].id, hid = sess.ent[1].id, b = BL.bilanDe(sharedRef.current.bouloBilan, pid, hid);
+      const t = BL.tirageReplique(sess.sid, 0, 11);
+      bouloBark(hid, b.v + b.d === 0 ? ((t & 2) ? "defi" : "bilan0") : b.v >= b.d ? "bilanJ" : "bilanH", t, b);
+    }
   }
   /* Ma session (affichée), ou null. */
   function bouloMine() {
@@ -13557,7 +13599,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function bouloMyTurn(mi) {
     const R = bouloRef.current;
-    return BJ.monTour(mi.sess, me.id) && !R.anims[mi.k] && !R.fx[mi.k] && bouloAtPlace(mi);
+    return BJ.monTour(mi.sess, me.id) && !R.anims[mi.k] && !R.fx[mi.k] && !(R.mesure && R.mesure[mi.k]) && bouloAtPlace(mi);   // lot 5 : on attend le mètre
   }
   /* La souris (px de la fenêtre) → le monde, par la caméra de la dernière image. */
   function bouloMouseWorld(mo) {
@@ -13570,24 +13612,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* CHAQUE IMAGE : les animations, leur adoption, les effets de fin de mène, ma visée. */
   function bouloTick() {
     const R = bouloRef.current, nowP = performance.now();
+    let rollV = 0;   // lot 5 : le roulé le plus fort de l'image (vitesse × volume), pour le crissement du gravier
+    if (R.primeWait && nowP > R.primeWait.until) { const pw = R.primeWait; R.primeWait = null; bouloPrimeToast(pw.list); }   // lot 4
     for (const k of ["a", "b"]) {
       const an = R.anims[k];
       if (an) {
         const t = (nowP - an.t0 - BOULO_LANCER_MS * A.BOULO_LACHER) / 1000;
         an.st = t >= 0 ? BJ.animPas(an.a, t, an.corps || (an.corps = [])) : null;
+        if (an.st) rollV = Math.max(rollV, bouloSonLancer(k, an, t));   // lot 5 : les sons du lancer, à l'instant où la simulation les date
         if (an.st && an.st.fini) {
           if (an.doneAt == null) an.doneAt = nowP;
           if (an.got && nowP - an.doneAt > BJK.TENIR_MS) {
             if (an.emp) { try { const e = PQ.empreinte(BJ.conclusion(an.base, an.a)); if (e !== an.emp) console.warn("[BOULO] l'état rejoué diffère de celui de l'hôte (empreinte " + e + " / " + an.emp + ") : on adopte celui de l'hôte."); } catch (e) { /* rien */ } }
-            R.anims[k] = null; bouloAdopt(k, an.pending);
+            R.anims[k] = null; bouloBarkLancer(an); bouloAdopt(k, an.pending);   // lot 4 : ce que les boulistes en disent
           } else if (!an.got && nowP - an.doneAt > 8000) R.anims[k] = null;   // la réponse ne vient pas : on garde l'état d'avant
         }
       }
       const fx = R.fx[k];
       if (fx && nowP - fx.t0 > (fx.fin ? BJK.FIN_PARTIE_MS : BJK.FIN_MENE_MS + BJK.RETOUR_MS)) R.fx[k] = null;
+      if (R.mesure && R.mesure[k] && nowP - R.mesure[k].t0 > BJA.MESURE_MS) R.mesure[k] = null;   // lot 5 : la mesure rangée
     }
+    SBO.boulesRoll(rollV, 1);   // lot 5 : le gravier qui crisse (se tait de lui-même sans boule qui roule)
     const mi = bouloMine();
-    if (R.panel && (mi || !bouloNear() || bouloNear().kind !== "open")) R.panel = null;
+    // le panneau se ferme quand on s'éloigne (du cercle, ou du bouliste qu'on défiait — lot 4)
+    if (R.panel) { const nb = mi ? null : bouloNear(); if (!nb || (R.panel.defi ? nb.kind !== "defi" || nb.hab !== R.panel.defi : nb.kind !== "open")) R.panel = null; }
     if (!mi || mi.sess.etat !== "jeu" || !bouloMyTurn(mi)) { R.visee = null; return; }
     const s = PQ.avancer(mi.sess.partie), q = PQ.aQui(s);
     if (!q) { R.visee = null; return; }
@@ -13675,7 +13723,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!mi || mi.sess.etat !== "jeu") return false;
     const v = bouloRef.current.visee;
     if (!v || e.button !== 0) return true;
-    if (v.etape === "donnee") { const w = bouloMouseWorld({ x: e.clientX, y: e.clientY }); if (w) v.donnee = BJ.mondeVersPiste(mi.k, w[0], w[1]); bouloValider(); }
+    if (v.etape === "donnee") {
+      const w = bouloMouseWorld({ x: e.clientX, y: e.clientY });
+      /* 2026-11-01 — LA DETTE DU LOT 3, L'iPAD : un toucher arrive comme un clic, et il posait la donnée ET la validait d'un coup —
+         pas de survol au doigt, donc aucune visée qu'on ajuste. Au toucher : le premier pose la donnée (le guide la montre), un second
+         au même endroit (à 60 cm près) lance ; « Valider » aussi. La souris garde son clic qui vise et valide. */
+      if (touchUiRef.current) {
+        if (w) {
+          const nd = BJ.mondeVersPiste(mi.k, w[0], w[1]), od = v.donnee;
+          const meme = od && (nd.x - od.x) * (nd.x - od.x) + (nd.y - od.y) * (nd.y - od.y) < 600 * 600 && v.touchee;
+          v.donnee = meme ? od : nd; v.touchee = true;
+          if (meme) bouloValider();
+        }
+      } else { if (w) v.donnee = BJ.mondeVersPiste(mi.k, w[0], w[1]); bouloValider(); }
+    }
     else if (v.etape === "jauge") bouloLacher();
     return true;
   }
@@ -13686,9 +13747,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const mi = bouloMine();
     if (mi && mi.sess.etat !== "fin") return null;
     const fx = C.footX(m.x) * C.TILE, fy = C.footY(m.y) * C.TILE, V = bouloRef.current.view, PXM = PQ.PETANQUE.PX_M;
+    /* 2026-11-01 (lot 4) — UN BOULISTE, À PORTÉE DE VOIX (là où on le voit : sa place affichée, `bouloRef.hab`). Libre, on le défie ;
+       pris par une partie, il répond qu'il finit d'abord la sienne. Testé AVANT les cercles : les bancs sont au nord des pistes. */
+    const HB = bouloRef.current.hab || {};
+    let hb = null, hd = 1.5 * C.TILE;   // le PLUS PROCHE à portée (le premier de la liste visait Mireille en pleine partie, Toinou libre à côté)
+    for (const c of BL.CLUB) {
+      const st = HB[c.id];
+      if (!st || st.leaving) continue;
+      const d = Math.hypot(fx - C.footX(st.x) * C.TILE, fy - C.footY(st.y) * C.TILE);
+      if (d < hd) { hd = d; hb = c; }
+    }
+    if (hb) { const hs = bouloHabSess(hb.id, V); return { kind: "defi", hab: hb.id, name: hb.nom, busy: !!hs }; }
     for (const k of ["a", "b"]) {
       const se = V[k];
-      if (se && se.etat === "salle" && !BJ.estDans(se, me.id) && se.ent.length < BJ.requis(se.mode)) {
+      // lot 4 : la salle d'une doublette avec habitants est au complet, mais un joueur y prend la place d'un habitant
+      if (se && se.etat === "salle" && !BJ.estDans(se, me.id) && (se.ent.length < BJ.requis(se.mode) || (se.mode === "dbl" && se.ent.some((e) => BL.estMembre(e.id))))) {
         const cd = BJ.cadre(k), mg = BJK.BORD_M * PXM;
         if (fx > cd.x0 - mg && fx < cd.x1 + mg && fy > cd.y0 + 22 - mg && fy < cd.y1 + mg) return { kind: "join", k, name: se.ent[0].name };
       }
@@ -13699,12 +13772,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return null;
   }
-  function bouloPromptKey() { const n = bouloNear(); return !n ? null : n.kind === "join" ? "bouloJoin:" + n.name : n.kind === "snow" ? "bouloSnow" : "bouloOpen"; }
+  function bouloPromptKey() { const n = bouloNear(); return !n ? null : n.kind === "defi" ? (n.busy ? "bouloBusyHab:" : "bouloDefi:") + n.name : n.kind === "join" ? "bouloJoin:" + n.name : n.kind === "snow" ? "bouloSnow" : "bouloOpen"; }
   function bouloTryE() {
     if (bouloInGame()) return true;
     const n = bouloNear();
     if (!n) return false;
-    if (n.kind === "open") bouloRef.current.panel = { k: n.k };
+    if (n.kind === "defi") { if (n.busy) pushToast(L.bouloHabBusy(n.name)); else bouloRef.current.panel = { defi: n.hab }; }   // lot 4
+    else if (n.kind === "open") bouloRef.current.panel = { k: n.k };
     else if (n.kind === "join") sendReq({ kind: "bouloJoin", k: n.k });
     else pushToast(L.bouloSnow);
     return true;
@@ -13731,7 +13805,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* LA CAMÉRA DE LA PARTIE : le cran ×3, la piste cadrée ; une piste plus large que l'écran suit la boule qui roule (ou le lanceur).
      null hors partie. Le fondu enchaîné se fait autour (`bouloFadeCheck`, `bouloFadeDraw`), jamais un zoom glissé. */
   function bouloCamera(cv) {
-    const mi = bouloMine();
+    const mi = bouloMine() || bouloSpect();   // lot 4 : assis sur un banc du boulodrome, on regarde la partie (le même cadre)
     if (!mi || !cv) return null;
     const R = bouloRef.current, se = mi.sess, fx = R.fx[mi.k];
     if (!(se.etat === "jeu" || (se.etat === "fin" && fx && fx.fin))) return null;
@@ -13789,7 +13863,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (an || R.fx[k] || se.pause || se.etat !== "jeu" || p.moving) return null;
       const q = BJ.tour(se);
-      if (!q || q.joueurs[0] !== p.id) return null;
+      if (!q || BJ.lanceur(se) !== p.id) return null;   // lot 4 : en doublette, le LANCEUR désigné (pas le premier du camp)
       const bp = isSelf ? bouloMyPosture() : p.bp | 0;
       if (!bp) return null;
       return { acc: bp === 1, ph: -1, kx, col: BJ.couleurDe(se, p.id), but: q.phase !== "boule" };
@@ -13853,7 +13927,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!se || !se.partie) continue;
       for (const b of bouloBalls(k)) if (b.z >= 0.06) BJA.dessinerBoule(ctx, Rp, b.wx, b.wy, b.z, b.col, b.but, b.a);
       const fx = R.fx[k];
-      if (fx && fx.marque.camp >= 0 && nowP - fx.t0 < BJK.FIN_MENE_MS) {
+      const mz = R.mesure && R.mesure[k];   // lot 5 : la mesure, par-dessus le terrain
+      if (mz) {
+        const ms = mz.ms, fine = Math.abs(ms.a.mm - ms.b.mm) < 10, j = BJ.mmVersMonde(k, ms.but.x, ms.but.y), wa = BJ.mmVersMonde(k, ms.a.x, ms.a.y), wb = BJ.mmVersMonde(k, ms.b.x, ms.b.y);
+        BJA.dessinerMesure(ctx, Rp, { jx: j[0], jy: j[1], a: { wx: wa[0], wy: wa[1], txt: BJ.cote(ms.a.mm, fine, L.bouloDec), col: BJ.couleurDe(se, ms.a.j) },
+          b: { wx: wb[0], wy: wb[1], txt: BJ.cote(ms.b.mm, fine, L.bouloDec), col: BJ.couleurDe(se, ms.b.j) }, centre: ms.a.mm === ms.b.mm ? L.bouloEgalite : null }, nowP - mz.t0);
+      }
+      if (fx && fx.marque.camp >= 0 && nowP >= fx.t0 && nowP - fx.t0 < BJK.FIN_MENE_MS) {
         const q = fx.marque.boules[0] || fx.from.mene.but || fx.from.mene.cercle, w = BJ.mmVersMonde(k, q.x, q.y);
         const pid = fx.from.camps[fx.marque.camp].joueurs[0], tt = (nowP - fx.t0) / BJK.FIN_MENE_MS;
         if (fx.marque.points > 0) BJA.dessinerPoints(ctx, Rp, w[0], w[1] - tt * 4, "+" + fx.marque.points, BJ.couleurDe(se, pid), Math.min(1, (1 - tt) * 4));
@@ -13875,19 +13955,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function bouloVMGet() {
     const R = bouloRef.current, nowP = performance.now(), m = meRef.current;
     if (!m || m.zone !== "town") return null;
-    const mi = bouloMine();
+    let mi = bouloMine();
     if (!mi) {
-      const vm = { panel: R.panel ? { k: R.panel.k, piste: L.bouloPiste(R.panel.k) } : null, invite: null, sess: null };
-      for (const k of ["a", "b"]) { const se = R.view[k]; if (se && se.etat === "salle" && se.ent.length < BJ.requis(se.mode)) vm.invite = { k, name: se.ent[0].name, mode: se.mode, piste: L.bouloPiste(k) }; }
+      const sp = bouloSpect();   // lot 4 : assis sur un banc, l'ardoise de la partie qu'on regarde
+      if (sp) mi = sp;
+    }
+    if (!mi) {
+      const vm = { panel: R.panel && R.panel.k ? { k: R.panel.k, piste: L.bouloPiste(R.panel.k) } : null, invite: null, sess: null, defi: R.panel && R.panel.defi ? bouloDefiVM(R.panel.defi) : null };
+      for (const k of ["a", "b"]) { const se = R.view[k]; if (se && se.etat === "salle" && (se.ent.length < BJ.requis(se.mode) || (se.mode === "dbl" && se.ent.some((e) => BL.estMembre(e.id))))) vm.invite = { k, name: se.ent[0].name, mode: se.mode, piste: L.bouloPiste(k) }; }
       return vm;
     }
-    const se = mi.sess, k = mi.k, an = R.anims[k], fx = R.fx[k], v = R.visee;
+    const se = mi.sess, k = mi.k, an = R.anims[k], fx = R.fx[k], v = mi.spect ? null : R.visee;
     const partie = an ? an.base : fx ? fx.from : se.partie;
     return { panel: null, invite: null, sess: {
-      k, etat: se.etat, mode: se.mode, cible: se.cible, owner: se.owner === me.id, requis: BJ.requis(se.mode),
+      k, spect: !!mi.spect, spectTxt: mi.spect ? L.bouloSpect(L.bouloPiste(k)) : null,
+      etat: se.etat, mode: se.mode, cible: se.cible, owner: se.owner === me.id, requis: BJ.requis(se.mode),
       ent: se.ent.map((e) => ({ id: e.id, name: e.name, col: BJ.couleurDe(se, e.id), me: e.id === me.id })),
       ardoise: partie ? BJ.ardoise(se, partie, me.id, !!fx && !fx.fin) : null,
-      visee: v ? { etape: v.etape, geste: v.geste } : null,
+      visee: v ? { etape: v.etape, geste: v.geste, touch: !!touchUiRef.current } : null,
       coin: R.coin[k] && nowP - R.coin[k].t0 < 2600 ? BJ.nomDe(se, R.coin[k].pid) : null,
       pauseNames: se.pause ? se.pause.qui.map((id) => BJ.nomDe(se, id)) : null,
       pauseLeft: se.pause && R.pauseEnd[k] ? Math.max(0, R.pauseEnd[k] - nowP) : BJK.PAUSE_MS, closable: !!se.closable,
@@ -13900,8 +13985,389 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     cancelPanel: () => { bouloRef.current.panel = null; },
     go: (k) => sendReq({ kind: "bouloGo", k }), leave: (k) => sendReq({ kind: "bouloLeave", k }),
     revanche: (k) => sendReq({ kind: "bouloRevanche", k }), close: (k) => sendReq({ kind: "bouloClose", k }),
-    geste: (g) => bouloGeste(g), back: () => bouloBack(),
+    geste: (g) => bouloGeste(g), back: () => bouloBack(), valider: () => bouloValider(),   // « Valider » : la dette iPad du lot 3
+    defi: (hab, mode, cible) => { bouloRef.current.panel = null; sendReq({ kind: "bouloDefi", hab, mode, cible }); },   // lot 4
   };
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-11-01 — LE BOULODROME, LOT 4 : LES HABITANTS BOULISTES (`boulistes.js` le club, `bouloBot.js` leur tête).
+     ╚══════════════════════════════════════════════════════════════════════
+     Ses verdicts : docs/PROJETS.md §11. QUI TIENT QUOI.
+     · L'HÔTE fait lancer les habitants (`hostBouloBots`) : quand c'est le tour de l'un d'eux et que SON écran a fini d'animer le
+       lancer d'avant, il attend le temps de réflexion de la décision, puis la passe à la MÊME porte qu'un lancer de joueur
+       (`BJ.hoteLancer`) et diffuse le MÊME `apply`. Il installe les parties du club (deux jouent, le troisième attend sur le banc) —
+       seulement si un joueur est en ville : sans spectateur, rien ne part —, cède sa piste et ses boulistes à un défi (« on finit la
+       mène et on arrive »), solde les primes (`BL.solder`, le bilan dans `shared.bouloBilan`, sauvegardé).
+     · CHACUN déduit le reste : qui est de sortie (l'heure du jeu, lue sur le même `dayStartAt`), où chacun se tient (la partie
+       AFFICHÉE, sinon son banc ; `bouloHabTick` les fait marcher), la posture de celui qui réfléchit (la même décision, `BB.decider`,
+       sur la même partie que l'hôte), les répliques (un tirage sur la graine de la partie et le numéro du lancer).
+     ⚠️ Coût réseau du lot : un `apply` par boule d'habitant (comme une boule de joueur), un par partie du club qui s'ouvre ou se
+       range. Rien pour les positions, les postures, les répliques, l'horaire.
+     ⚠️ Des REFS, jamais un état React : tout ceci est lu par la boucle (closure à deps vides). */
+  const BOULO_HAB_SPEED = C.PLAYER_SPEED * 0.7;   // un retraité marche un peu moins vite qu'un joueur
+  function bouloGameMin() { const s = sharedRef.current; return s && s.dayStartAt ? E.gameTimeMin(s.dayStartAt, Date.now()) : 0; }
+  function bouloClubSortie() { return BL.deSortie(bouloGameMin(), bouloEnneige()); }
+  /** La partie qui tient un bouliste (`V` : les sessions affichées, ou partagées chez l'hôte) ; une partie du club FINIE ne le tient plus. */
+  function bouloHabSess(id, V) {
+    for (const k of ["a", "b"]) { const se = V && V[k]; if (se && BJ.estDans(se, id) && !(se.club && se.etat === "fin")) return { k, sess: se }; }
+    return null;
+  }
+  /** Un bouliste libre (pour reprendre une place en doublette), ou null. */
+  function bouloHabLibre(ss) { const busy = BJ.habitantsOccupes(ss); const c = BL.CLUB.find((h) => !busy.has(h.id)); return c ? { id: c.id, name: c.nom } : null; }
+  function bouloAnyoneInTown() {
+    const m = meRef.current;
+    if (m && (m.zone || "farm") === "town") return true;
+    for (const p of playersRef.current.values()) if (p && (p.zone || "farm") === "town") return true;
+    return false;
+  }
+  function bouloParisDay() { const n = Date.now(); return BL.jourDeParis(n, CH.parisOffsetMin(n)); }
+  const bouloRand = () => (Math.random() * 4294967296) >>> 0;
+  const bouloPisteLibre = (ss, k) => !ss[k] || (ss[k].club && ss[k].etat === "fin");
+
+  /* ── L'HÔTE ── */
+  /** Un défi (`req` : { hab, mode, cible }). Le club cède ce qu'il faut — sa piste s'il n'y en a pas d'autre, ses boulistes s'il les
+      faut — à la fin de la mène en cours (`hostBouloBots`, « on finit la mène et on arrive »). */
+  function hostBouloDefi(req, f, s, out) {
+    const no = (key, n) => { out.toast = { id: f.id, key, n }; };
+    const h = BL.membre(req.hab), ss = bouloSess(), H = bouloRef.current.host;
+    if (!h) return no("bouloHabGone");
+    if (bouloEnneige()) return no("bouloSnow");
+    if (!bouloClubSortie()) return no("bouloHabGone");
+    for (const kk of ["a", "b"]) if (BJ.estDans(ss[kk], f.id) && ss[kk].etat !== "fin") return no("bouloAlready");
+    const mode = req.mode === "dbl" ? "dbl" : "tat";
+    const cible = PQ.PETANQUE.CIBLES.includes(req.cible | 0) ? req.cible | 0 : BJ.cibleDefaut(mode);
+    const pris = BJ.habitantsOccupes(ss, false);   // pris par une partie de JOUEURS : ceux-là ne cèdent pas
+    const need = mode === "dbl" ? BL.CLUB.map((c) => c.id) : [h.id];
+    const occ = need.find((id) => pris.has(id));
+    if (occ) return no("bouloHabBusy", BL.membre(occ).nom);
+    const df = { pid: f.id, name: f.name, hab: h.id, mode, cible, at: performance.now() };
+    const kc = ["a", "b"].find((kk) => ss[kk] && ss[kk].club && ss[kk].etat !== "fin");
+    if (kc) {
+      const ids = ss[kc].ent.map((e) => e.id);
+      const autre = kc === "a" ? "b" : "a";
+      if (need.some((id) => ids.includes(id)) || !bouloPisteLibre(ss, autre)) {
+        if (H.defi && H.defi.pid !== f.id) return no("bouloBusy");
+        H.defi = df;
+        out.toast = { id: f.id, key: "bouloDefiCede", n: h.nom };
+        out.bouloCede = { hab: ids.includes(h.id) ? h.id : ids[0], t: BL.tirageReplique(ss[kc].sid, ss[kc].partie ? ss[kc].partie.coups : 0, 23) };
+        return;
+      }
+    }
+    const r = hostBouloDefiGo(df);
+    if (r.toast) { out.toast = r.toast; return; }
+    out.boulo = { k: r.k, sess: r.sess };
+  }
+  function hostBouloDefiGo(df) {
+    const ss = bouloSess(), s = sharedRef.current, H = bouloRef.current.host;
+    const busy = BJ.habitantsOccupes(ss);
+    if (busy.has(df.hab)) return { toast: { id: df.pid, key: "bouloHabBusy", n: BL.membre(df.hab).nom } };
+    const habs = [BL.membre(df.hab), ...BL.CLUB.filter((c) => c.id !== df.hab && !busy.has(c.id))].map((c) => ({ id: c.id, name: c.nom }));
+    const k = bouloPisteLibre(ss, "a") ? "a" : bouloPisteLibre(ss, "b") ? "b" : null;
+    if (!k) return { toast: { id: df.pid, key: "bouloBusy" } };
+    s.bouloSeq = (s.bouloSeq | 0) + 1;
+    const r = BJ.hoteDefi(ss, s.bouloSeq, k, df.pid, df.name, habs, df.mode, df.cible, bouloRand());
+    if (r) return { toast: { id: df.pid, key: r, n: BL.membre(df.hab).nom } };
+    delete H.finAt[k]; delete H.pauseAt[k];
+    return { k, sess: ss[k] };
+  }
+  /** La fin d'une partie contre des habitants : le bilan de chacun, les primes (l'or est commun : une prime par joueur gagnant). */
+  function hostBouloFin(se, out) {
+    if (!se || !se.habs || se.club || !se.partie || se.partie.gagnant === null) return;
+    const s = sharedRef.current, bil = s.bouloBilan || (s.bouloBilan = {});
+    const pays = BL.solder(bil, se.partie, bouloParisDay());
+    out.bouloBilan = bil;
+    if (pays.length) {
+      for (const p of pays) { s.money += p.prime; s.totalEarned = (s.totalEarned || 0) + p.prime; p.name = BJ.nomDe(se, p.pid); }
+      out.state = shareState(); out.bouloPrime = pays;
+    }
+    dirtyRef.current = true;
+  }
+  /** L'HÔTE, à chaque image : les lancers des habitants, la partie du club (s'installer, se ranger), le défi qui attend. */
+  function hostBouloBots() {
+    const tw = townWorldRef.current;
+    if (!tw || !tw.boulo) return;
+    // ⚠️ `bouloSess()` et pas `sharedRef.current.boulo` : l'état des pistes est null tant que personne n'y a joué — le club, lui, s'installe
+    const ss = bouloSess(), R = bouloRef.current, H = R.host, nowP = performance.now(), s = sharedRef.current;
+    const inTown = bouloAnyoneInTown(), hb = H.bot || (H.bot = { a: null, b: null });
+    const send = (payload) => hostSend({ type: "broadcast", event: "apply", payload });
+    // 1. LES LANCERS DES HABITANTS
+    for (const k of ["a", "b"]) {
+      const se = ss[k];
+      if (!se || se.etat !== "jeu" || !se.partie || se.pause) { hb[k] = null; continue; }
+      const who = BJ.lanceur(se);
+      if (!who || !BL.estMembre(who)) { hb[k] = null; continue; }
+      if (se.club && !inTown) { hb[k] = null; continue; }   // personne pour regarder : le club se tait, rien ne part
+      const V = R.view[k];
+      // SON écran d'abord : le lancer d'avant fini et adopté (sinon l'habitant lancerait pendant que la boule roule encore)
+      if (R.anims[k] || R.fx[k] || (R.mesure && R.mesure[k]) || !V || !V.partie || V.partie.coups !== se.partie.coups) { if (hb[k]) hb[k].t0 = nowP; continue; }
+      if (!hb[k] || hb[k].coup !== se.partie.coups || hb[k].who !== who || hb[k].sid !== se.sid) {
+        const d = BB.decider(se.partie, who, BL.membre(who).niveau);
+        if (!d) { hb[k] = null; continue; }
+        hb[k] = { sid: se.sid, coup: se.partie.coups, who, d, t0: nowP, sent: false };
+      }
+      const b = hb[k];
+      if (b.sent || nowP - b.t0 < b.d.pense) continue;
+      b.sent = true;
+      let res = BJ.hoteLancer(ss, k, who, b.d.input, bouloLourdNow());
+      if (res.raison) {
+        /* ⚠️ Ne doit pas arriver (`verify-boulo-bot` §3 : aucune décision refusée sur des milliers de lancers). S'il arrive, le
+           bouliste ne reste pas planté au cercle : la roulette par défaut, celle que le guide propose et que l'arbitre accepte. */
+        console.warn("[BOULO] lancer d'habitant refusé (" + (res.detail || res.raison) + ") : roulette par défaut.");
+        const m = PQ.avancer(se.partie).mene, q = PQ.aQui(se.partie);
+        const g = q && q.phase === "but" ? "but" : q && q.phase === "placer" ? "placer" : "roulette";
+        res = BJ.hoteLancer(ss, k, who, { coup: se.partie.coups, geste: g, donnee: BJ.donneeDefaut(m, g), err: 0 }, bouloLourdNow());
+        if (res.raison) { ss[k] = null; send({ boulo: { k, sess: null } }); continue; }
+      }
+      const out = { boulo: { k, sess: res.s }, bouloLancer: { k, pid: who, input: res.input, emp: res.emp } };
+      if (res.s.etat === "fin") { H.finAt[k] = nowP; hostBouloFin(res.s, out); }
+      send(out);
+    }
+    // 2. LA PARTIE DU CLUB FINIE : le temps de l'ardoise, puis on range — et un verre avant la suivante
+    for (const k of ["a", "b"]) {
+      const se = ss[k];
+      if (!se || !se.club || se.etat !== "fin") continue;
+      if (H.finAt[k] == null) H.finAt[k] = nowP;
+      if (nowP - H.finAt[k] > BL.CLUB_FIN_MS) { ss[k] = null; delete H.finAt[k]; H.clubNext = nowP + BL.CLUB_PAUSE_MS; send({ boulo: { k, sess: null } }); }
+    }
+    /* 2b. LA NEIGE FERME LE BOULODROME : le club range ses boules à la fin de la mène en cours (vu en jeu : Fernand et Mireille jouaient
+       sous la tempête, sur un terrain que l'invite dit fermé). Les parties des JOUEURS continuent — c'est à eux de voir. */
+    if (bouloEnneige()) for (const k of ["a", "b"]) {
+      const se = ss[k];
+      if (!se || !se.club || se.etat !== "jeu" || R.anims[k] || R.fx[k]) continue;
+      const m = se.partie.mene;
+      if (m.fini || (!m.but && !m.boules.length)) { ss[k] = null; delete H.finAt[k]; hb[k] = null; send({ boulo: { k, sess: null } }); }
+    }
+    // 3. UN DÉFI QUI ATTEND LA FIN DE LEUR MÈNE
+    const df = H.defi;
+    if (df) {
+      const pp = df.pid === me.id ? meRef.current : playersRef.current.get(df.pid);
+      if (nowP - df.at > BL.DEFI_MS || !pp || (pp.zone || "farm") !== "town" || !bouloClubSortie()) H.defi = null;
+      else {
+        const kc = ["a", "b"].find((kk) => ss[kk] && ss[kk].club && ss[kk].etat === "jeu");
+        if (kc) {
+          const m = ss[kc].partie.mene;
+          // entre deux mènes (la dernière boule jouée, son « +n » fini sur MON écran), ou avant la première boule de celle-ci
+          if ((m.fini || (!m.but && !m.boules.length)) && !R.anims[kc] && !R.fx[kc]) { ss[kc] = null; delete H.finAt[kc]; hb[kc] = null; send({ boulo: { k: kc, sess: null } }); }
+        }
+        if (!["a", "b"].some((kk) => ss[kk] && ss[kk].club && ss[kk].etat === "jeu")) {
+          H.defi = null;
+          const r = hostBouloDefiGo(df);
+          send(r.toast ? { toast: r.toast } : { boulo: { k: r.k, sess: r.sess } });
+        }
+      }
+    }
+    // 4. LE CLUB S'INSTALLE : de sortie, un joueur en ville, aucun défi en attente, une piste libre (jamais celle d'une revanche)
+    if (!H.defi && inTown && bouloClubSortie() && nowP >= (H.clubNext || 0) && !["a", "b"].some((kk) => ss[kk] && ss[kk].club)) {
+      const busy = BJ.habitantsOccupes(ss), n = s.bouloClubN | 0, pair = BL.paireDu(n);
+      const k = !ss.b ? "b" : !ss.a ? "a" : null;
+      if (k && pair.every((h) => !busy.has(h.id))) {
+        s.bouloSeq = (s.bouloSeq | 0) + 1; s.bouloClubN = n + 1;
+        BJ.hoteClub(ss, s.bouloSeq, k, { id: pair[0].id, name: pair[0].nom }, { id: pair[1].id, name: pair[1].nom }, BL.CLUB_CIBLE, bouloRand());
+        delete H.finAt[k]; delete H.pauseAt[k];
+        send({ boulo: { k, sess: ss[k] } });
+      } else if (k) H.clubNext = nowP + 4000;   // un des deux est pris (un défi) : on regarde plus tard, la paire suivante
+    }
+  }
+
+  /* ── CHACUN ── */
+  /** Assis sur un banc du boulodrome, sans partie à soi : la partie qu'on regarde (celle qui se joue ; la plus animée d'abord). */
+  function bouloSpect() {
+    const m = meRef.current, R = bouloRef.current;
+    if (!m || !m.sitOn || m.zone !== "town" || !BD.BOULO_BENCHES.some((b) => b.x === m.sitOn.x && b.y === m.sitOn.y)) return null;
+    let best = null;
+    for (const k of ["a", "b"]) {
+      const se = R.view[k];
+      if (!se || !se.partie) continue;
+      if (!(se.etat === "jeu" || (se.etat === "fin" && R.fx[k]))) continue;
+      if (!best || R.anims[k]) best = { k, sess: se, spect: true };
+    }
+    return best;
+  }
+  /** Ce que le panneau du défi affiche. */
+  function bouloDefiVM(hid) {
+    const c = BL.membre(hid);
+    if (!c) return null;
+    const bil = BL.bilanDe(sharedRef.current.bouloBilan, me.id, hid), V = bouloRef.current.view;
+    const pris = BJ.habitantsOccupes(V, false);
+    const autres = BL.CLUB.filter((h) => h.id !== hid), jour = bouloParisDay();
+    // en doublette, le défié est ton PARTENAIRE : la prime est celle du plus fort des deux autres (`BL.solder`)
+    const fort = autres[0] && autres[1] && BL.primeDe(autres[1].id) > BL.primeDe(autres[0].id) ? autres[1] : autres[0];
+    const bilF = BL.bilanDe(sharedRef.current.bouloBilan, me.id, fort.id);
+    return {
+      hab: hid, name: c.nom, title: L.bouloDefiTitle(c.nom), bilan: L.bouloDefiBilan(c.nom, bil.v, bil.d),
+      prime: bil.pd === jour ? L.bouloDefiPrimeDone : L.bouloDefiPrime(BL.primeDe(hid)),
+      primeDbl: bilF.pd === jour ? L.bouloDefiPrimeDone : L.bouloDefiPrime(BL.primeDe(fort.id)),
+      dbl: L.bouloDefiDbl(c.nom, autres[0].nom, autres[1].nom), dblOk: !BL.CLUB.some((h) => pris.has(h.id)),
+    };
+  }
+  /** Le bouliste réfléchit : sa posture au cercle — la décision de l'hôte, refaite ici sur la même partie (une fois par lancer). */
+  function bouloHabPosture(id) {
+    const R = bouloRef.current, hs = bouloHabSess(id, R.view);
+    if (!hs || hs.sess.etat !== "jeu" || hs.sess.pause || R.anims[hs.k] || R.fx[hs.k] || BJ.lanceur(hs.sess) !== id) return 0;
+    const key = hs.sess.sid + ":" + hs.sess.partie.coups + ":" + id, cache = R.botDec || (R.botDec = {});
+    if (!cache[hs.k] || cache[hs.k].key !== key) cache[hs.k] = { key, bp: BB.postureDe(BB.decider(hs.sess.partie, id, BL.membre(id).niveau)) };
+    return cache[hs.k].bp;
+  }
+  /** OÙ SE TIENT CHAQUE BOULISTE, sur CET écran (`bouloRef.hab`, coordonnées de personnage, en cases). Sa place se déduit : dans une
+      partie, celle que le jeu donne à tout joueur (`BJ.placeDe`) ; en pause, en salle d'attente ou de sortie, son banc ; sinon, chez
+      lui. Il y MARCHE. ⚠️ En entrant en ville, on les trouve DÉJÀ installés (pas tous les trois remontant l'allée à chaque train) :
+      seule une arrivée vue en direct (14 h) se fait à pied depuis le jardin de la mairie. */
+  function bouloHabTick(dt) {
+    const R = bouloRef.current, m = meRef.current, tw = townWorldRef.current;
+    const H = R.hab || (R.hab = {});
+    if (!m || (m.zone || "farm") !== "town" || !tw || !tw.boulo) { for (const id in H) delete H[id]; R.habInit = false; return; }
+    const V = R.view, T = C.TILE, sortie = bouloClubSortie(), nowP = performance.now();
+    const day = (sharedRef.current.day | 0);
+    const ex = BL.ENTREE.x - C.footX(0), ey = BL.ENTREE.y - C.footY(0);
+    BL.CLUB.forEach((c, i) => {
+      const hs = bouloHabSess(c.id, V);
+      let tgt = null;
+      if (hs && hs.sess.etat === "jeu" && hs.sess.partie && !hs.sess.pause || hs && hs.sess.etat === "fin") {
+        const fx = R.fx[hs.k], an = R.anims[hs.k];
+        const part = an ? an.base : fx ? fx.from : hs.sess.partie;
+        const pl = fx && nowP - fx.t0 < BJK.FIN_MENE_MS ? null : part ? BJ.placeDe(hs.sess, part, c.id) : null;
+        if (pl) tgt = { x: pl.wx / T - C.footX(0), y: pl.wy / T - C.footY(0), dir: pl.dir, sit: false };
+        else if (H[c.id]) tgt = { x: H[c.id].x, y: H[c.id].y, dir: H[c.id].dir, sit: H[c.id].sit };   // pendant le « +n », on reste où l'on est
+      }
+      if (!tgt && (hs || sortie)) { const st = BL.siegeDe(c.id); tgt = { x: st.b.x + st.seat * C.TOWN_SEAT_SPACING, y: st.b.y + C.TOWN_SEAT_OFFSET, dir: 0, sit: true }; }
+      let st = H[c.id];
+      if (!st) {
+        if (!tgt) return;
+        // déjà là quand on arrive (`habInit` faux) ; arrivée vue en direct sinon : depuis le jardin de la mairie
+        // en file, pas l'un sur l'autre : chacun un pas derrière le précédent
+        st = H[c.id] = R.habInit ? { x: ex - i * 0.8, y: ey + (i % 2) * 0.3, sx: ex - i * 0.8, sy: ey + (i % 2) * 0.3, dir: 3, moving: false, animT: 0, sit: false, arriving: true } : { x: tgt.x, y: tgt.y, dir: tgt.dir, moving: false, animT: 0, sit: !!tgt.sit };
+        if (R.habInit) bouloBark(c.id, "arrive", BL.tirageReplique(day, i, 31), null);
+      }
+      if (!tgt) {
+        if (!st.leaving) { st.leaving = true; bouloBark(c.id, "depart", BL.tirageReplique(day, i, 37), null); }
+        tgt = { x: ex, y: ey, dir: 2, sit: false, leave: true };
+      } else st.leaving = false;
+      // on se lève d'abord (un pas au sud du banc), puis on marche
+      if (st.sit && !tgt.sit) { st.sit = false; st.y += 0.25; }
+      const dx = tgt.x - st.x, dy = tgt.y - st.y, d = Math.hypot(dx, dy);
+      if (d > 0.04 && !(st.sit && tgt.sit)) {
+        const stp = Math.min(d, BOULO_HAB_SPEED * dt);
+        st.x += (dx / d) * stp; st.y += (dy / d) * stp; st.moving = true; st.sit = false; st.animT += dt * 9;
+        st.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 3 : 2) : dy > 0 ? 0 : 1;
+      } else {
+        st.x = tgt.x; st.y = tgt.y; st.moving = false; st.animT = 0; st.sit = !!tgt.sit; st.dir = tgt.sit ? 0 : tgt.dir; st.arriving = false;
+        if (tgt.leave) delete H[c.id];
+      }
+    });
+    R.habInit = true;
+  }
+  /** Le personnage à dessiner (le format de `drawCharacter` : les mêmes champs qu'un habitant de la ville). */
+  function bouloHabChar(c, st) {
+    return { id: c.id, name: c.nom, x: st.x, y: st.y, dir: st.dir, moving: st.moving, animT: st.animT, gender: c.gender, outfit: c.outfit,
+             overalls: c.overalls, cap: c.cap, look: c.look, zone: "town", sit: st.sit, bp: !st.moving && !st.sit ? bouloHabPosture(c.id) : 0 };
+  }
+  /* ── LES RÉPLIQUES ── (chacun les choisit pareil : le même tirage au même moment ; rares, et jamais deux en huit secondes par la
+     même bouche, sauf les moments qu'on ne tait pas) */
+  function bouloBark(id, moment, t, vars) {
+    const R = bouloRef.current, nowP = performance.now(), c = BL.membre(id);
+    if (!c || !BL.onLeDit(moment, t)) return;
+    const last = (R.barkLast || (R.barkLast = {}))[id] || 0;
+    if (nowP - last < BL.BARK_PAUSE_MS && !["defi", "bilan0", "bilanJ", "bilanH", "gagne", "perd", "fanny", "cede"].includes(moment)) return;
+    let txt = BL.phrase((L.bouloBarks || {})[c.nom], moment, t);
+    if (!txt) return;
+    if (vars) txt = txt.replace(/\{v\}/g, String(vars.v | 0)).replace(/\{d\}/g, String(vars.d | 0));
+    R.barkLast[id] = nowP;
+    (R.barks || (R.barks = {}))[id] = { txt, until: nowP + BL.BARK_MS };
+  }
+  function bouloBarkOf(id) { const b = (bouloRef.current.barks || {})[id]; return b && performance.now() < b.until ? b.txt : null; }
+  /** Un lancer qui vient d'être joué (à l'adoption de son animation) : ce que les boulistes de la partie en disent. */
+  function bouloBarkLancer(an) {
+    try {
+      const sess = an.pending, before = an.base, after = sess && sess.partie;
+      if (!sess || !sess.habs || !before || !after || after.coups <= before.coups) return;
+      const pid = an.a.pid, g = an.a.geste, salt = (n) => BL.tirageReplique(after.graine, after.coups, n);
+      const habsIn = sess.ent.map((e) => e.id).filter((id) => BL.estMembre(id));
+      if (!habsIn.length) return;
+      const sb = before.stats[pid] || {}, sa = after.stats[pid] || {};
+      const fini = after.gagnant !== null;
+      if (fini) {
+        for (const h of habsIn) {
+          const ch = PQ.campDe(after, h), win = ch === after.gagnant;
+          const loserZero = after.camps.some((cc, i) => i !== after.gagnant && cc.score === 0);
+          bouloBark(h, win ? (loserZero ? "fanny" : "gagne") : "perd", salt(41 + habsIn.indexOf(h)), null);
+        }
+        return;
+      }
+      const carreau = (sa.carreaux | 0) > (sb.carreaux | 0);
+      const mb = PQ.avancer(before).mene, ma = after.mene;
+      const memeMene = ma.n === mb.n;
+      if (carreau || g === "tir" && (sa.fers | 0) > (sb.fers | 0)) {
+        if (BL.estMembre(pid) && carreau) bouloBark(pid, "carreau", salt(43), null);
+        // la boule chassée : celle d'un autre camp qui est morte ou a bougé de plus d'un mètre
+        if (memeMene) for (const q0 of mb.boules) {
+          if (q0.mort || q0.camp === PQ.campDe(after, pid) || !BL.estMembre(q0.j) || q0.j === pid) continue;
+          const q1 = ma.boules.find((q) => q.j === q0.j && !q.mort && Math.abs(q.x - q0.x) + Math.abs(q.y - q0.y) < 50);
+          if (!q1) { bouloBark(q0.j, "subit", salt(47), null); break; }
+        }
+        if (!BL.estMembre(pid) && carreau) { const fan = habsIn.find((h) => BL.membre(h).niveau === "debutant") || habsIn[0]; bouloBark(fan, "beau", salt(53), null); }
+      } else if (g !== "but" && g !== "placer" && memeMene && ma.but) {
+        const mine = ma.boules[ma.boules.length - 1];
+        const dist = mine && !mine.mort ? Math.sqrt((mine.x - ma.but.x) ** 2 + (mine.y - ma.but.y) ** 2) : Infinity;
+        if (BL.estMembre(pid)) { if (dist < 150) bouloBark(pid, "colle", salt(59), null); else if (dist > 1500) bouloBark(pid, "rate", salt(61), null); }
+        else if (dist < 150) { const fan = habsIn.find((h) => BL.membre(h).niveau === "debutant") || habsIn[0]; bouloBark(fan, "beau", salt(67), null); }
+      }
+      // une mène qui finit sur un gros score : un bouliste du camp qui l'emporte s'en réjouit
+      if (memeMene && ma.fini && !ma.fini.nulle && (ma.fini.points | 0) >= 3) {
+        const w = habsIn.find((h) => PQ.campDe(after, h) === ma.fini.gagnant);
+        if (w) bouloBark(w, "mene", salt(71), null);
+      }
+    } catch (e) { /* une réplique ne casse jamais une partie */ }
+  }
+  /* ── 2026-11-01 — LES SONS DU BOULODROME (`sonBoules.js`, la part sonore du lot 5) ──
+     Les événements que la simulation a DATÉS (`sim.ev` : « sol », « fer », « choc », « carreau »), joués quand l'animation les atteint :
+     chaque écran rejoue le même lancer, chacun les entend au même instant de sa boule, sans un message. Le volume : 1 dans sa partie
+     ou depuis un banc, puis il décroît avec la distance au terrain (muet à 16 cases). Rend vitesse × volume de la boule la plus
+     rapide qui roule au sol, pour le crissement du gravier. */
+  function bouloSonVol(k) {
+    const m = meRef.current;
+    if (!m || m.zone !== "town") return 0;
+    const mi = bouloMine(), sp = mi ? null : bouloSpect();
+    if ((mi && mi.k === k) || (sp && sp.k === k)) return 1;
+    const cd = BJ.cadre(k), fx = C.footX(m.x) * C.TILE, fy = C.footY(m.y) * C.TILE;
+    const dx = Math.max(cd.x0 - fx, 0, fx - cd.x1), dy = Math.max(cd.y0 - fy, 0, fy - cd.y1), d = Math.hypot(dx, dy) / C.TILE;
+    return d >= 16 ? 0 : 0.85 * (1 - d / 16);
+  }
+  function bouloSonLancer(k, an, t) {
+    const sim = an.a && an.a.sim;
+    if (!sim) return 0;
+    const vol = bouloSonVol(k), DT = PQ.PETANQUE.DT;
+    let i = an.evI | 0;
+    for (; i < sim.ev.length; i++) {
+      const e = sim.ev[i], te = sim.tSol + e.n * DT;
+      if (te > t) break;
+      if (vol <= 0 || te < t - 0.25) continue;   // trop loin, ou déjà passé (une animation prise en route) : on ne rattrape pas
+      const c = sim.corps[e.i];
+      if (e.t === "sol") SBO.boulesEvent(c && c.but ? "butSol" : "sol", Math.abs(e.vz || 0) / 7, vol);
+      else if (e.t === "fer") SBO.boulesEvent(e.but ? "but" : "fer", (e.v || 0) / 6, vol);
+      else if (e.t === "choc") SBO.boulesEvent(e.but ? "but" : "choc", (e.v || 0) / 3, vol);
+      else if (e.t === "carreau") SBO.boulesEvent("carreau", 1, vol);
+    }
+    an.evI = i;
+    if (vol <= 0) return 0;
+    let v = 0;
+    for (const b of sim.corps) if (b.vivant && b.bouge && !(b.air > 0)) { const s2 = b.vx * b.vx + b.vy * b.vy; if (s2 > v) v = s2; }
+    return Math.sqrt(v) * vol;
+  }
+  /** Une prime gagnée : chacun en ville le voit passer (l'or est commun). ⚠️ Elle arrive avec le DERNIER lancer, pendant que la boule
+      roule encore à l'écran : annoncée tout de suite, elle donnait le vainqueur avant la boule. Elle attend donc que la vue montre la
+      fin de partie (`bouloAdopt`) — douze secondes au plus (`bouloTick`), si cet écran ne la montre jamais (parti en route). */
+  function bouloPrimeShow(list) {
+    const R = bouloRef.current;
+    if (Object.values(R.anims).some((a) => a)) { R.primeWait = { list, until: performance.now() + 12000 }; return; }
+    bouloPrimeToast(list);
+  }
+  function bouloPrimeToast(list) {
+    const m = meRef.current;
+    for (const p of list || []) {
+      const c = BL.membre(p.hid);
+      if (!c || !(p.pid === me.id || (m && m.zone === "town"))) continue;
+      pushToast(L.bouloPrimeWon(p.name || "?", c.nom, p.prime | 0));
+    }
+  }
   /* LA VUE DE L'ÉCRAN DE COURSE (`CourseHud`, qui la lit à ~20 images/s) : rien n'y est calculé deux fois — le
      classement en direct vient de la passe de dessin (`rinkLocalRef.live`), les tours et le chrono du pas du coureur. */
   function raceVM() {
@@ -18984,6 +19450,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townHall") { m.x = C.TOWN_HALL.x + C.TOWN_HALL.w / 2; m.y = C.TOWN_HALL.y + C.TOWN_HALL.h + 2; }
+          else if (dk === "townBoulo") { const b = BD.BOULO_BENCHES[1]; m.x = b.x - 1.5; m.y = b.y + 1.4; }   // 2026-11-01 : sur l'herbe entre les bancs et la piste du nord
           else if (dk === "townChurch") { m.x = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2; m.y = C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2; }
           // 2026-09-26 (phase 6a) : dans la rue, devant la porte de la maison n°1 (ruine : sur son allée).
           else if (dk === "townHouses") { const h = C.TOWN_HOUSES[1]; m.x = h.x + 3; m.y = h.y + C.TOWN_HOUSE_H + 3; }
@@ -19285,6 +19752,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     if (phase !== "playing" || !spritesReady) return;
     const canvas = canvasRef.current; if (!canvas) return;
+    /* 2026-11-01 — un remontage (la promotion d'hôte, voir les dépendances en bas) a effacé le réveil automatique d'un joueur qui dort
+       (`sleepTimerRef`, que le nettoyage annule) : on le réarme pour ce qui lui reste à dormir. */
+    if (meRef.current && meRef.current.sleeping && sleepStartedAtRef.current != null) {   // (le nettoyage annule le minuteur sans vider la ref)
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = setTimeout(() => wakeUp(true), Math.max(0, C.SLEEP_MS - (performance.now() - sleepStartedAtRef.current)));
+    }
     /* ⚠️ 2026-09-25 (phase 4) — `let`, ET UNE SEULE RAISON : la passe des
        REFLETS (`drawTownFrame`) redessine des entrées de la file de dessin dans
        un tampon, en miroir, et ces dessins écrivent sur `ctx`. Elle l'échange le
@@ -19703,7 +20176,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateWhistledHorses(dt);
       if (isHost) hostRinkTick();   // 2026-10-05 (nuit) : les échéances de la course de la patinoire
       if (isHost) hostBouloTick();   // 2026-10-31 : qui est encore en ville pendant une partie de boules (la pause)
+      if (isHost) hostBouloBots();   // 2026-11-01 (lot 4) : les lancers des habitants, les parties du club, les défis qui attendent
       bouloTick();                   // 2026-10-31 : les lancers qu'on anime, leur adoption, ma visée
+      bouloHabTick(dt);              // 2026-11-01 (lot 4) : où se tiennent les boulistes (chacun le déduit, rien ne voyage)
       if (isHost) hostIceTick(dt);   // 2026-10-06 : l'usure de la glace, et la fin de la passe de la surfaceuse
       lakeWatchTick();   // 2026-10-06 : le message du gel du lac du sud (chacun, sans réseau)
       if (isHost) updateWolves(dt);
@@ -29277,6 +29752,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         };
       }
       if (parkStripQ) for (const pc of SPA.parkDrawPieces(parkStripQ.pk, parkCuts, parkStripQ.wy0, parkStripQ.wy1)) pushE(pc.key, 0, () => pc.draw(ctx));
+      /* 2026-11-01 — LES BOULISTES (lot 4) : Fernand, Mireille, Toinou, là où CET écran les a fait marcher (`bouloHabTick`), dessinés
+         comme tout habitant de la ville (`drawCharacter` : assis sur leur banc, la boule en main quand ils réfléchissent au cercle, le
+         geste quand ils lancent) ; leur réplique dans la bulle des habitants. */
+      if (tw.boulo) {
+        const RH = bouloRef.current.hab || {};
+        for (const c of BL.CLUB) {
+          const st = RH[c.id];
+          if (!st) continue;
+          const pB = bouloHabChar(c, st);
+          const peB = st.sit ? townElevAt(tw, pB.x, pB.y + 0.2) : townLvl(tw, "bh:" + c.id, pB.x, pB.y + 0.2);
+          if (!st.sit) snowWalk("bh:" + c.id, "boot", C.footX(pB.x), C.footY(pB.y), peB);
+          // ils sortent du jardin et y rentrent en fondu (le dernier pas avant l'allée), jamais d'un coup
+          const alB = st.leaving ? Math.max(0, Math.min(1, Math.hypot(st.x - (BL.ENTREE.x - C.footX(0)), st.y - (BL.ENTREE.y - C.footY(0))) / 1.2))
+            : st.arriving ? Math.max(0, Math.min(1, Math.hypot(st.x - st.sx, st.y - st.sy) / 1.2)) : 1;
+          if (alB <= 0.02 && st.leaving) continue;
+          pushE((pB.y + 1) * T, peB, () => {
+            if (alB < 1) { ctx.save(); ctx.globalAlpha *= alB; drawCharacter(pB, false); ctx.restore(); } else drawCharacter(pB, false);
+            const bk = bouloBarkOf(c.id);
+            if (bk) queueTownBubble(Math.round(pB.x * T) + 8, Math.round(pB.y * T) - 18 - peB * C.TOWN_ELEV_PX, bk, true);
+          }, 0, Math.floor(pB.x + 0.5));
+        }
+      }
       bouloDrawPush(ctx, draws);   // 2026-10-31 — le boulodrome : les cercles, les boules au sol (triées avec les personnages), le point
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
@@ -34645,8 +35142,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       canvas.removeEventListener("contextmenu", onCtxMenu);
       canvas.removeEventListener("wheel", onWheel);
     };
+    /* ⚠️⚠️ 2026-11-01 — `isHost` DANS LES DÉPENDANCES, ET C'EST LA SUCCESSION D'HÔTE QUI L'EXIGE (le piège « un effet monté une fois
+       voit pour toujours l'état de son premier rendu », noyau §4). Cette boucle lit `isHost` à chaque image — `if (isHost) updateResidents`,
+       `updateVisitors`, `updateWolves`, `updateGreg`, les ateliers, la montgolfière, la patinoire, le boulodrome… — et appelle des fonctions du
+       composant qui le lisent aussi (`hostSend` s'applique ses propres `apply` : sans lui, un hôte en `self:false` ne verrait plus ses actes).
+       Montée avec [phase, spritesReady] seulement, elle gardait l'`isHost` de son montage : un invité promu hôte (`claimAbandonedHost`,
+       la page du salon) ne simulait RIEN de ce qui vit ici, et la ferme se figeait sans une erreur pour ceux qui restaient — seuls les
+       minuteurs à la seconde, dont l'effet dépend déjà de `isHost`, repartaient. Vu en cherchant qui relance les habitants boulistes
+       quand l'hôte s'en va. Le remontage ne perd que des caches et la neige décorative ; le réveil du dormeur est réarmé en tête. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, spritesReady]);
+  }, [phase, spritesReady, isHost]);
 
   // Throttle du prompt (évite un setState par frame)
   const promptRef = useRef(null);
@@ -36165,6 +36670,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     for (const p of playersRef.current.values()) {
       if (p && Array.isArray(p.sit) && p.sit[0] === pr.x && p.sit[1] === pr.y) busy.add(p.sit[2] || 0);
     }
+    // 2026-11-01 (lot 4) — les boulistes assis sur les bancs du boulodrome (leur place se déduit : `BL.SIEGES`)
+    for (const c of BL.CLUB) { const st = (bouloRef.current.hab || {})[c.id], sg = BL.siegeDe(c.id); if (st && st.sit && sg.b.x === pr.x && sg.b.y === pr.y) busy.add(sg.seat); }
     const half = (C.TOWN_SEATS_PER_BENCH - 1) / 2;
     let best = null, bestD = Infinity;
     for (let k = 0; k < C.TOWN_SEATS_PER_BENCH; k++) {
@@ -41634,7 +42141,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "bouloOpen" ? L.bouloPromptOpen : promptKey.startsWith("bouloJoin:") ? L.bouloPromptJoin(promptKey.slice(10)) : promptKey === "bouloSnow" ? L.bouloSnow : promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "bouloOpen" ? L.bouloPromptOpen : promptKey.startsWith("bouloDefi:") ? L.bouloPromptDefi(promptKey.slice(10)) : promptKey.startsWith("bouloBusyHab:") ? L.bouloHabBusy(promptKey.slice(13)) : promptKey.startsWith("bouloJoin:") ? L.bouloPromptJoin(promptKey.slice(10)) : promptKey === "bouloSnow" ? L.bouloSnow : promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

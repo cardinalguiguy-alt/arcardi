@@ -13,11 +13,13 @@
 import { useEffect, useRef, useState } from "react";
 
 const GESTES = ["roulette", "demi", "plombee", "tir"];
+const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const Boule = ({ col, vide }) => <i className={"ferme-boulo-dot" + (vide ? " vide" : "")} style={{ background: vide ? "transparent" : col, borderColor: col }} />;
 
 export default function BouloHud({ getVM, L, act }) {
   const [vm, setVm] = useState(null);
   const [fmt, setFmt] = useState({ mode: "tat", cible: 13 });
+  const [dfi, setDfi] = useState({ mode: "tat", cible: 13 });   // lot 4 : le format d'un défi (gardé d'un défi à l'autre)
   const [sure, setSure] = useState(false);
   const raf = useRef(0), last = useRef(0);
   useEffect(() => {
@@ -51,6 +53,30 @@ export default function BouloHud({ getVM, L, act }) {
         <div className="row small">{fmt.mode === "solo" ? L.bouloSoloHint : L.bouloOpenHint(fmt.mode === "trois" ? 3 : 2)}</div>
         <div className="row">
           <button className="ferme-btn" onClick={() => act.open(vm.panel.k, fmt.mode, fmt.cible)}>{fmt.mode === "solo" ? L.bouloSoloBtn : L.bouloOpenBtn}</button>
+          <button className="ferme-btn ferme-btn-ghost" onClick={act.cancelPanel}>{L.bouloCancel}</button>
+        </div>
+      </div>
+    );
+  }
+  /* ── DÉFIER UN BOULISTE (lot 4, 2026-11-01 : E près d'un habitant libre) — le bilan contre lui, la prime, le format ── */
+  if (vm.defi) {
+    const d = vm.defi, set = (o) => setDfi((f) => ({ ...f, ...o }));
+    const mode = dfi.mode === "dbl" && !d.dblOk ? "tat" : dfi.mode;
+    return (
+      <div className="ferme-boulo-open panel">
+        <div className="ttl">🎯 {d.title}</div>
+        <div className="row small">{d.bilan}</div>
+        <div className="row small">{mode === "dbl" ? d.primeDbl : d.prime}</div>
+        <div className="row">
+          <button className={"ferme-btn" + (mode === "tat" ? "" : " ferme-btn-ghost")} onClick={() => set({ mode: "tat", cible: dfi.mode === "tat" ? dfi.cible : 13 })}>{L.bouloDefiTat}</button>
+          <button className={"ferme-btn" + (mode === "dbl" ? "" : " ferme-btn-ghost")} disabled={!d.dblOk} onClick={() => set({ mode: "dbl", cible: 7 })}>{cap(L.bouloFmt("dbl"))}</button>
+        </div>
+        <div className="row">
+          {[13, 7].map((c) => <button key={c} className={"ferme-btn" + (dfi.cible === c ? "" : " ferme-btn-ghost")} onClick={() => set({ cible: c })}>{L.bouloPts(c)}</button>)}
+        </div>
+        {mode === "dbl" && <div className="row small">{d.dbl} — {L.bouloDefiDblHint}</div>}
+        <div className="row">
+          <button className="ferme-btn" onClick={() => act.defi(d.hab, mode, dfi.cible)}>{L.bouloDefiBtn}</button>
           <button className="ferme-btn ferme-btn-ghost" onClick={act.cancelPanel}>{L.bouloCancel}</button>
         </div>
       </div>
@@ -107,7 +133,8 @@ export default function BouloHud({ getVM, L, act }) {
           </div>
         )}
         <div className="sub">
-          {s.coin ? L.bouloCoin(s.coin)
+          {s.spect && !gagnant && !s.coin ? (tourNom ? L.bouloTurnOf(tourNom, a.phase) + " · " : "") + s.spectTxt
+            : s.coin ? L.bouloCoin(s.coin)
             : s.pauseNames ? (s.closable ? L.bouloClosable(s.pauseNames.join(", ")) : L.bouloPause(s.pauseNames.join(", "), Math.ceil((s.pauseLeft || 0) / 60000)))
             : gagnant ? (a.fanny ? "🎉 " + L.bouloFanny + " " : "🏆 ") + L.bouloWins(gagnant.joueurs.map((j) => j.nom).join(" & "), gagnant.score, Math.max(...a.camps.filter((c, i) => i !== a.gagnant).map((c) => c.score)))
             : s.busy ? "…"
@@ -119,20 +146,21 @@ export default function BouloHud({ getVM, L, act }) {
       {s.visee && (
         <div className="ferme-boulo-gestes panel">
           {s.visee.etape === "geste" && GESTES.map((g, i) => <button key={g} className="ferme-btn" onClick={() => act.geste(g)}>{i + 1} · {L.bouloGeste(g)}</button>)}
-          {s.visee.etape !== "geste" && <span className="hint">{s.visee.etape === "donnee" ? (s.visee.geste === "placer" ? L.bouloStepPlacer : L.bouloStepDonnee) : L.bouloStepJauge}</span>}
+          {s.visee.etape !== "geste" && <span className="hint">{s.visee.etape === "donnee" ? (s.visee.geste === "placer" ? L.bouloStepPlacer : s.visee.touch ? L.bouloStepDonneeTouch : L.bouloStepDonnee) : L.bouloStepJauge}</span>}
+          {s.visee.etape === "donnee" && <button className="ferme-btn" onClick={act.valider}>{L.bouloValider}</button>}
           {s.visee.etape !== "geste" && s.visee.geste && s.visee.geste !== "but" && s.visee.geste !== "placer" && <span className="geste">{L.bouloGeste(s.visee.geste)}</span>}
           {(s.visee.etape === "jauge" || (s.visee.etape === "donnee" && GESTES.includes(s.visee.geste))) && <button className="ferme-btn ferme-btn-ghost" onClick={act.back}>{L.bouloBack}</button>}
           {s.visee.etape === "geste" && <span className="hint">{L.bouloStepGeste}</span>}
         </div>
       )}
-      {/* ── LA FIN, LA PAUSE, L'ABANDON ── */}
-      <div className="ferme-boulo-coin">
+      {/* ── LA FIN, LA PAUSE, L'ABANDON (pas pour qui regarde depuis un banc — lot 4) ── */}
+      {!s.spect && <div className="ferme-boulo-coin">
         {s.etat === "fin" && <button className="ferme-btn" onClick={() => act.revanche(s.k)}>{L.bouloRevanche}</button>}
         {(s.etat === "fin" || s.closable) && <button className="ferme-btn ferme-btn-ghost" onClick={() => act.close(s.k)}>{L.bouloClose}</button>}
         {s.etat === "jeu" && !s.closable && (sure
           ? <><button className="ferme-btn" onClick={() => { setSure(false); act.leave(s.k); }}>{L.bouloAbandonSure}</button><button className="ferme-btn ferme-btn-ghost" onClick={() => setSure(false)}>{L.bouloCancel}</button></>
           : <button className="ferme-btn ferme-btn-ghost" onClick={() => setSure(true)}>{s.mode === "solo" ? L.bouloStopSolo : L.bouloAbandon}</button>)}
-      </div>
+      </div>}
     </>
   );
 }

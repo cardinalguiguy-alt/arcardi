@@ -89,6 +89,9 @@ export default function AuditTmpPage() {
     installHelpers();
     const q = new URLSearchParams(window.location.search);
     setWho({ p: q.get("p") === "2" ? 2 : 1, room: q.get("room") || "audit-room" });
+    // 2026-11-01 — LA SUCCESSION D'HÔTE, comme la page du salon la fait (`claimAbandonedHost` puis `isHost` vrai) : `__promote()` chez
+    // l'invité, après avoir retiré l'hôte (`window.parent.A.remove()` dans `audit-duo`).
+    window.__promote = () => setWho((w) => (w ? { ...w, promoted: true } : w));
   }, []);
   if (!who) return null;
   const players = [
@@ -102,7 +105,7 @@ export default function AuditTmpPage() {
       room={{ id: who.room }}
       me={me}
       players={who.p === 2 ? players : [players[0]]}
-      isHost={who.p === 1}
+      isHost={who.p === 1 || !!who.promoted}
       savedCode="XXXX"
     />
   );

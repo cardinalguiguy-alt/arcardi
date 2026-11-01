@@ -12,7 +12,7 @@
    ⚠️ LE FAUX CANEVAS DES BANCS IGNORE `setTransform` : les bancs passent un cran explicite (`k`) et un repère d'écran.
    ========================================================================== */
 import { PETANQUE } from "./petanque.mjs";
-import { drawPixelText } from "./pixelFont.mjs";
+import { drawPixelText, pixelTextWidth } from "./pixelFont.mjs";
 
 const PX_M = PETANQUE.PX_M;
 const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
@@ -167,6 +167,72 @@ export function dessinerPoints(ctx, R, wx, wy, txt, couleur, alpha) {
   ctx.save(); if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = alpha;
   try { drawPixelText(ctx, mk, txt, R.sx(wx), R.sy(wy) - 4 * R.k, Math.max(1, R.k - 1), couleur, "#2a1a10"); } catch (e) { /* hors navigateur */ }
+  ctx.restore();
+}
+
+/* ── 2026-11-01 (lot 5) — LA MESURE ──
+   Le boîtier rouge du mètre posé sur le cochonnet, le ruban jaune gradué qui se déroule jusqu'au BORD de la première boule (sa cote
+   apparaît, à sa couleur), puis de la seconde (le premier ruban reste en retrait) ; les deux cotes tiennent, puis tout s'efface. `M` :
+   { jx, jy (le cochonnet), a, b : { wx, wy, txt, col } , centre : un texte au cochonnet ou null (l'égalité) } en px du monde ; `t` :
+   les millisecondes depuis le début ; la durée est `MESURE_MS`. Aucune logique de jeu ici : le jeu calcule les cotes. */
+export const MESURE_MS = 2600;
+const RUBAN = "#e9c53a", RUBAN_OMBRE = "#8a6a10", BOITIER = "#b0301e", BOITIER_BORD = "#2a1a10";
+function ruban(ctx, R, x0, y0, x1, y1, f, alpha) {
+  const k = R.k, ep = Math.max(1, Math.round(k / 2)), L = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
+  if (L < 0.5 || f <= 0) return;
+  const n = Math.max(1, Math.round(L * f)), pas = 0.1 * PX_M * k;   // une graduation tous les 10 cm
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i <= n; i++) {
+    const u = i / L, x = Math.round(x0 + (x1 - x0) * u - ep / 2), y = Math.round(y0 + (y1 - y0) * u - ep / 2);
+    ctx.fillStyle = pas >= 3 && i > 0 && Math.round(i % pas) === 0 ? RUBAN_OMBRE : RUBAN;
+    ctx.fillRect(x, y, ep, ep);
+  }
+}
+export function dessinerMesure(ctx, R, M, t) {
+  if (!M || t < 0 || t > MESURE_MS) return;
+  const k = R.k, fade = t > MESURE_MS - 300 ? (MESURE_MS - t) / 300 : 1;
+  const jx = R.sx(M.jx), jy = R.sy(M.jy), rBut = diamBut(k) / 2, rB = diamBoule(k) / 2;
+  // les extrémités : du bord du cochonnet au bord de la boule (la cote est une distance de bord à bord)
+  const bout = (q) => {
+    const x = R.sx(q.wx), y = R.sy(q.wy), dx = x - jx, dy = y - jy, d = Math.sqrt(dx * dx + dy * dy) || 1;
+    return [jx + (dx / d) * rBut, jy + (dy / d) * rBut, x - (dx / d) * rB, y - (dy / d) * rB];
+  };
+  const A = bout(M.a), B = bout(M.b);
+  const fa = Math.max(0, Math.min(1, (t - 150) / 500)), fb = Math.max(0, Math.min(1, (t - 1150) / 500));
+  ctx.save(); if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ruban(ctx, R, A[0], A[1], A[2], A[3], fa, (t > 1150 ? 0.4 : 1) * fade);
+  ruban(ctx, R, B[0], B[1], B[2], B[3], fb, fade);
+  /* le boîtier, posé à côté du cochonnet, du côté opposé aux boules (il apparaît d'abord) : un vrai mètre de poche, rouge, son
+     bouton blanc, sa sortie de ruban tournée vers le cochonnet */
+  ctx.globalAlpha = Math.min(1, t / 150) * fade;
+  const mx = (A[2] + B[2]) / 2 - jx, my = (A[3] + B[3]) / 2 - jy, md = Math.sqrt(mx * mx + my * my) || 1;
+  const s = Math.max(4, Math.round(2.2 * k)), cx = jx - (mx / md) * (rBut + s * 0.75), cy = jy - (my / md) * (rBut + s * 0.75);
+  const bx = Math.round(cx - s / 2), by = Math.round(cy - s / 2), pt = Math.max(1, Math.round(k / 3));
+  ctx.fillStyle = BOITIER_BORD; ctx.fillRect(bx - 1, by - 1, s + 2, s + 2);
+  ctx.fillStyle = BOITIER; ctx.fillRect(bx, by, s, s);
+  ctx.fillStyle = "#7a1c12"; ctx.fillRect(bx, by + s - pt, s, pt);                      // le dessous, dans l'ombre
+  ctx.fillStyle = "#f2ece0"; ctx.fillRect(Math.round(cx - pt / 2), Math.round(cy - pt / 2) - pt, pt + 1, pt + 1);   // le bouton
+  ctx.restore();
+  /* LES COTES, SUR UNE PETITE ARDOISE AU-DESSUS DU COCHONNET — pas au-dessus de chaque boule : celles qu'on mesure sont collées au
+     cochonnet, donc côte à côte, et leurs deux cotes se chevauchaient (vu en jeu, 2026-11-01). Une ligne par camp, une pastille à sa
+     couleur, celle qui tient le point en haut ; l'égalité dessous. */
+  const sc = Math.max(1, k - 1), lh = 9 * sc, fa2 = Math.max(0, Math.min(1, (t - 650) / 200)), fb2 = Math.max(0, Math.min(1, (t - 1650) / 200));
+  if (fa2 <= 0) return;
+  const lignes = [[M.a, fa2], [M.b, fb2]], tw = (x) => pixelTextWidth(x) * sc;
+  const larg = Math.max(...lignes.map(([q]) => tw(q.txt)), M.centre ? tw(M.centre) : 0) + 5 * sc + 6;
+  const H = lh * (M.centre && t > 1750 ? 3 : 2) + 4, px0 = Math.round(jx - larg / 2), py0 = Math.round(jy - rBut - 4 * k - H);
+  ctx.save(); if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 0.88 * fa2 * fade;
+  ctx.fillStyle = "#2b2a26"; ctx.fillRect(px0, py0, larg, H);
+  ctx.fillStyle = "#6b5233"; ctx.fillRect(px0, py0 - 1, larg, 1); ctx.fillRect(px0, py0 + H, larg, 1); ctx.fillRect(px0 - 1, py0, 1, H); ctx.fillRect(px0 + larg, py0, 1, H);
+  lignes.forEach(([q, f], i) => {
+    if (f <= 0) return;
+    const y = py0 + 2 + i * lh;
+    ctx.globalAlpha = f * fade;
+    ctx.fillStyle = q.col; ctx.fillRect(px0 + 2 + sc, y + 3 * sc, 2 * sc + 1, 2 * sc + 1);
+    try { drawPixelText(ctx, mk, q.txt, px0 + 4 * sc + 4 + tw(q.txt) / 2, y + 7 * sc, sc, "#f6f1e2", null); } catch (e) { /* hors navigateur */ }
+  });
+  if (M.centre && t > 1750) { ctx.globalAlpha = fade; try { drawPixelText(ctx, mk, M.centre, px0 + larg / 2, py0 + 2 + 2 * lh + 7 * sc, sc, "#f2c23e", null); } catch (e) { /* hors navigateur */ } }
   ctx.restore();
 }
 
