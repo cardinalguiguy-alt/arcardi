@@ -11,11 +11,13 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU) ; LOT 5 : LES SONS, LA MESURE
+### 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU) ; LOT 5 : LES SONS, LA MESURE ; LE LÂCHER REFAIT
 
 1. **Boulodrome, lot 4 fait** (ses 19 verdicts, `docs/PROJETS.md` §11 ; le casting est le mien) : `bouloBot.js`, `boulistes.js` (purs),
    la doublette dans `bouloJeu.js`, le bloc « LOT 4 » de FermeGame.js ; les sons (`sonBoules.js`) et la mesure du lot 5.
    `verify-boulo-bot` 49/49, vu en jeu seul et à deux (la nuit, la pluie, la neige comprises). Au doigt, la visée se pose puis se valide en deux temps. À juger : `docs/A-JUGER.md` (lots 3 et 4).
+   **Le lâcher refait sur son premier essai** (la jauge était cachée sous son nom) : le point de chute va et vient sur un rail au sol, on lâche
+   dans l'anneau doré, un mot suit (« Pile ! ») ; difficulté inchangée. `verify-boulo-jeu` 34/34.
 2. **La succession d'hôte figeait la ferme** (la boucle de rendu gardait l'`isHost` de son montage : un invité promu ne simulait rien) :
    corrigé, vu au harnais ; à voir en vrai à deux (l'hôte ferme son onglet). Et le verger refusait une case arrosée (`C.G_SOIL` fantôme).
 3. **Notés pour plus tard** : le réseau « instantané, sans limite de messages » (`docs/PROJETS.md` §13, mesuré : ≈ 30 h de ferme à deux par

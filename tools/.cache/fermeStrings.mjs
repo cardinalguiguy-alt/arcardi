@@ -5190,6 +5190,7 @@ export const FERME_STR = {
       townPlaceEast: "🏗️ Valley Town — l'allée de l'est (le chantier)",
       townCourt: "⚖️ Valley Town — le tribunal",
       townHall: "🏛️ Valley Town — l'hôtel de ville (perron)",
+      townBoulo: "🎯 Valley Town — le boulodrome",
       townChurch: "⛪ Valley Town — l'église (parvis)",   // 2026-09-20 : le sprite bitmap n'avait aucun arrêt direct
       townBelvedere: "🔭 Valley Town — le belvédère",
       townBoutique: "👗 Valley Town — la Haute-Ville",   // zip 427
@@ -5371,7 +5372,8 @@ export const FERME_STR = {
     bouloTurnOf: (name, phase) => (phase === "but" ? `${name} lance le cochonnet.` : phase === "placer" ? `${name} pose le cochonnet.` : `Au tour de ${name}.`),
     bouloGeste: (g) => ({ roulette: "Roulette", demi: "Demi-portée", plombee: "Plombée", tir: "Tir" }[g] || g),
     bouloStepGeste: "Choisis ton geste (1 à 4).", bouloStepDonnee: "Vise : promène le pointeur sur la piste et clique (ou flèches, puis Entrée).",
-    bouloStepPlacer: "Clique où poser le cochonnet.", bouloStepJauge: "Espace, clic ou toucher : lâche sur la marque.", bouloBack: "Retour (Échap)",
+    bouloStepPlacer: "Clique où poser le cochonnet.", bouloStepJauge: "Le point de chute va et vient sur son rail : clique (ou Espace) quand il passe dans l'anneau doré.",
+    bouloVerdict: { pile: "Pile !", bien: "Bien", court: "Court", long: "Long", tropCourt: "Trop court", tropLong: "Trop long" }, bouloBack: "Retour (Échap)",
     bouloWins: (name, a, b) => `${name} ${name.includes(" & ") ? "gagnent" : "gagne"}, ${a} à ${b}.`, bouloFanny: "Fanny !",   // lot 4 : une équipe de doublette gagne au pluriel
     bouloRevanche: "Revanche", bouloClose: "Fermer la partie", bouloAbandon: "Abandonner", bouloAbandonSure: "Abandonner (sans vainqueur)", bouloStopSolo: "Arrêter",
     bouloPause: (names, min) => `En pause : ${names} a quitté la ville (encore ${min} min).`,
@@ -5384,6 +5386,8 @@ export const FERME_STR = {
     // « comiques, et même en anglais, avec des expressions du sud de la France » ({v} : tes victoires contre lui, {d} : tes défaites).
     bouloPromptDefi: (name) => `E : défier ${name}`,
     bouloValider: "Valider (Entrée)",
+    bouloDec: ",",   // lot 5 : le séparateur décimal des cotes de la mesure (« 12,4 cm »)
+    bouloEgalite: "égalité",
     bouloStepDonneeTouch: "Vise : touche la piste où la boule doit tomber, puis touche encore au même endroit (ou Valider).",
     bouloDefiTitle: (name) => `Une partie contre ${name} ?`,
     bouloDefiBilan: (name, v, d) => (v + d === 0 ? `Tu n'as encore jamais joué contre ${name}.` : `Contre ${name} : ${v} victoire${v > 1 ? "s" : ""}, ${d} défaite${d > 1 ? "s" : ""}.`),
@@ -5416,6 +5420,7 @@ export const FERME_STR = {
         beau: ["Pas mal. Pour un amateur.", "Hm. Joli."],
         depart: ["Bon, il fait nuit. À demain, et révisez.", "Je rentre. La soupe ne m'attendra pas."],
         cede: ["On finit la mène et on arrive. Patience, jeunesse.", "Deux minutes, on termine ici."],
+        mesure: ["Pas besoin de mètre, elle est à moi. … Bon, mesure, va.", "On mesure. Au millimètre, comme au cadastre."],
       },
       Mireille: {
         arrive: ["Bonjour bonjour ! Qui marque les points ? Moi, évidemment.", "J'ai apporté mon mètre. On ne sait jamais, avec Fernand."],
@@ -5434,6 +5439,7 @@ export const FERME_STR = {
         beau: ["Oh, très jolie, celle-là !", "Belle boule, je l'admets."],
         depart: ["Allez, à demain ! Et j'ai tout noté.", "Bonne nuit ! Fernand, tu ramènes les boules ?"],
         cede: ["On finit cette mène et on vient, promis !", "Une minute ! Je compte les points et j'arrive."],
+        mesure: ["Ah non, celle-là, on la mesure !", "Personne ne touche à rien : je sors mon mètre."],
       },
       Toinou: {
         arrive: ["Oh, il fait bon, hein ? Ça me rappelle le lac en 87…", "Salut la compagnie ! Je suis venu, mais je ne promets rien."],
@@ -5452,6 +5458,7 @@ export const FERME_STR = {
         beau: ["Oh, la belle boule ! Comme mon brochet de 87 !", "Bravo ! Ça, c'est joli !", "Té, regarde-moi ça, elle est au bouchon !"],
         depart: ["Bon, je rentre. Demain, je vous raconte le silure.", "Bonne nuit à tous ! Et méfiez-vous des galéjades."],
         cede: ["On arrive ! Le temps de finir et je suis là.", "Deux secondes, je ramasse et je viens !"],
+        mesure: ["On mesure ? Moi je dis qu'elle y est !", "Ça se joue à un cheveu… ou à une écaille."],
       },
     },
     // AUDIT 2026-10 (FIX-004) — l'interrupteur du prototype de dallage civique haute résolution (solHD.js).
@@ -7589,6 +7596,7 @@ export const FERME_STR = {
       townPlaceEast: "🏗️ Valley Town — the east lane (the works)",
       townCourt: "⚖️ Valley Town — the courthouse",
       townHall: "🏛️ Valley Town — the town hall (steps)",
+      townBoulo: "🎯 Valley Town — the boules ground",
       townChurch: "⛪ Valley Town — the church (forecourt)",
       townBelvedere: "🔭 Valley Town — the belvedere",
       townBoutique: "👗 Valley Town — Upper Town",
@@ -7762,7 +7770,8 @@ export const FERME_STR = {
     bouloTurnOf: (name, phase) => (phase === "but" ? `${name} throws the jack.` : phase === "placer" ? `${name} places the jack.` : `${name}'s turn.`),
     bouloGeste: (g) => ({ roulette: "Roll", demi: "Half-lob", plombee: "High lob", tir: "Shot" }[g] || g),
     bouloStepGeste: "Pick your throw (1 to 4).", bouloStepDonnee: "Aim: move the pointer over the pitch and click (or arrows, then Enter).",
-    bouloStepPlacer: "Click where to place the jack.", bouloStepJauge: "Space, click or tap: let go on the mark.", bouloBack: "Back (Esc)",
+    bouloStepPlacer: "Click where to place the jack.", bouloStepJauge: "The landing spot swings along its rail: click (or Space) as it passes through the gold ring.",
+    bouloVerdict: { pile: "Spot on!", bien: "Nice", court: "Short", long: "Long", tropCourt: "Way short", tropLong: "Way long" }, bouloBack: "Back (Esc)",
     bouloWins: (name, a, b) => `${name} ${name.includes(" & ") ? "win" : "wins"}, ${a} to ${b}.`, bouloFanny: "Fanny!",
     bouloRevanche: "Rematch", bouloClose: "Close the game", bouloAbandon: "Give up", bouloAbandonSure: "Give up (no winner)", bouloStopSolo: "Stop",
     bouloPause: (names, min) => `Paused: ${names} left town (${min} min left).`,
@@ -7775,6 +7784,8 @@ export const FERME_STR = {
     // French expressions (his note: "comic, even in English, with expressions from the south of France"). {v}: your wins, {d}: your losses.
     bouloPromptDefi: (name) => `E: challenge ${name}`,
     bouloValider: "Confirm (Enter)",
+    bouloDec: ".",
+    bouloEgalite: "tie",
     bouloStepDonneeTouch: "Aim: tap where the boule should land, then tap the same spot again (or Confirm).",
     bouloDefiTitle: (name) => `A game against ${name}?`,
     bouloDefiBilan: (name, v, d) => (v + d === 0 ? `You have never played ${name} yet.` : `Against ${name}: ${v} win${v === 1 ? "" : "s"}, ${d} loss${d === 1 ? "" : "es"}.`),
@@ -7807,6 +7818,7 @@ export const FERME_STR = {
         beau: ["Not bad. For an amateur.", "Hm. Nice."],
         depart: ["Right, it's dark. See you tomorrow — and practise.", "I'm off home. The soup won't wait for me."],
         cede: ["We'll finish this end and come over. Patience, youngster.", "Two minutes, we're finishing here."],
+        mesure: ["No need for a tape, it's mine. … Fine, measure it.", "We measure. To the millimetre, like a land survey."],
       },
       Mireille: {
         arrive: ["Hello, hello! Who's keeping score? Me, obviously.", "I brought my tape measure. You never know with Fernand."],
@@ -7825,6 +7837,7 @@ export const FERME_STR = {
         beau: ["Oh, a lovely one!", "Fine boule, I admit it."],
         depart: ["See you tomorrow! And I've written everything down.", "Good night! Fernand, will you carry the boules?"],
         cede: ["We'll finish this end and come, promise!", "One minute! I'll count the points and come over."],
+        mesure: ["Oh no, this one gets measured!", "Nobody touch a thing: I'm getting my tape measure."],
       },
       Toinou: {
         arrive: ["Lovely weather, eh? Reminds me of the lake back in '87…", "Hello, everyone! I came, but I promise nothing."],
@@ -7843,6 +7856,7 @@ export const FERME_STR = {
         beau: ["Oh, what a boule! Like my pike of '87!", "Bravo! Now that's pretty!", "Té, look at that, right on the jack!"],
         depart: ["Right, I'm off. Tomorrow I'll tell you about the catfish.", "Good night, all! And beware of tall tales."],
         cede: ["Coming! Let me finish and I'll be right there.", "Two seconds, I'll pick up and come!"],
+        mesure: ["Measure it? I say it's ours!", "It comes down to a hair… or a fish scale."],
       },
     },
     // AUDIT 2026-10 (FIX-004) — the switch of the high-resolution civic paving prototype (solHD.js).

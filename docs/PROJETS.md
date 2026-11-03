@@ -405,6 +405,12 @@ deux, salle, invitation, tours, pause et reprise, fin 7-6, revanche, abandon ; a
 **Pas fait / pas vu** (repris le 2026-11-01 : au doigt, un premier toucher pose la donnée et un second la valide ; le spectateur assis sur un
 banc a son ardoise et le cadre ×3 ; la nuit, la pluie — `lourd` lu à 3 — et la fermeture sous la neige vues au harnais) : le
 fondu enchaîné pas jugé à l'œil ; le bras du geste est fin à ×2 ; un vrai iPad ; une partie entière jouée à la main (fin testée à 6-6).
+**Le lâcher refait le 2026-11-01, sur son premier essai** (« on comprend pas quand lancer, il faudrait un timing parfait ») : la jauge au-dessus
+de la tête était CACHÉE sous son nom (cote de tête en dur, d'avant le trait simple) et ne disait pas ce que l'aiguille changeait. Elle n'existe
+plus : pendant le lâcher, le guide montre le VRAI point de chute de l'instant sur son RAIL (de « trop court » à « trop long », l'anneau doré au
+milieu), l'arc et la boule fantôme le suivent ; on lâche quand il passe dans l'anneau ; un mot suit (« Pile ! », « Bien », « Court »/« Long »,
+« Trop… »). Difficulté inchangée (périodes et `kL`/`kA` du banc §9, bots intacts) : on voit ce qu'on joue. `verify-boulo-jeu` 34/34 (le
+guide du lâcher ne ment pas : 0,0 mm de la chute simulée). À juger en jeu : la vitesse du point (inchangée), la lisibilité du rail à ×3.
 
 **Lot 4 — les habitants boulistes : ses 19 verdicts du 2026-11-01** (https://claude.ai/artifact/FjZkm6oWF1bGbDZs8vDRgd, base
 `verdicts/<id>`, `meta/fin` ; rien n'est codé). Le premier tour avait dit : boulistes à heures fixes, un niveau selon leur caractère, on en

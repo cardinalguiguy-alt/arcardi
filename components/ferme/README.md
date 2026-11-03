@@ -1,5 +1,18 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-01
 
+## 2026-11-01 (suite) — LES BOULES : LE LÂCHER SE LIT SUR LA PISTE (LA JAUGE SUR LA TÊTE N'EXISTE PLUS)
+
+Son premier essai : « le système de trajectoire est cool, comme au billard, mais on comprend pas quand lancer, il faudrait un timing
+parfait ». Joué au harnais : la jauge était dessinée… SOUS son nom (« la tête − 24 px », cote d'avant le trait simple, dont la tête est plus
+haute) — seule la pointe de l'aiguille dépassait. Refait plutôt que remonté : pendant le lâcher, `BJ.guide(…, err)` rend le VRAI point de
+chute de l'instant (le calcul de `petanque.preparer`) et sa course (`course`, de −1000 à +1000 ‰) ; `dessinerGuide` trace ce RAIL (pointillé
+pâle, un cran à chaque bout), le point de chute (l'ombre de la boule cerclée de craie) qui y va et vient, l'arc et la boule fantôme qui le
+suivent ; l'anneau doré, au milieu du rail, ne bouge pas. Au lâcher, un mot au-dessus de l'anneau (`BJ.verdictLacher` : « Pile ! » ≤ 50 ‰,
+« Bien » ≤ 180, « Court »/« Long », « Trop… » au-delà de 550), 1,4 s. `dessinerJauge` supprimée. Difficulté inchangée (mêmes périodes, même
+table, `bouloBot.errDe` intact). `verify-boulo-jeu` 34/34 (+2 : le guide du lâcher tombe à 0,0 mm de la simulation, l'anneau au milieu du
+rail ; les six mots), `verify-petanque` 83/83, `verify-boulo-bot` 49/49, `verify-strings` ; vu en jeu : cochonnet lâché « Pile ! »,
+roulette « Pile ! » finie à 20 cm, plombée lâchée en retard « Long ».
+
 ## 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU)
 
 Ses 19 verdicts du matin (`docs/PROJETS.md` §11 ; un écart : TROIS PERSONNAGES NEUFS plutôt que des habitants du roster) ; le casting est

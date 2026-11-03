@@ -59,7 +59,8 @@ longues vues de dos. Les détails ne sont plus à l'ordre du jour tant que le tr
 
 **À JOUER — LE BOULODROME, LOT 3 (2026-10-31)** : E au cercle de craie d'une piste (derrière la mairie) ; un entraînement seul, puis un
 tête-à-tête à deux (`docs/PROJETS.md` §11). À juger : le fondu vers ×3, le geste du lanceur (le bras est fin au cran 2), le guide (trop ou pas
-assez aidant ?), la jauge (sa vitesse), la durée d'une mène (les roulés sont en temps réel), l'ardoise, le placement des joueurs qui
+assez aidant ?), le LÂCHER refait le 2026-11-01 (le point de chute qui va et vient sur son rail, l'anneau doré, le mot « Pile ! » : se
+comprend-il sans explication ? sa vitesse ?), la durée d'une mène (les roulés sont en temps réel), l'ardoise, le placement des joueurs qui
 attendent. **Pas vu** : l'iPad réel (depuis le 2026-11-01 : un premier toucher pose la visée, un second au même endroit ou « Valider » lance —
 vu au harnais seulement), la nuit, le terrain lourd après la pluie, la fermeture sous la neige.
 

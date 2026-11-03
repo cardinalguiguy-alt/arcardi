@@ -2,8 +2,9 @@
    bouloJeuArt.js — LE BOULODROME, LOT 3 : CE QUI SE DESSINE PENDANT UNE PARTIE (2026-10-31)
    -----------------------------------------------------------------------------
    Les boules d'ACIER à BANDE de couleur, le cochonnet ORANGE, leurs ombres ; le cercle de craie ; le GUIDE de visée (l'arc
-   pointillé, l'anneau doré de la donnée, le roulé sur le plat, la boule fantôme) ; la JAUGE au-dessus du joueur ; l'ANNEAU de
-   craie du point ; le « +2 » de la fin de mène. Les verdicts : docs/PROJETS.md §11 (lot 3), maquettes sur le vrai sable de la page.
+   pointillé, l'anneau doré de la donnée, le roulé sur le plat, la boule fantôme) ; le LÂCHER, lu dans le guide (2026-11-01 : le
+   rail de la course, le point de chute qui y va et vient, le mot qui suit — la jauge au-dessus de la tête n'existe plus, elle
+   était cachée sous le nom du joueur) ; l'ANNEAU de craie du point ; le « +2 » de la fin de mène. Les verdicts : docs/PROJETS.md §11 (lot 3), maquettes sur le vrai sable de la page.
    ⚠️⚠️ TOUT SE POSE AU PIXEL D'ÉCRAN, PAS AU PIXEL D'ART (le premier tour l'a décidé : « 3 pixels du jeu, dessinées au pixel de
    l'écran pour rester nettes à ×3 »). Une boule de 3 px d'art agrandie au plus proche serait un carré de 9 × 9 ; dessinée à 9 px
    d'écran, c'est une sphère. L'appelant passe le `ctx` du monde (sa transformation) : on lit `getTransform()`, on convertit le
@@ -112,18 +113,30 @@ export function dessinerPoint(ctx, R, wx, wy) {
 }
 
 /** LE GUIDE : `g` = `bouloJeu.guide(…)` (mètres de la piste), `versMonde(mx, my)` → [wx, wy]. L'arc en points blancs (le vol,
-    hauteur comprise), l'anneau doré de la donnée, le roulé en pointillé au sol jusqu'à la boule fantôme (l'arrêt sur le plat). */
+    hauteur comprise), l'anneau doré de la donnée, le roulé en pointillé au sol jusqu'à la boule fantôme (l'arrêt sur le plat).
+    Pendant le lâcher (`g.course`), l'arc et la boule fantôme suivent le point de chute de l'instant, sur son rail. */
 export function dessinerGuide(ctx, R, g, versMonde, couleur, but) {
   if (!g) return;
   const k = R.k, dot = Math.max(1, Math.round(k / 2)), p = [0, 0];
   ctx.save(); if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (g.course) {
+    /* 2026-11-01 — LE RAIL DU LÂCHER : la course entière du point de chute (de « trop court » à « trop long »), un pointillé pâle
+       et serré, avec un cran à chaque bout ; l'anneau doré en est le milieu. On voit d'avance où le point va passer. */
+    const a = versMonde(g.course[0][0], g.course[0][1], [0, 0]), b = versMonde(g.course[1][0], g.course[1][1], [0, 0]);
+    const ax = R.sx(a[0]), ay = R.sy(a[1]), bx = R.sx(b[0]), by = R.sy(b[1]), Ls = Math.hypot(bx - ax, by - ay), n = Math.floor(Ls / (2 * dot + 1));
+    ctx.fillStyle = "rgba(255,252,240,0.6)";
+    for (let i = 0; i <= n; i++) { const f = n ? i / n : 0; ctx.fillRect(Math.round(ax + (bx - ax) * f - dot / 2), Math.round(ay + (by - ay) * f - dot / 2), dot, dot); }
+    ctx.fillStyle = "rgba(255,252,240,0.9)";
+    const tx = Ls ? -(by - ay) / Ls : 0, ty = Ls ? (bx - ax) / Ls : 0, h = 2 * k;
+    for (const [x, y] of [[ax, ay], [bx, by]]) for (let j = -h; j <= h; j += dot) ctx.fillRect(Math.round(x + tx * j - dot / 2), Math.round(y + ty * j - dot / 2), dot, dot);
+  }
   ctx.fillStyle = "rgba(255,252,240,0.92)";
   for (let i = 1; i < g.arc.length - 1; i++) {
     const a = g.arc[i], w = versMonde(a[0], a[1], p);
     ctx.fillRect(Math.round(R.sx(w[0]) - dot / 2), Math.round(R.sy(w[1]) - a[2] * PX_M * k - dot / 2), dot, dot);
   }
   if (g.arret) {
-    const d0 = versMonde(g.donnee[0], g.donnee[1], [0, 0]), d1 = versMonde(g.arret[0], g.arret[1], [0, 0]);
+    const c0 = g.chute || g.donnee, d0 = versMonde(c0[0], c0[1], [0, 0]), d1 = versMonde(g.arret[0], g.arret[1], [0, 0]);
     const L = Math.sqrt((d1[0] - d0[0]) ** 2 + (d1[1] - d0[1]) ** 2), n = Math.floor(L / 3);
     ctx.fillStyle = "rgba(255,252,240,0.7)";
     for (let i = 1; i < n; i++) { const f = i / n; ctx.fillRect(Math.round(R.sx(d0[0] + (d1[0] - d0[0]) * f) - dot / 2), Math.round(R.sy(d0[1] + (d1[1] - d0[1]) * f) - dot / 2), dot, dot); }
@@ -131,35 +144,13 @@ export function dessinerGuide(ctx, R, g, versMonde, couleur, but) {
   ctx.restore();
   const w = versMonde(g.donnee[0], g.donnee[1], [0, 0]);
   poser(ctx, spriteAnneau(Math.max(3, Math.round(1.6 * k)), Math.max(1, Math.round(k / 2)), "#f2c23e"), R.sx(w[0]), R.sy(w[1]));
+  if (g.course) {
+    // le point de chute de cet instant : l'ombre de la boule qui tombera là, cerclée de craie — plus petit que l'anneau doré, il s'y loge
+    const c = versMonde(g.chute[0], g.chute[1], [0, 0]), D = but ? diamBut(k) : diamBoule(k), om = spriteOmbre(D);
+    ctx.save(); ctx.globalAlpha *= 0.9; poser(ctx, om, R.sx(c[0]), R.sy(c[1])); ctx.restore();
+    poser(ctx, spriteAnneau(Math.max(2, Math.round(0.9 * k)), Math.max(1, Math.round(k / 3)), "#fffcf0"), R.sx(c[0]), R.sy(c[1]));
+  }
   if (g.arret) { const a = versMonde(g.arret[0], g.arret[1], [0, 0]); dessinerBoule(ctx, R, a[0], a[1], 0, couleur, but, 0.45); }
-}
-
-/** LA JAUGE, au-dessus du joueur (`wx`, `wy` : le haut de sa tête, px du monde) : un arc de bois clair, la marque dorée au milieu,
-    l'aiguille (`v` ∈ [−1, 1], la valeur de `petanque.jauge` ÷ 1000) qui va et vient. Court à gauche, long à droite — toujours le
-    même sens, ça s'apprend. */
-export function dessinerJauge(ctx, R, wx, wy, v) {
-  const k = R.k, Rr = 6 * k + 2, cx = Math.round(R.sx(wx)), cy = Math.round(R.sy(wy) - 3 * k) + Rr;
-  const fond = cached("j" + k, () => {
-    const D = 2 * Rr + 3, c = mk(D, Rr + 3), g = c.getContext("2d");
-    for (let j = 0; j < Rr + 3; j++) for (let i = 0; i < D; i++) {
-      const dx = i + 0.5 - D / 2, dy = j + 0.5 - (Rr + 1), d = Math.sqrt(dx * dx + dy * dy), a = Math.atan2(dx, -dy);
-      if (Math.abs(a) > 1.05 || dy > 0) continue;
-      const ep = Math.max(2, Math.round(k * 0.9));
-      if (d <= Rr + 1 && d > Rr + 1 - ep - 2) g.fillStyle = d > Rr + 1 - 1 || d <= Rr + 1 - ep - 1 ? "#3a2a1c" : "#efe2c2";
-      else continue;
-      if (Math.abs(a) < 0.07 && d > Rr + 1 - ep - 1 && d <= Rr) g.fillStyle = "#d6a024";
-      g.fillRect(i, j, 1, 1);
-    }
-    return c;
-  });
-  ctx.save(); if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(fond, cx - Math.floor(fond.width / 2), cy - Rr - 1);
-  const a = Math.max(-1, Math.min(1, v)) * 1.0, ex = Math.sin(a) * (Rr - 1), ey = -Math.cos(a) * (Rr - 1), n = Math.ceil(Rr);
-  ctx.fillStyle = "#7a1f14";
-  const t = Math.max(1, Math.round(k / 2));
-  for (let i = Math.round(n * 0.25); i <= n; i++) ctx.fillRect(Math.round(cx + (ex * i) / n - t / 2), Math.round(cy + (ey * i) / n - t / 2), t, t);
-  ctx.fillStyle = "#3a2a1c"; ctx.fillRect(cx - t, cy - t, 2 * t, 2 * t);
-  ctx.restore();
 }
 
 /** Le « +2 » de la fin de mène, au-dessus de la boule qui marque (pixels de la police du jeu, à l'échelle du cran). */

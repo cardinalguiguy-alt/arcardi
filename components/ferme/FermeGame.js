@@ -13677,9 +13677,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     v.etape = "jauge"; v.t0 = performance.now();
   }
   function bouloLacher() {
-    const v = bouloRef.current.visee;
+    const R = bouloRef.current, v = R.visee;
     if (!v || v.etape !== "jauge") return;
-    bouloSendThrow(PQ.jauge(performance.now() - v.t0, PQ.GESTES[v.geste].jauge));
+    const err = PQ.jauge(performance.now() - v.t0, PQ.GESTES[v.geste].jauge), w = BJ.mmVersMonde(v.k, v.donnee.x, v.donnee.y);
+    R.verdict = { mot: BJ.verdictLacher(err), wx: w[0], wy: w[1], t0: performance.now() };   // le mot qui suit (dessiné par bouloDrawPost)
+    bouloSendThrow(err);
   }
   function bouloSendThrow(err) {
     const R = bouloRef.current, v = R.visee, mi = bouloMine();
@@ -13939,16 +13941,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (fx.marque.points > 0) BJA.dessinerPoints(ctx, Rp, w[0], w[1] - tt * 4, "+" + fx.marque.points, BJ.couleurDe(se, pid), Math.min(1, (1 - tt) * 4));
       }
     }
+    /* 2026-11-01 — LE MOT DU LÂCHER (« Pile ! », « Court »…), au-dessus de l'anneau doré, qui monte et s'efface : il apprend ce que
+       la jauge veut dire. Le mien seulement — les autres voient la boule. */
+    const vd = R.verdict;
+    if (vd && nowP - vd.t0 < BJK.VERDICT_MS) {
+      const tt = (nowP - vd.t0) / BJK.VERDICT_MS;
+      BJA.dessinerPoints(ctx, Rp, vd.wx, vd.wy - 3 - tt * 5, L.bouloVerdict[vd.mot], BJK.VERDICT_COL[vd.mot], Math.min(1, (1 - tt) * 3));
+    } else if (vd) R.verdict = null;
     const v = R.visee, mi = bouloMine(), m = meRef.current;
     if (!v || !mi || !m) return;
     const mene = PQ.avancer(mi.sess.partie).mene, col = BJ.couleurDe(mi.sess, me.id);
     if (v.etape !== "geste" && v.donnee) {
+      /* Le lâcher se lit DANS le guide (2026-11-01) : pendant la jauge, l'arc, le point de chute et la boule fantôme suivent l'aiguille
+         sur leur rail (`BJ.guide` avec l'erreur de cet instant) ; l'anneau doré, la cible, ne bouge pas. Plus de jauge sur la tête. */
+      const err = v.etape === "jauge" ? PQ.jauge(nowP - v.t0, PQ.GESTES[v.geste].jauge) : null;
       if (v.geste === "placer") { const w = BJ.mmVersMonde(mi.k, v.donnee.x, v.donnee.y); BJA.dessinerBoule(ctx, Rp, w[0], w[1], 0, null, true, 0.6); }
-      else BJA.dessinerGuide(ctx, Rp, BJ.guide(mene, v.geste, v.donnee, v.geste === "but" ? bouloLourdNow() : mene.lourd), (x, y, o) => BJ.versMonde(mi.k, x, y, o), col, v.geste === "but");
-    }
-    if (v.etape === "jauge") {
-      const head = C.footY(m.y) * C.TILE - 24 + (bouloMyPosture() === 1 ? 5 : 0);
-      BJA.dessinerJauge(ctx, Rp, C.footX(m.x) * C.TILE, head - 2, PQ.jauge(nowP - v.t0, PQ.GESTES[v.geste].jauge) / 1000);
+      else BJA.dessinerGuide(ctx, Rp, BJ.guide(mene, v.geste, v.donnee, v.geste === "but" ? bouloLourdNow() : mene.lourd, err), (x, y, o) => BJ.versMonde(mi.k, x, y, o), col, v.geste === "but");
     }
   }
   /* LA VUE DE L'ÉCRAN DE LA PARTIE (`BouloHud`, ~20 images/s). */

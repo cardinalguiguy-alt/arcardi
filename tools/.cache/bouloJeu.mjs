@@ -43,6 +43,8 @@ export const BJ = {
   BORD_M: 1.2,                                     // … et autour de la piste, pour rejoindre (m)
   PAS_M: 0.1,                                      // la donnée au clavier : 10 cm par flèche (×5 avec Maj)
   REVANCHE_MS: 90 * 1000,                          // une partie finie, sans revanche, se ferme
+  VERDICT_MS: 1400,                                // 2026-11-01 — le mot du lâcher au-dessus de l'anneau doré
+  VERDICT_COL: { pile: "#f2c23e", bien: "#a8dc6e", court: "#f3eee0", long: "#f3eee0", tropCourt: "#ec8a5e", tropLong: "#ec8a5e" },
 };
 /* 2026-11-01 (lot 4) — "dbl", LA DOUBLETTE, n'existe qu'AVEC DES HABITANTS (son verdict : « doublette complétée jusqu'à deux contre
    deux ») : elle s'ouvre en défiant un bouliste (`hoteDefi`), jamais au cercle. Ses équipes sont dans `sess.equipes`. */
@@ -150,7 +152,7 @@ export function placeDe(sess, partie, pid) {
 /* ── LE GUIDE DE VISÉE (ce que fait le GESTE sur sol plat ; le relief n'est pas compté) ──
    Rend { main, donnee, arc: [[x, y, z]…] (m, repère de la piste), arret: [x, y] | null } : l'arc du vol de la main à la donnée,
    puis l'arrêt sur le plat (`arretPlat`). Un dessin, pas de la physique : la règle n°2 de `petanque.js` ne s'y applique pas. */
-export function guide(m, geste, donnee, lourd = 0) {
+export function guide(m, geste, donnee, lourd = 0, err = null) {
   const g = PT.GESTES[geste];
   if (!g || !donnee) return null;
   const cx = m.cercle.x / 1000, cy = m.cercle.y / 1000, Dx = donnee.x / 1000, Dy = donnee.y / 1000;
@@ -158,15 +160,33 @@ export function guide(m, geste, donnee, lourd = 0) {
   const dC = Math.sqrt(ux * ux + uy * uy);
   if (dC < P.DONNEE_MIN) return null;
   ux /= dC; uy /= dC;
-  const hx = cx + ux * P.BRAS, hy = cy + uy * P.BRAS, d = dC - P.BRAS;
+  const hx = cx + ux * P.BRAS, hy = cy + uy * P.BRAS, d0 = dC - P.BRAS;
+  /* 2026-11-01 — LE LÂCHER SE LIT DANS LE GUIDE. Premier essai de Guillaume : « on comprend pas quand lancer, il faudrait un timing
+     parfait ». La jauge au-dessus de la tête était cachée sous son nom (la tête du trait simple est plus haute que celle que la jauge
+     visait), et rien ne disait ce que l'aiguille changeait. Pendant le lâcher (`err` donné, en ‰), le guide montre donc le VRAI point
+     de chute à cet instant — exactement le calcul de `petanque.preparer` (en long et en travers de la direction visée) — et la course
+     entière (`course` : la chute à −1000 et à +1000). Le point va et vient sur ce rail en passant par l'anneau doré : on lâche quand
+     il y est. La difficulté ne bouge pas (même période, même table `kL`/`kA`) : on voit ce qu'on joue, on ne le joue pas mieux. */
+  const chute = (e) => [Dx + ux * e * g.kL * d0 - uy * e * g.kA * d0, Dy + uy * e * g.kL * d0 + ux * e * g.kA * d0];
+  const c = err === null ? [Dx, Dy] : chute(err / 1000);
+  let fx = c[0] - hx, fy = c[1] - hy;
+  const d = Math.sqrt(fx * fx + fy * fy);
+  fx /= d; fy /= d;
   const vz0 = Math.sqrt(2 * P.G * (g.H - g.h0)), T = vz0 / P.G + Math.sqrt((2 * g.H) / P.G);
   const n = Math.max(6, Math.round(d / 0.32)), arc = [];
   for (let i = 0; i <= n; i++) {
     const f = i / n, t = f * T;
-    arc.push([hx + ux * d * f, hy + uy * d * f, Math.max(0, g.h0 + vz0 * t - (P.G * t * t) / 2)]);
+    arc.push([hx + fx * d * f, hy + fy * d * f, Math.max(0, g.h0 + vz0 * t - (P.G * t * t) / 2)]);
   }
   const L = geste === "placer" ? 0 : PT.arretPlat(geste, d, lourd);
-  return { main: [hx, hy], donnee: [Dx, Dy], arc, arret: geste === "placer" ? null : [hx + ux * L, hy + uy * L] };
+  return { main: [hx, hy], donnee: [Dx, Dy], chute: c, course: err === null ? null : [chute(-1), chute(1)], arc,
+           arret: geste === "placer" ? null : [hx + fx * L, hy + fy * L] };
+}
+/** Le mot qui suit le lâcher, au-dessus de l'anneau doré (2026-11-01) : il apprend ce que la jauge veut dire. `err` en ‰ ;
+    négatif, court. « pile » ≤ 5 % de la course (≈ 20 ms d'avance ou de retard sur la marque, à la roulette), « bien » ≤ 18 %. */
+export function verdictLacher(err) {
+  const a = Math.abs(err);
+  return a <= 50 ? "pile" : a <= 180 ? "bien" : a <= 550 ? (err < 0 ? "court" : "long") : err < 0 ? "tropCourt" : "tropLong";
 }
 /** La donnée par défaut à l'ouverture de la visée : celle qui, sur le plat, arrête la boule SUR le but (le tir : le but lui-même) ;
     pour lancer le but, celle qui le pose à 8 m dans le sens du jeu (ou au plus long qui tient : 6 m au moins, 1,5 m du bout) ;

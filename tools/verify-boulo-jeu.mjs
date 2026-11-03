@@ -155,6 +155,27 @@ function rejoueEcran(partie, pid, input) {
     if (e > pire) pire = e;
   }
   ok(pire < 0.03, "sur le plat, sans erreur de jauge, la boule s'arrête sur la boule fantôme du guide", "écart max " + (pire * 100).toFixed(1) + " cm");
+  /* 2026-11-01 — LE LÂCHER SE LIT DANS LE GUIDE : à toute erreur de jauge, le point de chute montré est celui de la simulation, et
+     la boule fantôme, l'arrêt sur le plat ; la course va de −1000 à +1000 et passe par l'anneau doré (la donnée) en son milieu. */
+  let chute = 0, arret = 0, milieu = 0;
+  for (const geste of ["roulette", "demi", "plombee", "tir"]) for (const err of [-1000, -620, -180, 0, 90, 400, 1000]) {
+    const s = PT.nouvellePartie({ mode: "solo", cible: 13, camps: [["A"]], graine: 0, piste: "plat" });
+    s.mene.but = { x: 3600, y: 14000 };
+    const input = { coup: 0, geste, donnee: PT.donneePour(geste, s.mene.cercle, { x: 1700, y: 7500 }, 0), err };
+    const g = BJ.guide(s.mene, geste, input.donnee, 0, err), p = PT.preparer(s, "A", input);
+    if (p.raison) { chute = 99; continue; }
+    const v = p.sim.vols[0];
+    chute = Math.max(chute, Math.hypot(v.x0 + v.vx * v.t1 - g.chute[0], v.y0 + v.vy * v.t1 - g.chute[1]));
+    const r = PT.jouer(s, "A", input), q = r.s.mene.boules[r.s.mene.boules.length - 1];
+    if (!q.mort) arret = Math.max(arret, Math.hypot(q.x / 1000 - g.arret[0], q.y / 1000 - g.arret[1]));
+    const mx = (g.course[0][0] + g.course[1][0]) / 2, my = (g.course[0][1] + g.course[1][1]) / 2;
+    milieu = Math.max(milieu, Math.hypot(mx - g.donnee[0], my - g.donnee[1]));
+  }
+  ok(chute < 0.002 && arret < 0.03 && milieu < 0.001, "pendant le lâcher, le guide ne ment pas : le point de chute est celui de la simulation, la boule fantôme son arrêt sur le plat, l'anneau doré le milieu du rail",
+    "chute " + (chute * 1000).toFixed(1) + " mm, arrêt " + (arret * 100).toFixed(1) + " cm, milieu " + (milieu * 1000).toFixed(2) + " mm");
+  ok(BJ.verdictLacher(0) === "pile" && BJ.verdictLacher(-50) === "pile" && BJ.verdictLacher(120) === "bien" && BJ.verdictLacher(-300) === "court" &&
+     BJ.verdictLacher(300) === "long" && BJ.verdictLacher(-800) === "tropCourt" && BJ.verdictLacher(1000) === "tropLong" && Object.keys(BJ.BJ.VERDICT_COL).length === 6,
+    "le mot du lâcher : pile, bien, court / long, trop court / trop long, chacun sa couleur");
 }
 
 // 7. Le point et le « +n »

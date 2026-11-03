@@ -41,12 +41,11 @@ for (const [id, x, y] of boules) { const q = w(x, y); BJA.dessinerBoule(ctx, R, 
 const pt = w(2100, 8950); BJA.dessinerPoint(ctx, R, pt[0], pt[1]);
 // une boule en vol (une plombée, à 1,6 m de haut) et son ombre
 const fv = w(1600, 6200); BJA.dessinerBoule(ctx, R, fv[0], fv[1], 1.6, BJ.couleurDe(sess, "C"), false);
-// le guide complet d'une demi-portée, et la jauge au-dessus du lanceur
+// le guide complet d'une demi-portée PENDANT LE LÂCHER (2026-11-01) : le rail de la course, le point de chute un peu long (+35 %),
+// l'anneau doré de la donnée au milieu du rail
 const m = { cercle, but, lourd: 0 };
-const g = BJ.guide(m, "demi", BJ.donneeDefaut(m, "demi"), 0);
+const g = BJ.guide(m, "demi", BJ.donneeDefaut(m, "demi"), 0, 350);
 BJA.dessinerGuide(ctx, R, g, (x, y, o) => BJ.versMonde(k, x, y, o), BJ.couleurDe(sess, "A"), false);
-const head = w(cercle.x, cercle.y);
-BJA.dessinerJauge(ctx, R, head[0], head[1] - 22, 0.35);
 BJA.dessinerPoints(ctx, R, pt[0], pt[1] - 2, "+2", BJ.couleurDe(sess, "A"), 1);
 writePNG(path.join(ROOT, "tools", "out", "boulo-jeu.png"), out.px, W, H);
 const up = scale(out.px, W, H, 2);

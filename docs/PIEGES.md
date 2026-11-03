@@ -75,6 +75,10 @@ dépôt.
   autres endroits lisaient « la case sous ses pieds » avec le même décalage, si bien que les deux
   erreurs s'annulaient à peu près. *Corriger une moitié d'une paire d'erreurs qui se compensent
   casse ce qui marchait ;* les deux se corrigent dans le même geste, ou pas du tout.
+  ⚠️ **Même famille, côté dessin (2026-11-01)** : la jauge des boules se posait à « la tête − 24 px », une cote recopiée de l'ancien
+  personnage. Le trait simple l'a grandi : le NOM s'est posé dessus et la jauge a disparu, sans erreur, aucun banc ne la cherchant à
+  l'écran — le joueur lançait à l'aveugle. *Ce qui s'accroche à la tête lit la hauteur du sprite courant, et un repère de jeu vit là
+  où l'œil regarde déjà* (ici, sur la piste, dans le guide).
 - ⚠️⚠️ **UN SPRITE N'A PAS DE SENS INTERDIT, IL A UN SENS DESSINÉ** (2026-09-01). Une murette de
   42 px de large posée sur une file NORD-SUD couvre 2,6 cases pour une case de collision : vu en
   jeu, elle mange 0,8 case de sol praticable de chaque côté et le joueur passe DERRIÈRE un mur
