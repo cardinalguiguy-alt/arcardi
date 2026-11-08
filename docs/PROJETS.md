@@ -517,7 +517,12 @@ de l'invité affichés tout de suite puis confirmés ou défaits par l'hôte (ce
 centre (deux amis en Océanie et lui en Europe : l'hôte en Océanie). **Plan B** si le direct échoue souvent : regrouper les envois de l'hôte
 en un message par battement (de 8,5 à ≈ 4 /s, plus de messages jetés) — `components/ferme/SECURITE.md` §5 le décrivait déjà.
 
-## 14. La grande quête de l'étoile (les astéroïdes) : la rejouer pour voir comment elle tourne (dit le 2026-11-01, rien de fait)
+## 14. La grande quête de l'étoile (les astéroïdes) : la rejouer pour voir comment elle tourne (dit le 2026-11-01 ; AUDIT EN JEU FAIT LE 2026-11-07)
+
+➡️ **Rejouée de bout en bout le 2026-11-07 : 35 constats, dont 3 BLOQUANTS (la quête ne peut pas se finir sans menu dev), dans
+`docs/AUDIT-QUETE-2026-11.md`.** Verdicts rendus le soir même : les 21 « corriger » sont faits (les trois bloquants rejoués en jeu) ;
+reste à concevoir avec Guillaume LA FIN (baptême à trois noms, contestation et orage, foule à l'inauguration, départ : G9-G11), et le
+navire « magnifique » (M14) — voir le tableau en tête de l'audit.
 
 Sa phrase : « on retravaillera aussi la grande quête des astéroïdes pour vérifier comment elle tourne. » Point de départ :
 `components/ferme/QUETE.md` (l'AUTORITÉ du 2026-09-13 bis, D1–D15, et « ce qui reste codé mais n'a pas été vu en jeu ») ;

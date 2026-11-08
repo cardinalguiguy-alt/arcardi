@@ -37,6 +37,7 @@ import { townNoise, seasonOf } from "./fermeEngine";
 import { buildFaunaSprites } from "./fauneArt";
 import { paintWardrobe, paintFroufrou } from "./garderobeArt";
 import { lookHair, paintHair, paintBeard } from "./coiffureArt";
+import { drawPixelText, pixelTextWidth, pixelTextSupported } from "./pixelFont";   // 2026-11-08 (M14) — le nom du navire, peint en lettres d'or
 import * as PS from "./persoSimpleArt";   // 2026-10-31 — le TRAIT SIMPLE (S.getCharHD quand S.persoStyle === "simple")
 import * as HD from "./persoHdArt";   // 2026-10-23 — les joueurs en 32 × 48 (S.getCharHD)   // 2026-10-21 — le salon de coiffure   // 2026-10-21 — les vêtements de la Maison Garfield
 import * as PT from "./patin";   // 2026-10-05 (fin quater) : les couleurs et les lames du matériel de patin (pur)
@@ -13039,6 +13040,17 @@ export function buildSprites() {
     star:  "#dff6ff",
     glow:  [150, 232, 255],
     dark:  "#241a10",           // le cerne
+    /* 2026-11-08 (M14) — LE NAVIRE MAGNIFIQUE : un bois verni couleur miel (six virures), un bandeau de pavois bleu nuit semé
+       d'étoiles d'or, l'or des moulures, un fond cuivré sous une ligne de flottaison crème, des vitres qui s'allument la nuit. */
+    honey: ["#4a2a14", "#5e3719", "#74461f", "#8a5729", "#a06a34", "#b98042", "#cf9852"],
+    /* ⚠️ BLEU MARINE, PAS BLEU CANARD : un bleu tirant sur le cyan (#1f4a69) se confondait avec la lueur des FANTÔMES — le banc
+       les reconnaît à leur teinte (B − R > 45 ET G − R > 25), et le bandeau comptait pour un fantôme. Le marine garde le vert bas. */
+    band:  ["#0f1834", "#152246", "#1c2c5c", "#273d74"],
+    gold:  ["#7a5a1c", "#b08a34", "#dcb456", "#f6dc8c"],
+    copper:["#5a2416", "#743020", "#8e3e28", "#a85034"],
+    cream: ["#c9bc9a", "#e8dfc6"],
+    glass: ["#121a2a", "#2a3550", "#a8b8d2"],
+    warm:  "#ffd98a",
   };
   /* La boîte de dessin, DÉRIVÉE des constantes de jeu — jamais recopiée (§8). */
   const SHIP_W = () => C.STAR_SHIP_DRAW_W * 16;    // 144 px de référence
@@ -13130,185 +13142,259 @@ export function buildSprites() {
     }
   }
 
-  /* ── LE BORDÉ. Cinq virures, la lisse claire, la ligne de flottaison sombre. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-11-08 (M14) — LE NAVIRE MAGNIFIQUE. « Le bateau doit être MAGNIFIQUE : la récompense de la quête, l'élément central,
+     ║ le plus beau et remarquable, pas cheap » (Guillaume). Les cinq pièces sont redessinées ; la boîte, la quille, la ligne de
+     ║ pont et le ber ne bougent pas (la cale, la collision et les bancs les lisent).
+     ╚══════════════════════════════════════════════════════════════════════════
+     Ce qui fait « navire » et plus « barque » : un PAVOIS (le bordé monte au-dessus du pont) peint en bandeau bleu nuit semé
+     d'étoiles d'or — c'est le Bateau des Étoiles, il le porte sur le flanc —, un CHÂTEAU DE POUPE vitré, un BEAUPRÉ avec sa
+     figure de proue dorée, une ligne de flottaison crème sur un fond cuivré, des hublots cerclés de laiton ; un gréement avec
+     HUNE, mât de hune, deux vergues, haubans à enfléchures et une flamme en tête de mât ; trois voiles (grand-voile, hunier, foc).
+     ⚠️ La lumière vient d'en haut à gauche, comme partout ; les valeurs sont quantifiées en paliers (446). */
+  /* Le haut du pavois : huit pixels au-dessus du pont, plus haut au CHÂTEAU (poupe) et au gaillard (proue). */
+  const SHIP_CASTLE_X = 44;   // le château de poupe s'étend de l'étambot jusqu'ici
+  function shipRailY(x) {
+    const sm = (k) => { const c = Math.max(0, Math.min(1, k)); return c * c * (3 - 2 * c); };
+    // ⚠️ HUIT pixels de pavois : c'est la hauteur de la police pixel avec ses accents (« É » monte de deux rangées) — le nom s'y
+    // peint en lettres d'or (`drawStarShipName`)
+    return shipSheerY(x) - 8 - 10 * sm((SHIP_CASTLE_X - x) / 7) - 3 * sm((x - 112) / 8);
+  }
+  /* La ligne de flottaison (le haut du fond cuivré) : dix pixels au-dessus de la quille au milieu, moins aux extrémités. */
+  function shipWaterY(x) { return shipKeelY(x) - Math.max(3, 10 - 7 * Math.pow(Math.abs(shipT(x) - 0.48) * 2, 3)); }
+  const SHIP_PORTS = [52, 64, 76, 88, 100];       // les hublots, au milieu du bordé
+  const SHIP_STERN_WIN = [19, 26, 33];            // les fenêtres du château de poupe
+  const SHIP_BOWSPRIT = [143, 47];                // le bout du beaupré
+  const SHIP_MASTHEAD = [74, 4];                  // la pomme du grand mât (la foudre de la fête y tombe)
+  const SHIP_BELL = [114, 0];                     // le clocher, sur le gaillard (y calculé : voir `shipPartBell`)
+  /* Une petite étoile d'or à quatre branches, centrée (cx, cy), de rayon r (1 ou 2). */
+  function shipStar(g, u, cx, cy, r, cLight, cDark) {
+    shipR(g, u, cx, cy - r, 1, 2 * r + 1, cLight);
+    shipR(g, u, cx - r, cy, 2 * r + 1, 1, cLight);
+    if (cDark) { shipR(g, u, cx + 1, cy + 1, 1, 1, cDark); }
+  }
+  /* Une ligne d'un pixel, en escalier (les cordages). */
+  function shipLine(g, u, x0, y0, x1, y1, col, step) {
+    const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / (step || 1)));
+    for (let k = 0; k <= n; k++) shipR(g, u, x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, 1, 1, col);
+  }
+
+  /* ── LA COQUE (le bordé, le pavois, le château, le beaupré, la figure de proue, l'ancre). */
   function shipPartHull(g, u) {
-    const S = SHIP_PAL;
+    const S = SHIP_PAL, H = S.honey;
     for (let x = SHIP_X0; x <= SHIP_X1; x++) {
-      const y0 = shipSheerY(x), y1 = shipKeelY(x);
-      if (y1 - y0 < 2) continue;
-      const h = y1 - y0;
-      for (let y = Math.round(y0); y <= Math.round(y1); y++) {
-        /* ⚠️ LA VALEUR SE QUANTIFIE EN PALIERS (446) : un dégradé continu sur un
-           bordé fait une tache lisse, les paliers font des VIRURES. Six tons, le
-           clair en haut (la lumière du jeu vient d'en haut à gauche). */
-        const k = (y - y0) / h;
-        let ci = 5 - Math.min(5, Math.floor(k * 6.2));
-        if ((y - Math.round(y0)) % 5 === 4) ci = Math.max(0, ci - 2);   // le joint entre deux virures
-        shipR(g, u, x, y, 1, 1, S.wood[ci]);
+      const yr = Math.round(shipRailY(x)), yd = Math.round(shipSheerY(x)), yk = Math.round(shipKeelY(x)), yw = Math.round(shipWaterY(x));
+      if (yk - yd < 2) continue;
+      const tEnd = Math.min(1, Math.min(x - SHIP_X0, SHIP_X1 - x) / 10);   // les bouts de la coque s'arrondissent : plus sombres
+      // le pavois : bandeau bleu nuit, une arête claire en haut, sombre au pied
+      for (let y = yr; y <= yd; y++) {
+        const k = (y - yr) / Math.max(1, yd - yr);
+        shipR(g, u, x, y, 1, 1, S.band[k < 0.2 ? 3 : k > 0.8 ? 0 : (tEnd < 0.5 ? 1 : 2)]);
       }
-      // La lisse : deux rangées claires, puis le liseré d'or au-dessus.
-      shipR(g, u, x, y0, 1, 2, S.wood[5]);
-      shipR(g, u, x, y0 - 1, 1, 1, S.trim);
+      shipR(g, u, x, yr - 1, 1, 1, S.gold[2]);           // la lisse dorée
+      shipR(g, u, x, yr - 2, 1, 1, S.gold[1]);
+      shipR(g, u, x, yd + 1, 1, 1, S.gold[2]);           // la moulure sous le pont
+      // le bordé verni : des virures de quatre pixels qui SUIVENT la courbe du pont, des abouts décalés
+      for (let y = yd + 2; y < yw; y++) {
+        const r = y - (yd + 2), plank = Math.floor(r / 4), inP = r % 4;
+        const depth = (y - yd) / Math.max(1, yw - yd);    // le galbe : la coque rentre vers le fond
+        let ci = 6 - Math.min(5, Math.floor(depth * 5.5)) - (tEnd < 1 ? Math.round((1 - tEnd) * 2) : 0);
+        if (inP === 3) ci -= 2;                            // le joint entre deux virures
+        if (inP === 0) ci += 1;                            // l'arête éclairée de la virure
+        if (((x + plank * 11) % 23) === 0) ci -= 2;        // un about
+        shipR(g, u, x, y, 1, 1, H[Math.max(0, Math.min(6, ci))]);
+      }
+      // la ligne de flottaison crème, puis le fond cuivré, plaqué
+      shipR(g, u, x, yw, 1, 1, S.cream[1]);
+      shipR(g, u, x, yw + 1, 1, 1, S.cream[0]);
+      for (let y = yw + 2; y <= yk; y++) {
+        const k = (y - yw) / Math.max(1, yk - yw);
+        let ci = k < 0.3 ? 3 : k < 0.65 ? 2 : 1;
+        if (((y - yw) % 5 === 4) || (x % 9 === 0 && y > yw + 2)) ci = Math.max(0, ci - 1);   // les plaques de cuivre
+        shipR(g, u, x, y, 1, 1, S.copper[ci]);
+      }
+      shipR(g, u, x, yk, 1, 1, S.dark);                  // la quille
     }
-    // L'étrave et l'étambot, plus épais que le bordé : ce sont des pièces.
-    for (let y = Math.round(shipSheerY(SHIP_X1) - 2); y <= Math.round(shipKeelY(SHIP_X1)); y++)
-      shipR(g, u, SHIP_X1 - 2, y, 4, 1, S.wood[1]);
-    for (let y = Math.round(shipSheerY(SHIP_X0)); y <= Math.round(shipKeelY(SHIP_X0)); y++)
-      shipR(g, u, SHIP_X0 - 1, y, 4, 1, S.wood[1]);
-    /* Les sabords : quatre ouvertures sombres, DÉDUITES de la lisse et non posées
-       à la main — une position réglée à l'œil penchera (441). */
-    for (let k = 0; k < 4; k++) {
-      const x = 40 + k * 20, y = shipSheerY(x) + 7;
-      shipR(g, u, x, y, 7, 6, S.dark);
-      shipR(g, u, x + 1, y + 1, 5, 4, "rgba(90,160,190,0.55)");
-      shipR(g, u, x, y - 1, 7, 1, S.wood[4]);
+    // les étoiles d'or du pavois (« le Bateau des Étoiles » le porte sur le flanc)
+    for (let x = 52; x <= 108; x += 14) { const y = Math.round((shipRailY(x) + shipSheerY(x)) / 2); shipStar(g, u, x, y, 1, S.gold[3], S.gold[0]); }
+    // le CHÂTEAU DE POUPE : trois fenêtres à petits carreaux, cadres dorés, et la volute dorée de l'angle
+    for (const wx of SHIP_STERN_WIN) {
+      const wy = Math.round(shipRailY(wx)) + 2;
+      shipR(g, u, wx - 1, wy - 1, 6, 7, S.gold[1]);
+      shipR(g, u, wx, wy, 4, 5, S.glass[0]);
+      shipR(g, u, wx, wy, 4, 1, S.glass[1]);
+      shipR(g, u, wx + 2, wy, 1, 5, S.gold[0]);          // le meneau
+      shipR(g, u, wx, wy + 2, 4, 1, S.gold[0]);          // la traverse
+      shipR(g, u, wx + 3, wy + 1, 1, 1, S.glass[2]);     // un reflet
+      shipR(g, u, wx - 1, wy - 2, 6, 1, S.gold[3]);      // le cintre
     }
+    { const y0 = Math.round(shipRailY(SHIP_X0 + 1));
+      for (let k = 0; k < 6; k++) shipR(g, u, SHIP_X0 - 1 + Math.round(Math.sin(k * 0.9) * 1.5), y0 - 2 + k * 2, 2, 2, S.gold[k % 2 ? 1 : 3]);   // la volute de l'étambot
+      shipR(g, u, SHIP_X0 + 2, y0 - 3, 12, 1, S.gold[3]);  // la frise du couronnement
+      shipR(g, u, SHIP_X0 + 2, y0 - 4, 12, 1, S.gold[1]); }
+    // les hublots cerclés de laiton
+    for (const px of SHIP_PORTS) {
+      const py = Math.round(shipSheerY(px)) + 9;
+      shipR(g, u, px - 2, py - 1, 5, 5, S.gold[1]); shipR(g, u, px - 1, py - 2, 3, 7, S.gold[1]);
+      shipR(g, u, px - 2, py - 1, 1, 1, S.gold[3]); shipR(g, u, px - 1, py - 2, 1, 1, S.gold[3]);
+      shipR(g, u, px - 1, py - 1, 3, 5, S.glass[0]); shipR(g, u, px - 1, py, 3, 3, S.glass[0]);
+      shipR(g, u, px - 1, py - 1, 1, 1, S.glass[2]);
+    }
+    // l'étrave et l'étambot : des pièces, plus sombres que le bordé
+    for (let y = Math.round(shipRailY(SHIP_X1) - 1); y <= Math.round(shipKeelY(SHIP_X1)); y++) shipR(g, u, SHIP_X1 - 1, y, 3, 1, H[0]);
+    for (let y = Math.round(shipRailY(SHIP_X0) - 1); y <= Math.round(shipKeelY(SHIP_X0)); y++) shipR(g, u, SHIP_X0 - 1, y, 2, 1, H[0]);
+    // le BEAUPRÉ : un espar qui file vers l'avant, chapeauté d'or
+    { const x0 = SHIP_X1 - 4, y0 = Math.round(shipRailY(SHIP_X1)) + 1, [x1, y1] = SHIP_BOWSPRIT;
+      const n = x1 - x0;
+      for (let k = 0; k <= n; k++) { const x = x0 + k, y = y0 + (y1 - y0) * (k / n); shipR(g, u, x, y, 1, 2, H[2]); shipR(g, u, x, y, 1, 1, H[4]); }
+      shipR(g, u, x1 - 1, y1 - 1, 2, 2, S.gold[3]); }
+    // la FIGURE DE PROUE : une volute dorée sous le beaupré, et une étoile d'or à son bout
+    { const yh = Math.round(shipRailY(SHIP_X1));
+      for (let k = 0; k < 7; k++) shipR(g, u, SHIP_X1 + 1 + Math.round(k * 0.9), yh + 4 - Math.round(Math.sin(k / 6 * Math.PI) * 4) - k, 2, 2, S.gold[k % 2 ? 2 : 1]);
+      shipStar(g, u, SHIP_X1 + 8, yh - 5, 2, S.gold[3], S.gold[1]); }
+    // l'ANCRE au bossoir de proue
+    { const ax = 118, ay = Math.round(shipSheerY(ax)) + 3;
+      shipR(g, u, ax, ay, 1, 7, S.dark); shipR(g, u, ax - 2, ay + 1, 5, 1, S.dark);
+      shipR(g, u, ax - 3, ay + 5, 1, 2, S.dark); shipR(g, u, ax + 3, ay + 5, 1, 2, S.dark); shipR(g, u, ax - 2, ay + 7, 5, 1, S.dark);
+      shipR(g, u, ax - 1, ay - 2, 3, 2, S.metal[1]); }
   }
 
-  /* ── LE SAFRAN, à l'étambot. Petit, mais c'est ce qui fait qu'un bateau se
-     DIRIGE : sans lui il dérive, et l'étoile le dit. */
+  /* ── LE SAFRAN, sous le château : une pelle de bois aux ferrures dorées, et la barre qui monte au pont. */
   function shipPartRudder(g, u) {
-    const S = SHIP_PAL;
-    const yTop = shipSheerY(SHIP_X0) + 4, yBot = shipKeelY(SHIP_X0) + 8;
-    shipR(g, u, SHIP_X0 - 7, yTop, 6, yBot - yTop, S.wood[2]);
-    shipR(g, u, SHIP_X0 - 7, yTop, 2, yBot - yTop, S.wood[4]);
-    shipR(g, u, SHIP_X0 - 7, yBot - 2, 6, 2, S.wood[0]);
-    for (const fy of [yTop + 3, yBot - 7]) {                 // les ferrures
-      shipR(g, u, SHIP_X0 - 8, fy, 10, 2, S.metal[1]);
-      shipR(g, u, SHIP_X0 - 8, fy, 10, 1, S.metal[3]);
+    const S = SHIP_PAL, H = S.honey;
+    const yTop = shipSheerY(SHIP_X0) + 3, yBot = shipKeelY(SHIP_X0) + 7;
+    for (let y = Math.round(yTop); y <= yBot; y++) {
+      const k = (y - yTop) / (yBot - yTop), w = 4 + Math.round(3 * k);
+      shipR(g, u, SHIP_X0 - 2 - w, y, w, 1, k > 0.75 ? S.copper[2] : H[3]);
+      shipR(g, u, SHIP_X0 - 2 - w, y, 1, 1, k > 0.75 ? S.copper[3] : H[5]);
     }
-    // La barre, qui monte vers le pont : une diagonale en escalier.
-    for (let k = 0; k < 12; k++)
-      shipR(g, u, SHIP_X0 - 5 + k, yTop - 1 - Math.round(k * 0.55), 2, 2, S.wood[3]);
+    for (const fy of [yTop + 3, yTop + 9, yBot - 6]) {     // les ferrures (aiguillots dorés)
+      shipR(g, u, SHIP_X0 - 9, fy, 10, 2, S.gold[1]);
+      shipR(g, u, SHIP_X0 - 9, fy, 10, 1, S.gold[3]);
+    }
+    for (let k = 0; k < 10; k++) shipR(g, u, SHIP_X0 - 4 + k, yTop - 1 - Math.round(k * 0.6), 2, 2, H[4]);   // la barre
   }
 
-  /* ── LE MÂT ET SA VERGUE. ⚠️ IL MONTE JUSQU'À SIX PIXELS DU BORD HAUT, et pas
-     plus : c'est le piège du canevas qui découpe en silence (427/433). */
+  /* ── LE GRÉEMENT : le grand mât et sa hune, le mât de hune, les deux vergues, les haubans à enfléchures, l'étai jusqu'au
+     beaupré, la flamme en tête de mât. ⚠️ La pomme reste à quatre pixels du bord haut (le canevas découpe en silence, 427). */
   function shipPartMast(g, u) {
-    const S = SHIP_PAL;
-    const mx = 74, top = 8, foot = shipSheerY(mx) + 6;
-    shipR(g, u, mx - 2, top, 5, foot - top, S.wood[2]);
-    shipR(g, u, mx - 2, top, 2, foot - top, S.wood[4]);      // l'arête éclairée
-    shipR(g, u, mx + 2, top, 1, foot - top, S.wood[0]);
-    shipR(g, u, mx - 3, top, 7, 3, S.metal[1]);              // le capelage
-    // La vergue, et ses deux itagues.
-    shipR(g, u, 44, 26, 61, 3, S.wood[3]);
-    shipR(g, u, 44, 26, 61, 1, S.wood[5]);
-    shipR(g, u, 44, 26, 2, 4, S.wood[1]); shipR(g, u, 103, 26, 2, 4, S.wood[1]);
-    /* Les haubans : deux par bord, en escalier d'un pixel. ⚠️ Ils partent du
-       capelage et tombent sur la lisse, donc leurs PIEDS sont dérivés de
-       `shipSheerY` — posés à la main, ils flotteraient au-dessus du bordé. */
-    for (const [x1, sgn] of [[30, -1], [118, 1]]) {
-      const y1 = shipSheerY(x1) + 1, n = Math.round(Math.abs(x1 - mx));
-      for (let k = 0; k <= n; k += 1) {
-        const x = mx + sgn * k, y = top + 4 + (y1 - top - 4) * (k / n);
-        shipR(g, u, x, y, 1, 1, S.rope);
+    const S = SHIP_PAL, H = S.honey;
+    const mx = 74, foot = shipSheerY(mx) + 6, topY = 30, [hx, hy] = SHIP_MASTHEAD;
+    // le bas-mât
+    shipR(g, u, mx - 2, topY, 5, foot - topY, H[3]); shipR(g, u, mx - 2, topY, 2, foot - topY, H[5]); shipR(g, u, mx + 2, topY, 1, foot - topY, H[1]);
+    for (const y of [topY + 12, topY + 26]) shipR(g, u, mx - 3, y, 7, 2, S.metal[1]);   // les cercles de fer
+    // le mât de hune
+    shipR(g, u, mx - 1, hy + 2, 3, topY - hy - 2, H[3]); shipR(g, u, mx - 1, hy + 2, 1, topY - hy - 2, H[5]);
+    shipR(g, u, hx - 1, hy - 1, 3, 3, S.gold[2]); shipR(g, u, hx - 1, hy - 1, 1, 1, S.gold[3]);   // la pomme dorée
+    // la hune : une plate-forme et son garde-corps
+    shipR(g, u, mx - 9, topY - 1, 19, 2, H[1]); shipR(g, u, mx - 9, topY - 1, 19, 1, H[4]);
+    shipR(g, u, mx - 8, topY - 5, 17, 1, H[3]);
+    for (const x of [mx - 8, mx - 3, mx + 2, mx + 8]) shipR(g, u, x, topY - 5, 1, 4, H[2]);
+    // les vergues : basse (grand-voile) et de hune (hunier)
+    for (const [y, x0, x1] of [[35, 38, 110], [14, 52, 96]]) {
+      shipR(g, u, x0, y, x1 - x0, 2, H[2]); shipR(g, u, x0, y, x1 - x0, 1, H[5]);
+      shipR(g, u, x0 - 1, y, 2, 3, H[1]); shipR(g, u, x1 - 1, y, 2, 3, H[1]);
+    }
+    // les haubans : deux paires, de la hune au pavois, et leurs enfléchures (les échelons de corde)
+    /* ⚠️ VUS SUR LA PLANCHE : deux échelles sombres en travers de la grand-voile, plus lourdes que la toile. Les haubans s'écartent
+       donc jusqu'aux bouts du pavois (ils ne croisent plus que les coins de la voile), et les enfléchures sont un fil clair, un
+       échelon sur quatre pixels. */
+    for (const [xTop, xFoot] of [[mx - 8, 40], [mx + 8, 108]]) {
+      const yFoot = Math.round(shipRailY(xFoot)) - 1, off = xFoot < mx ? 3 : -3;
+      shipLine(g, u, xTop, topY, xFoot, yFoot, S.rope); shipLine(g, u, xTop, topY, xFoot + off, yFoot, S.rope);
+      for (let y = topY + 4; y < yFoot - 1; y += 4) {
+        const k = (y - topY) / (yFoot - topY), xa = xTop + (xFoot - xTop) * k, xb = xTop + (xFoot + off - xTop) * k;
+        shipR(g, u, Math.min(xa, xb), y, Math.abs(xb - xa) + 1, 1, "#b4a582");
       }
     }
+    // les haubans de hune, l'étai jusqu'au beaupré, le pataras jusqu'au château
+    shipLine(g, u, mx, hy + 4, mx - 8, topY - 1, S.rope); shipLine(g, u, mx, hy + 4, mx + 8, topY - 1, S.rope);
+    shipLine(g, u, mx + 1, hy + 3, SHIP_BOWSPRIT[0] - 1, SHIP_BOWSPRIT[1], S.rope);
+    shipLine(g, u, mx - 1, hy + 3, SHIP_X0 + 3, Math.round(shipRailY(SHIP_X0 + 3)) - 3, S.rope);
+    // la flamme : une longue banderole bleue au bout d'or, qui file vers l'avant (le vent vient de l'arrière : les voiles portent vers la proue)
+    for (let k = 0; k < 30; k++) {
+      const x = hx + 2 + k, y = hy + Math.round(Math.sin(k / 4) * 1.5 + k * 0.08), w = Math.max(1, Math.round(3 - k / 12));
+      shipR(g, u, x, y, 1, w, k > 24 ? S.gold[2] : (k % 6 < 3 ? S.band[3] : S.band[2]));
+    }
   }
 
-  /* ── LA VOILE. ⚠️ ELLE EST BOMBÉE, ET SON VENTRE EST DU CÔTÉ DE L'ÉTRAVE : une
-     voile plate est un drap. Le ventre se décrit par une largeur qui varie avec
-     la hauteur, jamais par une forme repliée (437). */
-  /* ⚠️⚠️ PREMIER JET JETÉ, ET LA PLANCHE L'A MONTRÉ EN UNE SECONDE : une demi-
-     largeur en `sin(k^0.85 · π)` donne une LENTILLE — un ballon blanc pendu au
-     mât, pas une voile. La faute est la même que la collerette de tournesol du
-     446 : *une formule de forme qui décore au lieu de décrire l'objet.* Une voile
-     carrée est un TRAPÈZE — un peu plus large au bas (le point d'écoute borde plus
-     loin que la vergue) — dont les bords se creusent légèrement sous le vent. On
-     décrit donc la largeur par une interpolation franche entre têtière et bordure,
-     plus un ventre en `sin(πk)` qui ne fait que la BOMBER. */
-  function shipPartSail(g, u) {
+  /* ── LES VOILES : la grand-voile (avec l'étoile brodée), le hunier, le foc. Bombées vers l'avant ; la toile est cousue en LAIZES
+     verticales (c'est ce qui la distingue d'un drap) ; trois bandes de ris sur la grand-voile.
+     ⚠️ `SHIP_SAILS` dit où sont les voiles : `drawStarShip` s'en sert pour les ferler au mouillage. */
+  const SHIP_SAILS = { course: [37, 66, 32, 35], top: [16, 33, 22, 26] };   // [haut, bas, demi-largeur en haut, en bas]
+  function shipSquare(g, u, top, bot, hTop, hBot, belly, mx) {
     const S = SHIP_PAL;
-    const yTop = 30, yBot = 70, mx = 74;
-    const HALF_TOP = 27, HALF_BOT = 31;
-    for (let y = yTop; y <= yBot; y++) {
-      const k = (y - yTop) / (yBot - yTop);
-      const half = HALF_TOP + (HALF_BOT - HALF_TOP) * k + 2.5 * Math.sin(k * Math.PI);
-      /* Le ventre : la voile est poussée vers l'ÉTRAVE, donc son centre glisse
-         vers la droite. C'est ce qui la fait lire comme portée par le vent plutôt
-         que pendue. */
-      const belly = 5 * Math.sin(k * Math.PI);
-      const x0 = mx - half + belly, w = half * 2;
-      /* Quatre valeurs quantifiées, du guindant (à l'ombre) à la chute (éclairée).
-         ⚠️ Le clair est vers la DROITE et non au centre : une voile creuse reçoit
-         la lumière sur sa partie la plus fuyante, et un dégradé symétrique ferait
-         un coussin. */
+    for (let y = top; y <= bot; y++) {
+      const k = (y - top) / (bot - top);
+      const half = hTop + (hBot - hTop) * k + 1.5 * Math.sin(k * Math.PI);
+      const b = belly * Math.sin(k * Math.PI), x0 = mx - half + b, w = half * 2;
       shipR(g, u, x0, y, w, 1, S.sail[1]);
-      shipR(g, u, x0 + w * 0.22, y, w * 0.58, 1, S.sail[2]);
-      shipR(g, u, x0 + w * 0.58, y, w * 0.30, 1, S.sail[3]);
-      shipR(g, u, x0, y, 3, 1, S.sail[0]);                    // le guindant, dans l'ombre du mât
-      shipR(g, u, x0 + w - 2, y, 2, 1, S.sail[1]);            // la chute, un rien plus sourde
-      // Les bandes de ris : trois, horizontales, comme sur une vraie voile carrée.
-      if ((y - yTop) % 13 === 12) shipR(g, u, x0 + 2, y, w - 4, 1, S.sail[0]);
+      shipR(g, u, x0 + w * 0.22, y, w * 0.56, 1, S.sail[2]);
+      shipR(g, u, x0 + w * 0.6, y, w * 0.3, 1, S.sail[3]);
+      shipR(g, u, x0, y, 2, 1, S.sail[0]);
+      if (y % 2 === 0) for (let sx = 7; sx < w - 3; sx += 8) shipR(g, u, x0 + sx, y, 1, 1, "rgba(168,158,134,0.5)");   // les laizes, en pointillé : un fil, pas une grille
     }
-    // La têtière et la bordure : deux ralingues franches, sinon la toile bave.
-    shipR(g, u, mx - HALF_TOP, yTop, HALF_TOP * 2, 1, S.sail[0]);
-    shipR(g, u, mx - HALF_BOT + 5, yBot, HALF_BOT * 2, 1, S.sail[0]);
-    /* ⚠️⚠️ L'ÉTOILE COUSUE, ET ELLE EST UNE ÉTINCELLE À QUATRE BRANCHES, PAS UN
-       PENTAGRAMME. Le premier jet posait cinq rayons de carrés : à vingt pixels ça
-       ne fait pas une étoile, ça fait une tache avec des pattes — l'échancrure
-       d'un pentagramme demande plus de place que le dessin n'en a (c'est la leçon
-       du 449 sur la compagne : *un cerne d'un pixel impose une échancrure d'au
-       moins trois*). Quatre branches effilées se lisent à cette taille, et c'est
-       déjà le langage visuel de la quête (le chevron, les éclats). */
-    const sx = mx + 4, sy = 49, R0 = 13;
+    shipR(g, u, mx - hTop, top, hTop * 2, 1, S.sail[0]);
+    shipR(g, u, mx - hBot + belly * 0.3, bot, hBot * 2, 1, S.sail[0]);
+  }
+  function shipPartSail(g, u) {
+    const S = SHIP_PAL, mx = 74, [cT, cB, cH0, cH1] = SHIP_SAILS.course, [tT, tB, tH0, tH1] = SHIP_SAILS.top;
+    // le foc : un triangle tendu sur l'étai, du beaupré vers le mât
+    const A = [SHIP_BOWSPRIT[0] - 4, SHIP_BOWSPRIT[1]], B = [96, 16], Cc = [112, Math.round(shipRailY(112)) - 3];
+    for (let y = B[1]; y <= Math.max(A[1], Cc[1]); y++) {
+      const xs = [];
+      for (const [p, q] of [[A, B], [B, Cc], [Cc, A]]) {
+        if ((y - p[1]) * (y - q[1]) > 0 || p[1] === q[1]) continue;
+        xs.push(p[0] + (q[0] - p[0]) * ((y - p[1]) / (q[1] - p[1])));
+      }
+      if (xs.length < 2) continue;
+      const xa = Math.min(...xs), xb = Math.max(...xs), w = xb - xa;
+      if (w < 1) continue;
+      shipR(g, u, xa, y, w, 1, S.sail[2]); shipR(g, u, xa + w * 0.55, y, w * 0.45, 1, S.sail[3]); shipR(g, u, xa, y, 1, 1, S.sail[0]);
+    }
+    shipSquare(g, u, tT, tB, tH0, tH1, 3, mx);
+    shipSquare(g, u, cT, cB, cH0, cH1, 5, mx);
+    shipR(g, u, mx - cH0 + 3, cT + 6, cH0 * 2 - 4, 1, S.sail[0]);   // une bande de ris (deux quadrillaient la toile, vu sur la planche)
+    // l'ÉTOILE BRODÉE : quatre branches effilées (la langue de la quête), un fil d'or autour
+    const sx = mx + 4, sy = 52, R0 = 11;
     for (let r = 0; r <= R0; r++) {
       const w = Math.max(1, Math.round(Math.pow(1 - r / R0, 1.9) * 6));
-      shipR(g, u, sx - w / 2, sy - r, w, 1, S.star);          // haut
-      shipR(g, u, sx - w / 2, sy + r, w, 1, S.star);          // bas
-      shipR(g, u, sx - r, sy - w / 2, 1, w, S.star);          // gauche
-      shipR(g, u, sx + r, sy - w / 2, 1, w, S.star);          // droite
+      for (const [ax, ay, hz] of [[0, -1, 0], [0, 1, 0], [-1, 0, 1], [1, 0, 1]]) {
+        const x = sx + ax * r, y = sy + ay * r;
+        if (hz) { shipR(g, u, x, y - w / 2 - 1, 1, 1, S.gold[2]); shipR(g, u, x, y + w / 2, 1, 1, S.gold[2]); shipR(g, u, x, y - w / 2, 1, w, S.star); }
+        else { shipR(g, u, x - w / 2 - 1, y, 1, 1, S.gold[2]); shipR(g, u, x + w / 2, y, 1, 1, S.gold[2]); shipR(g, u, x - w / 2, y, w, 1, S.star); }
+      }
     }
-    for (let r = 0; r <= 5; r++) {                            // les quatre diagonales, courtes
-      const w = Math.max(1, Math.round((1 - r / 5) * 2));
-      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
-        shipR(g, u, sx + dx * r * 0.7 - w / 2, sy + dy * r * 0.7 - w / 2, w, w, S.star);
-    }
-    // Les écoutes, du point d'écoute vers le pont.
-    for (let k = 0; k <= 14; k++) shipR(g, u, mx + 30 + k * 0.7, yBot + Math.round(k * 0.5), 1, 1, S.rope);
+    shipR(g, u, sx - 1, sy - 1, 3, 3, "#ffffff");
+    // les écoutes, des points d'écoute vers le pont
+    shipLine(g, u, mx + cH1 + 2, cB, mx + cH1 + 12, Math.round(shipRailY(mx + cH1 + 12)) - 1, S.rope);
+    shipLine(g, u, mx - cH1, cB, mx - cH1 - 6, Math.round(shipRailY(mx - cH1 - 6)) - 1, S.rope);
   }
 
-  /* ── LA CLOCHE DE BORD. ⚠️ C'EST LE CINQUIÈME MORCEAU, ET C'EST CELUI DE
-     L'ÉGLISE : elle est trop lourde pour rentrer au ciel, elle n'a jamais eu de
-     bateau, elle donne sa voix et elle voyagera. Elle est donc EN BRONZE VERDI et
-     pas en laiton neuf — c'est la même cloche, on doit la reconnaître. */
+  /* ── LA CLOCHE DE BORD, dans son clocher sculpté sur le gaillard d'avant. C'est la cloche des deux plaques d'étoile (G4) :
+     bronze verdi, et la même silhouette que la cloche de l'église. */
   function shipPartBell(g, u) {
-    const S = SHIP_PAL;
-    const bx = 118, by = 38;
-    /* La potence : deux montants et un chapeau, pour qu'elle soit MONTÉE et non
-       posée en l'air. ⚠️ Vu sur la planche : sans montants visibles, la cloche
-       flottait et se lisait comme une lanterne accrochée. */
-    shipR(g, u, bx - 8, by - 3, 3, 14, S.wood[2]);
-    shipR(g, u, bx + 6, by - 3, 3, 14, S.wood[2]);
-    shipR(g, u, bx - 9, by - 5, 19, 3, S.wood[3]);
-    shipR(g, u, bx - 9, by - 5, 19, 1, S.wood[5]);
-    // Le joug de bois et l'axe : ce qui la fait basculer.
-    shipR(g, u, bx - 5, by - 1, 13, 3, S.wood[1]);
-    shipR(g, u, bx - 5, by - 1, 13, 1, S.wood[4]);
-    /* ⚠️⚠️ UNE CLOCHE N'EST PAS UN CÔNE, ET LE PREMIER JET EN ÉTAIT UN — vu sur la
-       planche, il se lisait comme un VASE. Le profil qui la fait reconnaître a
-       quatre parties et trois d'entre elles sont presque droites : un cerveau
-       étroit, une ÉPAULE qui s'élargit d'un coup, une taille qui ne bouge presque
-       pas, puis un PIED DE SON large et ÉPAIS. C'est la règle du 438 sous une
-       autre forme : *on assemble des masses, on ne texture pas une silhouette* —
-       et ici la silhouette EST ce qui identifie l'objet. */
-    const PROFILE = [3, 4, 7, 8, 9, 9, 10, 10, 11, 12, 13, 15, 16, 16];
+    const S = SHIP_PAL, H = S.honey, bx = SHIP_BELL[0], base = Math.round(shipRailY(bx)) - 1, by = base - 15;
+    /* ⚠️ VU SUR LA PLANCHE : un clocher de vingt-cinq pixels, fermé, faisait CABINE et cachait le foc. Il est ouvert, plus bas :
+       deux fins montants, un linteau courbe, un petit toit à deux pans, le fleuron d'or. */
+    shipR(g, u, bx - 7, by - 1, 2, base - by + 1, H[3]); shipR(g, u, bx - 7, by - 1, 1, base - by + 1, H[5]);
+    shipR(g, u, bx + 6, by - 1, 2, base - by + 1, H[3]); shipR(g, u, bx + 6, by - 1, 1, base - by + 1, H[5]);
+    for (let k = 0; k < 4; k++) shipR(g, u, bx - 8 + k, by - 2 - k, 17 - 2 * k, 1, k % 2 ? H[2] : H[4]);
+    shipR(g, u, bx - 8, by - 2, 17, 1, S.gold[2]);
+    shipStar(g, u, bx + 0, by - 8, 1, S.gold[3], S.gold[0]);
+    shipR(g, u, bx - 4, by, 9, 2, H[1]); shipR(g, u, bx - 4, by, 9, 1, H[4]);   // le joug
+    const PROFILE = [3, 4, 6, 7, 7, 8, 8, 9, 10, 12];
     for (let k = 0; k < PROFILE.length; k++) {
       const w = PROFILE[k], y = by + 2 + k;
-      const tone = k < 2 ? S.metal[0] : k >= PROFILE.length - 2 ? S.metal[0] : S.metal[1];
-      shipR(g, u, bx + 1 - w / 2, y, w, 1, tone);
-      // La lumière en haut à gauche, comme partout dans le jeu.
-      shipR(g, u, bx + 1 - w / 2, y, Math.max(1, Math.round(w * 0.30)), 1, k < 2 ? S.metal[1] : S.metal[2]);
-      shipR(g, u, bx + 1 + w / 2 - 1, y, 1, 1, S.metal[0]);
+      shipR(g, u, bx + 0.5 - w / 2, y, w, 1, k < 2 ? S.metal[0] : S.metal[1]);
+      shipR(g, u, bx + 0.5 - w / 2, y, Math.max(1, Math.round(w * 0.3)), 1, k < 2 ? S.metal[1] : S.metal[2]);
+      shipR(g, u, bx + 0.5 + w / 2 - 1, y, 1, 1, S.metal[0]);
     }
-    // Le pied de son : deux rangées franches, plus larges que la jupe.
-    shipR(g, u, bx - 8, by + 16, 18, 2, S.metal[1]);
-    shipR(g, u, bx - 8, by + 16, 6, 1, S.metal[3]);
-    shipR(g, u, bx - 8, by + 18, 18, 1, S.metal[0]);
-    shipR(g, u, bx, by + 19, 2, 3, S.metal[2]);           // le battant, qui dépasse
-    shipR(g, u, bx - 1, by + 21, 4, 2, S.metal[3]);
+    shipR(g, u, bx - 6, by + 12, 13, 2, S.metal[1]); shipR(g, u, bx - 6, by + 12, 4, 1, S.metal[3]);
+    shipR(g, u, bx, by + 14, 1, 1, S.metal[2]);      // le battant
+    shipLine(g, u, bx + 1, by + 14, bx + 3, base, S.rope);   // la corde de la cloche
   }
+
 
   const SHIP_PARTS_DRAW = {
     sail: shipPartSail, mast: shipPartMast, hull: shipPartHull,
@@ -13652,7 +13738,7 @@ export function buildSprites() {
   const SHIP_MID_X = (SHIP_X0 + SHIP_X1) / 2, SHIP_HALF_X = (SHIP_X1 - SHIP_X0) / 2;
   const SHIP_ROCK_ALONG = {
     hull: 0, sail: (74 - SHIP_MID_X) / SHIP_HALF_X, mast: (74 - SHIP_MID_X) / SHIP_HALF_X,
-    rudder: -1, bell: (118 - SHIP_MID_X) / SHIP_HALF_X,
+    rudder: -1, bell: (SHIP_BELL[0] - SHIP_MID_X) / SHIP_HALF_X,
   };
   /* ⚠️ LA PHASE, ÉCRITE UNE SEULE FOIS : `drawStarShip` ET `drawStarShipName`
      doivent tanguer DU MÊME PILON (le nom est peint sur la coque, dont
@@ -13695,12 +13781,18 @@ export function buildSprites() {
        la coque reste presque immobile, ce qui est la définition même du
        tangage (par opposition au roulis ou au pilonnement seuls). */
     const rockPhase = shipRockPhase(cx, t);
-    const rockBob = shipHullBob(cx, t, u);
-    const rockPitch = Math.cos(rockPhase) * C.STAR_SHIP_ROCK_PITCH_PX * u;
+    /* 2026-11-08 (la fête) — `rockGain` : l'orage de la fête fait tanguer le navire bien plus fort que la houle (×1 à ×5,5) ;
+       même pilon, même tangage, multipliés — jamais un second mouvement à tenir d'accord avec le premier. */
+    const rg = o.rockGain > 0 ? o.rockGain : 1;
+    const rockBob = shipHullBob(cx, t, u) * rg;
+    const rockPitch = Math.cos(rockPhase) * C.STAR_SHIP_ROCK_PITCH_PX * u * rg;
     const rockAt = (along) => rockBob + rockPitch * (along == null ? 0 : along);
-    // La cale (le ber de pierre) NE TANGUE PAS : elle est fixée au quai.
-    const cr = shipBake(T2, "cradle", false);
-    g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
+    // La cale (le ber de pierre) NE TANGUE PAS : elle est fixée au quai. 2026-11-08 : à flot (`afloat`), pas de ber du tout —
+    // il reste sur le quai, peint à part par l'appelant (`gone`).
+    if (!o.afloat) {
+      const cr = shipBake(T2, "cradle", false);
+      g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
+    }
     /* 2026-09-13 (lot 2) — L'ÉPAVE. `opt.wreck` vient de l'appelant (`Q.starShipWrecked`) :
        `fermeArt` ne sait toujours rien de la quête. Peinte sur le ber, SOUS les pièces
        reconstruites — une coque neuve montée recouvre les débris, et l'appelant cesse
@@ -13738,6 +13830,23 @@ export function buildSprites() {
          Elle tangue quand même, comme toute pièce montée : le tangage n'est pas
          l'avancement, c'est l'eau. */
       const c2 = shipBake(T2, key, !has);
+      /* 2026-11-08 — LES VOILES SE FERLENT (`sailK` : 1 dehors, 0 ferlées au mouillage). On ne peint que le haut de la toile
+         (rectangle source à 9 arguments, à partir du haut du hunier), et le reste se roule en boudins sous les deux vergues ; le foc
+         se roule le long du beaupré. Les positions viennent de `SHIP_SAILS` (une seule écriture, M14). */
+      if (has && key === "sail" && o.sailK != null && o.sailK < 1) {
+        const k = Math.max(0, o.sailK), top = SHIP_SAILS.top[0], bot = SHIP_SAILS.course[1];
+        const dx0 = Math.round(cx) - c2.ox, dy0 = Math.round(cy2) - c2.oy;
+        const hK = Math.round((bot - top) * k * u);
+        if (hK > 0) g2.drawImage(c2, 0, Math.round(top * u), c2.width, hK, dx0, dy0 + Math.round(top * u), c2.width, hK);
+        const roll = (x0, x1, y) => {
+          P(g2, dx0 + Math.round(x0 * u), dy0 + Math.round(y * u), Math.round((x1 - x0) * u), Math.max(2, Math.round(3 * u)), SHIP_PAL.sail[1]);
+          P(g2, dx0 + Math.round(x0 * u), dy0 + Math.round(y * u), Math.round((x1 - x0) * u), Math.max(1, Math.round(u)), SHIP_PAL.sail[3]);
+          P(g2, dx0 + Math.round(x0 * u), dy0 + Math.round((y + 2) * u), Math.round((x1 - x0) * u), Math.max(1, Math.round(u)), SHIP_PAL.sail[0]);
+          for (let x = x0 + 4; x < x1 - 2; x += 8) P(g2, dx0 + Math.round(x * u), dy0 + Math.round(y * u), Math.max(1, Math.round(u)), Math.max(2, Math.round(3 * u)), SHIP_PAL.rope);
+        };
+        if (k < 1) { roll(40, 108, 37); roll(54, 94, 16); roll(SHIP_X1 - 2, SHIP_BOWSPRIT[0] - 2, Math.round(shipRailY(SHIP_X1)) - 2); }
+        continue;
+      }
       if (has) g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
       else {
         /* Le battement du fantôme, peint en repassant la pièce une seconde fois
@@ -13746,6 +13855,67 @@ export function buildSprites() {
         g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
         if (Math.sin(t / 700 + idx * 1.1) > 0.35)
           g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
+      }
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-11-08 — LE GRAND PAVOIS, LA LANTERNE, LE FEU (la fête du navire, `fete.js`).
+       ╚══════════════════════════════════════════════════════════════════════════
+       Le grand pavois : une drisse de fanions de l'étrave à la pomme du mât, puis du mât à l'étambot — c'est ainsi qu'on pare
+       un navire pour un baptême. Peint ICI, dans le repère de la coque, pour tanguer, virer et couler AVEC lui. `pavois` 0..1
+       (la drisse se hisse) ; `lantern` 0..1 (la nuit, au mouillage) ; `fire` 0..1 (la foudre au grand mât). */
+    /* 2026-11-08 (M14) — LA NUIT, LES VITRES S'ALLUMENT : les fenêtres du château et les hublots, une lueur chaude autour. Peint
+       en direct (comme la lanterne) : la cuisson du bordé reste celle du jour, et un navire SANS coque ne s'allume pas. */
+    if (o.night && P5[C.STAR_SHIP_ORDER.indexOf("hull")]) {
+      const yOf = (y) => cy + rockAt(0) - Math.round((SHIP_GROUND + 1 - y) * u), xOf = (x) => cx + Math.round((x - SHIP_W() / 2) * u);
+      const lit = [...SHIP_STERN_WIN.map(x => [x + 2, Math.round(shipRailY(x)) + 4, 2]), ...SHIP_PORTS.map(x => [x, Math.round(shipSheerY(x)) + 10, 1.4])];
+      for (const [x, y, r] of lit) {
+        for (let k = 3; k >= 0; k--) craterDisc(g2, xOf(x), yOf(y), (r + k * 1.6) * u, `rgba(255,205,120,${(0.07 + (3 - k) * 0.035).toFixed(3)})`, 1);
+        P(g2, xOf(x) - Math.round(u), yOf(y) - Math.round(u), Math.max(2, Math.round(2 * u)), Math.max(2, Math.round(2 * u)), SHIP_PAL.warm);
+      }
+    }
+    if (o.pavois > 0 && built > 0) {
+      const ax = (x) => cx + Math.round((x - SHIP_W() / 2) * u), ay = (y, along) => cy + rockAt(along) - Math.round((SHIP_GROUND + 1 - y) * u);
+      const FL = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#f4ecd8", "#e08a3a"];
+      // le grand pavois du navire de M14 : du bout du beaupré à la pomme du mât, puis de la pomme au couronnement du château
+      const legs = [[SHIP_BOWSPRIT[0] - 1, SHIP_BOWSPRIT[1], 0.95, SHIP_MASTHEAD[0], SHIP_MASTHEAD[1] + 3, SHIP_ROCK_ALONG.mast],
+                    [SHIP_MASTHEAD[0], SHIP_MASTHEAD[1] + 3, SHIP_ROCK_ALONG.mast, SHIP_X0 + 2, Math.round(shipRailY(SHIP_X0 + 2)) - 4, -0.95]];
+      let n = 0;
+      for (const [x0, y0, a0, x1, y1, a1] of legs) {
+        const steps = 13;
+        for (let i = 0; i < steps; i++) {
+          const k0 = i / steps, k1 = (i + 1) / steps;
+          const sag = (k) => Math.sin(k * Math.PI) * 6;
+          const px0 = ax(x0 + (x1 - x0) * k0), py0 = ay(y0 + (y1 - y0) * k0 + sag(k0), a0 + (a1 - a0) * k0);
+          const px1 = ax(x0 + (x1 - x0) * k1), py1 = ay(y0 + (y1 - y0) * k1 + sag(k1), a0 + (a1 - a0) * k1);
+          if ((n + 1) / (steps * 2) > o.pavois) break;
+          g2.strokeStyle = "rgba(60,48,34,0.85)"; g2.lineWidth = Math.max(1, u * 0.6);
+          g2.beginPath(); g2.moveTo(px0, py0); g2.lineTo(px1, py1); g2.stroke();
+          const mx = (px0 + px1) / 2, my = (py0 + py1) / 2, fw = 2.6 * u, fh = 4.5 * u + Math.sin(t / 260 + n) * 0.8 * u;
+          g2.fillStyle = FL[n % FL.length];
+          g2.beginPath(); g2.moveTo(mx - fw, my); g2.lineTo(mx + fw, my); g2.lineTo(mx + Math.sin(t / 300 + n) * u, my + fh); g2.closePath(); g2.fill();
+          n++;
+        }
+      }
+    }
+    if (o.lantern > 0 && built > 0) {
+      const lx = cx + Math.round((SHIP_X0 + 1 - SHIP_W() / 2) * u), ly = cy + rockAt(-0.95) - Math.round((SHIP_GROUND + 1 - (shipRailY(SHIP_X0 + 1) - 7)) * u);
+      for (let s = 4; s >= 0; s--) craterDisc(g2, lx, ly, (2 + s * 2.6) * u, `rgba(255,214,140,${((0.13 - s * 0.024) * o.lantern).toFixed(3)})`, 1);
+      P(g2, Math.round(lx - 1.5 * u), Math.round(ly - 2 * u), Math.max(2, Math.round(3 * u)), Math.max(3, Math.round(4 * u)), "#ffe7a8");
+      P(g2, Math.round(lx - 1.5 * u), Math.round(ly - 3 * u), Math.max(2, Math.round(3 * u)), Math.max(1, Math.round(u)), "#3a2a18");
+    }
+    if (o.fire > 0 && built > 0) {
+      const fx = cx + Math.round((SHIP_MASTHEAD[0] - SHIP_W() / 2) * u), fy = cy + rockAt(SHIP_ROCK_ALONG.mast) - Math.round((SHIP_GROUND + 1 - (SHIP_MASTHEAD[1] + 6)) * u);
+      // ⚠️ le premier jet faisait des flammes de 5 à 11 px multipliées par un feu qui décroît : à mi-chemin, deux pixels, invisibles
+      // en jeu. Le feu se tient sur toute la tête du mât (la vergue comprise), haut, et une fumée monte au-dessus.
+      const fk = Math.min(1, o.fire * 1.6);
+      for (let i = 0; i < 14; i++) {
+        const ph = t / 70 + i * 1.9, h = (9 + 12 * Math.abs(Math.sin(ph))) * u * fk, w = (3 + (i % 3)) * u;
+        const x = fx + (Math.sin(i * 2.3 + t / 190) * 9) * u;
+        P(g2, Math.round(x - w / 2), Math.round(fy + 8 * u - h), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), i % 3 === 0 ? "#fff2b0" : i % 3 === 1 ? "#ffb347" : "#e2542c");
+      }
+      for (let i = 0; i < 6; i++) {
+        const ph = ((t / 900 + i / 6) % 1), sx2 = fx + Math.sin(i * 3.1 + t / 600) * 6 * u, sy2 = fy - 14 * u - ph * 30 * u, r = (3 + ph * 7) * u;
+        craterDisc(g2, sx2, sy2, r, `rgba(60,58,62,${(0.35 * (1 - ph) * fk).toFixed(3)})`, 1);
       }
     }
     /* ╔══════════════════════════════════════════════════════════════════════════
@@ -13769,7 +13939,8 @@ export function buildSprites() {
          l'étrave — le point qu'on regarde quand on regarde une coque — elle se lit
          comme une lumière AU BOUT du bateau. Même déplacement pour le mât, monté à
          sa pomme. */
-      const SPARK = { hull: [129, 60], rudder: [8, 86], mast: [74, 11], sail: [78, 49], bell: [119, 47] };
+      // 2026-11-08 (M14) — la figure de proue, le safran, la pomme du mât, l'étoile brodée, le clocher
+      const SPARK = { hull: [SHIP_X1 + 8, Math.round(shipRailY(SHIP_X1)) - 5], rudder: [8, 86], mast: SHIP_MASTHEAD, sail: [78, 52], bell: [SHIP_BELL[0], Math.round(shipRailY(SHIP_BELL[0])) - 10] };
       for (let i = 0; i < C.STAR_SHIP_ORDER.length; i++) {
         if (!P5[i]) continue;
         const sp = SPARK[C.STAR_SHIP_ORDER[i]];
@@ -13796,7 +13967,7 @@ export function buildSprites() {
     if (built === C.STAR_SHIP_ORDER.length) {
       const p = 0.5 + 0.5 * Math.sin(t / 620);
       const sx = cx + Math.round((78 - SHIP_W() / 2) * u);
-      const sy = cy + rockAt(SHIP_ROCK_ALONG.sail) - Math.round((SHIP_GROUND + 1 - 49) * u);
+      const sy = cy + rockAt(SHIP_ROCK_ALONG.sail) - Math.round((SHIP_GROUND + 1 - 52) * u);
       for (let s = 4; s >= 0; s--)
         craterDisc(g2, sx, sy, (5 + s * 3.4) * u,
                    `rgba(255,255,255,${(0.11 - s * 0.021 + 0.03 * p).toFixed(3)})`, 1);
@@ -14640,66 +14811,83 @@ export function buildSprites() {
      des bancs (§4 de CLAUDE.md) : contrairement au reste du navire (`shipBake`),
      ce nom se peint EN DIRECT, à chaque appel — la même discipline que les
      enseignes de Valley Town, qui restent vivantes pour être bilingues. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-11-08 (M14) — LE NOM, PEINT EN LETTRES D'OR SUR LE PAVOIS (plus une étiquette d'interface collée sur la coque).
+     ╚══════════════════════════════════════════════════════════════════════════
+     Audit M14 : « grand cadre sombre bordé d'or, police lisse non pixel, qui masque les hublots ». Le nom est maintenant écrit à
+     la police pixel du jeu (`pixelFont.js`), lettre par lettre, chaque lettre posée sur la ligne du pont là où elle tombe — il
+     suit la tonture comme un nom peint à la main. Le bandeau marine est repeint sous les lettres (le peintre efface les étoiles
+     qu'il recouvre). Au-delà de la longueur droite du pavois (« Le bout de bois qui flotte mal », 122 px), la fin du nom passe
+     sur une seconde ligne, sur un bandeau assorti cloué sous la moulure.
+     ⚠️ TOUJOURS VIVANT (bilingue, et le nom change au baptême) ; et maintenant mesurable au banc : `drawImage` remplace `fillText`.
+     ⚠️ Un nom que la police ne sait pas écrire (un caractère hors table) garde l'ancienne écriture, comme les noms de personnages. */
+  const SHIP_NAME_ONE_LINE = 100;
+  function shipNameLines(name) {
+    const n = String(name || "");
+    if (pixelTextWidth(n) <= SHIP_NAME_ONE_LINE || n.indexOf(" ") < 0) return [n];
+    const words = n.split(" ");
+    let best = null;
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" "), b = words.slice(i).join(" "), m = Math.max(pixelTextWidth(a), pixelTextWidth(b));
+      if (!best || m < best.m) best = { a, b, m };
+    }
+    return [best.a, best.b];
+  }
+  function shipNameWidth(name, T2) {
+    const u = (T2 || 16) / 16;
+    return (Math.max(...shipNameLines(name).map(pixelTextWidth)) + 8) * u;
+  }
+  const mkCanvas = (w, h) => cv(w, h)[0];
+  /* Les lumières du navire la nuit (fenêtres du château, hublots, lanterne de poupe), en px relatifs au point d'ancrage du dessin
+     (`cx`, `cy`), pour la passe de lumière du jeu : peintes avec le navire, le voile de la nuit les éteignait (vu en jeu). */
+  function shipLights(T2, face) {
+    const u = (T2 || 16) / 16, f = face == null ? 1 : face, out = [];
+    const P2 = (x, y, k) => out.push({ x: (x - SHIP_W() / 2) * u * f, y: -(SHIP_GROUND + 1 - y) * u, k });
+    for (const x of SHIP_STERN_WIN) P2(x + 2, shipRailY(x) + 4, 1);
+    for (const x of SHIP_PORTS) P2(x, shipSheerY(x) + 10, 0.7);
+    return out;
+  }
   function drawStarShipName(g2, cx, cy, T2, name, tMs) {
     if (!name) return;
-    const u = T2 / 16;
-    const fs = Math.max(9, Math.round(9 * u));
-    g2.save();
-    g2.font = `bold ${fs}px monospace`;
-    g2.textAlign = "center"; g2.textBaseline = "middle";
-    const w = g2.measureText(name).width;
-    const px = 5 * u, py = 3 * u;
-    // Le même pilon que la coque (`SHIP_ROCK_ALONG.hull = 0`) — voir `shipHullBob` :
-    // le nom est peint SUR le bordé, il ne doit jamais s'en détacher.
-    const cy2 = cy + shipHullBob(cx, tMs, u);
-    const by = cy2 - Math.round(24 * u);           // à hauteur de plat-bord, sous le mât
-    g2.fillStyle = "rgba(18,14,10,0.72)";
-    g2.fillRect(Math.round(cx - w / 2 - px), Math.round(by - fs / 2 - py), Math.round(w + px * 2), Math.round(fs + py * 2));
-    g2.strokeStyle = "rgba(216,180,90,0.85)"; g2.lineWidth = Math.max(1, u);
-    g2.strokeRect(Math.round(cx - w / 2 - px) + 0.5, Math.round(by - fs / 2 - py) + 0.5,
-                  Math.round(w + px * 2) - 1, Math.round(fs + py * 2) - 1);
-    g2.fillStyle = "#f4ecd8";
-    g2.fillText(name, cx, by + 1);
-    g2.restore();
+    const u = T2 / 16, s = Math.max(1, Math.round(u)), bob = shipHullBob(cx, tMs, u), S = SHIP_PAL;
+    if (!pixelTextSupported(name)) {   // le repli : l'ancienne écriture, sans cadre
+      g2.save(); g2.font = `bold ${Math.max(8, Math.round(8 * u))}px monospace`; g2.textAlign = "center"; g2.fillStyle = S.gold[3];
+      g2.fillText(name, cx + Math.round((76 - SHIP_W() / 2) * u), cy + bob - Math.round((SHIP_GROUND + 1 - shipSheerY(76) + 1) * u)); g2.restore();
+      return;
+    }
+    const X = (ax) => cx + Math.round((ax - SHIP_W() / 2) * u), Y = (ay) => cy + bob - Math.round((SHIP_GROUND + 1 - ay) * u);
+    const lines = shipNameLines(name), mid = 77;
+    lines.forEach((line, li) => {
+      const w = pixelTextWidth(line), x0 = Math.round(mid - w / 2);
+      // le fond : le bandeau marine repeint sous la ligne (et, pour la seconde, un bandeau assorti sous la moulure, liseré d'or)
+      for (let ax = x0 - 2; ax <= x0 + w + 1; ax++) {
+        // (le second bandeau descend jusqu'à yd + 12 : il couvre les hublots en entier — à yd + 9, leur bas dépassait, vu en jeu)
+        const yd = Math.round(shipSheerY(ax)), top = li === 0 ? yd - 7 : yd + 2, bot = li === 0 ? yd : yd + 12;
+        g2.fillStyle = S.band[2]; g2.fillRect(X(ax), Y(top), Math.max(1, Math.round(u)), Math.round((bot - top + 1) * u));
+        g2.fillStyle = S.band[li === 0 ? 3 : 1]; g2.fillRect(X(ax), Y(top), Math.max(1, Math.round(u)), Math.max(1, Math.round(u)));
+        if (li === 1) { g2.fillStyle = S.gold[2]; g2.fillRect(X(ax), Y(bot + 1), Math.max(1, Math.round(u)), Math.max(1, Math.round(u))); }
+      }
+      if (li === 1) for (const ax of [x0 - 3, x0 + w + 2]) {   // les bouts dorés du second bandeau
+        const yd = Math.round(shipSheerY(ax)); g2.fillStyle = S.gold[1]; g2.fillRect(X(ax), Y(yd + 2), Math.max(1, Math.round(u)), Math.round(12 * u));
+      }
+      // les lettres, une à une, chacune sur la ligne du pont là où elle tombe
+      let ax = x0;
+      for (const ch of line) {
+        const cw = pixelTextWidth(ch);
+        if (ch !== " ") {
+          const base = Math.round(shipSheerY(ax + cw / 2)) + (li === 0 ? 1 : 11);
+          // ⚠️ LE CENTRE N'EST PAS ARRONDI : `drawPixelText` recentre (`round(cx − w/2)`) ; un centre déjà arrondi décalait d'un pixel
+          // vers la droite les lettres de largeur impaire — « Belle » se lisait « Belk » (vu en jeu, les deux « l » collés au « e »)
+          drawPixelText(g2, mkCanvas, ch, X(ax) + (cw * s) / 2, Y(base), s, S.gold[3], S.band[0]);
+        }
+        ax += cw + 1;
+      }
+    });
   }
 
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ D11 (c) — LA GUIRLANDE DE FANIONS DE L'INAUGURATION, MÊME RECETTE QUE
-     ║ CELLE DU MARCHÉ (zip 431, FermeGame.js) : DEUX MÂTS, UNE CORDE QUI PEND.
-     ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️ ELLE VIT ICI ET PAS DANS `FermeGame.js` : contrairement à celle du
-     marché (qui RELIE deux étals dont la position dérive du monde généré),
-     celle-ci est fixe par rapport au chantier — un dessin, donc `fermeArt.js`,
-     pour qu'un banc puisse la regarder (§10 de CLAUDE.md). */
-  function drawFestivalBunting(g2, cx, cy, T2, t) {
-    const u = T2 / 16;
-    const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
-    const half = 4.4 * T2;
-    const topY = cy - 44 * u;
-    const ax = cx - half, bx = cx + half;
-    const sway = Math.sin(t / 1400) * 2 * u;
-    g2.fillStyle = "#6a4726";
-    for (const mx of [ax, bx]) g2.fillRect(Math.round(mx - u), Math.round(topY), Math.round(2 * u), Math.round(50 * u));
-    g2.fillStyle = "#d8b45a";
-    for (const mx of [ax, bx]) g2.fillRect(Math.round(mx - u), Math.round(topY - 2 * u), Math.round(2 * u), Math.round(2 * u));
-    g2.strokeStyle = "rgba(80,66,44,0.85)"; g2.lineWidth = Math.max(1, u);
-    const seg = 16, sag = 10 * u;
-    const py = (k) => topY + Math.sin(k * Math.PI) * sag + sway * Math.sin(k * Math.PI * 2 + 1);
-    g2.beginPath();
-    for (let i = 0; i <= seg; i++) {
-      const k = i / seg, x = ax + (bx - ax) * k, y = py(k);
-      if (i === 0) g2.moveTo(x, y); else g2.lineTo(x, y);
-    }
-    g2.stroke();
-    for (let i = 0; i < seg; i++) {
-      const k = (i + 0.5) / seg, x = ax + (bx - ax) * k, y = py(k);
-      g2.fillStyle = FLAGS[i % FLAGS.length];
-      g2.beginPath();
-      g2.moveTo(x - 4 * u, y); g2.lineTo(x + 4 * u, y); g2.lineTo(x, y + 8 * u);
-      g2.closePath(); g2.fill();
-    }
-  }
 
+  /* 2026-11-08 — LA GUIRLANDE DE L'INAUGURATION (D11 c, deux petits mâts aux bouts du navire) EST PARTIE : la fête du navire a
+     son décor (`feteArt.js` : les mâts du quai, les fanions et les lampions, l'estrade) et le navire son grand pavois. */
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ D11 (c) — LES CONFETTIS DE L'INAUGURATION, UNE BOUFFÉE À LA FOIS.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -22423,8 +22611,11 @@ house: house(),
     drawStarCraterAir,
     drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
-    drawStarShipName,      // D11 (b) — son nom, peint vivant sur la coque
-    drawFestivalBunting, drawStarConfetti,   // D11 (c) — l'inauguration
+    drawStarShipName,      // D11 (b) — son nom, peint vivant sur la coque ; 2026-11-08 (M14) : en lettres d'or de la police pixel
+    shipNameWidth,         // 2026-11-08 (M14) — la largeur peinte du nom (le dévoilement du baptême, `feteArt.js`)
+    shipNameLines,         // 2026-11-08 (M14) — une ou deux lignes (le banc les compte)
+    shipLights,            // 2026-11-08 (M14) — les vitres allumées, pour la passe de lumière de la nuit
+    drawStarConfetti,   // D11 (c) — l'inauguration ; 2026-11-08 : le baptême de la fête
     drawBoatBack, drawBoatFront, boatSeatDy, BOAT_SIT_CROP,   // 2026-08-31 — la coque qu'on monte dedans
     drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,

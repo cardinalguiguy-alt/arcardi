@@ -21,12 +21,14 @@ const RUN_STR = {
     ctrlJump: "<b>↑</b>, <b>W</b> ou <b>Espace</b> — sauter",
     ctrlSlide: "<b>↓</b> ou <b>S</b> — glisser",
     ctrlPause: "<b>Échap</b> — pause",
-    hint: "Les piliers violets annoncent un virage : appuyez dans la bonne direction avant le coin. Percuter un obstacle ne tue pas, mais la meute gagne du terrain.",
+    hint: "Les piliers violets annoncent un virage : appuie dans la bonne direction avant le coin. Percuter un obstacle ne tue pas, mais la meute gagne du terrain.",
     // Zip 377. Le texte doit dire les trois choses qui comptent, dans cet
     // ordre : où c'est, ce que ça fait, ce que ça coûte. Un joueur qui lit
     // « sortie » sans savoir que son score s'arrête là se sentira volé.
-    hintExit: "Tous les 4000 m, un embranchement s'ouvre sur le côté : tournez vers lui pour quitter la course sain et sauf. Votre score s'arrête au virage, mais il compte.",
-    hintFarm: "Les bonbons ramassés seront rapportés à la ferme. En cas de défaite, vous rentrerez blessé.",
+    hintExit: "Tous les 4 000 m, un embranchement s'ouvre sur le côté : tourne vers lui pour quitter la course sain et sauf. Ton score s'arrête au virage, mais il compte.",
+    hintFarm: "Les bonbons ramassés seront rapportés à la ferme. Si la meute te rattrape, tu rentreras blessé.",
+    // 2026-11-07 — audit G14 : ce que la quête attend, rappelé à l'accueil (envoyé par la ferme dans « vf-run-init »).
+    hintQuest: (have, need) => `L'étoile bleue attend ${need} bonbons : tu en as ${have}.`,
 
     hudScore: "Score",
     hudCandies: "Bonbons",
@@ -34,23 +36,23 @@ const RUN_STR = {
     hudBest: "Record",
     hudPack: "Meute",
     exitIn: (m) => `Sortie dans ${m} m`,
-    exitNow: "Sortie — tournez maintenant",
+    exitNow: "Sortie — tourne maintenant",
 
     pause: "Pause",
     resume: "Reprendre",
     quit: "Abandonner",
     quitWarn: "Abandonner une course en cours compte comme une défaite.",
 
-    escapeTitle: "Vous quittez la piste",
+    escapeTitle: "Tu quittes la piste",
     escapeSub: "La meute continue tout droit.",
 
     over: "Rattrapé",
     escaped: "Échappé",
-    reasonWolves: "La meute vous a rattrapé.",
-    reasonGap: "Vous êtes tombé dans le vide.",
-    reasonFall: "Virage manqué — vous êtes passé par-dessus bord.",
+    reasonWolves: "La meute t'a rattrapé.",
+    reasonGap: "Tu es tombé dans le vide.",
+    reasonFall: "Virage manqué — tu es passé par-dessus bord.",
     reasonAbort: "Course abandonnée.",
-    reasonEscape: "Vous avez pris l'embranchement et semé la meute.",
+    reasonEscape: "Tu as pris l'embranchement et semé la meute.",
     newBest: "Nouveau record !",
     labelScore: "Score",
     labelCandies: "Bonbons",
@@ -58,10 +60,10 @@ const RUN_STR = {
     labelBest: "Record",
     backFarm: "Retour à la ferme",
     backMenu: "Retour au menu",
-    overHintFarm: "Vous rentrez à la ferme blessé pour 10 minutes. Les bonbons ramassés sont conservés.",
+    overHintFarm: "Tu rentres à la ferme blessé pour 10 minutes. Les bonbons ramassés sont conservés.",
     overHintSolo: "Prototype autonome : aucune conséquence hors du défi.",
 
-    loadError: "Three.js n'a pas pu être chargé. Le défi a besoin d'un accès internet au premier lancement. Vérifiez la connexion, puis relancez.",
+    loadError: "Three.js n'a pas pu être chargé. Le défi a besoin d'un accès internet au premier lancement. Vérifie la connexion, puis relance.",
   },
 
   en: {
@@ -75,6 +77,7 @@ const RUN_STR = {
     hint: "Purple pillars announce a turn: press the matching direction before the corner. Hitting an obstacle won't kill you, but the pack gains ground.",
     hintExit: "Every 4000 m a side track opens up: turn into it to leave the run in one piece. Your score stops at the fork — but it counts.",
     hintFarm: "Candies you pick up are carried back to the farm. If you lose, you return injured.",
+    hintQuest: (have, need) => `The blue star wants ${need} candies: you have ${have}.`,
 
     hudScore: "Score",
     hudCandies: "Candies",

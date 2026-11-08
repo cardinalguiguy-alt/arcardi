@@ -11,21 +11,21 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-11-01 — LE BOULODROME, LOT 4 : LE CLUB DES BOULISTES (FERNAND, MIREILLE, TOINOU) ; LOT 5 : LES SONS, LA MESURE ; LE LÂCHER REFAIT
+### 2026-11-08 (suite) — LA FÊTE ET LE NAVIRE (G9-G11, M14) ; PUIS G8, M7, M13 — RIEN N'EST COMMITTÉ
 
-1. **Boulodrome, lot 4 fait** (ses 19 verdicts, `docs/PROJETS.md` §11 ; le casting est le mien) : `bouloBot.js`, `boulistes.js` (purs),
-   la doublette dans `bouloJeu.js`, le bloc « LOT 4 » de FermeGame.js ; les sons (`sonBoules.js`) et la mesure du lot 5.
-   `verify-boulo-bot` 49/49, vu en jeu seul et à deux (la nuit, la pluie, la neige comprises). Au doigt, la visée se pose puis se valide en deux temps. À juger : `docs/A-JUGER.md` (lots 3 et 4).
-   **Le lâcher refait sur son premier essai** (la jauge était cachée sous son nom) : le point de chute va et vient sur un rail au sol, on lâche
-   dans l'anneau doré, un mot suit (« Pile ! ») ; difficulté inchangée. `verify-boulo-jeu` 34/34.
-2. **La succession d'hôte figeait la ferme** (la boucle de rendu gardait l'`isHost` de son montage : un invité promu ne simulait rien) :
-   corrigé, vu au harnais ; à voir en vrai à deux (l'hôte ferme son onglet). Et le verger refusait une case arrosée (`C.G_SOIL` fantôme).
-3. **Notés pour plus tard** : le réseau « instantané, sans limite de messages » (`docs/PROJETS.md` §13, mesuré : ≈ 30 h de ferme à deux par
-   mois) ; rejouer la quête de l'étoile (même fichier, §14). Codex n'est plus disponible (§2).
-⚠️ `app/audit-tmp` vise les crochets React d'AVANT `sharedRef` par leur distance : tout crochet neuf APRÈS lui. ⚠️ `app/audit-*`,
-`app/api/audit-cap` : **à supprimer avant déploiement**.
+1. **La fête** (G9-G11, `fete.js` pur, `feteArt.js`, `sonFete.js`, autorité en tête de `components/ferme/QUETE.md`) et **le navire
+   magnifique** (M14, nom peint en lettres d'or) : vus en jeu, à un et à deux. **Pas vu** : le son, le geste du tirage au sort, un iPad.
+2. **G8** (halage de la septième sœur) : sa lumière écarte les créatures pendant le halage (`Q.evilHaloStep`, `pub.halo` porté par la
+   position) ; capture = 10 min au lieu de 30 tant qu'elle est à sauver (`Q.starEvilInjuryMs`) ; toast qui recommande la pommade.
+3. **M7** (les deux chutes) : voile du météore borné (il montait à 1,6 → écran noir) ; plan de la ferme en amont de la course
+   (`Q.starFarmCamLead`, 68 % du vol à l'écran) ; interface masquée pendant les plans ; fonte des cratères = boue et paille (`neige.js`).
+   **Pas fait** : les feuillus de la FERME gardent leurs feuilles en hiver (dette du zip 232, chantier graphique à part).
+4. **M13** : chiffré (45 min à 1 h 50 d'attentes imposées), puis **« plus cher »** (Guillaume) : plans 60 000 or + 100 récoltes +
+   20 poissons, navire 450 000 or ; attentes inchangées. Montants groupés à l'affichage (« 60 000 »). **Pas vu en jeu** : le guichet.
+5. ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.
+   En attente aussi : boulodrome lots 3-4 (`docs/A-JUGER.md`) ; succession d'hôte à deux ; M17 (le rendez-vous chez le maire à plusieurs).
 
-### ⏭️ ACTION SUIVANTE — FAIRE JOUER LES LOTS 3 ET 4 À GUILLAUME (S'ENTRAÎNER, DÉFIER TOINOU, PUIS FERNAND), PUIS LA FIN DU LOT 5 (FANNY, L'AIMANT, LA GAZETTE)
+### ⏭️ ACTION SUIVANTE — GUILLAUME JOUE LA FÊTE, LE NAVIRE ET LE HALAGE (À DEUX SI POSSIBLE)
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -69,7 +69,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 | Clôtures, buis, haies | `components/ferme/clotures.js`, `buis.js` | `render-haies`, `render-buis` |
 | Génération de la ville, rues, collision, marche | `components/ferme/fermeEngine.js` ; README ferme §15 et §15 bis (pièges) | `verify-vallee`, `verify-collision`, `verify-compo`, `render-rues` |
 | Tribunal, mairie, église, beffroi, escaliers | README ferme §7, §22 ; `components/ferme/DESSIN.md` | `render-tribunal`, `render-mairie`, `render-eglise`, `render-beffroi`, `render-escaliers` |
-| Quête de l'étoile, navire | `components/ferme/QUETE.md` (§17 d'abord), `quete.js` | `verify-quete`, `render-etoile`, `render-navire` |
+| Quête de l'étoile, navire | `docs/AUDIT-QUETE-2026-11.md` (l'état joué, 35 constats) ; `components/ferme/QUETE.md` (§17 d'abord), `quete.js` ; la fête finale : `components/ferme/fete.js`, `feteArt.js`, `sonFete.js` | `verify-quete`, `verify-jalons`, `verify-fete`, `render-etoile`, `render-navire` |
 | Maire, élections, audience | `components/ferme/maire.js`, `MaireScene.js`, `maireBureau.js` | `verify-maire`, `render-maire` |
 | Scierie de Tristan | `components/ferme/scierie.js`, `scierieAtelier.js`, `ScierieScene.js` | `verify-scierie`, `render-scierie` |
 | Marché, vente, économie | README ferme §14 ; `fermeEngine.js` | `verify-vallee` |
@@ -264,6 +264,10 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - UN COUP DE POUCE DU JEU S'ACCORDE UNE FOIS PAR GESTE : REDONNÉ À CHAQUE PAS, IL DEVIENT UN ÉTAT
 - UNE TRANCHE DE TRI QUI PORTE UN RELIEF PASSE DEVANT CE QUI SE TIENT DEDANS, CE QUI EST DERRIÈRE COMPRIS
 - UNE FEUILLE DE PERSONNAGE EST UN ATLAS : LES POSES LA DÉCOUPENT PAR REPÈRES, ET UNE RETOUCHE DU GABARIT SE JUGE SUR CHACUNE
+- UN BANC QUI APPELLE LE RÉSOLVEUR NE VOIT PAS LE CLIENT : UN GESTE SE TESTE PAR LES FONCTIONS QUE LE CLIENT APPELLE
+- UN BESOIN DU MONDE LU SUR LA CLÉ DU BANDEAU RATE LES OBJECTIFS PARALLÈLES : IL SE LIT SUR L'ÉTAT
+- UN ZOOM QUI GLISSE RECUIT LE SOL CUIT PAR BLOCS À CHAQUE IMAGE
+- UN BANC QUI RECONNAÎT UN EFFET À SA TEINTE SE TROMPE LE JOUR OÙ LE DESSIN PREND CETTE TEINTE
 
 **JavaScript / three.js / canevas**
 
@@ -310,6 +314,7 @@ avant d'éditer. Ailleurs, à côté de ce qu'ils décrivent : les pièges de la
 - `crystal` n'affiche AUCUNE image
 - La caméra de `walk` est 2,6 unités DERRIÈRE le personnage.
 - Rendre un objet invisible ne le retire pas du monde.
+- `h >> n` SUR UN HACHAGE NON SIGNÉ REND UN INDICE NÉGATIF UNE FOIS SUR DEUX
 
 <!-- pieges:fin -->
 
@@ -329,6 +334,7 @@ Tout « §N » cité dans le code, les README et les bancs reste valable : on le
 | — | projets décidés, pas commencés (catalogue Garfield, création du personnage, iPad, place hors hiver, piscine) | `docs/PROJETS.md` |
 | 14 | maintenir ce fichier (règles et leçons complètes) | `docs/ENTRETIEN.md` |
 | — | audit 2026-10 : graphismes (ferme, ville, intérieurs), fluidité à deux, corrections FIX-… | `docs/AUDIT-2026-10.md` |
+| — | audit en jeu de la quête du bateau des étoiles (2026-11-07) | `docs/AUDIT-QUETE-2026-11.md` |
 
 ## 14. Maintenir ce fichier — RÉSUMÉ (règles et leçons complètes : `docs/ENTRETIEN.md`, à lire en fin de livraison)
 

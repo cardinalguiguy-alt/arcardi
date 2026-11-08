@@ -258,6 +258,12 @@ Les DEUX dossiers `audit-*` et `app/api/audit-cap` se suppriment avant livraison
 `pagehide` et ne revient qu'au `pageshow` — l'hôte devient muet (« falling back to REST API »), un invité rechargé reste à l'écran de choix. Envoyer
 `new PageTransitionEvent("pageshow", { persisted: true })` juste après.
 
+⚠️⚠️ **LE VOLET MASQUÉ SUSPEND LA PAGE — UN CHROME SANS TÊTE LA REMPLACE (2026-11-08)** : quand le volet du navigateur intégré est
+masqué, la page n'avance plus (les outils expirent, même `javascript_tool`). Recette dans l'en-tête de `tools/cdp.mjs` : Chrome
+`--headless=new --remote-debugging-port=9333`, puis `node tools/cdp.mjs nav|eval|key|click|shot`. Elle a joué la fête du navire de
+bout en bout, à un client puis à deux (`/audit-duo`, les iframes se pilotent par `window.A/B.contentWindow`), captures lues comme
+images. ⚠️ Fermer d'abord l'onglet du volet : un client gelé resté HÔTE gèle tout le salon.
+
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
 quelle au 454 puis au 456) :
 1. l'URL factice `http://127.0.0.1:54321` — ⚠️ **SANS RÉÉCRIRE `.env.local`, qui porte les vraies

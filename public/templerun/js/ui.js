@@ -42,7 +42,9 @@ const UI = (function () {
     html("cSlide", L.ctrlSlide); html("cPause", L.ctrlPause);
     txt("tHint", L.hint);
     txt("tHintExit", L.hintExit);
-    txt("tHintFarm", Bridge.embedded ? L.hintFarm : "");
+    // 2026-11-07 — audit G14 : l'objectif de la quête d'abord, s'il y en a un.
+    const q = Bridge.quest;
+    txt("tHintFarm", Bridge.embedded ? (q ? L.hintQuest(q.have, q.need) + " " : "") + L.hintFarm : "");
     txt("eTitle", L.escapeTitle); txt("eSub", L.escapeSub);
 
     txt("lScore", L.hudScore); txt("lCoins", L.hudCandies);

@@ -54,6 +54,7 @@ copy("gazette");       // 2026-10-04 — le tableau des nouvelles (gazette, peti
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
 const Q = await import(pathToFileURL(path.join(tmp, "quete.js")).href);
+const FTQ = await import(pathToFileURL(path.join(tmp, "fete.js")).href);   // 2026-11-08 — la chronologie de la fête
 
 /* ⚠️⚠️ ZIP 479 — LE BANC REJOUE LE VRAI GESTE, PAS SA MOITIÉ. C'est la leçon 469
    (« un banc qui invente ses données mesure un jeu que personne ne joue »)
@@ -1677,8 +1678,10 @@ section("La chute est vue, et le chevron désigne (445)");
        premier réglage, et le symptôme serait le pire du genre : juste à la
        ferme, faux en ville (§4, troisième visage du piège n°1). */
     const camCalls = (src.match(/starCamNow\(/g) || []).length;
-    ok("⚠️ les deux caméras appellent la MÊME fonction de scène",
-       camCalls === 3, `${camCalls} occurrences (1 déclaration + 2 appels)`);
+    /* 2026-11-08 (audit M7) — un quatrième lecteur, et il ne calcule rien : l'interface se tait tant que la caméra de la
+       scène cadre ailleurs (`starCamNow(m.zone …)`, dans le battement de la fête). Il LIT la même fonction : c'est le but. */
+    ok("⚠️ les deux caméras appellent la MÊME fonction de scène (et l'interface la lit pour se taire)",
+       camCalls === 4 && /starCamNow\(m\.zone/.test(src), `${camCalls} occurrences (1 déclaration + 2 caméras + l'interface)`);
     ok("…la ferme la lit", /starCamNow\("farm"\)/.test(src));
     ok("…la ville aussi", /starCamNow\("town"\)/.test(src));
     /* ⚠️ LE CHEVRON REFUSE LES AUTRES ZONES. Sans ce garde, il pointerait « à
@@ -3292,78 +3295,49 @@ section("La construction du navire (454)");
     ok("le navire est fini : le don réussit, et la finale commence", rg.ok && Q.starDone(e));
     ok("⚠️ …et le bandeau/chevron convoquent aussitôt, à la mairie",
        Q.starGoalKey(e, {}) === "finaleSummon" && Q.starTargetSite(e, {}) === "townHall");
-    /* ⚠️⚠️⚠️ LE BAPTÊME REFUSE SANS L'ACCORD DU MAIRE (falsifié : sans le garde
-       `starFinaleAgreed`, on pourrait nommer le navire avant même d'avoir
-       parlé au maire — l'ordre du récit D11 ne tiendrait plus). */
-    ok("⚠️⚠️⚠️ le baptême refuse tant que le maire n'a pas convoqué-accepté",
-       Q.resolveStarBaptize(e, "j1", 4).ok === false && !Q.starShipName(e));
-    ok("⚠️⚠️ …et l'inauguration refuse aussi, pour la même raison",
-       Q.resolveStarFinaleInaugurate(e, "j1", 4).ok === false);
-    const ra = Q.resolveStarFinaleAgree(e, "j1", 5);
-    ok("le maire accorde la fête", ra.ok && Q.starFinaleAgreed(e));
-    const ra2 = Q.resolveStarFinaleAgree(e, "j2", 6);
+    /* ⚠️⚠️⚠️ 2026-11-08 — LA FÊTE REFUSE SANS L'ACCORD DU MAIRE (falsifié : sans le garde `starFinaleAgreed`, on pourrait
+       lancer la cérémonie avant d'avoir parlé au maire — l'ordre du récit ne tiendrait plus). Le détail de la cérémonie
+       (votes, bouteille, naufrage, fin) est joué par `verify-fete`. */
+    ok("⚠️⚠️⚠️ la fête refuse tant que le maire n'a pas convoqué-accepté",
+       Q.resolveFeteStart(e, "j1", 4).ok === false && !Q.starShipName(e));
+    const ra = Q.resolveStarFinaleAgree(e, "j1", 5, 500);
+    ok("le maire accorde la fête, et en fixe l'heure dans le même geste", ra.ok && Q.starFinaleAgreed(e) && e.finale.feteAt === 500);
+    const ra2 = Q.resolveStarFinaleAgree(e, "j2", 6, 900);
     ok("⚠️ …et un second « oui » ne réécrit rien (idempotent)",
-       ra2.ok && ra2.already === true && e.finale.agreedAt === 5);
-    ok("⚠️ le bandeau passe au baptême, à la cale",
-       Q.starGoalKey(e, {}) === "finaleBaptize" && Q.starTargetSite(e, {}) === "shipyard");
-    /* ⚠️⚠️ L'INAUGURATION REFUSE ENCORE, TANT QUE LE NAVIRE N'A PAS DE NOM
-       (falsifié : sans le garde `starFinaleBaptized`, on pourrait inaugurer un
-       bateau jamais baptisé — D11 exige l'ordre baptême PUIS inauguration). */
-    ok("⚠️⚠️⚠️ l'inauguration refuse tant que le navire n'a pas de nom",
-       Q.resolveStarFinaleInaugurate(e, "j1", 7).ok === false);
-    const rb = Q.resolveStarBaptize(e, "j1", 8);
-    ok("le baptême réussit, et `starShipName` rend enfin le nom (D1)",
-       rb.ok && Q.starShipName(e) === C.STAR_SHIP_NAME);
-    const rb2 = Q.resolveStarBaptize(e, "j2", 9);
-    ok("⚠️ …et un second baptême ne réécrit rien (idempotent)",
-       rb2.ok && rb2.already === true && e.baptism.at === 8 && e.baptism.by === "j1");
-    ok("⚠️ le bandeau passe à l'inauguration, toujours à la cale",
-       Q.starGoalKey(e, {}) === "finaleInaugurate" && Q.starTargetSite(e, {}) === "shipyard");
-    const ri = Q.resolveStarFinaleInaugurate(e, "j1", 10);
-    ok("l'inauguration réussit", ri.ok && Q.starFinaleInaugurated(e));
-    const ri2 = Q.resolveStarFinaleInaugurate(e, "j2", 11);
-    ok("⚠️ …et une seconde inauguration ne réécrit rien (idempotent)",
-       ri2.ok && ri2.already === true && e.finale.inaugAt === 10);
-    ok("⚠️⚠️ LES TROIS ÉTAPES FRANCHIES : LE BANDEAU SE TAIT POUR DE BON",
-       Q.starGoalKey(e, {}) === null);
-    /* ── LA FENÊTRE DE LA CÉRÉMONIE, ET LE DÉPART DU NAVIRE, DÉRIVÉS D'UNE
-       SEULE DATE (`e.finale.inaugAt` = 10) — jamais un second champ. */
-    ok("⚠️⚠️ la fenêtre de la cérémonie est active juste après l'inauguration",
-       Q.starFinaleInaugActive(e, 11));
-    ok("…et elle se referme toute seule, `STAR_FINALE_INAUG_MS` plus tard",
-       !Q.starFinaleInaugActive(e, 10 + Q.STAR_FINALE_INAUG_MS + 1));
-    ok("⚠️ le départ du navire (`starFinaleLaunchK`) vaut 0 avant l'heure du départ",
-       Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS - 1) === 0);
-    const kMid = Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS + 1500);
-    ok("⚠️⚠️ …puis progresse strictement entre 0 et 1 pendant les trois secondes du départ",
-       kMid > 0 && kMid < 1, `k=${kMid}`);
-    ok("…et atteint 1 (parti) à la fin de ce court trajet",
-       Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS + 3000) === 1);
-    ok("⚠️⚠️ la cinématique finale (étoiles + texte) N'EST PAS due tout de suite",
-       !Q.starFinaleEndDue(e, 10 + Q.STAR_FINALE_END_AT_MS - 1));
-    ok("⚠️⚠️⚠️ …mais elle L'EST, `STAR_FINALE_END_AT_MS` après l'inauguration — jamais après `doneAt`",
-       Q.starFinaleEndDue(e, 10 + Q.STAR_FINALE_END_AT_MS + 1)
-       && !Q.starFinaleEndDue(e, 3 + Q.STAR_FINALE_END_AT_MS + 1));
+       ra2.ok && ra2.already === true && e.finale.agreedAt === 5 && e.finale.feteAt === 500);
+    ok("⚠️ le bandeau dit d'attendre l'heure, à la cale",
+       Q.starGoalKey(e, {}) === "finaleWait" && Q.starTargetSite(e, {}) === "shipyard");
+    ok("⚠️⚠️ la fête refuse avant son heure", Q.resolveFeteStart(e, "j1", 499).early === true);
+    ok("⚠️ à l'heure, « tout le monde au quai »", Q.starGoalKey(e, { feteReady: true }) === "finaleGo" && Q.starTargetSite(e, { feteReady: true }) === "shipyard");
+    const rs = Q.resolveFeteStart(e, "j1", 600);
+    ok("le signal est donné ; un second signal ne réécrit rien", rs.ok && e.finale.startAt === 600 && Q.resolveFeteStart(e, "j2", 700).already === true && e.finale.startAt === 600);
+    ok("⚠️⚠️ pendant la cérémonie, le bandeau se tait", Q.starGoalKey(e, { feteReady: true }) === null);
+    const tl = FTQ.feteTimeline(e.finale);
+    Q.resolveFeteClose(e, ["j1"], tl.open.deadline + 1, 0, 0);
+    const end = FTQ.feteTimeline(e.finale).end;
+    ok("la fin de la fête : `inaugAt`, et le baptême porte le nom voté", Q.resolveFeteEnd(e, "j1", end).ok && Q.starFinaleInaugurated(e) && Q.starShipName(e) === C.STAR_SHIP_NAME && e.finale.inaugAt === end);
+    ok("⚠️⚠️ LA FÊTE FINIE : LE BANDEAU SE TAIT POUR DE BON", Q.starGoalKey(e, { feteReady: true }) === null);
   }
-  /* ── LES TROIS CHAMPS SURVIVENT À LA MIGRATION (la leçon de `vandal`, §14.2
-     de CLAUDE.md : un champ écrit par un résolveur et absent de `migrateStar`
-     disparaît en silence à la requête suivante). */
+  /* ── LES CHAMPS SURVIVENT À LA MIGRATION (la leçon de `vandal`, §14.2 de CLAUDE.md : un champ écrit par un résolveur et
+     absent de `migrateStar` disparaît en silence à la requête suivante). */
   {
     const e = devAll(signedStar(), 1).star;
     Q.resolveStarGift(e, ["j1"], 2);
-    Q.resolveStarFinaleAgree(e, "j1", 3);
-    Q.resolveStarBaptize(e, "j1", 4);
-    Q.resolveStarFinaleInaugurate(e, "j1", 5);
+    Q.resolveStarFinaleAgree(e, "j1", 3, 4);
+    Q.resolveFeteStart(e, "j1", 5);
+    Q.resolveFeteClose(e, ["j1"], FTQ.feteTimeline(e.finale).open.deadline + 1, 0, 0);
+    const end = FTQ.feteTimeline(e.finale).end;
+    Q.resolveFeteEnd(e, "j1", end);
     const round = JSON.parse(JSON.stringify(e));
     const e2 = Q.migrateStar(round);
-    ok("⚠️⚠️⚠️ `finale.agreedAt`/`finale.inaugAt` et `baptism` survivent à `migrateStar`",
-       e2.finale.agreedAt === 3 && e2.finale.inaugAt === 5
-       && e2.baptism && e2.baptism.at === 4 && e2.baptism.by === "j1");
+    ok("⚠️⚠️⚠️ `finale` (accord, heure, signal, nom, fin) et `baptism` survivent à `migrateStar`",
+       e2.finale.agreedAt === 3 && e2.finale.feteAt === 4 && e2.finale.startAt === 5 && e2.finale.inaugAt === end
+       && e2.finale.name && e2.finale.name.k === 0 && e2.baptism && e2.baptism.k === 0 && e2.baptism.by === "j1");
   }
   /* ── LES TROIS OBJECTIFS ONT LEUR ADRESSE, COMME TOUS LES AUTRES (§ « chaque
      objectif a une adresse, ou une raison écrite de n'en pas avoir »). */
   ok("⚠️ les trois objectifs de la finale visent un lieu réel de la table hors-lieux",
-     ["finaleSummon", "finaleBaptize", "finaleInaugurate"].every(k =>
+     ["finaleSummon", "finaleWait", "finaleGo"].every(k =>
        Q.STAR_OFF_TABLE_TARGETS.includes(Q.STAR_GOAL_TARGET[k])));
 
   /* ── LE MENU DÉVELOPPEUR NE PROMET PAS CE QU'IL NE DONNE PAS. */
@@ -3487,8 +3461,29 @@ section("Les textes de la quête");
   // D11 — les trois invites de la finale, même discipline (voir la note ci-dessus
   // sur le repli menteur « || E » : la clé qui manque n'échoue jamais toute seule).
   for (const p of ["impact", "impactDig", "impactSeen", "material", "tame", "crater", "craterHot", "engineer",
-                    "finaleBaptize", "finaleInaugurate", "finaleGather"])
+                    "feteStart", "feteBottle", "finaleGather"])
     ok(`l'invite « ${p} » a son texte`, typeof st.prompt(p) === "string" && st.prompt(p) !== "E");
+  /* ⚠️⚠️⚠️ 2026-11-07 — AUDIT G12 : LE CONTRÔLE QUE LE COMMENTAIRE DE `fermeStrings.js`
+     PROMETTAIT DEPUIS LE 2026-09-12, ET QUI N'EXISTAIT PAS. La liste ci-dessus est
+     écrite à la main (onze clés) : la clé `dock` (le ponton) manquait à la table,
+     le repli `|| "E"` affichait un « E » nu, et ce banc était vert. On balaie
+     maintenant le SOURCE : chaque `p: "…"` rendu par `starNearby` (FermeGame.js)
+     doit avoir son texte dans les deux langues, sans passer par le repli. Et le
+     banc publie combien il en a lu (leçon du 441 : un scanner qui ne lit rien
+     passe toujours au vert). */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    const i0 = src.indexOf("  function starNearby() {");
+    const i1 = i0 >= 0 ? src.indexOf("\n  function ", i0 + 10) : -1;
+    const body = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : "";
+    const keys = [...new Set([...body.matchAll(/\bp:\s*"([A-Za-z0-9_]+)"/g)].map(m => m[1]))];
+    for (const lang of ["fr", "en"]) {
+      const pr = S.FERME_STR[lang].star.prompt;
+      const bare = keys.filter(k => typeof pr(k) !== "string" || pr(k) === "E");
+      ok(`⚠️⚠️ chaque invite de \`starNearby\` a son texte (${lang}, sans le repli « E »)`,
+         keys.length >= 20 && bare.length === 0, `${keys.length} clés lues ; nues : ${bare.join(", ") || "aucune"}`);
+    }
+  }
   /* ⚠️⚠️ UN TITRE DE MINI-JEU EST UN NOM, PAS UNE PHRASE, ET LE BANC LE MESURE
      EN CARACTÈRES. Le premier jet passait `rackHint` (« One of these beads used
      to be a star… ») comme titre : à 15 px de chasse fixe sur un canevas de
@@ -5011,7 +5006,7 @@ section("La frise du menu dev (« aller à » une étape) et les médailles");
   {
     const e = Q.migrateStar(JSON.parse(JSON.stringify(Q.devStarTo(Q.newStar(), "done", T0, "p1", ["p1"]).star)));
     ok("⚠️ « Quest complete » : la quête est gagnée, la fin est due tout de suite, rien n'est plus à faire",
-       Q.starQuestComplete(e) && !!e.doneAt && Q.starFinaleEndDue(e, T0) && Q.starDevStepAt(e) === -1);
+       Q.starQuestComplete(e) && !!e.doneAt && Q.starFinaleInaugurated(e) && Q.starDevStepAt(e) === -1);
     ok("⚠️ … et le vandale a déjà fui (sa course ne repart pas à chaque clic)",
        Q.vandalPhase(e, T0) === "gone", Q.vandalPhase(e, T0));
   }
@@ -5092,6 +5087,95 @@ section("Le tableau des nouvelles : gazette et petites annonces");
   // la gazette ne parle pas d'étoile avant l'avis (consigne de QUETE.md)
   const early = GZm.gazetteOfDay({ seed: 1, day: 3, quest: { yardOffer: true } });
   ok("avant l'avis, la une parle du port, pas du ciel", early.head.key === "yardOffer");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-11-07 — AUDIT B2/B3 : LE PASSAGE RESTE SUR LES TERRES MALÉFIQUES TANT QUE
+   LA QUÊTE EN A BESOIN. Le forçage lisait la seule clé du bandeau : la rose sans
+   chaudron et la septième sœur dépendaient de la rotation (~4 h réelles).
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Le passage reste ouvert sur les Terres Maléfiques (audit B2/B3)");
+{
+  const e = Q.newStar(); e.fall = 1;
+  ok("rien de fouillé : le passage suit sa rotation", Q.starNeedsEvil(e, null, false) === false);
+  const rose = Q.STAR_WARM_SITE;
+  Q.resolveStarDig(e, rose, "j1", 2);
+  ok("⚠️ la rose fouillée, chaudron pas encore ramassé : forcé", Q.starNeedsEvil(e, null, false) === true);
+  ok("…chaudron ramassé : la rose ne force plus rien", Q.starNeedsEvil(e, null, true) === false);
+  const blue = Q.STAR_FARM_IMPACTS.find(s => s.verb === "light").id;
+  Q.resolveStarDig(e, blue, "j1", 3);
+  ok("la bleue fouillée, pas éclairée : forcé, même chaudron ramassé et même si le bandeau parle d'une autre",
+     Q.starNeedsEvil(e, null, true) === true);
+  const white = Q.STAR_FARM_IMPACTS.find(s => s.verb === "lure").id;
+  const e2 = Q.newStar(); e2.fall = 1; Q.resolveStarDig(e2, white, "j1", 2);
+  ok("la blanche fouillée, sans fiole : forcé ; la fiole en main : plus besoin",
+     Q.starNeedsEvil(e2, null, true) === true && Q.starNeedsEvil(e2, { potion: true }, true) === false);
+  const e3 = Q.newStar(); e3.ch = Q.STAR_CH_DONE - 1;
+  ok("⚠️ la septième sœur à trouver, haler ou porter : forcé", Q.starNeedsEvil(e3, null, true) === true);
+  Q.resolveStarFound(e3, Q.STAR_EVIL_ID, "j1", 5);
+  ok("…réanimée : le passage retrouve sa rotation", Q.starNeedsEvil(e3, null, true) === false);
+  e3.ch = Q.STAR_CH_DONE - 1; e3.doneAt = 9;
+  ok("quête finie : plus jamais forcé", Q.starNeedsEvil(e3, null, false) === false);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-11-08 (audit G8) — LE HALAGE N'EST PLUS UN PIÈGE, ET UNE CAPTURE NE COÛTE PLUS LA SOIRÉE.
+   Le joueur qui hale est ANCRÉ : la règle de Guillaume (« s'en sortir techniquement, pas de blocage
+   total ou répété ») exige qu'aucune créature ne puisse l'atteindre pendant ce temps. On joue la
+   règle de mouvement pure (`Q.evilHaloStep`) contre des créatures parties de partout dans le rayon
+   de détection, pendant une minute, et on mesure la plus petite distance atteinte.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Le plan de la pluie se pose en amont de la course (audit M7)");
+{
+  for (let i = 0; i < Q.STAR_FARM_ANIMATED_N; i++) {
+    const ld = Q.starFarmCamLead(i), a = Q.starFarmFlightPath(i, 0).angle;
+    const along = -(ld.dx * Math.cos(a) + ld.dy * Math.sin(a));
+    ok(`fragment ${i + 1} : le centre du plan recule de ${Q.STAR_FARM_CAM_LEAD} cases vers d'où il vient`, Math.abs(along - Q.STAR_FARM_CAM_LEAD) < 1e-9);
+  }
+  /* La part du vol visible : un cadre de 1200 × 713 au cran 3 (48 px la case), l'impact décalé du centre par le recul. Avant :
+     l'entrée à 0,72 diagonale et le plan sur le trou. On exige au moins la moitié du vol à l'écran. */
+  const W = 1200, H = 713, TP = 48, a = Q.starFarmFlightPath(0, 0).angle, diag = Math.hypot(W, H);
+  const visibleFrom = (lead, entry) => {
+    const ex = W / 2 + Math.cos(a) * lead * TP, ey = H / 2 + Math.sin(a) * lead * TP;
+    const inside = Math.min(ex / Math.cos(a), ey / Math.sin(a)), len = diag * entry;
+    for (let u = 0; u <= 1.0001; u += 0.001) if ((1 - Q.starFarmFlightPath(0, u).travel) * len <= inside) return u;
+    return 1;
+  };
+  const before = 1 - visibleFrom(0, 0.72), after = 1 - visibleFrom(Q.STAR_FARM_CAM_LEAD, Q.STAR_FARM_ENTRY);
+  ok(`⚠️ la pierre est à l'écran ${Math.round(after * 100)} % du vol (avant : ${Math.round(before * 100)} %)`, after >= 0.5 && after > before + 0.2);
+}
+section("La lumière de la septième sœur pendant le halage (audit G8)");
+{
+  const t = { x: 34, y: 24 }, DT = 1 / 60, R = C.EVIL_HAUL_HALO_R;
+  let minD = Infinity, endBand = true, prowled = 0;
+  for (let a = 0; a < 16; a++) for (const r0 of [1, 3, R + 0.3, 7, C.EVIL_MONSTER_DETECT_RADIUS]) {
+    const mo = { x: t.x + Math.cos(a * 0.39) * r0, y: t.y + Math.sin(a * 0.39) * r0 };
+    let start = null;
+    for (let i = 0; i < 60 * 60; i++) {
+      const st = Q.evilHaloStep(mo, t, DT, a % 2 ? 1 : -1);
+      mo.x = st.x; mo.y = st.y;
+      const d = Math.hypot(mo.x - t.x, mo.y - t.y);
+      if (i > 60 * 4) minD = Math.min(minD, d);
+      if (i === 60 * 59) start = { x: mo.x, y: mo.y };
+      if (st.mode === "prowl" && i > 60 * 50) prowled++;
+    }
+    const d = Math.hypot(mo.x - t.x, mo.y - t.y);
+    if (d < R - 1e-6 || d > R + 0.6 + 1e-6) endBand = false;
+  }
+  ok(`⚠️ après 4 s, aucune créature n'est à moins de ${R} cases du joueur qui hale (plus proche : ${minD.toFixed(2)})`, minD >= R - 1e-6);
+  ok("au bout d'une minute, toutes rôdent sur le bord du halo (ni dedans, ni reparties)", endBand);
+  ok("elles rôdent (elles bougent au bord, elles ne se figent pas)", prowled > 0);
+  const inside = Q.evilHaloStep({ x: t.x + 1, y: t.y }, t, 0.1, 1);
+  ok("une créature dans le halo recule, à sa vitesse", inside.mode === "flee" && inside.x > t.x + 1
+     && Math.abs(inside.x - (t.x + 1) - C.EVIL_MONSTER_SPEED * 0.1) < 1e-9);
+  ok("la morsure (contact) est hors d'atteinte : le halo est bien plus large", R > C.EVIL_MONSTER_CATCH_RADIUS * 4);
+  ok("le halo tient dans le rayon de détection (on les voit venir, puis s'arrêter)", R < C.EVIL_MONSTER_DETECT_RADIUS);
+  const e = Q.newStar();
+  ok("hors de la septième sœur, une capture dure toujours 30 min (décision de 2026-07)", Q.starEvilInjuryMs(e) === C.EVIL_INJURED_MS);
+  e.ch = Q.STAR_CH_DONE - 1;
+  ok("⚠️ la septième sœur à sauver : une capture dure 10 min, comme au labyrinthe", Q.starEvilInjuryMs(e) === C.RUN_INJURED_MS && C.RUN_INJURED_MS <= C.EVIL_INJURED_MS / 3);
+  Q.resolveStarFound(e, Q.STAR_EVIL_ID, "j1", 5);
+  ok("…réanimée : on revient aux 30 min", Q.starEvilInjuryMs(e) === C.EVIL_INJURED_MS);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

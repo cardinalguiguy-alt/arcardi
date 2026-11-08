@@ -70,7 +70,7 @@ installFakeDOM();
 /* ⚠️ `quete` EST DEMANDÉ POUR LA JOINTURE (contrôle 6) ET POUR RIEN D'AUTRE : le
    dessin, lui, ne reçoit que cinq booléens. Un banc de RENDU qui aurait besoin de
    monter la quête pour peindre serait un banc qu'on finit par ne plus lancer. */
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "quete"]);
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "quete", "feteArt"]);
 const C = mods.fermeConstants, A = mods.fermeArt, Q = mods.quete;
 const S = A.buildSprites();
 
@@ -341,12 +341,28 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
        laisse à 255 ce qui était opaque). `nA − nB` compte donc EXACTEMENT les
        pixels que le damier a retirés, et rien d'autre. Un fantôme devenu aplat
        donne 0 ; un fantôme réduit à trois pixels donne un rapport énorme. */
-    const nA = count(A, 150), nB = count(B, 150);
-    const dropped = nA - nB;
-    const ratio = ghost ? dropped / ghost : 0;
+    /* ⚠️⚠️ 2026-11-08 (M14) — QUATRIÈME RÉDACTION : LES PIÈCES SE RECOUVRENT. Le navire de M14 croise ses pièces (le gréement
+       passe devant les voiles, le clocher devant le foc) : un trou du damier y montre une AUTRE pièce, opaque, et l'alpha ne
+       baisse pas — le rapport tombait à 0,02 pour un damier parfait. On compte donc sur la seule région où la pièce se voit
+       (`A` ≠ `C`, `C` = le navire SANS elle) : un trou du damier y rend le pixel de `C`, un pixel gardé y est teinté fantôme. */
+    /* ⚠️ ET À QUATRE PIÈCES, PAS CINQ : le navire complet porte la MARQUE DE FIN (une grande lueur autour de l'étoile brodée),
+       que « tout » a et « tout sauf i » n'a pas — elle comptait pour un bout de chaque pièce. On retire donc aussi une pièce
+       éloignée `jx` (la cloche, ou le safran pour la cloche) des trois images de la mesure. */
+    const jx = C.STAR_SHIP_ORDER.indexOf(C.STAR_SHIP_ORDER[i] === "bell" ? "rudder" : "bell");
+    const A4 = shot(C.STAR_SHIP_ORDER.map((_, j) => j !== jx), { t: 0, ghosts: false }), dA4 = px(A4);
+    const B4 = shot(C.STAR_SHIP_ORDER.map((_, j) => j !== jx && j !== i), { t: 0, ghosts: true }), dB4 = px(B4);
+    const Cc = shot(C.STAR_SHIP_ORDER.map((_, j) => j !== jx && j !== i), { t: 0, ghosts: false }), dC = px(Cc);
+    let dropped = 0, ghostIn = 0;
+    for (let k = 0; k < A.width * A.height; k++) {
+      const same = (d1, d2) => Math.abs(d1[k * 4] - d2[k * 4]) + Math.abs(d1[k * 4 + 1] - d2[k * 4 + 1]) + Math.abs(d1[k * 4 + 2] - d2[k * 4 + 2]) + Math.abs(d1[k * 4 + 3] - d2[k * 4 + 3]) < 60;   // ⚠️ 60 et pas 12 : la LUEUR des pièces posées (un voile de 0,1) change avec leur nombre, elle ne doit pas compter pour la pièce
+      if (same(dA4, dC) || dA4[k * 4 + 3] <= 150) continue;   // la pièce ne se voit pas ici (ou ce n'est que sa lueur sur le vide)
+      if (same(dB4, dC)) dropped++;                      // un trou du damier : on voit ce qu'il y a dessous
+      else if (isGhost(dB4, k)) ghostIn++;
+    }
+    const ratio = ghostIn ? dropped / ghostIn : 0;
     checked++;
-    ok(ratio > 0.35 && ratio < 1.8, `le fantôme « ${key} » est un damier lisible`,
-       `${dropped} px retirés pour ${ghost} px peints (rapport ${ratio.toFixed(2)})`);
+    ok(ratio > 0.35 && ratio < 1.8 && ghostIn > 20, `le fantôme « ${key} » est un damier lisible`,
+       `${dropped} px retirés pour ${ghostIn} px de fantôme visibles (rapport ${ratio.toFixed(2)})`);
   }
   console.log(`         (${checked} morceaux isolés par « tout » contre « tout sauf lui »)`);
 }
@@ -677,16 +693,22 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
       if (l > 90) n++;
     }
     return n; };
-  const vide = inkOf(sheet(0)), plein = inkOf(sheet(N));
+  const vide = inkOf(sheet(0));
+  /* ⚠️ 2026-11-08 (M14) — LA MONOTONIE SE MESURE EN ÉCART AU PLAN VIERGE, PLUS EN CLARTÉ : le navire de M14 pose des pièces
+     SOMBRES (bois verni, bandeau marine) sur un fantôme clair ; compter les pixels clairs faisait « effacer » une pièce qui ne
+     faisait que s'en poser une. Ce qu'on veut dire : chaque pièce posée CHANGE davantage la feuille. */
+  const blank = sheet(0).px;
+  const diffOf = (cv) => { const d = cv.px; let n = 0; for (let i = 0; i < PW * PH; i++) if (Math.abs(d[i * 4] - blank[i * 4]) + Math.abs(d[i * 4 + 1] - blank[i * 4 + 1]) + Math.abs(d[i * 4 + 2] - blank[i * 4 + 2]) > 40) n++; return n; };
+
   ok(vide > 600, "une feuille vierge montre déjà le bateau en fantôme", `${vide} px d'encre`);
-  ok(plein > vide * 1.15, "⚠️ un bateau avancé se lit franchement plus dense qu'un plan vierge",
-     `${vide} px → ${plein} px (×${(plein / vide).toFixed(2)})`);
+  ok(diffOf(sheet(N)) > vide * 0.6, "⚠️ un bateau avancé se lit franchement autrement qu'un plan vierge",
+     `${diffOf(sheet(N))} px changés pour ${vide} px de fantôme`);
   /* ⚠️ ET LA PROGRESSION EST MONOTONE : chaque pièce posée AJOUTE de l'encre. Sans
      ce balayage, une pièce qui en effacerait une autre passerait inaperçue — c'est
      l'invariant que ce banc mesure déjà sur le navire lui-même (32 masques), et il
      n'y a aucune raison que la feuille y échappe. */
   let mono = true, prev = -1;
-  for (let n = 0; n <= N; n++) { const v = inkOf(sheet(n)); if (v < prev - 40) mono = false; prev = v; }
+  for (let n = 0; n <= N; n++) { const v = diffOf(sheet(n)); if (v < prev - 40) mono = false; prev = v; }
   ok(mono, "…et poser une pièce n'en efface jamais une autre sur le plan");
   /* La feuille ne doit pas déborder : elle est peinte dans un rectangle donné, et
      un panneau React la posera à des tailles variables. */
@@ -794,16 +816,28 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
      été vérifié en l'écrivant : ce n'est pas un test qu'on a oublié d'ajouter,
      c'est un test que ce banc ne peut pas rendre. Le nom se juge à l'écran. */
 
-  /* 2. LA GUIRLANDE DE L'INAUGURATION (D11 c) : de l'encre, et elle BOUGE — un
-     fanion qui ne bouge jamais serait un décor mort (même famille que la
-     guirlande du marché, zip 431, qui balance déjà). */
+  /* 2. LA FÊTE DU NAVIRE (2026-11-08, G9-G11) : la guirlande de l'inauguration de D11 est partie avec elle (deux petits mâts,
+     audit G11) ; le décor du quai est dans `feteArt.js`, et le navire gagne cinq options. ⚠️ Le faux canevas ignore
+     `translate`/`scale` : le virement et le naufrage (`FA.drawFeteShip`) ne se mesurent pas ici, ils se jugent en jeu. */
   {
-    const a = makeCanvas(240, 80); S.drawFestivalBunting(a.ctx, 120, 60, T, 0);
-    const b = makeCanvas(240, 80); S.drawFestivalBunting(b.ctx, 120, 60, T, 700);
-    ok(ink(a) > 40, "D11 — la guirlande de l'inauguration peint quelque chose", `${ink(a)} px d'encre`);
+    const FA = mods.feteArt;
+    const g1 = makeCanvas(240, 120); FA.drawFeteGarland(g1.ctx, 20, 30, 220, 34, T, 0, 1, { lit: 1, out: [] });
+    const g2 = makeCanvas(240, 120); FA.drawFeteGarland(g2.ctx, 20, 30, 220, 34, T, 900, 1, { lit: 1, out: [] });
+    ok(ink(g1) > 120, "fête — la guirlande de fanions et de lampions peint quelque chose", `${ink(g1)} px d'encre`);
     let moved = false;
-    for (let i = 0; i < a.px.length; i++) if (a.px[i] !== b.px[i]) { moved = true; break; }
-    ok(moved, "⚠️ …et elle balance dans le temps (t=0 ≠ t=700 ms)");
+    for (let i = 0; i < g1.px.length; i++) if (g1.px[i] !== g2.px[i]) { moved = true; break; }
+    ok(moved, "⚠️ …et elle ondule dans le temps (t=0 ≠ t=900 ms)");
+    const lamps = []; FA.drawFeteGarland(makeCanvas(240, 120).ctx, 20, 30, 220, 34, T, 0, 1, { lit: 1, out: lamps });
+    ok(lamps.length >= 3, "…ses lampions publient leur lumière pour la nuit", `${lamps.length} lampions`);
+    const st = makeCanvas(120, 80); FA.drawFeteStage(st.ctx, 1, 1, 3, 2, T, 0);
+    ok(ink(st) > 600, "fête — l'estrade du maire", `${ink(st)} px`);
+    const full = new Array(Q.STAR_SHIP_TOTAL).fill(true);
+    const shipAt = (o) => { const c = makeCanvas(220, 160); S.drawStarShip(c.ctx, 110, 140, T, full, 0, o); return c; };
+    const base = shipAt({}), pav = shipAt({ pavois: 1 }), afl = shipAt({ afloat: true }), furl = shipAt({ sailK: 0 }), fire = shipAt({ fire: 1 });
+    ok(ink(pav) > ink(base), "le grand pavois ajoute ses fanions au navire", `${ink(base)} → ${ink(pav)} px`);
+    ok(ink(afl) < ink(base), "à flot, le ber reste au quai (moins d'encre)", `${ink(base)} → ${ink(afl)} px`);
+    ok(ink(furl) < ink(base), "la voile ferlée au mouillage : moins de toile", `${ink(base)} → ${ink(furl)} px`);
+    ok(ink(fire) > ink(base), "la foudre met le feu au grand mât", `${ink(base)} → ${ink(fire)} px`);
   }
 
   /* 3. LES CONFETTIS (D11 c) : rien avant la bouffée, de l'encre pendant, plus
@@ -818,6 +852,36 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
     const after = makeCanvas(240, 240); S.drawStarConfetti(after.ctx, 120, 120, T, 5000, 1000);
     ok(ink(after) === 0, "…et plus rien longtemps après (la bouffée s'éteint toute seule)", `${ink(after)} px`);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. 2026-11-08 (M14) — LE NOM PEINT EN LETTRES D'OR. Il n'est plus une étiquette `fillText` (que ce banc ne savait pas rendre) :
+      la police pixel passe par `drawImage`, on peut donc le regarder et le mesurer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+{
+  console.log("\n9. LE NOM PEINT (M14)\n");
+  const NAMES = ["La Belle Étoile", "L'Épave hasardeuse", "Le bout de bois qui flotte mal", "The Plank That Barely Floats"];
+  const full = C.STAR_SHIP_ORDER.map(() => true);
+  const M = 8, BW = BOX_W + M * 2, BH = BOX_H + M * 2;
+  const sur = makeCanvas(BW * NAMES.length, BH);
+  const gold = (d, k) => d[k * 4] > 220 && d[k * 4 + 1] > 190 && d[k * 4 + 2] > 110 && d[k * 4 + 2] < 170;
+  NAMES.forEach((nm, i) => {
+    const a = makeCanvas(BW, BH), b = makeCanvas(BW, BH);
+    S.drawStarShip(a.ctx, M + BOX_W / 2, M + BOX_H - 11, T, full, 0, {});
+    S.drawStarShip(b.ctx, M + BOX_W / 2, M + BOX_H - 11, T, full, 0, {});
+    S.drawStarShipName(b.ctx, M + BOX_W / 2, M + BOX_H - 11, T, nm, 0);
+    let added = 0, y0 = 1e9, y1 = -1;
+    for (let k = 0; k < BW * BH; k++) if (gold(b.px, k) && !gold(a.px, k)) { added++; const y = Math.floor(k / BW); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const lines = S.shipNameLines(nm).length;
+    ok(added > 60, `« ${nm} » est peint en lettres d'or`, `${added} px d'or, ${lines} ligne(s)`);
+    if (nm.length > 26) ok(lines === 2 && y1 - y0 > 15, `…un nom long passe sur deux lignes`, `${y1 - y0 + 1} rangées d'or`);
+    else ok(lines === 1, `…un nom plus court tient sur le pavois, en une ligne`, `${y1 - y0 + 1} rangées d'or (il suit la tonture)`);
+    sur.ctx.drawImage(b.canvas || b, i * BW, 0);
+    for (let k = 0; k < BW * BH; k++) { const x = k % BW, y = Math.floor(k / BW), o = (y * BW * NAMES.length + i * BW + x) * 4; for (let c = 0; c < 4; c++) sur.px[o + c] = b.px[k * 4 + c]; }
+  });
+  const z = scale(sur.px, BW * NAMES.length, BH, 3);
+  writePNG(path.join(OUT, "navire-noms.png"), z.px, z.W, z.H);
+  console.log(`\n  planche : tools/out/navire-noms.png (×3) — les quatre noms peints sur le navire complet`);
 }
 
 console.log(`\n${fails ? `❌ ${fails} contrôle(s) en échec` : "✅ tout est vert"}\n`);

@@ -454,6 +454,28 @@ section("8. CHAQUE VERDICT A SA PHRASE, DANS LES DEUX LANGUES");
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-11-07 — AUDIT G6 : UN TRAIT MOU NE FIGE PLUS LA SCIE.
+   Rejoué tel que vu en jeu : Tristan ouvre, on le laisse dormir chez lui
+   (~0,6 s, le trait devient mou), on tire UNE fois, puis on attend sans rien
+   toucher — comme le dit l'aide (« tire quand la lame revient de son côté »).
+   Avant le correctif, la lame s'arrêtait à mi-rail et Tristan ne reprenait
+   jamais : manche figée jusqu'au plafond des trois minutes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("9. UN TRAIT MOU NE FIGE PLUS LA SCIE (audit G6)");
+{
+  const s = S.sawInit({ part: "hull" });
+  let t = 0;
+  // Tristan ouvre ; on attend que la lame soit chez lui (x ≥ SAW_GOOD_X) et y dorme.
+  while (t < C.SAW_HZ * 6 && !((-s.bx / C.SAW_END) >= C.SAW_PERFECT_X && s.slack >= C.SAW_SLACK_GOOD + 0.2)) { S.sawTick(s); t++; }
+  ok("la lame arrive chez Tristan et s'y endort", (-s.bx / C.SAW_END) >= C.SAW_PERFECT_X && s.slack >= C.SAW_SLACK_GOOD, `x=${(-s.bx / C.SAW_END).toFixed(2)} mou=${s.slack.toFixed(2)}`);
+  const v = S.sawPull(s, 1);
+  ok("…et le trait tiré si tard est mou", v === "weak", v);
+  const mate0 = s.mateN;
+  for (let i = 0; i < C.SAW_HZ * 3; i++) S.sawTick(s);
+  ok("⚠️ sans un autre trait, Tristan reprend la lame en moins de trois secondes", s.mateN > mate0, `${s.mateN - mate0} reprise(s)`);
+}
+
 console.log(`\n${total - fails}/${total}`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fails ? 1 : 0);

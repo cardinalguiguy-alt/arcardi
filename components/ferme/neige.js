@@ -714,7 +714,14 @@ export function buildChunkStatic(tw, cx, cy, env, only) {
     /* 2026-09-29 — LA FONTE D'UN CRATÈRE CHAUD (`setMelts`, makeSnowField) : un trou
        brûlant ne garde pas la neige, et sa lisière s'effrange (l'ordre de couverture,
        §6, fait le reste : la terre mouillée apparaît pixel par pixel). */
-    if (env.meltAt) { const mk = env.meltAt(wx + 0.5, wy + 0.5); if (mk < 1) r *= mk; }
+    if (env.meltAt) {
+      const mk = env.meltAt(wx + 0.5, wy + 0.5);
+      if (mk < 1) r *= mk;
+      /* ⚠️ 2026-11-08 (audit M7) — LA FONTE SE RETIENT SUR L'HERBE : `aux` (inutilisé par les classes d'herbe, lu par la rue et
+         la pierre seules, ici comme dans `pluie.js`) vaut 1 + 6 × la force de la fonte. Le rendu y lit « ce sol a dégelé » : la
+         frange où la neige amincie ne couvre plus montrait l'herbe d'été, en anneau vert autour du trou. */
+      if (mk < 1 && (c === CL.GRASS || c === CL.LAWN || c === CL.SHORE)) ax = 1 + 6 * (1 - mk);
+    }
     /* 2026-10-05 (nuit) — LA LISIÈRE CONTRE LA BORDURE. Une fois la rue lue au contour, la neige du pré s'arrêtait
        sur une ligne parfaite parallèle à la bordure (`render-neige biais`, FONTE=1) — juste, mais tirée à la règle.
        Contre la pierre, la neige recule en MORSURES : le sel projeté par les roues, la chaussée qui rend sa chaleur.
@@ -898,6 +905,10 @@ const RAMP_GREY = ["#555c6e", "#646c80", "#747c90", "#848c9f", "#949cae", "#a4ab
    CHAUD (brun), plus sombre que la neige de la même lumière. */
 const RAMP_SLUSH = ["#3c3a38", "#4d4a46", "#5f5b56", "#716c66", "#847f78", "#97928b", "#aaa59e", "#bbb7b1", "#cbc8c3", "#d8d6d2", "#e3e2df"].map(hex);
 const WINTER_GRASS = [158, 146, 96];      // l'herbe dormante : olive paille
+/* 2026-11-08 (audit M7) — le sol qu'un cratère chaud a dégelé : la paille couchée (kaki) et la boue (brun) de l'eau de fonte.
+   Presque opaques : sous un voile, l'herbe d'été du sol revenait en vert. */
+const THAW_STRAW = [128, 114, 72];
+const THAW_MUD = [70, 56, 40];
 const rampMemo = new Map();
 function rampFor(which, sun) {
   const k = which + Math.round(sun * 10);
@@ -1045,9 +1056,21 @@ export function renderChunk(st, pack, P, imp, out) {
          manteau : `setMelts`) est détrempé par l'eau de fonte — sans quoi l'anneau
          dégagé montrait une herbe d'été vive, une pelouse posée dans la neige. */
       const thawed = !st.recv[o] && c !== CL.NONE && G > 0.3;
-      if (c && c !== CL.RAIL && c !== CL.STREET && (dd > 0.02 || thawed)) {
-        const r = thawed ? 0.9 : Math.min(1, dd / need);
+      const grassy = c === CL.GRASS || c === CL.LAWN || c === CL.SHORE;
+      const meltZ = grassy && G > 0.3 && st.aux[o] >= Q_AUX;   // 2026-11-08 (audit M7) — la zone de fonte d'un cratère (voir la construction)
+      if (c && c !== CL.RAIL && c !== CL.STREET && (dd > 0.02 || thawed || meltZ)) {
+        const r = thawed || meltZ ? 0.9 : Math.min(1, dd / need);
         if (falling) { if (b1 < r * 0.5) { dout[q] = 236; dout[q + 1] = 241; dout[q + 2] = 248; dout[q + 3] = 150; } }
+        else if ((thawed || meltZ) && grassy) {
+          /* ⚠️ 2026-11-08 (audit M7) — L'HERBE DÉGELÉE PAR UN CRATÈRE N'EST PAS L'HERBE D'ÉTÉ. Le seul voile sombre ci-dessous
+             laissait passer le vert vif du sol : « une auréole d'herbe verte sur la neige », la plus grande tache de couleur
+             de l'écran. L'eau de fonte couche une herbe dormante (la paille de `WINTER_GRASS`) dans une terre trempée : un
+             couvrant presque opaque, deux tons au bruit fin (des touffes de paille dans la boue, `THAW_STRAW` / `THAW_MUD`). Vu en jeu, 4 cm, ferme. */
+          const straw = st.fine[o] > 30, col = straw ? THAW_STRAW : THAW_MUD;
+          const mz = thawed ? 1 : Math.min(1, (st.aux[o] / Q_AUX - 1) / 6);   // la frange s'efface à peine vers la neige
+          dout[q] = col[0]; dout[q + 1] = col[1]; dout[q + 2] = col[2];
+          dout[q + 3] = Math.round((straw ? 226 : 236) * (0.86 + 0.14 * mz));
+        }
         else { dout[q] = 24; dout[q + 1] = 30; dout[q + 2] = 36; dout[q + 3] = Math.round(34 + 50 * r); }
         continue;
       }

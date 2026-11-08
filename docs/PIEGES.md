@@ -307,6 +307,31 @@ dépôt.
   membre qui change d'axe se redessine AU PIXEL FIN, sa largeur en travers de l'os (`armHD`, montureArt.js, avec `__armRig` de la feuille
   nue), et le buste vient de la feuille SANS BRAS (`__bare`, fermeArt.js `makeCharHD`). Banc : `render-poses-hd` ; au navigateur,
   `app/audit-riders?hd=1`.
+- ⚠️⚠️⚠️ **UN BANC QUI APPELLE LE RÉSOLVEUR NE VOIT PAS LE CLIENT : UN GESTE SE TESTE PAR LES FONCTIONS QUE LE CLIENT APPELLE** (2026-11-07,
+  audit de la quête, la seconde plaque). Le mini-jeu de refroidissement envoyait toujours `site: "farmMaterial"` à la victoire, quel que soit le
+  cratère refroidi : la seconde plaque ne pouvait jamais être créditée, le chapitre 1 ne se fermait pas, et le météore de Valley Town ne tombait
+  pour personne. `verify-jalons` était vert : il appelait `resolveStarFound` sur chaque site, avec le BON argument — exactement ce que le client
+  ne faisait pas. Parade : la décision du client (quel site ouvre le mini-jeu, quel site part à la victoire) devient une fonction pure de
+  `quete.js` (`starCoolStart`, `starCoolFoundSite`) que le client APPELLE et que le banc rejoue — dans l'ordre qui cassait (la seconde d'abord).
+  Ce qui ne peut pas sortir du client se balaie dans le SOURCE (les invites de `starNearby`, 2026-11-07).
+- ⚠️⚠️ **UN BESOIN DU MONDE LU SUR LA CLÉ DU BANDEAU RATE LES OBJECTIFS PARALLÈLES : IL SE LIT SUR L'ÉTAT** (2026-11-07, audit de la quête). Le
+  monde maléfique n'était forcé que si le bandeau disait `farmImpactLight` ou `farmImpactLure`. Le bandeau ne nomme qu'UN objectif quand trois
+  étoiles attendent en parallèle, et deux gestes se jouaient là-bas sans jamais être sa clé (ramasser le chaudron pour la rose, toute la
+  septième sœur) : la rotation ne ramène ce monde qu'au bout d'environ quatre heures réelles, quête bloquée. Parade : `Q.starNeedsEvil` interroge
+  chaque étoile en cours (`starTameGoalKey`) et la septième ; et un forçage ne se relâche pas sous les pieds de quelqu'un (le monde du passage
+  suit l'index en direct).
+- ⚠️⚠️ **UN ZOOM QUI GLISSE RECUIT LE SOL CUIT PAR BLOCS À CHAQUE IMAGE** (2026-11-08, la fête du navire). La caméra de la
+  cinématique zoomait d'un plan à l'autre (0,8 à 1,45, lissé). Le sol de la ville est cuit par blocs À L'ÉCHELLE DU CADRAGE
+  (`townGroundFrame` : sa signature porte le zoom) ; chaque image d'un zoom glissant avait un zoom neuf, donc un recuit complet du sol
+  visible — la page s'est figée au bout d'une minute de cérémonie, sans une erreur (les images duraient de plus en plus longtemps). Aucun
+  banc ne le pouvait voir : il a fallu jouer. Parade : une cinématique cadre par PANORAMIQUES au zoom du joueur ; un changement de zoom se
+  fait d'un cran, jamais en glissant (le dézoom du 428 l'avait déjà fait ainsi).
+- ⚠️⚠️ **UN BANC QUI RECONNAÎT UN EFFET À SA TEINTE SE TROMPE LE JOUR OÙ LE DESSIN PREND CETTE TEINTE** (2026-11-08, M14). `render-navire`
+  reconnaissait les fantômes du navire à leur bleu-cyan (B − R > 45 et G − R > 25) en supposant que « le pixel le plus bleu du reste du
+  dessin plafonne à 32 ». Le navire de M14 a reçu un bandeau de pavois bleu canard : le banc l'a compté comme du fantôme, et trois
+  pièces ont « échoué » leur damier pour un dessin parfaitement juste. Parade double : le dessin garde le marine (vert bas), et le banc
+  mesure le damier là où la pièce SE VOIT (l'image sans elle en référence), à quatre pièces (le navire complet porte une lueur de fin
+  que l'image « sans » n'a pas). Quand une hypothèse de couleur fonde un banc, l'écrire À CÔTÉ de la palette qu'elle contraint.
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
   RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
@@ -501,6 +526,9 @@ dépôt.
 - **`crystal` n'affiche AUCUNE image** : tampon 480×270 toujours opaque.
 - **La caméra de `walk` est 2,6 unités DERRIÈRE le personnage.**
 - **Rendre un objet invisible ne le retire pas du monde.**
+- ⚠️ **`h >> n` SUR UN HACHAGE NON SIGNÉ REND UN INDICE NÉGATIF UNE FOIS SUR DEUX** (2026-11-08, la fête). Un hachage rendu par
+  `>>> 0` vaut jusqu'à 2³² ; `>>` le relit en entier SIGNÉ, donc `(h >> 3) % 8` vaut −7 à 7 : des tenues de visiteurs négatives, des
+  types de fusée `undefined`. Rien ne casse, ça dessine faux au hasard. Parade : `>>>` sur tout ce qui sort d'un hachage.
 - ⚠️⚠️ **`x | 0` SUR UN HORODATAGE EN MILLISECONDES LE TRONQUE À 32 BITS : UN ENTIER QUELCONQUE, PARFOIS NÉGATIF, QUI NE SE COMPARE PLUS À `Date.now()`** (2026-10-05, nuit fin quater). `Date.now()` vaut ~1,79 × 10¹² : `| 0` n'en garde
   que les 32 bits bas (ici ~2,3 × 10⁸, et NÉGATIF une moitié de chaque cycle de 49,7 jours). `skatesActive` refusait des patins
   loués pendant cette moitié-là, et le sac des autres, copié avec le même `| 0`, n'était jamais comparable à `Date.now()` — à deux, un

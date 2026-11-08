@@ -7505,6 +7505,28 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
   box-shadow:0 2px 10px rgba(0,0,0,.35);
   white-space:nowrap;
 }
+/* 2026-11-07 — audit M9 : le même rappel quand c'est la QUÊTE qui garde le passage ouvert — teinte d'étoile, pas de pastille dev. */
+.ferme-quest-banner{ border-color:rgba(255,214,120,.55); color:#fff3d2; }
+/* 2026-11-08 — LA FÊTE DU NAVIRE (G9-G11). La cinématique tait l'interface (le canevas, la carte du moment et le menu dev
+   restent) ; la carte du vote se pose au-dessus de la bande basse du cinéma (10 % de la hauteur). */
+.ferme-root.ferme-cine > :not(.ferme-canvas):not(.fete-card):not([class*="ferme-dev"]){ opacity:0 !important; pointer-events:none !important; transition:opacity .6s ease; }
+.fete-card{ position:absolute; left:50%; bottom:calc(10% + 14px); transform:translateX(-50%); z-index:60; box-sizing:border-box;
+  width:min(560px, calc(100% - 24px)); display:grid; gap:10px; padding:12px 14px; border-radius:10px;
+  background:rgba(12,16,28,.9); color:#f4efe2; border:1px solid rgba(232,196,90,.55); box-shadow:0 10px 30px rgba(0,0,0,.45);
+  font:14px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif; animation:feteCardIn .35s ease-out; }
+.fete-card-title{ font-weight:700; text-align:center; letter-spacing:.02em; font-size:15px; }
+.fete-card-opts{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.fete-opt{ flex:1 1 150px; min-width:0; display:grid; gap:2px; justify-items:center; text-align:center; cursor:pointer;
+  background:rgba(255,255,255,.06); color:inherit; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:10px 12px; font:inherit; font-weight:600; }
+.fete-opt:hover{ border-color:#e8c45a; }
+.fete-opt:focus-visible{ outline:2px solid #e8c45a; outline-offset:2px; }
+.fete-opt.on{ background:rgba(232,196,90,.22); border-color:#e8c45a; }
+.fete-mine{ font-size:11px; font-weight:500; opacity:.8; text-transform:uppercase; letter-spacing:.06em; }
+.fete-card-foot{ display:flex; align-items:center; gap:10px; font-size:12px; opacity:.85; }
+.fete-timer{ flex:1; height:4px; background:rgba(255,255,255,.15); border-radius:2px; overflow:hidden; }
+.fete-timer i{ display:block; height:100%; background:#e8c45a; transition:width .25s linear; }
+.fete-big{ font-size:16px; }
+@keyframes feteCardIn{ from{ opacity:0; transform:translate(-50%,8px); } to{ opacity:1; transform:translate(-50%,0); } }
 /* 2026-09-02 — MENU DÉVELOPPEUR, PASSE DE COMPACITÉ (demande de Guillaume :
    "moins interface de jeu, plus simple, c'est pour les dev"). Le reste du jeu
    utilise des boutons épais à bordure 3D (.ferme-btn) et des rangées de
@@ -7591,6 +7613,14 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 }
 .ferme-shop-row button:hover{ filter:brightness(1.08); }
 .ferme-shop-row button:disabled{ opacity:.45; cursor:default; }
+/* 2026-11-07 — audit M3 : le panneau du chantier de Tristan. Le libellé de droite ne
+   s'écrase plus sur la colonne de texte ; sous 520 px, l'action passe dessous. */
+.ferme-timber-row .info{ flex:1 1 58%; min-width:0; }
+.ferme-timber-row > :not(.info){ flex:0 1 auto; max-width:42%; min-width:0; text-align:right; }
+@media (max-width:520px){
+  .ferme-timber-row{ flex-wrap:wrap; }
+  .ferme-timber-row > :not(.info){ max-width:100%; text-align:left; }
+}
 /* hors-zip : trois boutons de robe côte à côte, à la place du bouton
    "Acheter" unique du cheval — même ligne, même style de bouton. */
 .ferme-horse-coats{ display:flex; flex-direction:column; gap:4px; }

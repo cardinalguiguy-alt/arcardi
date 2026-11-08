@@ -247,7 +247,17 @@ function sawMate(s, rate) {
      une scie qu'on relance avant la fin du trait précédent est une scie qui
      s'arrache des mains */
   if (s.mateWait < 0) {
-    if (s.bx > C.SAW_END - 0.10 && s.bv < 0.30) {
+    /* ⚠️⚠️ 2026-11-07 — AUDIT G6 : LA LAME QUI S'ENDORT AU MILIEU, TRISTAN LA REPREND.
+       Un trait mou (la lame restée trop longtemps chez lui) ne la ramène qu'à
+       mi-rail : Tristan attendait qu'elle arrive chez nous, le joueur attendait
+       qu'elle « revienne de son côté » (l'aide le dit), et tout s'immobilisait
+       jusqu'au plafond des trois minutes. Une lame ARRÊTÉE hors de la fenêtre du
+       joueur (en deçà de `SAW_GOOD_X`), depuis assez longtemps pour qu'un trait
+       n'y soit plus bon (`SAW_SLACK_GOOD`), est une lame que Tristan retire vers
+       lui — exactement ce que ferait l'homme d'en face. Au-delà de `SAW_GOOD_X`
+       (chez lui), c'est au joueur, et rien ne change. */
+    const stalled = s.pull <= 0 && s.slack >= C.SAW_SLACK_GOOD && (-s.bx / C.SAW_END) < C.SAW_GOOD_X;
+    if ((s.bx > C.SAW_END - 0.10 && s.bv < 0.30) || stalled) {
       const j = hash32(s.seed, s.mateN) % 2001;                 // 0..2000
       const jit = ((j - 1000) / 1000) * C.SAW_MATE_JITTER_MS;   // ±SAW_MATE_JITTER_MS
       /* ⚠️ SON DÉLAI N'EST PLUS MIS À L'ÉCHELLE DU TEMPO : la dilatation globale

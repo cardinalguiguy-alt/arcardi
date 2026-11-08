@@ -1237,6 +1237,19 @@ export const FISH_HAUL_RATES = {
   slipPenalty: 0.12, slipTension: 0.28, slipLockMs: 380,
 };
 export const EVIL_HAUL_ARRIVE_MS = 1800;     // mise en scène d'arrivée sur la rive, une fois gagné
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-08 (audit G8) — LA LUMIÈRE DE LA SEPTIÈME SŒUR TIENT LES CRÉATURES À DISTANCE PENDANT QU'ON LA HALE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Le halage ANCRE le joueur (on ne marche pas en tirant) : c'était le seul moment du monde maléfique où une
+   créature pouvait arriver sans qu'on puisse fuir. Règle de Guillaume pour G8 : « la difficulté n'est pas
+   gênante si on peut techniquement s'en sortir : s'il n'y a pas blocage total ou répété ». Donc : pendant le
+   halage (et `GRACE_MS` après, le temps de se relever et de partir), une créature qui entre dans `R` RECULE,
+   une créature qui arrive au bord RÔDE autour (on la voit, on stresse) — aucune ne peut mordre. Le reste du
+   monde maléfique (le chemin, le chaudron, les lancers) garde toute sa menace : on y marche, on peut fuir.
+   ⚠️ La règle de mouvement est pure (`Q.evilHaloStep`, banc `verify-quete`) ; l'hôte l'applique. */
+export const EVIL_HAUL_HALO_R = 4.5;         // cases autour du joueur qui hale
+export const EVIL_HAUL_HALO_GRACE_MS = 3000; // la lumière s'attarde après la sortie de l'eau
+export const EVIL_HAUL_HALO_PROWL = 0.5;     // vitesse de rôde au bord, en part de EVIL_MONSTER_SPEED
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
@@ -4856,14 +4869,25 @@ export const STAR_BANG_MS = 2000;
    toutes les trois d'une seule date posée par l'hôte (`plan.at`). */
 export const STAR_ENG_TRAVEL_MS = 1 * 60 * 1000;    // il monte dans le premier train
 export const STAR_ENG_WORK_MS = 5 * 60 * 1000;      // les plans — 15 min à l'origine, voir ci-dessus
-export const STAR_ENG_FEE_GOLD = 24000;             // sur la bourse commune
-export const STAR_ENG_FEE_CROPS = 60;               // récoltes, toutes espèces confondues, dans MON sac
-export const STAR_ENG_FEE_FISH = 12;                // poissons, toutes espèces confondues, dans MON sac
+/* ⚠️ 2026-11-08 (audit M13) — PLUS CHER, DÉCISION DE GUILLAUME (« plus cher », après le chiffrage). Les plans étaient le seul or
+   OBLIGATOIRE de la quête et coûtaient moins qu'un moulin (30 000) : pour la récompense centrale du jeu, c'était un achat courant.
+   60 000 dépasse la sucrerie (36 000), le plus gros bâtiment ; récoltes et poissons montent dans la même proportion, à peu près.
+   Pour revenir en arrière : 24 000, 60, 12. Les ATTENTES n'ont pas bougé (ce qui allonge la quête est l'horloge, pas l'or). */
+export const STAR_ENG_FEE_GOLD = 60000;             // sur la bourse commune (24 000 jusqu'au 2026-11-08)
+export const STAR_ENG_FEE_CROPS = 100;              // récoltes, toutes espèces confondues, dans MON sac (60)
+export const STAR_ENG_FEE_FISH = 20;                // poissons, toutes espèces confondues, dans MON sac (12)
 /* Où il s'installe : à trois cases à l'est de la cale, sur la grève. ⚠️ DÉRIVÉ
    DE `shipX/shipY` AU RENDU et pas écrit en dur ici — la cale est posée par un
    balayage du générateur (450), une coordonnée recopiée mentirait au premier
    déplacement de la rive. Seul l'ÉCART est une constante. */
-export const STAR_ENG_DX = 4, STAR_ENG_DY = 1;
+/* ⚠️ 2026-11-07 — AUDIT M2 : DY PASSE DE 1 À −1. Depuis le redessin de la rive, la rangée
+   `shipY + 1` est de l'EAU (relevé en jeu : quai dallé en 156-157, lac dès 158) — Kerguélen
+   se tenait les jambes dans le lac, sous la ligne du quai. `shipY` (157) est la dernière
+   rangée du quai, et un banc y est posé juste à côté de lui (essayé à 0 : il disparaissait
+   derrière) ; à −1 il est debout sur les dalles, devant le muret. `starEngSpot`
+   (FermeGame.js) remonte en plus tant qu'il trouve de l'eau, au cas où une autre graine
+   dessinerait la rive autrement. */
+export const STAR_ENG_DX = 4, STAR_ENG_DY = -1;
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ AUTORITÉ 2026-09-12 — LE VANDALE : UN SEUL HORODATAGE (e.vandal.at, quete.js),
    ║ TOUT LE RESTE DÉRIVÉ.
@@ -4972,6 +4996,11 @@ export const STAR_TIMBER = {
    tableau arrière, dans la langue de qui l'a baptisé. C'est la même règle que
    « Valley Town », qui n'est pas « La ville de la vallée » en français. */
 export const STAR_SHIP_NAME = "La Belle Étoile";
+/* 2026-11-08 (G9, décision C1) — LES TROIS NOMS DU BAPTÊME, votés pendant la fête (`fete.js`). Le premier ne se traduit
+   jamais (la règle ci-dessus) ; les deux autres sont des BLAGUES de Guillaume, et une blague se traduit, sinon elle ne fait
+   rire personne. L'ordre est l'indice stocké (`e.baptism.k`) : ne jamais le changer. */
+export const STAR_SHIP_NAMES_FR = [STAR_SHIP_NAME, "L'Épave hasardeuse", "Le bout de bois qui flotte mal"];
+export const STAR_SHIP_NAMES_EN = [STAR_SHIP_NAME, "The Hazardous Wreck", "The Plank That Barely Floats"];
 /* 2026-09-13 (D11) — LE RASSEMBLEMENT DE LA FINALE (D13). Rayon de présence
    partagé par les deux portes gardées (le bureau du maire, la cale) : assez
    large pour tenir toute la pièce/le quai, pas assez pour compter quelqu'un
@@ -4984,15 +5013,15 @@ export const STAR_FINALE_GATHER_R = 10;
    prix se paie PAR PIÈCE), D8 (« il faut un temps d'attente réel, mais pas aussi
    long [qu'un à deux jours] ; tu jugeras »), D9 (la scie de Tristan raccourcit
    l'attente).
-   ⚠️ LE PRIX ENTIER DU NAVIRE RESTE LES 300 000 OR de la conception, réparti au
-   poids de bois de chaque pièce (la coque est la plus chère, la cloche la moins) —
-   `verify-quete` tient la somme.
+   ⚠️ LE PRIX ENTIER DU NAVIRE : 450 000 OR depuis le 2026-11-08 (300 000 à la conception ; ×1,5, audit M13, « plus cher »),
+   réparti au poids de bois de chaque pièce (la coque est la plus chère, la cloche la moins) — `verify-jalons` tient la somme.
+   L'attente reste l'autre chemin, inchangée : l'or ne bloque jamais la reconstruction, il l'achète.
    ⚠️ L'ATTENTE SE COMPTE EN MINUTES RÉELLES, pas en jours : les pièces courent en
    parallèle (478), donc le chantier entier attend la plus longue, quarante minutes,
    c'est-à-dire une soirée. Trois manches de scie retirent jusqu'à trente minutes
    sur une pièce, jamais plus bas que `STAR_REBUILD_HURRY_FLOOR_MS` : aider Tristan
    compte, et ne rend pas l'attente décorative. Premiers réglages, à jouer. */
-export const STAR_REBUILD_GOLD = { hull: 120000, rudder: 40000, mast: 80000, sail: 40000, bell: 20000 };
+export const STAR_REBUILD_GOLD = { hull: 180000, rudder: 60000, mast: 120000, sail: 60000, bell: 30000 };
 export const STAR_REBUILD_WAIT_MS = {
   hull: 40 * 60 * 1000, rudder: 15 * 60 * 1000, mast: 30 * 60 * 1000, sail: 20 * 60 * 1000, bell: 12 * 60 * 1000,
 };

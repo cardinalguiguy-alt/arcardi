@@ -89,6 +89,9 @@ const NUM_FR = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept",
 const nfr = (n) => NUM_FR[n | 0] || String(n | 0);
 const Nfr = (n) => { const s = nfr(n); return s.charAt(0).toUpperCase() + s.slice(1); };
 // 2026-11-01 (lot 4 du boulodrome) — « de » devant un nom : « la partie d'Amie », « la partie de Fernand » (vu en jeu : « de Amie »)
+/* 2026-11-08 (audit M15) — un montant en chiffres, groupé par milliers : « 60 000 », « 60,000 » — « 24000 » se lisait mal. */
+const nFr = (n) => Math.round(+n || 0).toLocaleString("fr-FR");
+const nEn = (n) => Math.round(+n || 0).toLocaleString("en-US");
 const deNom = (n) => (/^[aeiouyhàâäéèêëîïôöûüAEIOUYHÀÂÉÈÊÎÔÛ]/.test(String(n || "")) ? "d'" : "de ") + n;
 
 const STAR_FR = {
@@ -124,8 +127,11 @@ const STAR_FR = {
     tameDuo: "Vous êtes plusieurs dans la ferme. Dix secondes sans la regarder suffiront.",
     material1: "Sous la cendre : une plaque noire, lisse seulement sur sa cassure.",
     material2: "Elle a reçu tout le choc sans le transmettre à la terre dessous.",
-    material3: "Le bois sait plier ; cette matière sait tenir. Ensemble, ils résisteraient à bien davantage.",
-    materialKeep: "Tu gardes la plaque. Elle n'a pas encore d'usage, mais elle en aura un.",
+    /* 2026-11-07 — audit G4 (décision de Guillaume) : les deux plaques deviennent LA CLOCHE du bateau. Dit avant le geste, et après. */
+    material3: "Tapée du doigt, elle sonne clair, comme une cloche. Refroidis-la : elle fera la cloche du bateau.",
+    materialKeep: (n, total) => n < total
+      ? "Tu gardes la plaque d'étoile. Avec une seconde, on pourra fondre la cloche du bateau."
+      : "Les deux plaques d'étoile sont prêtes : elles deviendront la cloche du bateau.",
   },
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 469 — LA FOUILLE. TROIS RÉSULTATS, ET LE VIDE EN EST UN.
@@ -146,7 +152,7 @@ const STAR_FR = {
        `Q.STAR_DIG_MS` — exactement le même geste que « E : fouiller » promet
        déjà (une pression, pas un maintien). Le texte dit maintenant l'immobilité
        qu'on demande vraiment, dans le même vocabulaire que `s2.calmStill`. */
-    hint: "Ne bouge plus : il gratte la cendre.",
+    hint: "Ne bouge plus : tu grattes la cendre.",   // 2026-11-07 — audit M10 : « il » ne désignait personne
     /* ⚠️⚠️ ZIP 476 (défaut #6) — SEUL MESSAGE QUAND UNE FOUILLE EN COURS EST
        COUPÉE PAR L'OUVERTURE DE L'OVERLAY D'UN AUTRE TROU (voir `starDigStep`) :
        avant, cette interruption était totalement silencieuse. */
@@ -366,7 +372,7 @@ const STAR_FR = {
       kerguelenBack:   "Va voir Kerguélen sur le quai du chantier (E).",
       vandalChaseTown: "Quelqu'un fuit vers la gare — regarde autour de toi !",
       vandalChaseFarm: "Il a filé jusqu'à la ferme. Où est-il passé ?",
-      vandalEscaped:   "Il nous a semés… Mais qui est ce vandale ?",
+      vandalEscaped:   "Il nous a semés. Pour reconstruire, il faudra l'aide de la mairie.",   // 2026-11-07 — audit G3 : plus de piste jamais résolue
       /* ⚠️⚠️ 2026-09-13 — LE PRÉLUDE A ENFIN SA VOIX. Le bandeau restait masqué
          jusqu'à la chute : maire, plans, coque et gouvernail se jouaient sans une
          ligne pour dire où l'on en était. Quatre états, un par attente réelle
@@ -379,7 +385,8 @@ const STAR_FR = {
          Y LAISSER UN TROU : `evilSeek` se taisait dès qu'on l'avait vue, alors que
          la fin l'exige désormais réanimée (décision de Guillaume). Deux gestes, deux
          phrases : la haler, puis la porter et la réanimer. */
-      evilHaul:   "Lance ta ligne sur la lueur du lac maléfique et hale-la jusqu'à la rive.",
+      evilHaul:   "Lance ta ligne sur la lueur, hale-la à la rive. Pourvu que ta canne tienne…",
+      evilRodProtect: "Ta canne n'a pas tenu. Protège-la au chaudron, puis reviens lancer.",   // 2026-11-07 — audit G7
       evilRevive: "Porte la septième étoile à la ferme, pose-la, puis réanime-la (E).",
       /* 2026-09-13 (lot 2) — le budget après le saccage, et la reconstruction. PLAFOND DE 80 SIGNES. */
       budget:       "Chantier détruit. Il faut un budget : demande une audience au maire.",
@@ -387,9 +394,9 @@ const STAR_FR = {
       rebuildOrder: "Relance les pièces chez Tristan : payer, ou attendre les fonds (Employés).",
       rebuildWait:  "Les fonds arrivent. Aide Tristan à la scie pour accélérer (Employés).",
       /* D11 — les trois étapes de l'épilogue. PLAFOND DE 80 SIGNES, tenu par le TEXTE. */
-      finaleSummon: "Le maire veut vous voir. Montez à son bureau et appuyez sur E.",
-      finaleBaptize: "Le maire a son accord. Baptise le navire sur la cale (E).",
-      finaleInaugurate: "Le navire a un nom. Lance l'inauguration sur la cale (E).",
+      finaleSummon: "Le maire veut te voir. Monte à son bureau et appuie sur E.",   // 2026-11-07 — audit M1 : le bandeau tutoie
+      finaleWait: "La fête du navire se prépare au quai.",   // 2026-11-08 — l'heure est ajoutée par `starGoalText`
+      finaleGo: "Tout le monde t'attend au quai : donne le signal (E).",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -397,7 +404,11 @@ const STAR_FR = {
        s'affiche qu'un temps, avant la toute première fois où le chaudron est
        ramassé dans le monde maléfique — jamais en régime permanent une fois
        la ferme équipée. Voir `starGoalText`, FermeGame.js. */
-    cauldronPassage: "Fouillez les moindres recoins de cette forêt maudite et vous y trouverez un chaudron magique, mais restez vigilant.",
+    /* 2026-11-07 — audit M1 : le narrateur tutoie partout (ce bandeau vouvoyait). */
+    cauldronPassage: "Fouille la forêt maudite : un chaudron magique s'y cache. Reste sur tes gardes.",
+    candyCount: (have, need) => `(${have}/${need} 🍬)`,   // 2026-11-07 — audit G14
+    pipsImpacts: (n, total) => `Cratères de la ferme fouillés : ${n} sur ${total}`,   // 2026-11-07 — audit M8
+    pipsShip: (n, total) => `Pièces du navire posées : ${n} sur ${total}`,
     /* hors-zip — L'INFOBULLE DES PUCES CLIQUABLES DU CHAPITRE 1. Une seule
        fonction, composée, jamais deux chaînes séparées qui pourraient finir
        par ne plus s'accorder (voir myStarFocusRef, FermeGame.js). */
@@ -530,7 +541,7 @@ const STAR_FR = {
      même file d'attente `starShowCard`) : c'est la même chose, un texte plein
      écran qui marque un instant. Seul l'habillage change (`.win` en CSS). */
   win: {
-    mayor:    { title: "Félicitations !", sub: "Le maire soutient votre projet." },
+    mayor:    { title: "Félicitations !", sub: "Le maire soutient le projet." },
     engineer: { title: "Les plans sont prêts !", sub: "Kerguélen a dessiné le navire." },
     budget: { title: "Budget voté !", sub: "La mairie finance une part de la reconstruction." },   // 2026-09-13 (lot 2)
   },
@@ -754,7 +765,7 @@ const STAR_FR = {
        À L'OUVERTURE DU GESTE : l'anneau fait le reste. Il dit la RÈGLE (frapper
        quand l'anneau touche la marque) et son piège (marteler ne sert à rien),
        parce que c'est très exactement ce qu'un joueur essaie en premier. */
-    wakeHint: "Frappe quand l'anneau touche la marque. Marteler la fait retomber.",
+    wakeHint: "Frappe (E ou Espace) quand l'anneau touche la marque. Marteler la fait retomber.",
     /* ── LE PLAT. ⚠️⚠️ AUCUNE NE NOMME UNE RECETTE : ce qu'on cuisine ne regarde
        personne, et l'inventer aurait demandé un ingrédient, donc un prix, donc un
        arbitrage que Guillaume n'a pas tranché. Le geste est le CHEMIN. */
@@ -791,7 +802,7 @@ const STAR_FR = {
     /* ⚠️ ON ASSEMBLE ICI, PAS DANS LA VUE : deux fabriques de phrase (une par
        langue) qui vivraient dans `FermeGame.js` seraient un texte à trous rempli
        par du code, c'est-à-dire le défaut du 481 (« Scrutin dans Lui jours »). */
-    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintSay: (temp, way) => way ? `${temp} Elle est ${way}.` : temp,   // 2026-11-07 — vu en jeu : « …de la ville. vers l'est. »
     hintLeft: (n) => n > 0 ? `Il reste ${n} indice${n > 1 ? "s" : ""}.` : "C'était le dernier indice. Demande encore, et je te mènerai.",
     hintLead: "Alors viens. Je passe devant — E pour t'arrêter, E pour repartir.",
     hintAway: "Elle n'est pas de ce côté du rail. Descends en ville d'abord.",
@@ -810,8 +821,8 @@ const STAR_FR = {
     slipHold: "Ça glisse. Garde le même cap, il va trouver une prise.",
     slipClimb: "Il tient. Ne lâche pas la direction.",
     meet1: "Celle-ci est plus grande que les autres. Sa lumière jaune remplit le cratère.",
-    meet2: "Les deux petites étoiles de la ferme se rapprochent d'elle sans hésiter.",
-    meet3: "L'étoile reine trace dans la poussière la silhouette d'un navire brisé.",
+    meet2: "Les petites étoiles de la ferme se rapprochent d'elle sans hésiter.",   // 2026-11-07 — audit M10 : elles sont trois, plus deux
+    meet3: "L'étoile reine trace dans la poussière la silhouette d'un navire achevé, toutes voiles dehors.",   // 2026-11-07 — audit G3 : il n'est pas brisé à cette heure-là
     /* ⚠️ « Elle n'en a que … » A ÉTÉ ÉCARTÉ : l'élision (« qu'un », « que deux »)
        demanderait une règle de grammaire dans une table de textes. « Elle en a
        un » dit la même chose et tient dans toutes les langues du fichier. */
@@ -831,6 +842,7 @@ const STAR_FR = {
   ship: {
     got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Le bateau grandit.`,
     last: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Il ne manque plus qu'une pièce.`,
+    bellStar: "🔔 La cloche est fondue dans les deux plaques d'étoile. Elle sonne clair sur sa chaise.",   // 2026-11-07 — audit G4
   },
   /* ── LE RUBAN DE JALON (2026-09-01). ⚠️⚠️ IL NE DOUBLE PAS `ship.got` : le
      toast dit « le bateau grandit » PARTOUT, y compris à trois cents cases de
@@ -848,7 +860,7 @@ const STAR_FR = {
     last: "Le navire est entier.",
   },
   end: {
-    end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
+    end1: "Une à une, les sept étoiles quittent le navire.",   // 2026-11-08 — le plan de nuit de la fête : elles sont sept
     /* ⚠️⚠️ 2026-08-31 — « IL FLOTTE ENFIN » ÉTAIT FAUX, ET C'EST LE TEXTE QUI AVAIT
        TORT, PAS LE DESSIN. Le placement du navire est délibérément une CALE à
        terre : `starShipPos` balaie jusqu'à une case libre, praticable et au bord
@@ -864,7 +876,7 @@ const STAR_FR = {
        contraire de ce que le joueur vient de voir (§4 de CLAUDE.md, « un texte
        n'est pas un décor : il AFFIRME »). Fonction, pas chaîne : le nom vient du
        baptême (D1), jamais recopié en dur (§8). */
-    end2: (name) => `Au loin, ${name} fend déjà l'eau sombre, ses voiles gonflées vers le large.`,
+    end2: (name) => `Au loin, « ${name} » fend déjà l'eau sombre, toutes voiles dehors.`,
     end3: "Ensemble, elles nous ont guidés jusqu'ici.",
     /* D11 (d) — le message de la Brebis, en français dans le texte de Guillaume :
        « les étoiles rejoignent la constellation de la Brebis ; ensemble elles
@@ -872,22 +884,15 @@ const STAR_FR = {
        ne les nomme (consigne D11) : c'est la narration de la scène qui parle,
        jamais une réplique de PNJ. */
     end4: "Elles rejoignent la Brebis, là-haut. Elles guideront les matelots qui viendront après nous.",
-    gift: "Quelque chose d'elle est resté avec toi.",
     /* ⚠️ ZIP 479 — LA SEULE PHRASE DU JEU QUI NOMME DEUX JOUEURS. Elle ne se dit
        que si quelqu'un a vraiment tenu l'autre bord (ou porté le plat la moitié du
        chemin) : voir `found[*].with`. */
     together: (names) => `Ce qu'elle a reçu, elle l'a reçu à plusieurs mains : ${names}.`,
   },
   plan: {
-    /* ── LE CONSEIL DE L'ÉTOILE. Demande de Guillaume : « sur conseil (guidé) de
-       la première étoile récoltée dans le cratère ». C'est elle qui envoie, et
-       elle le dit avec ses mots — elle ne connaît pas le mot « mairie ». */
-    advise1: "Elle regarde la cale vide, au bord du lac. Elle secoue la tête.",
-    advise2: "Elle ne sait pas comment on construit. Elle sait seulement à quoi ça ressemblait.",
-    advise3: "Il faut quelqu'un qui dessine les bateaux. En ville, la grande maison où l'on demande.",
     /* ── LA MAIRIE. */
     hallIntro: "Un architecte naval ? Il en reste un, oui. Célestin Kerguélen. Il ne se dérange pas pour rien.",
-    hallFee: (gold, crops, fish) => `Ses conditions : ${gold} or, ${crops} récoltes et ${fish} poissons. Payables d'avance.`,
+    hallFee: (gold, crops, fish) => `Ses conditions : ${nFr(gold)} or, ${nFr(crops)} récoltes et ${nFr(fish)} poissons. Payables d'avance.`,
     hallWhy: "Il dit qu'un plan se paie en une fois ou pas du tout. Il n'a jamais expliqué pourquoi.",
     hallSendBtn: "Faire venir l'ingénieur",
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -913,8 +918,8 @@ const STAR_FR = {
     dealFromPurse: "caisse commune",
     dealFromBag: "ton sac",
     dealFromBagPool: "ton sac + réserve commune",
-    dealHave: (have, need) => `${have} / ${need}`,
-    dealShort: (n, what) => `Il manque ${n} ${what}.`,
+    dealHave: (have, need) => `${nFr(Math.min(have, need))} / ${nFr(need)}`,   // 2026-11-08 (M15) : espaces, et la jauge plafonnée au besoin
+    dealShort: (n, what) => `Il manque ${nFr(n)} ${what}.`,
     dealReady: "Kerguélen compte. Tout y est.",
     dealNotReady: "Il ne prendra pas la moitié. Complète, ou reviens plus tard.",
     hallPoor: "Il te manque de quoi payer. Il ne fera pas crédit.",
@@ -987,6 +992,7 @@ const STAR_FR = {
       : detail === "repair" ? "Le chantier attend Kerguélen."
       : detail === "noBudget" ? "Le budget attend l'accord du maire."
       : detail === "hullFirst" ? "Plus tard : Kerguélen veut d'abord voir la coque tenir l'eau."
+      : detail === "hullBefore" ? "Le safran se fixe à la coque : monte d'abord la coque."   // 2026-11-07 — audit G13
       : "Étape encore verrouillée.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
        explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
@@ -1003,7 +1009,9 @@ const STAR_FR = {
        était vrai, et c'était très exactement les 24 minutes de file d'attente que
        l'audit 477 a chiffrées. Les cinq berceaux se commandent maintenant ensemble ;
        ce qui limite n'est plus l'horloge, c'est la réserve. */
-    orderHint: "Il peut mener les cinq de front. Ce qui manque, ce n'est plus le temps : c'est la réserve.",
+    /* 2026-11-07 — audit M3/G6 : « les cinq de front » pendant que trois pièces attendent la coque ; et rien n'annonçait la scie à deux. */
+    orderHint: "Pour commander une pièce, tu la scies avec lui : chacun tire à son tour. Il en mène plusieurs de front.",
+    orderSawing: "🪚 Tristan y travaille",
     /* ⚠️ ZIP 478 — TROIS LIGNES, JAMAIS QUATRE (voir `STAR_TIMBER`). Le troisième
        terme est vide pour le mât, qui n'est que du bois — et la phrase le supporte
        sans cas particulier parce que l'appelant ne passe rien. */
@@ -1074,7 +1082,7 @@ const STAR_FR = {
        (une phrase pour plusieurs états) rejoué sur le chantier. */
     delivered: (part) => `${part} — le bois est sur la cale. Il ne manque qu'un marteau.`,
     raised: (part, who) => `${part} — ${who} vient de la poser. Le bateau grandit pour de bon.`,
-    raiseTitle: (part) => `🔨 Monter ${part}`,
+    raiseTitle: (part) => `🔨 Monter ${String(part).charAt(0).toLowerCase()}${String(part).slice(1)}`,   // 2026-11-07 — audit M3 : « Monter Le safran »
     raiseSub: (n, total) => `coup ${n} sur ${total}`,
     raiseHint: "Frappe quand le maillet passe sur la zone claire. Un coup à côté ne compte pas.",
     raiseWin: "La pièce est en place. Elle ne bougera plus.",
@@ -1113,7 +1121,7 @@ const STAR_FR = {
     combo: (n) => `${n} traits d'affilée`,
     stress: "Ce que la planche encaisse",
     pull: "TIRER",
-    hint: "Tire quand la lame revient de son côté. Tirer pendant qu'il tire coince la lame.",
+    hint: "Tire quand la lame arrive chez lui. Tirer pendant qu'il tire coince la lame.",   // 2026-11-07 — audit G6 : « revient de son côté » se lisait à l'envers
     quit: "← Laisser tomber",
     flat: "L'atelier ne s'affiche pas sur cette machine, mais la scie fonctionne : suis la lame sur la piste.",
     camHint: "Glisse pour regarder autour · Espace ou clic pour tirer",
@@ -1133,6 +1141,7 @@ const STAR_FR = {
     extraWood: (n) => `${n} bois partis dans les planches fendues.`,
     lost: "Trois planches fendues. La scie retourne au mur — rien n'a été prélevé, tu peux recommencer.",
     quitToast: "Tu reposes la poignée. Aucune commande n'est passée.",
+    timeoutToast: "Tristan s'essuie le front : trois minutes, on n'a pas fini. Rien n'est commandé, reprends quand tu veux.",   // 2026-11-07 — audit G6
     /* ⚠️ CE REFUS EXISTE PARCE QUE L'HÔTE REJOUE (voir `starTimberSaw`) : si sa
        manche ne finit pas comme la nôtre, il refuse — et il doit le DIRE, sinon
        le joueur voit un bouton qui ne fait rien. */
@@ -1187,7 +1196,7 @@ const STAR_FR = {
     // affichée en approchant du quai (voir starNearby, FermeGame.js).
     dockTitle: "⚓ La vieille cale",
     dockBody: "La passe du lac est ensablée depuis vingt ans. Relancer le chantier naval ici, sur ce quai ?",
-    boardTaken: (who) => `⚓ Chantier naval : confié à la ferme (${who}). Le maire attend votre visite.`,
+    boardTaken: (who) => `⚓ Chantier naval : confié à la ferme (${who}).`,   // 2026-11-07 — audit G3 : « le maire attend votre visite » restait affiché après la visite
     // La bulle au-dessus d'Eduardo quand on s'approche — et, depuis le
     // 2026-09-23, ce qui l'arrête et le tourne vers toi pendant qu'il la dit
     // (voir `starYardHookActive`/`starNerveHalt`, FermeGame.js). ⚠️ Courte :
@@ -1257,9 +1266,6 @@ const STAR_FR = {
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
-    // D11 — les trois annonces de l'épilogue, une par étape franchie.
-    baptized: (who, name) => `${who} a baptisé le navire : il s'appelle désormais ${name}.`,
-    inaugurated: (who) => `${who} a lancé l'inauguration : tout le monde est attendu sur le quai !`,
   },
   /* ═══════════════════════════════════════════════════════════════════════
      D11 — LA FINALE : LE MAIRE CONVOQUE, LE BAPTÊME, L'INAUGURATION.
@@ -1269,11 +1275,68 @@ const STAR_FR = {
      `starFinaleGoalKey`) ; les trois `hud.goal.*` vivent dans leur table
      habituelle plus bas, comme tous les autres objectifs de la quête. */
   finale: {
-    summonToast: "Le maire vous fait dire de passer le voir — rien d'urgent, juste pour parler du bateau.",
+    summonToast: "Le maire te fait dire de passer à son bureau — rien d'urgent, juste pour parler du bateau.",   // 2026-11-07 — audit G5 : sans « le voir » ; M1 : tutoiement
     /* Qui manque, pour la porte gardée par D13 (le bureau du maire, la cale). */
     missing: (names) => `Pas sans tout le monde : il manque ${names}.`,
-    baptizeToast: (name) => `Le navire s'appelle désormais ${name}.`,
-    inaugToast: "L'inauguration commence : rendez-vous sur le quai !",
+  },
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-11-08 — LA FÊTE DU NAVIRE (G9-G11, `fete.js`).
+     ───────────────────────────────────────────────────────────────────────
+     Le maire VOUVOIE (comme dans tout son bureau) ; le bandeau tutoie. Les bulles sont COURTES : une bulle se lit pendant
+     qu'on regarde autre chose. Les listes (`dance`, `contest`…) sont lues par indice (`fete.js`, `feteBubbles`) : l'ordre
+     n'a pas de sens, seule la longueur compte (une ligne de plus est une voix de plus dans la foule). Le public est large,
+     enfants compris : on s'indigne, on ne s'insulte pas. */
+  fete: {
+    hour: (h, m) => `${h} h ${String(m).padStart(2, "0")}`,
+    atHour: (when, tomorrow) => (tomorrow ? `Demain soir, ${when}.` : `Ce soir, ${when}.`),
+    fixedToast: (when, tomorrow) => `🎉 La fête du navire est fixée ${tomorrow ? "à demain soir" : "à ce soir"}, ${when}. Rendez-vous au quai !`,
+    fixedChat: (when, tomorrow) => `La fête du navire : ${tomorrow ? "demain soir" : "ce soir"}, ${when}, au quai.`,
+    postponedToast: (when, tomorrow) => `🌙 Personne n'est venu donner le signal : la fête est reportée ${tomorrow ? "à demain soir" : "à ce soir"}, ${when}.`,
+    prepToast: "🔨 Les ouvriers parent le quai pour la fête.",
+    readyToast: "🎉 La foule est au quai : il ne manque plus que vous !",
+    startChat: (who) => `${who} a donné le signal : la fête commence !`,
+    namedChat: (name) => `Le navire est baptisé « ${name} ».`,
+    sunkChat: "La foudre a coulé le navire… Il faudra recommencer.",
+    endChat: (name) => `« ${name} » a jeté l'ancre dans la baie. Pour toujours.`,
+    // les cartes de vote
+    voteNameTitle: "Comment s'appellera le navire ?",
+    voteVerdictTitle: "La foule n'est pas d'accord…",
+    cardListen: "Écouter la foule",
+    cardKeep: "Maintenir le nom",
+    voted: (n, total) => `${n} sur ${total} ont choisi`,
+    mine: "ton choix",
+    retry: "Recommencer",
+    retryHint: "Revenir à la contestation",
+    // le maire
+    speech: [
+      "Mes amis ! Ce soir, Valley Town a un navire.",
+      "Il est tombé du ciel en morceaux, une nuit d'étoiles…",
+      "…et nos fermiers l'ont rebâti, pièce par pièce.",
+      "Le bois de Tristan, les plans de Kerguélen, et vous !",
+      "Il ne lui manque plus qu'une chose : un nom !",
+    ],
+    voteName: "Alors ? Comment l'appelez-vous ?",
+    draw: "Égalité ! Je tire au sort…",
+    announce: (name) => `Je te baptise « ${name} » !`,
+    mayorBottle: "Bon, je m'en charge !",
+    contestMayor: "Hum… la foule n'a pas l'air d'accord.",
+    voteVerdict: "Que décidez-vous ?",
+    rename: "La foule a parlé : ce sera « La Belle Étoile » !",
+    keep: "Comme vous voudrez… On le met à l'eau.",
+    storm: "Oh là là… Le ciel tourne.",
+    sunk: "… Il a coulé.",
+    held: "Il a tenu ! Revenez, tout le monde !",
+    depart: "Larguez les amarres !",
+    home: "Le voilà chez lui.",
+    // la foule
+    dance: ["Quelle fête !", "Hourra !", "Allez, on danse !", "Bravo les fermiers !", "Vive le navire !"],
+    cheer: (name) => [`Vive « ${name} » !`, "Hourra !", "Bravo !", "Quel beau nom !", "Hip hip hip !", "Hourra !"],
+    contest: ["Quoi ?!", "C'est une blague ?", "Un nom pareil, jamais !", "Quelle honte…",
+              "On ne nomme pas un navire comme ça !", "Rendez-lui un vrai nom !", "Mais enfin !", "C'est non !", "Pauvre navire…"],
+    syco: ["Bravo ! Quel nom audacieux !", "Magnifique choix, vraiment !", "J'adore ! Très… original.", "Le maire a toujours raison !"],
+    leave: ["Moi, je rentre.", "Quelle honte…", "Venez, les enfants."],
+    sheepish: ["Bon… il flotte.", "On s'y fera.", "Finalement, ça lui va."],
+    farewell: ["Bon vent !", "Au revoir !", "Reviens vite !", "Bonne mer !", "Hourra !"],
   },
   /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Deux voix distinctes, comme le reste
      de la quête (§4 de `CLAUDE.md` : chaque geste dit pourquoi il compte) :
@@ -1299,7 +1362,7 @@ const STAR_FR = {
        passer dans 3 s) ; `rodMiss` accompagne chaque poisson-squelette une
        fois protégée, sans jamais nommer l'espèce à l'avance (même pudeur que
        `evilFishBite`, qui ne dit pas non plus ce qu'on va sortir de l'eau). */
-    rodNeedsProtect: "Il faudra d'abord la protéger — direction le chaudron.",
+    rodNeedsProtect: "Pour la prochaine, il faudra la protéger : direction le chaudron.",
     rodProtected: "Un enduit violet et noir recouvre ta ligne. Elle tiendra dix minutes.",
     rodProtectExpired: "L'enduit protecteur s'est dissipé.",
     rodMiss: "La ligne se tend, puis mollit d'un coup — ce n'est encore qu'un débris.",
@@ -1316,7 +1379,7 @@ const STAR_FR = {
        clôt la scène ; elle ne dit pas « sauvée », qui appartient à un
        chantier qu'on n'a pas encore construit (la ramasser, la sortir du
        monde maléfique). */
-    hookToast: "Ça mord fort — c'est elle ! Tiens bon.",
+    hookToast: "Ça mord fort — c'est elle ! Tiens bon : sa lumière tient les créatures à l'écart.",
     haulHint: "Maintiens Espace pour tirer. Relâche avant que la ligne ne casse.",
     haulSlip: "Elle tire fort... tu perds du terrain !",
     haulWon: "Tu la tires enfin sur la rive, hors de l'eau corrompue.",
@@ -1360,6 +1423,7 @@ const STAR_FR = {
     // 480 bis — la blanche : pas de touche non plus (une posture, la
     // proximité), même discipline que `tame`/`warm`.
     lure: "Elle se sauve sans la fiole (E : pourquoi ?)",
+    lureHave: "Tu as la fiole : approche du trou, elle viendra (E)",   // 2026-11-07 — audit M10
     cook: "E : cuisiner le plat de l'étoile",
     dishWait: "Ça mijote…",
     dishTake: "E : prendre le plat encore fumant",
@@ -1413,18 +1477,21 @@ const STAR_FR = {
        qu'il ne planterait (§10 de CLAUDE.md, le stub menteur). `verify-quete`
        vérifie que chaque clé lue EXISTE — elle « existe » toujours, grâce au
        repli. C'est pourquoi le banc gagne du même coup un contrôle qui compare
-       les clés `p:` de `FermeGame.js` à cette table SANS passer par le repli. */
+       les clés `p:` de `FermeGame.js` à cette table SANS passer par le repli.
+       ⚠️ 2026-11-07 — AUDIT G12 : CE CONTRÔLE N'AVAIT JAMAIS ÉTÉ ÉCRIT (la clé `dock`
+       manquait, banc vert). Il existe maintenant : `verify-quete`, « chaque invite de
+       `starNearby` a son texte ». Une phrase qui dit qu'un banc existe se vérifie. */
     kerguelenVandal: "E : réparer la coque avec lui",
     /* AUDIT 2026-09-12 — un CONSTAT, pas une invite : le bois est livré, le
        montage attend le ciel. Sans « E : », comme `impactDig` (règle du 456) —
        mais E reste branché pour DIRE pourquoi (`plan.blockWhy`). */
-    raiseWait: "La cale attend un signe du ciel (E : pourquoi ?)",
+    raiseWait: "Cette pièce attend son tour (E : pourquoi ?)",   // 2026-11-07 — audit G13 : plus de « signe du ciel », la raison est la coque
+    dock: "E : voir le vieux chantier naval",   // 2026-11-07 — audit G12 : la clé manquait, le repli affichait un « E » nu
     plaque: "E : lire la plaque du chantier",
-    // D11 — le baptême et l'inauguration, à la cale. `finaleGather` reste sans
-    // « E : » quand la porte D13 refuse : E ne fait alors que DIRE qui manque
-    // (même discipline que `raiseWait`, un CONSTAT, pas une promesse).
-    finaleBaptize: "E : baptiser le navire",
-    finaleInaugurate: "E : lancer l'inauguration",
+    // 2026-11-08 — la fête, à la cale. `finaleGather` reste sans « E : » quand la porte D13 refuse : E ne fait alors que
+    // DIRE qui manque (même discipline que `raiseWait`, un CONSTAT, pas une promesse).
+    feteStart: "E : donner le signal de la fête",
+    feteBottle: "E : briser la bouteille",
     finaleGather: "Il manque du monde (E : qui ?)",
   })[k] || "E",
 };
@@ -1454,12 +1521,14 @@ const STAR_EN = {
     tameDuo: "There are several of you on the farm. Ten seconds without looking will do.",
     material1: "Under the ash: a black plate, smooth only along the break.",
     material2: "It took the whole impact without passing the blow into the soil beneath.",
-    material3: "Wood knows how to bend; this matter knows how to hold. Together, they could endure far more.",
-    materialKeep: "You keep the plate. It has no use yet, but it will.",
+    material3: "Tap it and it rings clear, like a bell. Cool it down: it will make the ship's bell.",
+    materialKeep: (n, total) => n < total
+      ? "You keep the star plate. With a second one, the ship's bell can be cast."
+      : "Both star plates are ready: they will become the ship's bell.",
   },
   /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
   dig: {
-    hint: "Stay still: he's scraping the ash away.",
+    hint: "Stay still: you're scraping the ash away.",
     blocked: "The search stops: an announcement is on screen. Close it (Esc) to start again.",
     stopped: "You stood back up. The crater is still there.",
     titleStarLight: "A blue star.",
@@ -1589,7 +1658,8 @@ const STAR_EN = {
       yardCalm:  "Hull and rudder are in. Let a few days go by.",
       warnRead:  "The observatory posted a notice on the Valley Town news board.",
       warnWait:  "An asteroid shower is due tonight or the next. The valley waits.",
-      evilHaul:   "Cast at the glow in the evil lake and haul her to the shore.",
+      evilHaul:   "Cast at the glow in the lake, haul her ashore. Let's hope your rod holds…",
+      evilRodProtect: "Your rod didn't hold. Protect it at the cauldron, then come back and cast.",
       evilRevive: "Carry the seventh star to the farm, set her down, revive her (E).",
       budget:       "The shipyard is wrecked. It needs a budget: ask the mayor for an audience.",
       budgetBooked: "Budget appointment booked: go up to the mayor's office at the set time.",
@@ -1597,12 +1667,15 @@ const STAR_EN = {
       rebuildWait:  "The funds are coming. Help Tristan at the saw to speed up (Staff).",
       // D11 — the epilogue's three steps. 80-character ceiling, held by the text.
       finaleSummon: "The mayor wants to see you. Head up to their office and press E.",
-      finaleBaptize: "The mayor has agreed. Name the ship on the slipway (E).",
-      finaleInaugurate: "The ship has a name. Start the inauguration on the slipway (E).",
+      finaleWait: "The ship's party is being set up on the quay.",
+      finaleGo: "Everyone is waiting on the quay: give the signal (E).",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
-    cauldronPassage: "Search every corner of this cursed forest and you'll find a magic cauldron there — but stay alert.",
+    cauldronPassage: "Search the cursed forest: a magic cauldron is hidden there. Stay on your guard.",
+    candyCount: (have, need) => `(${have}/${need} 🍬)`,
+    pipsImpacts: (n, total) => `Farm craters searched: ${n} of ${total}`,
+    pipsShip: (n, total) => `Ship pieces in place: ${n} of ${total}`,
     // hors-zip — tooltip for the clickable chapter-1 pips, see the FR block.
     focusTip: (mine, shared) => (mine ? "Your personal target — click again to clear it" : "Aim for this hole first, without waiting on the others")
       + (shared ? " · a friend is aiming for the same one" : ""),
@@ -1805,7 +1878,7 @@ const STAR_EN = {
        queen still needs waking where the blue one only needed a turned back. */
     queenFed: "The lights pour into her. She has fuel now — but nothing beats yet.",
     wokeHer: "One beat. Then another. She opens her eyes, and she is yellow.",
-    wakeHint: "Strike when the ring meets the mark. Hammering makes her sink back.",
+    wakeHint: "Strike (E or Space) when the ring meets the mark. Hammering makes her sink back.",
     dishCook: "The cauldron heats up. It smells of something no book ever wrote down.",
     dishSimmer: "It is simmering.",
     dishReady: "It is ready, and steaming.",
@@ -1826,7 +1899,7 @@ const STAR_EN = {
     },
     hintWay: { n: "to the north", ne: "to the north-east", e: "to the east", se: "to the south-east",
                s: "to the south", sw: "to the south-west", w: "to the west", nw: "to the north-west" },
-    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintSay: (temp, way) => way ? `${temp} She is ${way}.` : temp,
     hintLeft: (n) => n > 0 ? `${n} hint${n > 1 ? "s" : ""} left.` : "That was the last hint. Ask again and I will lead you.",
     hintLead: "Then come. I will go ahead — E to stop, E to set off again.",
     hintAway: "She is not on this side of the rails. Go down to town first.",
@@ -1837,14 +1910,15 @@ const STAR_EN = {
     slipHold: "You're sliding. Keep the same heading — he'll find a grip.",
     slipClimb: "He's holding on. Don't let go of the direction.",
     meet1: "This one is larger than the others. Its yellow light fills the crater.",
-    meet2: "The two little farm stars move toward it without hesitation.",
-    meet3: "The queen star traces the outline of a broken ship in the dust.",
+    meet2: "The little farm stars move toward it without hesitation.",
+    meet3: "The queen star traces the outline of a finished ship in the dust, every sail set.",
     name: (n, total) => `Its boat broke when it fell. ${Nen(total)} pieces. It has ${nen(n)}.`,
   },
   /* ── ÉTAPE 3 : LE LAC. */
   ship: {
     got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat is growing.`,
     last: (n, total) => `${Nen(n)} of ${nen(total)} pieces. Only one piece left.`,
+    bellStar: "🔔 The bell is cast from the two star plates. It rings clear on its cradle.",
   },
   /* ── voir la note française : le toast COMPTE, le ruban MONTRE. */
   ribbon: {
@@ -1853,24 +1927,20 @@ const STAR_EN = {
     last: "The boat is whole.",
   },
   end: {
-    end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
+    end1: "One by one, the seven stars leave the ship.",
     /* D11 — see the French note: the boat has already sailed by this point
        (the public inauguration just launched it), so the line names it
        instead of describing a launch that already happened off-screen. */
-    end2: (name) => `Out on the water, ${name} is already cutting through the dark, sails full toward the open sea.`,
+    end2: (name) => `Far out, “${name}” is already cutting through the dark water, every sail set.`,
     end3: "Together, they have guided us this far.",
     // D11 (d) — no resident ever names them; this is the scene's own narration.
     end4: "They join the Ewe, up above. They will guide the sailors who come after us.",
-    gift: "Something of it stayed with you.",
     /* ⚠️ ZIP 479 — voir la note française : la seule phrase qui nomme deux joueurs. */
     together: (names) => `What it was given, it was given by more than one pair of hands: ${names}.`,
   },
   plan: {
-    advise1: "It looks at the empty slipway by the lake. It shakes its head.",
-    advise2: "It doesn't know how boats are built. It only knows what this one looked like.",
-    advise3: "You need someone who draws boats. In town — the big house where you ask for things.",
     hallIntro: "A shipwright? There's one left, yes. Célestin Kerguélen. He doesn't travel for nothing.",
-    hallFee: (gold, crops, fish) => `His terms: ${gold} gold, ${crops} crops and ${fish} fish. Paid up front.`,
+    hallFee: (gold, crops, fish) => `His terms: ${nEn(gold)} gold, ${nEn(crops)} crops and ${nEn(fish)} fish. Paid up front.`,
     hallWhy: "He says a plan is paid all at once or not at all. He has never explained why.",
     hallSendBtn: "Send for the shipwright",
     /* ⚠️⚠️ ZIP 458 — voir la note française : la transaction se voit, se compose
@@ -1886,8 +1956,8 @@ const STAR_EN = {
     dealFromPurse: "common purse",
     dealFromBag: "your bag",
     dealFromBagPool: "your bag + common store",
-    dealHave: (have, need) => `${have} / ${need}`,
-    dealShort: (n, what) => `${n} ${what} short.`,
+    dealHave: (have, need) => `${nEn(Math.min(have, need))} / ${nEn(need)}`,
+    dealShort: (n, what) => `${nEn(n)} ${what} short.`,
     dealReady: "Kerguélen counts it. It's all there.",
     dealNotReady: "He won't take half of it. Make it up, or come back later.",
     hallPoor: "You're short. He doesn't give credit.",
@@ -1934,6 +2004,7 @@ const STAR_EN = {
       : detail === "repair" ? "The shipyard is waiting for Kerguélen."
       : detail === "noBudget" ? "The budget is waiting for the mayor's approval."
       : detail === "hullFirst" ? "Later: Kerguélen first wants to see the hull hold the water."
+      : detail === "hullBefore" ? "The rudder hangs on the hull: raise the hull first."
       : "This step is still locked.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
        explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
@@ -1944,7 +2015,8 @@ const STAR_EN = {
     progressNext: (part) => `Next visible change: ${part}.`,
     progressComplete: "Construction complete: every piece is on the slipway.",
     orderTitle: (name) => `🪵 ${name}'s workshop`,
-    orderHint: "He can run all five at once. What's short isn't time any more: it's the stock.",
+    orderHint: "To order a piece, you saw it with him: each of you pulls in turn. He can run several at once.",
+    orderSawing: "🪚 Tristan is on it",
     orderCost: (wood, d, extra) => `${wood} wood${extra ? ` · ${extra}` : ""} · ${d} of work`,
     extraName: (ex) => !ex ? "" :
       ex.kind === "stone" ? `${ex.n} stone`
@@ -1983,7 +2055,7 @@ const STAR_EN = {
     blockHullFirst: "🔒 Later: the hull must hold the water first",
     delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
     raised: (part, who) => `${part} — ${who} just raised it. The boat is growing for real now.`,
-    raiseTitle: (part) => `🔨 Raise ${part}`,
+    raiseTitle: (part) => `🔨 Raise ${String(part).charAt(0).toLowerCase()}${String(part).slice(1)}`,
     raiseSub: (n, total) => `blow ${n} of ${total}`,
     raiseHint: "Strike when the mallet crosses the bright band. A blow off the mark doesn't count.",
     raiseWin: "The piece is home. It won't move again.",
@@ -2010,7 +2082,7 @@ const STAR_EN = {
     combo: (n) => `${n} strokes in a row`,
     stress: "What the board is taking",
     pull: "PULL",
-    hint: "Pull as the blade comes back from his side. Pulling while he pulls jams the blade.",
+    hint: "Pull when the blade reaches his side. Pulling while he pulls jams the blade.",
     quit: "← Leave it",
     flat: "The workshop will not draw on this machine, but the saw works: follow the blade on the track.",
     camHint: "Drag to look around · Space or click to pull",
@@ -2027,6 +2099,7 @@ const STAR_EN = {
     extraWood: (n) => `${n} wood lost in the split boards.`,
     lost: "Three boards split. The saw goes back on the wall — nothing was spent, you can try again.",
     quitToast: "You put the grip down. No order was placed.",
+    timeoutToast: "Tristan wipes his brow: three minutes and the cut isn't done. Nothing is ordered, try again whenever you like.",
     refused: "The order was not recorded. Take the saw again.",
   },
   /* ⚠️ ZIP 453 — voir la note française : elles remplacent `voyagerDeparted` /
@@ -2052,7 +2125,7 @@ const STAR_EN = {
     // 2026-09-16 — third door to the same offer, shown near the dock.
     dockTitle: "⚓ The old slipway",
     dockBody: "The lake channel has been silted up for twenty years. Restart the shipyard here, on this quay?",
-    boardTaken: (who) => `⚓ Shipyard: entrusted to the farm (${who}). The mayor is expecting you.`,
+    boardTaken: (who) => `⚓ Shipyard: entrusted to the farm (${who}).`,
     eduHook: "A boat of my own would change everything for my trips… Go take a look at the old quay, in town — you'll get an idea there.",
     eduTitle: "⚓ Eduardo's boat",
     eduMapBtn: "⚓ His boat project",
@@ -2119,6 +2192,14 @@ const STAR_EN = {
       deliver: "🔨 Timber delivered, not yet raised",
       // 2026-09-13 — before the repair, only hull and rudder are allowed (see devStar).
       timber: "🪵 Raise every piece the shipyard allows now",
+      // 2026-11-08 — la fête du navire, chacun de ses chemins sur commande
+      feteNow: "🎉 Party in 25 s (skip the wait)",
+      feteVote: "🗳 Party: skip to the name vote",
+      feteName1: "🤪 Party: force a silly name",
+      feteKeepSink: "⛈ Party: keep the name — it sinks",
+      feteKeepPass: "🌤 Party: keep the name — it holds",
+      feteDepart: "⛵ Party: jump to the departure",
+      feteReset: "↺ Party: replay it from the start",
       appt: "🎩 An appointment with the Mayor, right now",
       unslam: "🚪 Make him forget the slammed door",
       /* ⚠️ ZIP 479 — les deux raccourcis des nouveaux verbes. Ils sautent la
@@ -2207,8 +2288,8 @@ const STAR_EN = {
       evilRevive: "✨ The seventh, revived",
       rebuild: "⛵ The ship rebuilt",
       agree: "🎩 The mayor's summons (the party)",
-      baptism: "🍾 The christening",
-      inaug: "🎉 Inauguration and launch",
+      fete: "🎉 The party (the signal)",
+      inaug: "⚓ Party over — the ship at anchor",
       done: "🏅 Quest complete — the medal",
     }[k] || k),
     stepTip: (k) => ({
@@ -2222,8 +2303,9 @@ const STAR_EN = {
       evilSeen: "Rod reset: cast in the evil lake.",
       evilHaul: "Rod reset: the haul stays to play.",
       rebuild: "Every piece delivered, none raised: the hammer stays to play.",
-      agree: "The quest is won: the mayor's summons stays to play.",
-      done: "Everything done; the final scene plays, then the medal.",
+      agree: "The quest is won: the mayor's summons stays to play (then the party, 25 s later).",
+      fete: "The party starts now: the whole ceremony plays.",
+      done: "Everything done; the medal.",
     }[k] || ""),
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
@@ -2251,14 +2333,60 @@ const STAR_EN = {
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
     // D11 — the epilogue's three announcements, one per step reached.
-    baptized: (who, name) => `${who} named the ship: it is now called ${name}.`,
-    inaugurated: (who) => `${who} kicked off the inauguration — everyone is expected on the quay!`,
   },
   finale: {
     summonToast: "The mayor sends word to come see them — nothing urgent, just to talk about the boat.",
     missing: (names) => `Not without everyone: still missing ${names}.`,
-    baptizeToast: (name) => `The ship is now named ${name}.`,
-    inaugToast: "The inauguration is starting: meet on the quay!",
+  },
+  // 2026-11-08 — the ship's party (see the French table for the rules).
+  fete: {
+    hour: (h, m) => { const hh = ((h + 11) % 12) + 1; return `${hh}:${String(m).padStart(2, "0")} ${h < 12 || h >= 24 ? "am" : "pm"}`; },
+    atHour: (when, tomorrow) => (tomorrow ? `Tomorrow evening, ${when}.` : `Tonight, ${when}.`),
+    fixedToast: (when, tomorrow) => `🎉 The ship's party is set for ${tomorrow ? "tomorrow evening" : "tonight"}, ${when}. Meet on the quay!`,
+    fixedChat: (when, tomorrow) => `The ship's party: ${tomorrow ? "tomorrow evening" : "tonight"}, ${when}, on the quay.`,
+    postponedToast: (when, tomorrow) => `🌙 Nobody came to give the signal: the party is moved to ${tomorrow ? "tomorrow evening" : "this evening"}, ${when}.`,
+    prepToast: "🔨 The workers are dressing the quay for the party.",
+    readyToast: "🎉 The crowd is on the quay: they're only waiting for you!",
+    startChat: (who) => `${who} gave the signal: the party begins!`,
+    namedChat: (name) => `The ship is christened “${name}”.`,
+    sunkChat: "Lightning sank the ship… Time to start over.",
+    endChat: (name) => `“${name}” has dropped anchor in the bay. For good.`,
+    voteNameTitle: "What will the ship be called?",
+    voteVerdictTitle: "The crowd doesn't agree…",
+    cardListen: "Listen to the crowd",
+    cardKeep: "Keep the name",
+    voted: (n, total) => `${n} of ${total} have chosen`,
+    mine: "your pick",
+    retry: "Start over",
+    retryHint: "Back to the protest",
+    speech: [
+      "My friends! Tonight, Valley Town has a ship.",
+      "It fell from the sky in pieces, one starry night…",
+      "…and our farmers rebuilt it, piece by piece.",
+      "Tristan's timber, Kerguélen's plans, and you!",
+      "It only lacks one thing: a name!",
+    ],
+    voteName: "Well? What will you call it?",
+    draw: "A tie! I'll draw lots…",
+    announce: (name) => `I name you “${name}”!`,
+    mayorBottle: "Fine, I'll do it!",
+    contestMayor: "Hmm… the crowd doesn't look happy.",
+    voteVerdict: "What do you decide?",
+    rename: "The crowd has spoken: “La Belle Étoile” it is!",
+    keep: "As you wish… Into the water it goes.",
+    storm: "Oh dear… The sky is turning.",
+    sunk: "… It sank.",
+    held: "It held! Come back, everyone!",
+    depart: "Cast off!",
+    home: "There it is, home at last.",
+    dance: ["What a party!", "Hooray!", "Come on, let's dance!", "Well done, farmers!", "Long live the ship!"],
+    cheer: (name) => [`Long live “${name}”!`, "Hooray!", "Bravo!", "What a lovely name!", "Hip hip!", "Hooray!"],
+    contest: ["What?!", "Is this a joke?", "A name like that, never!", "How embarrassing…",
+              "You can't name a ship that!", "Give it a real name!", "Come on!", "No way!", "Poor ship…"],
+    syco: ["Bravo! What a daring name!", "A magnificent choice, truly!", "I love it! So… original.", "The mayor is always right!"],
+    leave: ["I'm going home.", "How embarrassing…", "Come along, kids."],
+    sheepish: ["Well… it floats.", "We'll get used to it.", "It suits it, actually."],
+    farewell: ["Fair winds!", "Goodbye!", "Come back soon!", "Safe sailing!", "Hooray!"],
   },
   // 2026-09-03 (lot C) — see the French note: two distinct voices, fired once
   // for the whole table on the e.evilFound transition (starWatch).
@@ -2270,7 +2398,7 @@ const STAR_EN = {
     rodArming: "The corrupted water seeps into your line...",
     rodBroken: "Your rod snapped in this cursed water.",
     rodStillBroken: "Your rod is broken here. Protect it before trying again.",
-    rodNeedsProtect: "It will need protecting first — head for the cauldron.",
+    rodNeedsProtect: "Next time it will need protecting: head for the cauldron.",
     rodProtected: "A purple and black coating covers your line. It will hold for ten minutes.",
     rodProtectExpired: "The protective coating has worn off.",
     rodMiss: "The line goes taut, then slack all at once — just debris, still.",
@@ -2279,7 +2407,7 @@ const STAR_EN = {
     cauldronRodBtn: "Coat the rod",
     cauldronRodReady: (mmss) => `Your rod is protected for ${mmss} more.`,
     rodSlotTip: "Rod protected against the corrupted water.",
-    hookToast: "Something bites hard — it's her! Hold on.",
+    hookToast: "Something bites hard — it's her! Hold on: her light keeps the creatures away.",
     haulHint: "Hold Space to pull. Release before the line snaps.",
     haulSlip: "She's pulling hard... you're losing ground!",
     haulWon: "You finally drag her onto the shore, out of the corrupted water.",
@@ -2303,6 +2431,7 @@ const STAR_EN = {
     light: "E: offer it blue light",
     warm: "It is waiting for something warm (E: why?)",
     lure: "It flees without the vial (E: why?)",
+    lureHave: "You have the vial: go near the hole, she will come (E)",
     cook: "E: cook the star's dish",
     dishWait: "Simmering…",
     dishTake: "E: take the steaming dish",
@@ -2328,11 +2457,12 @@ const STAR_EN = {
     // AUDIT 2026-09-12 — voir la note française : clé absente, masquée par le
     // repli `|| "E"` de cette table, trouvée en jeu.
     kerguelenVandal: "E: repair the hull with him",
-    raiseWait: "The slipway is waiting for a sign from the sky (E: why?)",
+    raiseWait: "This piece has to wait its turn (E: why?)",
+    dock: "E: look at the old shipyard",
     plaque: "E: read the shipyard plaque",
     // D11 — see the French note: same discipline as `raiseWait` when D13 refuses.
-    finaleBaptize: "E: name the ship",
-    finaleInaugurate: "E: start the inauguration",
+    feteStart: "E: give the signal for the party",
+    feteBottle: "E: break the bottle",
     finaleGather: "Some are missing (E: who?)",
   })[k] || "E",
 };
@@ -2401,7 +2531,7 @@ const MAIRE_FR = {
     great: "« Vous tombez bien. Il a ri au téléphone il y a dix minutes, ça n'arrive pas tous les jours. »",
     good:  "« Il est de bonne composition ce matin. Le conseil s'est bien passé. »",
     mid:   "« Comme d'habitude. Ni bien ni mal. Il vous écoutera. »",
-    bad:   "« Je vous préviens : la réunion de dix heures s'est mal terminée. Il n'est pas commode. »",
+    bad:   "« Je vous préviens : la dernière réunion s'est mal terminée. Il n'est pas commode. »",
     awful: "« Franchement, je ne vous le conseille pas. Mais c'est vous qui voyez. »",
   },
   moodSour: "« Ah. C'est vous. » Elle ne dit rien de plus, et note quelque chose.",
@@ -2412,7 +2542,7 @@ const MAIRE_FR = {
   bookedBy: (n) => `${n} a rendez-vous avec le maire.`,
   blockedFor: (mmss) => `Il ne vous recevra pas avant ${mmss}. « Il a demandé à ne pas être dérangé. »`,
   doorNotYet: "Le maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
-  doorWait: (mmss) => `Vous avez rendez-vous dans ${mmss}. Sa porte est encore fermée.`,
+  doorWait: (mmss) => `Vous avez rendez-vous dans ${mmss}. Revenez à l'heure dite.`,   // 2026-11-07 — audit M11 : on est déjà dans le bureau
   doorOther: (n) => `C'est ${n} qui a rendez-vous, pas vous.`,
 
   slam: "🚪 Se lever et claquer la porte",
@@ -2474,7 +2604,9 @@ const MAIRE_FR = {
     m3: "Du bout de l'index, il tapote la pile de dossiers ficelés posée à sa droite. « Un navire. Bien. Vous voyez ce tas ? C'est l'entretien du pont sud. On le repousse depuis deux ans, faute de six mille. Alors dites-moi qui paie le vôtre, et dites-le vite. »",
     m4: "« Admettons. Et après ? Un bateau, ça se répare, ça se cale, ça se garde, et ça se paie encore quand ça ne sert plus. Vous comptez laisser ça sur mon quai et rentrer chez vous ? »",
     m5: "« Qu'est-ce que vous voulez construire, au juste ? Une barque ? Un chalutier ? Vous me parlez d'un navire depuis dix minutes et je ne sais toujours pas de quoi il s'agit. »",
-    m6: "Il repose son stylo pour de bon. « Kerguélen. Célestin Kerguélen ? Celui-là ne se dérange pas pour rien. »",
+    /* 2026-11-07 — audit G3 : le joueur ne connaît pas encore Kerguélen au premier entretien (les plans viennent APRÈS la
+       signature) ; c'est le maire qui le SUGGÈRE, et deux répliques sur trois ne supposent plus qu'on l'a rencontré. */
+    m6: "Il repose son stylo pour de bon. « Un navire, ça se dessine avant de se construire. Il y a un architecte naval en ville, Célestin Kerguélen. Celui-là ne se dérange pas pour rien. Vous comptez aller le voir ? »",
     m7: "Il tapote le sous-main, deux fois, du plat de la main. « Et si ça coule ? Qui signe, en bas de la page ? »",
     m8: "« Le quai est public. Vous savez ce que ça veut dire ? Que si quelqu'un se casse une jambe sur vos madriers, c'est la commune qui paie l'avocat. »",
     m9: "« Et qui va le mener en mer, votre navire ? Vous ? »",
@@ -2550,8 +2682,8 @@ const MAIRE_FR = {
 
     m6a:  "« Non. Il ne se dérange pas pour rien. Il s'est dérangé. »",
     m6a0: "« C'est à lui que je compte m'adresser. »",
-    m6b:  "« Il a passé quinze jours sur la grève à mesurer votre lac. »",
-    m6c:  "« Vous le connaissez ? Ça tombe bien : il a parlé de vous en très bons termes. »",
+    m6b:  "« S'il ne se dérange pas pour rien, il saura dire si mon bateau tient l'eau. »",
+    m6c:  "« Kerguélen ? Il m'a parlé de vous en très bons termes. »",
 
     m7a: "« Vous. Et c'est exactement pour ça que je suis venu avant d'abattre le premier arbre. »",
     m7b: "« Ça ne coulera pas. »",
@@ -2636,7 +2768,7 @@ const MAIRE_FR = {
 
     m6a:  "Sept mots. Il regarde le rouleau, puis vous. Il connaît les honoraires de Kerguélen : vous venez de lui dire ce que vaut votre sérieux sans prononcer un chiffre.",
     m6a0: "« Compter s'adresser » n'est pas « s'être adressé ». Il en a reçu, des projets au conditionnel.",
-    m6b:  "Il ignorait qu'on mesurait son lac. Ça le flatte un peu et ça l'inquiète un peu, ce qui, au total, ne fait pas grand-chose.",
+    m6b:  "Il hoche la tête. Un homme de métier pour répondre de la sûreté, c'est déjà quelqu'un d'autre que vous. Ça ne lui donne pas encore de quoi signer.",
     m6c:  "Kerguélen n'a parlé de personne. Un maire reconnaît un compliment inventé à la même chose que tout le monde : il est trop bien tourné.",
 
     m7a: "Il se cale en arrière. Vous venez demander avant, pas après. C'est la première fois de la semaine, et il n'a rien à répondre à ça.",
@@ -2717,7 +2849,8 @@ const MAIRE_FR = {
      Une récompense qui ne se lit nulle part n'existe pas (leçon du 453 : chaque
      chose qu'un document dit visible doit avoir un chemin de code qui l'affiche). */
   after: {
-    signed: "Le chantier naval est autorisé. Tristan peut commencer à débiter.",
+    signed: "Le chantier naval est autorisé. Le quai est à vous.",   // 2026-11-07 — audit G3 : l'étape suivante est l'architecte, pas Tristan (voir `needPlans`)
+    needPlans: "Pour les plans, demandez l'architecte naval à l'accueil.",
     budgetSigned: "Le budget est voté. Tristan peut reprendre : payez les pièces, ou attendez les fonds de la mairie.",
     trust1: "Le maire se souviendra de vous.",
     trust2: "Le maire vous a à la bonne. La prochaine fois sera plus courte.",
@@ -2750,7 +2883,8 @@ const MAIRE_FR = {
     head: "L'inauguration",
     line1: "Il se lève dès que vous passez la porte, un sourire aux lèvres. « Enfin ! Toute la ville ne parle que de votre bateau. »",
     line2: "« Il faut fêter ça comme il se doit : une inauguration publique, sur le quai, avec tous les habitants. Et la mise en mer, bien sûr. »",
-    line3: "« Je vous laisse le baptiser vous-même — c'est à vous de choisir son nom. Retrouvez-moi là-bas dès que vous êtes prêt. »",
+    // 2026-11-08 — la fête a un RENDEZ-VOUS (B2) : le soir, sur le quai, paré par les ouvriers ; et c'est vous qui choisirez son nom (vrai, désormais : on le vote).
+    line3: "« Ce soir, à la tombée de la nuit, sur le quai. Mes ouvriers vont le parer. Et c'est vous qui choisirez son nom. »",
     next: "Continuer",
     agree: "« Alors, on est d'accord ! » Il vous raccompagne déjà vers la porte, pressé d'aller prévenir le crieur public.",
     done: "C'est entendu !",
@@ -2798,17 +2932,17 @@ const MAIRE_FR_F = {
     great: "« Vous tombez bien. Elle a ri au téléphone il y a dix minutes, ça n'arrive pas tous les jours. »",
     good:  "« Elle est de bonne composition ce matin. Le conseil s'est bien passé. »",
     mid:   "« Comme d'habitude. Ni bien ni mal. Elle vous écoutera. »",
-    bad:   "« Je vous préviens : la réunion de dix heures s'est mal terminée. Elle n'est pas commode. »",
+    bad:   "« Je vous préviens : la dernière réunion s'est mal terminée. Elle n'est pas commode. »",
   },
-  clerkAsk: "🎩 Demander une audience à la maire",
+  clerkAsk: "🎩 Demander une audience à madame le maire",
   bookedWhen: (mmss) => `Elle vous reçoit dans ${mmss}.`,
-  bookedBy: (n) => `${n} a rendez-vous avec la maire.`,
+  bookedBy: (n) => `${n} a rendez-vous avec madame le maire.`,
   blockedFor: (mmss) => `Elle ne vous recevra pas avant ${mmss}. « Elle a demandé à ne pas être dérangée. »`,
-  doorNotYet: "La maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
+  doorNotYet: "Madame le maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
   slamHint: "Vous ne pourrez plus la voir avant un quart d'heure, et elle s'en souviendra.",
   watchNoSay: "Vous regardez. C'est elle qui parle.",
   settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où elle serait allée.",
-  redoOffer: "Vous avez contrarié la maire. Voulez-vous vous reprendre ?",
+  redoOffer: "Vous avez contrarié madame le maire. Voulez-vous vous reprendre ?",
   /* ⚠️ SEUL `self` CHANGE : les quatre autres familles d'argument n'ont pas de
      genre. Recopier les cinq aurait été quatre phrases identiques déguisées en
      traduction, et le banc les compte comme telles. */
@@ -2825,7 +2959,7 @@ const MAIRE_FR_F = {
   ask: {
     m1: "Elle ne lève pas les yeux tout de suite. Elle finit sa ligne, repose son stylo, se cale en arrière. « Vous êtes le fermier du nord. On m'a annoncé un quart d'heure. Je vous écoute. »",
     m3: "Du bout de l'index, elle tapote la pile de dossiers ficelés posée à sa droite. « Un navire. Bien. Vous voyez ce tas ? C'est l'entretien du pont sud. On le repousse depuis deux ans, faute de six mille. Alors dites-moi qui paie le vôtre, et dites-le vite. »",
-    m6: "Elle repose son stylo pour de bon. « Kerguélen. Célestin Kerguélen ? Celui-là ne se dérange pas pour rien. »",
+    m6: "Elle repose son stylo pour de bon. « Un navire, ça se dessine avant de se construire. Il y a un architecte naval en ville, Célestin Kerguélen. Celui-là ne se dérange pas pour rien. Vous comptez aller le voir ? »",
     m7: "Elle tapote le sous-main, deux fois, du plat de la main. « Et si ça coule ? Qui signe, en bas de la page ? »",
     m11: "Elle ne sourit pas. « Et moi ? Vous n'avez pas fait la route pour le bien de Valley Town. Qu'est-ce que vous voulez de moi, exactement ? »",
     m12: "Elle se lève, va à la fenêtre, et reste là, dos à vous. « Vous voyez le quai, d'ici ? »",
@@ -2845,7 +2979,7 @@ const MAIRE_FR_F = {
     m2c: "Un mot d'écart avec ce qu'il fallait dire. « Personne ne l'a proposé » parle de la ville. « Vous n'avez personne » parle d'elle, et c'est comme ça qu'elle l'entend.",
     m3a:  "Vingt-quatre mille. Quatre fois son pont. Elle ne demandait pas une promesse, elle demandait une preuve, et la vôtre est plus grosse que son problème.",
     m3a0: "« Pas encore le chiffre exact » est la formule qu'elle entend chaque fois qu'un chantier va coûter le double. Elle vous croit. Pas assez.",
-    m3b:  "C'est exact, et elle le sait mieux que vous. On ne dit pas à une maire que ses priorités peuvent attendre. Surtout quand c'est vrai.",
+    m3b:  "C'est exact, et elle le sait mieux que vous. On ne dit pas à un maire que ses priorités peuvent attendre. Surtout quand c'est vrai.",
     m3c:  "Vous venez de lui décrire un chantier privé sur un quai public. C'est l'objection qu'elle cherchait depuis dix minutes, et vous la lui avez apportée vous-même.",
     m4a: "Elle n'avait pas envisagé qu'on lui propose quelque chose qui s'en aille. Tout ce qu'on lui demande, d'habitude, reste, et il faut l'entretenir.",
     m4b: "Elle note. Une promesse qu'on accepte de voir écrite vaut mieux qu'une promesse. Elle ne signe pas des arrêtés pour se rassurer.",
@@ -2853,15 +2987,15 @@ const MAIRE_FR_F = {
     m5a:  "Trois chiffres et un mot de métier. Elle ignore ce qu'est un gréement aurique, et c'est précisément pour ça que ça marche : quelqu'un, quelque part, a fait le travail.",
     m5a0: "C'est une intention, pas un bateau. Assez pour qu'elle ne vous mette pas dehors. Pas assez pour qu'elle prenne un crayon.",
     m5b:  "Elle apprécie qu'on n'invente pas. Elle aurait quand même préféré une longueur.",
-    m5c:  "Vous venez de lui expliquer son métier. Sa signature engage la commune sur un objet dont elle ne connaît pas la taille, et c'est exactement ce qu'une maire n'a pas le droit de faire.",
+    m5c:  "Vous venez de lui expliquer son métier. Sa signature engage la commune sur un objet dont elle ne connaît pas la taille, et c'est exactement ce qu'un maire n'a pas le droit de faire.",
     m6a:  "Sept mots. Elle regarde le rouleau, puis vous. Elle connaît les honoraires de Kerguélen : vous venez de lui dire ce que vaut votre sérieux sans prononcer un chiffre.",
     m6a0: "« Compter s'adresser » n'est pas « s'être adressé ». Elle en a reçu, des projets au conditionnel.",
-    m6b:  "Elle ignorait qu'on mesurait son lac. Ça la flatte un peu et ça l'inquiète un peu, ce qui, au total, ne fait pas grand-chose.",
-    m6c:  "Kerguélen n'a parlé de personne. Une maire reconnaît un compliment inventé à la même chose que tout le monde : il est trop bien tourné.",
+    m6b:  "Elle hoche la tête. Un homme de métier pour répondre de la sûreté, c'est déjà quelqu'un d'autre que vous. Ça ne lui donne pas encore de quoi signer.",
+    // m6c : retirée le 2026-11-07 (audit G5, « un maire ») — devenue identique au masculin, elle n'a plus rien à surcharger.
     m7a: "Elle se cale en arrière. Vous venez demander avant, pas après. C'est la première fois de la semaine, et elle n'a rien à répondre à ça.",
     m7b: "Elle aimerait vous croire. Ce n'est pas une réponse à la question qu'elle a posée.",
     m7c: "Vous lui proposez de se couvrir. Autrement dit, vous venez de supposer qu'elle a quelque chose à cacher, et vous l'avez dit à voix haute dans son bureau.",
-    m8a: "Vous venez de lui rendre le quai. Un chantier qu'elle encadre est un chantier qu'elle contrôle, et une maire préfère toujours contrôler que subir.",
+    m8a: "Vous venez de lui rendre le quai. Un chantier qu'elle encadre est un chantier qu'elle contrôle, et un maire préfère toujours contrôler que subir.",
     m9a: "Un nom, et quelqu'un à qui vérifier. Elle note le nom. C'est la première chose de tout l'entretien qu'elle peut contrôler sans vous.",
     m9b: "Elle apprécie que vous ne vous imaginiez pas capitaine. Ça reste quelqu'un sans nom.",
     m9c: "Oui. Elle délivre l'autorisation d'un navire qui partira de sa commune. Savoir qui le mène est très exactement son travail.",
@@ -2892,7 +3026,7 @@ const MAIRE_FR_F = {
     b6c: "« Tout », l'année d'un cratère. Elle vous regarde comme on regarde quelqu'un qui n'a jamais lu un budget.",
     b7a: "Elle ne se retourne pas. C'est le seul moment de l'entretien où parler d'elle répond à sa question, et vous lui offrez ce qu'aucun trou rebouché ne donne : qu'on se souvienne.",
     b7b: "Elle sourit à moitié. C'est une promesse, et elle en a déjà beaucoup sur le bureau.",
-    b7c: "Elle se retourne lentement, ouvre la porte, et attend. Proposer une enveloppe à une maire, dans son bureau, l'année d'un cratère.",
+    b7c: "Elle se retourne lentement, ouvre la porte, et attend. Proposer une enveloppe à un maire, dans son bureau, l'année d'un cratère.",
     b8a: "Elle pose le stylo et vous tend la main par-dessus la liasse. Une inauguration, c'est une photo, un discours et une ville réunie : elle vient d'obtenir plus qu'elle ne demandait.",
     b8b: "Elle n'aime pas les chèques en blanc, même quand c'est elle qui les reçoit.",
     b8c: "Elle ne demandait pas d'argent. Vous venez de supposer qu'elle en voulait, et c'est pire que de refuser.",
@@ -2911,18 +3045,18 @@ const MAIRE_FR_F = {
     full: "Elle signe sans relire. « Le conseil suivra. Et le jour du lancement, je veux être sur le quai. »",
   },
   after: {
-    trust1: "La maire se souviendra de vous.",
-    trust2: "La maire vous a à la bonne. La prochaine fois sera plus courte.",
+    trust1: "Madame le maire se souviendra de vous.",
+    trust2: "Madame le maire vous a à la bonne. La prochaine fois sera plus courte.",
     trust3: "Vous avez ses coudées franches. La prochaine fois, elle écoutera avant de compter.",
     again: "Vous pouvez redemander une audience à l'accueil. Elle se souvient de ce que vous lui avez déjà dit.",
     slam: "Elle ne vous recevra pas avant un quart d'heure. L'accueil vous redonnera un rendez-vous quand vous voudrez — mais elle se souviendra de la porte.",
   },
   chat: {
-    signed: (n) => `${n} a obtenu la signature de la maire : le chantier naval est autorisé.`,
-    thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau de la maire.`,
-    slam: (n) => `${n} a claqué la porte du bureau de la maire.`,
-    booked: (n) => `${n} a obtenu un rendez-vous avec la maire.`,
-    budgetSigned: (n) => `${n} a obtenu le budget de la maire : le chantier naval peut reprendre.`,
+    signed: (n) => `${n} a obtenu la signature de madame le maire : le chantier naval est autorisé.`,
+    thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau de madame le maire.`,
+    slam: (n) => `${n} a claqué la porte du bureau de madame le maire.`,
+    booked: (n) => `${n} a obtenu un rendez-vous avec madame le maire.`,
+    budgetSigned: (n) => `${n} a obtenu le budget de madame le maire : le chantier naval peut reprendre.`,
   },
   // D11 — seuls les deux pronoms qui la désignent changent ; les guillemets
   // (ce qu'elle DIT) sont identiques dans MAIRE_FR, ligne pour ligne.
@@ -2989,7 +3123,7 @@ const MAIRE_EN = {
     great: "\"You have picked your day. He laughed on the telephone ten minutes ago, and that does not happen often.\"",
     good:  "\"He is in a good frame of mind this morning. The council went well.\"",
     mid:   "\"The usual. Neither one thing nor the other. He will hear you out.\"",
-    bad:   "\"Fair warning: the ten o'clock meeting ended badly. He is not easy today.\"",
+    bad:   "\"Fair warning: the last meeting ended badly. He is not easy today.\"",
     awful: "\"Frankly, I would not advise it. But that is your business.\"",
   },
   moodSour: "\"Ah. It is you.\" She says nothing more, and writes something down.",
@@ -3000,7 +3134,7 @@ const MAIRE_EN = {
   bookedBy: (n) => `${n} has an appointment with the Mayor.`,
   blockedFor: (mmss) => `He will not see you before ${mmss}. \"He asked not to be disturbed.\"`,
   doorNotYet: "The Mayor is not available. Make an appointment at the front desk.",
-  doorWait: (mmss) => `Your appointment is in ${mmss}. His door is still shut.`,
+  doorWait: (mmss) => `Your appointment is in ${mmss}. Come back at the set time.`,
   doorOther: (n) => `It is ${n} who has the appointment, not you.`,
 
   slam: "🚪 Stand up and slam the door",
@@ -3050,7 +3184,7 @@ const MAIRE_EN = {
     m3: "With one fingertip he taps the stack of tied folders at his right. \"A ship. Fine. You see that pile? That is the south bridge maintenance. We have been putting it off for two years for want of six thousand. So tell me who pays for yours, and tell me quickly.\"",
     m4: "\"Say I grant that. And then? A boat gets repaired, chocked, guarded, and it still costs money once it is no use to anyone. Do you intend to leave that on my quay and go home?\"",
     m5: "\"What is it you want to build, exactly? A dinghy? A trawler? You have been saying the word ship for ten minutes and I still do not know what we are talking about.\"",
-    m6: "He puts his pen down for good. \"Kerguélen. Célestin Kerguélen? That one does not travel for nothing.\"",
+    m6: "He puts his pen down for good. \"A ship gets drawn before it gets built. There is a naval architect in town, Célestin Kerguélen. That one does not travel for nothing. Do you mean to go and see him?\"",
     m7: "He taps the desk pad twice, flat-handed. \"And if it sinks? Who signs, at the bottom of the page?\"",
     m8: "\"The quay is public. Do you know what that means? It means that if somebody breaks a leg on your timbers, the commune pays the lawyer.\"",
     m9: "\"And who is going to take it to sea, this ship of yours? You?\"",
@@ -3123,8 +3257,8 @@ const MAIRE_EN = {
 
     m6a:  "\"No. He does not travel for nothing. He travelled.\"",
     m6a0: "\"He is the man I intend to approach.\"",
-    m6b:  "\"He spent a fortnight on the shore measuring your lake.\"",
-    m6c:  "\"You know him? That is lucky: he spoke very warmly of you.\"",
+    m6b:  "\"If he does not travel for nothing, he will be able to say whether my boat holds the water.\"",
+    m6c:  "\"Kerguélen? He spoke very warmly of you.\"",
 
     m7a: "\"You do. And that is exactly why I came before felling the first tree.\"",
     m7b: "\"It will not sink.\"",
@@ -3201,7 +3335,7 @@ const MAIRE_EN = {
 
     m6a:  "Seven words. He looks at the roll, then at you. He knows what Kerguélen charges: you have just told him what your seriousness is worth without naming a figure.",
     m6a0: "\"Intend to approach\" is not \"have approached\". He has had his share of projects in the conditional.",
-    m6b:  "He did not know anyone was measuring his lake. It flatters him slightly and worries him slightly, which on balance comes to very little.",
+    m6b:  "He nods. A man of the trade to answer for safety is already someone other than you. It does not yet give him anything to sign.",
     m6c:  "Kerguélen spoke of nobody. A mayor recognises an invented compliment the same way everyone else does: it is too well turned.",
 
     m7a: "He leans back. You are here to ask before, not after. That is a first this week, and he has nothing to say to it.",
@@ -3269,7 +3403,8 @@ const MAIRE_EN = {
     full: "He signs without rereading. \"The council will follow. And on launch day, I want to be on the quay.\"",
   },
   after: {
-    signed: "The shipyard is authorised. Tristan can start cutting.",
+    signed: "The shipyard is authorised. The quay is yours.",
+    needPlans: "For the plans, ask the front desk for the naval architect.",
     budgetSigned: "The budget is voted. Tristan can start again: pay for the pieces, or wait for the town hall's funds.",
     trust1: "The mayor will remember you.",
     trust2: "The mayor has taken to you. Next time will be shorter.",
@@ -3292,7 +3427,7 @@ const MAIRE_EN = {
     head: "The inauguration",
     line1: "They stand up the moment you step in, beaming. \"At last! The whole town is talking about your ship.\"",
     line2: "\"We must celebrate properly: a public inauguration, right on the quay, with every resident there. And the launch, of course.\"",
-    line3: "\"I'll let you name it yourself — that part is yours. Meet me down there whenever you're ready.\"",
+    line3: "\"Tonight, at nightfall, on the quay. My workers will dress it up. And you will choose its name.\"",
     next: "Continue",
     agree: "\"Then it's settled!\" They're already walking you to the door, eager to send word to the town crier.",
     done: "Agreed!",
@@ -3700,7 +3835,7 @@ export const FERME_STR = {
     promptChurchCandle: "Allumer un cierge",
     promptChurchPew: "S'asseoir",
     // ZIP 438 — l'hôtel de ville.
-    promptTownHallEnter: "Entrer à l'hôtel de ville",
+    promptTownHallEnter: "E : entrer à l'hôtel de ville",   // 2026-11-07 — audit M11 : un seul format, « E : … »
     promptPriceBoard: "Lire le tableau des cours",
     hallEnterToast: "🏛️ Hôtel de ville de Valley Town.",
     hallExitToast: "🏛️ Vous ressortez de l'hôtel de ville.",
@@ -3782,8 +3917,8 @@ export const FERME_STR = {
     /* ═══ ZIP 439 — L'ACCUEIL, LES ÉLECTIONS, LES REGISTRES ═══════════════ */
     hallClerkName: "Léonie Sarrazin",
     hallClerkRole: "hôtesse d'accueil",
-    promptHallClerk: "Parler à l'accueil",
-    promptMayorDoor: "E : entrer dans le bureau du maire",
+    promptHallClerk: "E : parler à l'accueil",
+    promptMayorDoor: "E : s'adresser au maire",   // 2026-11-07 — audit M11 : l'invite vit au BUREAU (`nearMayorDesk`), on y est déjà entré
     hallClerkHello: "Bonjour ! Que puis-je faire pour vous ?",
     hallClerkAgain: "Autre chose ?",
     hallClerkClose: "Merci, au revoir",
@@ -3814,10 +3949,17 @@ export const FERME_STR = {
       fishPermit: "🎣 Le permis de pêche",
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
-    hallMayorAudience: (d, k) => k === 0
-      ? "Il reçoit AUJOURD'HUI, à son bureau, à l'étage."
-      : k === 1 ? `Il reçoit demain (jour ${d}), à son bureau, à l'étage.`
-      : `Il reçoit dans ${k} jours (jour ${d}), à son bureau, à l'étage.`,
+    /* 2026-11-07 — audit G5 : le titre reste « le maire » (décision de Guillaume :
+       « gardons le masculin, madame le maire »), mais le pronom suit la personne —
+       « Le maire en exercice est Ninon Delaunay. Il reçoit… » se lisait comme une faute. */
+    /* ⚠️ 2026-11-07 — audit M12 : « Il reçoit dans 3 jours » se lisait comme le délai
+       du rendez-vous, affiché juste dessous (« Elle vous reçoit dans 4:59 ») — deux
+       délais pour une question. C'est le JOUR D'AUDIENCE (le jour où le maire est
+       préparé), et la phrase le dit maintenant. */
+    hallMayorAudience: (d, k, fem) => k === 0
+      ? `Aujourd'hui, c'est son jour d'audience : ${fem ? "elle est préparée" : "il est préparé"}, et a le temps.`
+      : k === 1 ? `Prochain jour d'audience : demain (jour ${d}). Les autres jours, on le prend entre deux dossiers.`
+      : `Prochain jour d'audience : dans ${k} jours (jour ${d}). Les autres jours, on le prend entre deux dossiers.`,
     hallMayorHint: "Montez l'escalier d'honneur : son bureau est au fond, à gauche. Frappez avant d'entrer.",
     hallElecNext: (d, k) => k === 0
       ? "Le scrutin a lieu AUJOURD'HUI. Le dépouillement est affiché ci-dessous."
@@ -4658,7 +4800,7 @@ export const FERME_STR = {
     rodArmedToast: "🎣 Canne déployée. Vise l'eau ; change de case pour la ranger.",
     rodStowedToast: "🎣 Canne rangée : tu t'es éloigné de l'eau.",
     // 2026-09-04 — accès facilité, près de n'importe quel plan d'eau.
-    promptRod: "[E] Déployer la canne",
+    promptRod: "E : déployer la canne",
     /* ⚠️ ZIP 401 — LES NOMS COURTS DES VARIANTES DE CONSTRUCTION.
        Ils n'existaient pas : la case 6 n'avait que des INFOBULLES (wallTip,
        pathTip…), c'est-à-dire des phrases. Or une case d'inventaire de 44 px
@@ -4724,6 +4866,9 @@ export const FERME_STR = {
     homeToast: "🏠 Retour devant la maison !",
     homeBlockedToast: "🌑 Impossible de rentrer d'ici... il faut retrouver le passage.",
     darkPassageToast: "🌑 Une obscurité glaciale t'avale...",
+    // 2026-11-08 (audit G8) — la recommandation de Guillaume : la pommade pour rester au lac pendant la septième sœur.
+    evilLakeSalveHave: "🧴 Des créatures rôdent près du lac. Ta pommade te cache d'elles : mets-la avant de pêcher.",
+    evilLakeSalveHint: "🧴 Des créatures rôdent près du lac. Une pommade du chaudron te cacherait d'elles.",
     darkPassageReturnToast: "☀️ Tu retrouves la lumière du jour.",
     evilMonsterCaughtToast: "👹 Une créature t'a happé... tu te réveilles chez toi, blessé.",
     // Zip 372 : défi de fuite (porte est du monde sombre). Les textes de la
@@ -5222,6 +5367,9 @@ export const FERME_STR = {
     devWorldRotationToast: "🛠️ Rotation rétablie : le passage suit de nouveau le jour de jeu.",
     devTeleportToast: (name) => `🛠️ Téléportation : ${name}.`,
     devBanner: (name) => `Terre forcée : ${name}`,
+    /* 2026-11-07 — audit M9 : quand c'est la QUÊTE qui garde le passage ouvert, le rappel ne porte plus la pastille du menu dev. */
+    questWorldBanner: (name) => `🌀 Le passage reste ouvert sur : ${name}`,
+    questWorldTitle: "Les étoiles ont besoin de ce monde : le passage y reste ouvert tant que la quête en a besoin.",
     devBannerTitle: "Le menu développeur force le monde (passage, saison). N'importe quel joueur peut rétablir la rotation normale avec Cmd/Ctrl+Shift+X.",
     devBannerSeason: (s) => `Saison forcée : ${s}`,   // 2026-10-12 (soir) : la saison forcée a son rappel, comme la terre
     passageLootToast: (gold) => `✨ +${gold} or !`,
@@ -5622,7 +5770,7 @@ export const FERME_STR = {
         meteor: ["Un météore tombe près de la ville", "Les curieux se pressent autour du cratère encore chaud."],
         fallen: ["Pluie de pierres sur la vallée", "Des fermiers rapportent des trous fumants dans leurs champs."],
         warned: ["L'observatoire lance un avis", "Une pluie de pierres est attendue cette nuit ou la suivante. Rentrez les bêtes."],
-        yardTaken: (who) => ["Le port ensablé va rouvrir", `La ferme de ${who || "nos voisins"} relève le chantier naval. Le maire attend sa visite.`],
+        yardTaken: (who) => ["Le port ensablé va rouvrir", `La ferme de ${who || "nos voisins"} relève le vieux chantier naval.`],
         yardOffer: ["La mairie veut rouvrir le port", "Elle cherche une ferme pour relever le vieux chantier naval. Avis ci-dessous."],
         election: (k, name) => ["Jour d'élection", `${name} l'emporte et prend la mairie pour un nouveau mandat.`],
         newcomer: (n) => ["Une nouvelle tête à la ferme", `${n} vient de s'installer. Passez dire bonjour.`],
@@ -6424,7 +6572,7 @@ export const FERME_STR = {
     promptChurchOrgan: "Sit at the organ",
     promptChurchCandle: "Light a candle",
     promptChurchPew: "Sit down",
-    promptTownHallEnter: "Enter the town hall",
+    promptTownHallEnter: "E: enter the town hall",
     promptPriceBoard: "Read the price board",
     hallEnterToast: "🏛️ Valley Town hall.",
     hallExitToast: "🏛️ You step out of the town hall.",
@@ -6499,8 +6647,8 @@ export const FERME_STR = {
     /* ═══ ZIP 439 — front desk, elections, registers ═════════════════════ */
     hallClerkName: "Léonie Sarrazin",
     hallClerkRole: "front desk",
-    promptHallClerk: "Talk to the front desk",
-    promptMayorDoor: "E: enter the Mayor's office",
+    promptHallClerk: "E: talk to the front desk",
+    promptMayorDoor: "E: speak to the mayor",
     hallClerkHello: "Good morning! What can I do for you?",
     hallClerkAgain: "Anything else?",
     hallClerkClose: "Thank you, goodbye",
@@ -6529,11 +6677,11 @@ export const FERME_STR = {
       fishPermit: "🎣 The fishing permit",
     }[k] || k),
     hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
-    hallMayorAudience: (d, k) => k === 0
-      ? "He receives TODAY, in his office upstairs."
-      : k === 1 ? `He receives tomorrow (day ${d}), in his office upstairs.`
-      : `He receives in ${k} days (day ${d}), in his office upstairs.`,
-    hallMayorHint: "Take the main staircase: his office is at the far end, on the left. Knock before you enter.",
+    hallMayorAudience: (d, k, fem) => k === 0
+      ? `Today is the audience day: ${fem ? "she" : "he"} is prepared, and has time.`
+      : k === 1 ? `Next audience day: tomorrow (day ${d}). On other days, you catch the mayor between two files.`
+      : `Next audience day: in ${k} days (day ${d}). On other days, you catch the mayor between two files.`,
+    hallMayorHint: "Take the main staircase: the mayor's office is at the far end, on the left. Knock before you enter.",
     hallElecNext: (d, k) => k === 0
       ? "The ballot is held TODAY. The count is shown below."
       : `Next ballot in ${k} day(s), on day ${d}.`,
@@ -7164,7 +7312,7 @@ export const FERME_STR = {
     rodArmedToast: "🎣 Rod out. Aim at water; pick another slot to put it away.",
     rodStowedToast: "🎣 Rod put away: you've walked away from the water.",
     // 2026-09-04 — facilitated access, near any body of water.
-    promptRod: "[E] Get the rod out",
+    promptRod: "E: get the rod out",
     // ZIP 401 — short names for the build variants (see the FR block).
     buildNames: {
       fence: "Fence", wall: "Wall", path: "Paving", lamp: "Lamp post",
@@ -7207,6 +7355,8 @@ export const FERME_STR = {
     homeToast: "🏠 Back to the house!",
     homeBlockedToast: "🌑 Can't teleport home from here... find the passage back.",
     darkPassageToast: "🌑 A cold darkness swallows you...",
+    evilLakeSalveHave: "🧴 Creatures prowl around the lake. Your salve hides you from them: put it on before you fish.",
+    evilLakeSalveHint: "🧴 Creatures prowl around the lake. A salve from the cauldron would hide you from them.",
     darkPassageReturnToast: "☀️ You find daylight again.",
     evilMonsterCaughtToast: "👹 A creature caught you... you wake up at home, injured.",
     // Zip 372: dark-world escape challenge (east gate). The run's own text is
@@ -7624,6 +7774,8 @@ export const FERME_STR = {
     devWorldRotationToast: "🛠️ Rotation restored: the passage follows the game day again.",
     devTeleportToast: (name) => `🛠️ Teleported: ${name}.`,
     devBanner: (name) => `Forced land: ${name}`,
+    questWorldBanner: (name) => `🌀 The passage stays open to: ${name}`,
+    questWorldTitle: "The stars need this world: the passage stays open there for as long as the quest needs it.",
     devBannerTitle: "The developer menu is forcing the world (passage, season). Any player can restore the normal rotation with Cmd/Ctrl+Shift+X.",
     devBannerSeason: (s) => `Forced season: ${s}`,   // 2026-10-12 (evening): the forced season gets its reminder, like the land
     passageLootToast: (gold) => `✨ +${gold} gold!`,
@@ -7994,7 +8146,7 @@ export const FERME_STR = {
         meteor: ["A meteor falls near town", "Onlookers crowd around the still-warm crater."],
         fallen: ["Stones rain on the valley", "Farmers report smoking holes in their fields."],
         warned: ["The observatory issues a notice", "A rain of stones is expected tonight or the next. Bring the animals in."],
-        yardTaken: (who) => ["The silted harbour will reopen", `${who ? who + "'s farm" : "Our neighbours"} took on the old shipyard. The mayor awaits a visit.`],
+        yardTaken: (who) => ["The silted harbour will reopen", `${who ? who + "'s farm" : "Our neighbours"} took on the old shipyard.`],
         yardOffer: ["The town hall wants the harbour back", "It is looking for a farm to restore the old shipyard. Notice below."],
         election: (k, name) => ["Election day", `${name} wins and takes the town hall for a new term.`],
         newcomer: (n) => ["A new face on the farm", `${n} just moved in. Drop by and say hello.`],

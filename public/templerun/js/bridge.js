@@ -20,7 +20,8 @@
 
    PROTOCOLE
      ferme -> défi : { type:"vf-run-init", lang:"fr"|"en", best:<nombre>,
-                       skin:{ gender, shirt, pants, hair, skin } }
+                       skin:{ gender, shirt, pants, hair, skin },
+                       quest:{ have, need } | null }   (2026-11-07 : l'étoile bleue)
      défi -> ferme : { type:"vf-run-ready" }
                      { type:"vf-run-over", score, candies, distance, cause }
                      { type:"vf-run-escape", score, candies, distance }
@@ -49,6 +50,7 @@ const Bridge = (function () {
   let lang = "fr";
   let externalBest = null;
   let skin = null;
+  let quest = null;
   let onInit = null;
 
   /* Une couleur reçue est une DONNÉE EXTERNE : on ne la passe pas telle quelle
@@ -70,6 +72,9 @@ const Bridge = (function () {
     if (!d || typeof d !== "object" || d.type !== "vf-run-init") return;
     lang = d.lang === "en" ? "en" : "fr";
     if (typeof d.best === "number") externalBest = d.best;
+    // 2026-11-07 — audit G14 : ce que la quête de l'étoile attend du défi (ou rien).
+    quest = (d.quest && typeof d.quest === "object" && isFinite(d.quest.have) && isFinite(d.quest.need))
+      ? { have: Math.max(0, d.quest.have | 0), need: Math.max(0, d.quest.need | 0) } : null;
     if (d.skin && typeof d.skin === "object") {
       skin = {
         gender: d.skin.gender === "f" ? "f" : "m",
@@ -108,6 +113,7 @@ const Bridge = (function () {
     get lang() { return lang; },
     get externalBest() { return externalBest; },
     get skin() { return skin; },
+    get quest() { return quest; },
     over(payload) { post(Object.assign({ type: "vf-run-over" }, payload)); },
     escape(payload) { post(Object.assign({ type: "vf-run-escape" }, payload)); },
     exit() { post({ type: "vf-run-exit" }); },

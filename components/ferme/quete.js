@@ -107,6 +107,7 @@ import * as C from "./fermeConstants";
    où une commission ou le cadastre voudront la même mécanique. La quête n'en lit
    que deux choses : l'état migré et « a-t-il signé ». */
 import * as MA from "./maire";
+import * as FT from "./fete";   // 2026-11-08 — la fête du navire : la chronologie pure de la cérémonie (G9-G11)
 
 /* ───────────────────────────────────────────────────────────────────────────
    1. LES LIEUX. Un lieu = un endroit du monde où il se passe quelque chose et
@@ -474,6 +475,8 @@ export function starTimberReady(e, key) {
    balaie `STAR_SHIP_KEYS` dans l'ordre du navire, donc la cale se remplit de la
    quille vers la cloche même quand les cinq commandes ont couru en parallèle. */
 export function starTimberToRaise(e) {
+  // 2026-11-07 — audit G13 : une pièce qu'on PEUT monter passe devant une pièce prête mais bloquée.
+  for (const k of STAR_SHIP_KEYS) if (starTimberReady(e, k) && !starRaiseBlock(e, k)) return k;
   for (const k of STAR_SHIP_KEYS) if (starTimberReady(e, k)) return k;
   return null;
 }
@@ -2021,6 +2024,20 @@ export function starFarmFlightPath(impact, k) {
   const u = Math.max(0, Math.min(1, +k || 0));
   return { angle: STAR_FARM_FLIGHT_ANGLES[i], travel: Math.pow(u, 1.55) };
 }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-08 (audit M7) — LE PLAN SE POSE EN AMONT DE LA COURSE, PAS SUR LE TROU.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Cadrée pile sur le site, la caméra montrait « du sol vide pendant qu'un fragment tombe dans un coin » : la pierre arrive de
+   haut-gauche (`STAR_FARM_FLIGHT_ANGLES`) et ne traversait que le dernier tiers du cadre. Le centre du plan recule donc de
+   `STAR_FARM_CAM_LEAD` cases vers d'où elle vient — l'impact tombe en bas à droite du centre, la course traverse l'écran — et
+   l'entrée de la course se rapproche (`STAR_FARM_ENTRY`, en diagonales d'écran) : on la voit les deux tiers du vol au lieu
+   d'un tiers. Le site, lui, ne bouge pas : seul le regard se décale. */
+export const STAR_FARM_CAM_LEAD = 2.4;
+export const STAR_FARM_ENTRY = 0.55;
+export function starFarmCamLead(impact) {
+  const a = starFarmFlightPath(impact, 0).angle;
+  return { dx: -Math.cos(a) * STAR_FARM_CAM_LEAD, dy: -Math.sin(a) * STAR_FARM_CAM_LEAD };
+}
 export function starFarmImpactLanded(index, sceneKey, elapsedMs) {
   if ((index | 0) < 0 || (index | 0) >= STAR_FARM_IMPACT_MS.length) return false;
   if (sceneKey !== "fall") return true;
@@ -2319,6 +2336,7 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      vais-je », le défaut du 449, trouvé par Guillaume en jouant. */
   farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron",
   farmImpactLure: "cauldron",
+  evilRodProtect: "cauldron",   // 2026-11-07 — audit G7 : la canne cassée se protège au chaudron
   // 2026-09-02 (lot A2) — voir la note de `STAR_OFF_TABLE_TARGETS` : la place, pas elle.
   townShy: "shyPlaza", townShyAway: "shyPlaza",
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -2347,7 +2365,7 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
   evilHaul: "evilLake", mayorBooked: "townHall", warnRead: "newsBoard",
   /* D11 — les trois étapes de l'épilogue : le maire (même porte que `mayor`),
      puis la cale pour le baptême et l'inauguration (même porte que `raise`). */
-  finaleSummon: "townHall", finaleBaptize: "shipyard", finaleInaugurate: "shipyard" };
+  finaleSummon: "townHall", finaleWait: "shipyard", finaleGo: "shipyard" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -2356,7 +2374,8 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
    ⚠️ `shyPlaza` EST UNE ADRESSE HORS TABLE, comme `sawmill` ou `cauldron` : ce
    n'est pas un lieu d'étoile, c'est un endroit de la ville. `FermeGame.js` la
    résout depuis `C.TOWN_PLAZA`, seule source de « où est la place ». */
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake", "newsBoard"];
+/* 2026-11-07 — audit M8 : `runGate`, la porte du défi de fuite dans le monde maléfique (le passage sombre vu de la ferme). */
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake", "newsBoard", "runGate"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -2377,8 +2396,12 @@ export function starTargetSite(e, ctx) {
      reste seul dans le groupe « chaudron » juste au-dessus — c'est la
      PHRASE, dérivée de `ctx.potion` par `starTameGoalKey`, qui fait basculer
      le chevron d'un groupe à l'autre, jamais un test répété ici. */
+  /* ⚠️ 2026-11-07 — AUDIT M8 : « Traverse le monde maléfique » (`farmImpactLight`) et un
+     chevron planté sur l'étoile déjà trouvée, à 165 m : deux réponses à « où vais-je ».
+     Le geste se fait de l'autre côté (le défi de fuite), donc le chevron y mène. */
+  if (goal === "farmImpactLight") return "runGate";
   if (goal === "farmImpacts" || goal === "farmImpactCool"
-      || goal === "farmImpactTame" || goal === "farmImpactLight"
+      || goal === "farmImpactTame"
       || goal === "farmImpactLightPay" || goal === "farmImpactCarry"
       || goal === "farmImpactLureGive") {
     /* hors-zip — MÊME CONDITION DE FOCUS QUE `starGoalKey`, LIGNE POUR LIGNE.
@@ -3437,7 +3460,11 @@ export function newStar() {
            rassemblés, mise en mer. Sa date sert aussi d'horloge à la scène finale
            (étoiles + texte), qui se déclenche toute seule un peu plus tard —
            jamais un troisième champ pour « a-t-on déjà vu la fin ». */
-    finale: { agreedAt: 0, inaugAt: 0 },
+    /* 2026-11-08 (G9-G11) — LA FÊTE. `feteAt` : le rendez-vous fixé par le maire ; `startAt` : le signal ; `ballot` : le vote
+       ouvert { round, v: { idJoueur: choix } } ; `name` : le nom voté { at, k, draw } ; `bottleAt` : la bouteille brisée par
+       un joueur ; `rounds` : chaque contestation { at, verdict, roll, retryAt }. `inaugAt` est désormais la FIN de la fête
+       (le navire à l'ancre) — tout le reste se DÉDUIT de ces dates (`fete.js`). */
+    finale: { agreedAt: 0, feteAt: 0, firstAt: 0, startAt: 0, ballot: null, name: null, bottleAt: 0, bottleBy: "", rounds: [], inaugAt: 0 },
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3576,10 +3603,25 @@ export function migrateStar(saved) {
   e.vandal = saved.vandal && +saved.vandal.at ? { at: +saved.vandal.at } : null;
   // 2026-09-13 (lot 1) — voir la note de `yard` dans `newStar` : sans cette ligne, le « oui » s'effacerait à la requête suivante.
   e.yard = saved.yard && +saved.yard.at ? { at: +saved.yard.at, by: String(saved.yard.by || "").slice(0, 24) } : null;
-  e.baptism = saved.baptism && +saved.baptism.at ? { at: +saved.baptism.at, by: String(saved.baptism.by || "").slice(0, 24) } : null;
   // 2026-09-13 (D11) — voir la note de `finale` dans `newStar` : reconstruit, jamais fait confiance.
-  e.finale = { agreedAt: +(saved.finale && saved.finale.agreedAt) || 0,
-               inaugAt: +(saved.finale && saved.finale.inaugAt) || 0 };
+  const sf = (saved.finale && typeof saved.finale === "object") ? saved.finale : {};
+  const nk = (v, n) => (Number.isInteger(v) && v >= 0 && v < n ? v : 0);
+  const sb = sf.ballot && typeof sf.ballot === "object" && typeof sf.ballot.round === "string" ? sf.ballot : null;
+  const bv = {};
+  if (sb && sb.v && typeof sb.v === "object") for (const [id, v] of Object.entries(sb.v).slice(0, 8)) if (Number.isInteger(v) && v >= 0 && v < 3) bv[String(id).slice(0, 64)] = v;
+  e.finale = { agreedAt: +sf.agreedAt || 0, feteAt: +sf.feteAt || 0, firstAt: +sf.firstAt || +sf.feteAt || 0, startAt: +sf.startAt || 0,
+               ballot: sb ? { round: sb.round.slice(0, 8), v: bv } : null,
+               name: sf.name && +sf.name.at ? { at: +sf.name.at, k: nk(sf.name.k, 3), draw: !!sf.name.draw } : null,
+               bottleAt: +sf.bottleAt || 0, bottleBy: String(sf.bottleBy || "").slice(0, 64),
+               rounds: Array.isArray(sf.rounds) ? sf.rounds.slice(0, 12).filter(r => r && +r.at).map(r => ({ at: +r.at, verdict: r.verdict === "keep" ? "keep" : "listen", roll: r.roll === "pass" ? "pass" : "sink", retryAt: +r.retryAt || 0 })) : [],
+               inaugAt: +sf.inaugAt || 0 };
+  /* 2026-11-08 — LE BAPTÊME PORTE SON NOM (`k`, l'indice dans `C.STAR_SHIP_NAMES_FR`). ⚠️ Un baptême de l'ANCIEN format (sans
+     `k`, d'avant la fête) qui n'a pas eu son inauguration est ANNULÉ : le nom se vote maintenant pendant la fête, devant la
+     foule — le garder aurait peint « La Belle Étoile » sur la coque avant même qu'on ait pu choisir. Une partie déjà finie
+     (`inaugAt`) le garde, avec le seul nom qui existait. */
+  const bp = saved.baptism && +saved.baptism.at ? saved.baptism : null;
+  e.baptism = bp && (Number.isInteger(bp.k) || e.finale.inaugAt)
+    ? { at: +bp.at, by: String(bp.by || "").slice(0, 24), k: nk(bp.k, 3) } : null;
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3735,7 +3777,8 @@ export function starTownActivityStep(a, e, now, active) {
 export function starFallSeenStorageKey(kind, seed, who) {
   /* D11 — TROISIÈME NATURE, MÊME FAMILLE : « ai-je déjà vu la scène finale
      pour CETTE inauguration-là ? ». Sans elle, `starScenePump` la remettrait en
-     file à chaque image une fois `starFinaleEndDue` vrai. */
+     file à chaque image une fois la fin due. (2026-11-08 : la fin est désormais le plan de nuit de la fête, `fete.js` ;
+     la clé reste pour les marques déjà posées.) */
   const kk = kind === "townFall" ? "town_fall" : kind === "finaleEnd" ? "finale_end" : "farm_fall";
   return "ferme_star_" + kk + ":" + ((seed | 0) >>> 0) + ":" + String(who || "?").slice(0, 128);
 }
@@ -3955,6 +3998,38 @@ export function haulStep(state, dt, holding, rates) {
 }
 export function evilHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.EVIL_HAUL_RATES); }
 export function fishHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.FISH_HAUL_RATES); }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-08 (audit G8) — PENDANT LA SEPTIÈME SŒUR, UNE CAPTURE COÛTE UNE ATTENTE, PAS LA SOIRÉE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Règle de Guillaume : pas de blocage « total ou répété ». La blessure d'une créature dure 30 min (sa décision de
+   2026-07, inchangée hors quête) ; tant que la septième sœur est à sauver (vue au lac → pas encore réanimée), elle
+   dure celle du labyrinthe et du défi (`RUN_INJURED_MS`, 10 min), pour la même raison qu'il avait donnée là-bas :
+   « on doit pouvoir retenter dans la soirée ». Deux captures font vingt minutes, plus une heure. */
+export function starEvilLakeQuest(e) { return starEvilUnlocked(e) && !starHas(e, STAR_EVIL_ID); }
+export function starEvilInjuryMs(e) { return starEvilLakeQuest(e) ? C.RUN_INJURED_MS : C.EVIL_INJURED_MS; }
+/* La lumière de la septième sœur pendant le halage (voir `C.EVIL_HAUL_HALO_R`). Un pas de créature `mo` face à un
+   joueur `t` qui hale : dans le halo elle recule (vitesse pleine), au bord elle rôde (tangente, `side` = ±1, fixé par
+   créature pour qu'elles ne tournent pas toutes du même côté), plus loin elle approche — elle ne franchit jamais `R`,
+   donc jamais la distance de morsure. Rend la nouvelle position et le mode, rien d'autre. */
+export function evilHaloStep(mo, t, dt, side) {
+  const dx = mo.x - t.x, dy = mo.y - t.y, d = Math.hypot(dx, dy) || 1e-4;
+  const ux = dx / d, uy = dy / d, sp = C.EVIL_MONSTER_SPEED * Math.max(0, Math.min(0.25, +dt || 0));
+  const R = C.EVIL_HAUL_HALO_R, band = 0.6;
+  if (d < R) {
+    const step = Math.min(sp, R - d + 0.05);
+    return { x: mo.x + ux * step, y: mo.y + uy * step, mode: "flee" };
+  }
+  if (d > R + band) {
+    const step = Math.min(sp, d - (R + band * 0.5));
+    return { x: mo.x - ux * step, y: mo.y - uy * step, mode: "chase" };
+  }
+  // Au bord : un pas tangent, puis on reprojette sur le cercle du milieu de la bande (sans dérive vers l'intérieur).
+  const s = side < 0 ? -1 : 1, tp = sp * C.EVIL_HAUL_HALO_PROWL;
+  let nx = mo.x + (-uy * s) * tp, ny = mo.y + (ux * s) * tp;
+  const nd = Math.hypot(nx - t.x, ny - t.y) || 1e-4, rr = R + band * 0.5;
+  nx = t.x + (nx - t.x) / nd * rr; ny = t.y + (ny - t.y) / nd * rr;
+  return { x: nx, y: ny, mode: "prowl" };
+}
 export function starEvilRescued(e) { return !!(e && e.evilRescued); }
 /* Idempotent, comme `resolveStarEvilFound` : ne peut s'armer qu'après la
    découverte, ne régresse jamais une fois gagné. */
@@ -4013,17 +4088,13 @@ export function starChapterKey(e) {
        une à faire » plutôt que de répéter la même phrase.
    ⚠️ ELLE REND `null` QUAND IL N'Y A RIEN À DIRE (pas tombée, ou finie), jamais
    une clé de repli : le repli poli du 444 n'échoue pas, il AFFICHE la clé. */
-/* D11 — LES TROIS ÉTAPES DE L'ÉPILOGUE, DANS L'ORDRE FIXE QUE LES RÉSOLVEURS
-   FONT DÉJÀ RESPECTER (`resolveStarFinaleAgree`/`resolveStarBaptize`/
-   `resolveStarFinaleInaugurate`, ci-dessus). Trois `if`, pas une table : trois
-   états d'une même petite séquence, comme `engineerTravel`/`engineerWork` plus
-   bas — une table de plus pour trois lignes serait l'abstraction inventée que
-   le §0 de CLAUDE.md interdit. */
-function starFinaleGoalKey(e) {
+/* 2026-11-08 — LA FÊTE : avant l'heure, le bandeau dit l'heure et les préparatifs (`finaleWait`) ; à l'heure, « tout le
+   monde attend au quai » (`finaleGo`, `ctx.feteReady` : l'appelant compare l'heure à `feteAt`) ; pendant la cérémonie il se
+   tait (elle se regarde sans interface). */
+function starFinaleGoalKey(e, ctx) {
   if (!starFinaleAgreed(e)) return "finaleSummon";
-  if (!starFinaleBaptized(e)) return "finaleBaptize";
-  if (!starFinaleInaugurated(e)) return "finaleInaugurate";
-  return null;
+  if (starFinaleInaugurated(e) || (e.finale && e.finale.startAt)) return null;
+  return ctx && ctx.feteReady ? "finaleGo" : "finaleWait";
 }
 export function starGoalKey(e, ctx) {
   if (!e) return null;
@@ -4033,7 +4104,7 @@ export function starGoalKey(e, ctx) {
      le baptême et l'inauguration n'ont pas tous les trois eu lieu. Une fois les
      trois faits, `starFinaleGoalKey` rend `null` et le bandeau se tait pour de
      bon — exactement le silence qu'il gardait déjà avant D11. */
-  if (starDone(e)) return starFinaleGoalKey(e);
+  if (starDone(e)) return starFinaleGoalKey(e, ctx);
   /* ⚠️⚠️⚠️ 2026-09-13 — AVANT LA CHUTE, LE BANDEAU A QUELQUE CHOSE À DIRE. Il rendait
      `null` tant que rien n'était tombé : c'était juste quand la quête commençait
      par le ciel, faux depuis qu'elle commence par un chantier (autorité 2026-09-12).
@@ -4197,14 +4268,14 @@ export function starGoalKey(e, ctx) {
     if (starBudgetNeeded(e)) {
       const appt = MA.mayorAppt(e);
       const booked = !!(appt && appt.due && MA.mayorApptTopic(e) === "budget" && !MA.mayorApptStale(e, ctx && ctx.now));
-      return booked ? (starEvilGoalKey(e) || "budgetBooked") : "budget";
+      return booked ? (starEvilGoalKey(e, ctx) || "budgetBooked") : "budget";
     }
     const yard = starYardKey(e, ctx, STAR_SHIP_KEYS);
     if (yard && !["timberWait", "timberOrder", "rebuildWait", "rebuildOrder"].includes(yard)) return yard;
     /* ⚠️ LA SEPTIÈME PASSE ENTRE LE GESTE DU CHANTIER (monter) ET SON HORLOGE : un
        joueur qui peut aller haler une étoile ne doit pas lire « Tristan scie », ni
        « commande » — le geste passe devant l'horloge et la décision (478). */
-    return starEvilGoalKey(e) || yard;
+    return starEvilGoalKey(e, ctx) || yard;
   }
   /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — « farmImpacts » COUVRAIT TROIS ÉTATS
      SOUS UNE SEULE PHRASE. Le premier impact manquant peut être : pas encore
@@ -4368,7 +4439,9 @@ export function resolveStarYardAccept(e, who, day, now, gate) {
    annonçait les étoiles avant la moindre rumeur. Le navire reste sans nom jusqu'à
    son baptême, étape ultime avant la fin. ⚠️ `null` veut dire « pas encore
    baptisé » : les phrases qui le nomment savent dire « le navire » à la place. */
-export function starShipName(e) { return e && e.baptism && e.baptism.at ? C.STAR_SHIP_NAME : null; }
+/* 2026-11-08 — le nom VOTÉ à la fête (`e.baptism.k`), dans la langue demandée ; `null` avant le baptême. */
+export function starShipNameIdx(e) { return e && e.baptism && e.baptism.at ? (e.baptism.k | 0) : null; }
+export function starShipName(e, lang) { const k = starShipNameIdx(e); return k == null ? null : FT.feteNames(lang)[k] || C.STAR_SHIP_NAME; }
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-13 — LE PRÉLUDE : CE QUE DIT LE BANDEAU AVANT LA PLUIE.
    ╚═════════════════════════════════════════════════════════════════════════════
@@ -4416,13 +4489,49 @@ function starYardKey(e, ctx, keys) {
   if (keys.some(k => starTimberBlock(e, k) === null)) return starRebuildGate(e) ? "rebuildOrder" : "timberOrder";
   return null;
 }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-07 — AUDIT B2/B3 : LA QUÊTE A-T-ELLE BESOIN DES TERRES MALÉFIQUES ?
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ LE FORÇAGE LISAIT LA SEULE CLÉ DU BANDEAU (`farmImpactLight` ou
+   `farmImpactLure`). Deux gestes de la quête se jouent pourtant là-bas sans
+   jamais être cette clé : ramasser le chaudron pour la rose (`farmImpactWarm`,
+   et le chaudron n'existe que dans le monde maléfique tant que personne ne l'a
+   pris), et toute la septième sœur (la voir, la haler, la porter). Le passage
+   tourne sur cinq terres tous les trois jours : sans forçage, le monde maléfique
+   revient au bout de quinze jours de jeu, environ quatre heures réelles — pour
+   un joueur, la quête est bloquée.
+   ⚠️ ON LIT L'ÉTAT, PAS LA PREMIÈRE CLÉ : le bandeau ne nomme qu'UN objectif
+   quand trois étoiles de la ferme attendent en parallèle. Chaque étoile fouillée
+   et pas encore apprivoisée est interrogée (`starTameGoalKey`).
+   `ctx` est le contexte du bandeau (bonbons, fiole : personnels) ; `null` rend
+   la réponse « large » (sans bonbons ni fiole), celle qu'on affiche à tous.
+   `cauldron` vaut `salveCraft.cauldronUnlocked` (l'état partagé de la ferme). */
+export function starNeedsEvil(e, ctx, cauldron) {
+  if (!e || starDone(e)) return false;
+  for (const s of STAR_FARM_IMPACTS) {
+    if (s.content !== "star" || !starDug(e, s.id) || starHas(e, s.id)) continue;
+    const k = starTameGoalKey(e, s.id, ctx);
+    if (k === "farmImpactLight" || k === "farmImpactLure") return true;
+    if (k === "farmImpactWarm" && !cauldron) return true;
+  }
+  return starEvilUnlocked(e) && !starHas(e, STAR_EVIL_ID);
+}
+
 /* La septième sœur, une fois VUE (`evilSeek` a parlé avant). Deux gestes : la haler
    hors du lac, puis la porter à la ferme et la réanimer. ⚠️ Elle n'est dans aucun
    `need`, et c'est toujours voulu (voir sa note dans `STAR_SITES`) : sa voix passe
    par ces deux clés, jamais par `starMissing`. */
-function starEvilGoalKey(e) {
+/* ⚠️⚠️ 2026-11-07 — AUDIT G7 : LA CANNE CASSÉE A SA PHRASE. Le bandeau restait
+   sur « Lance ta ligne » après la casse, la canne n'existant plus. Décision de
+   Guillaume : l'échec doit rester POSSIBLE (on ne prévient pas avant — le bandeau
+   espère seulement que la canne tiendra), et la protection ne s'explique
+   qu'APRÈS : `evilRodProtect` envoie au chaudron. La canne est personnelle
+   (`f.evilRodArmedAt`, `f.evilRodProtectedAt`) : elle entre par le contexte,
+   comme les bonbons et la fiole, jamais lue ici. */
+function starEvilGoalKey(e, ctx) {
   if (!starEvilFound(e) || starHas(e, STAR_EVIL_ID)) return null;
-  return starEvilRescued(e) ? "evilRevive" : "evilHaul";
+  if (starEvilRescued(e)) return "evilRevive";
+  return (ctx && ctx.rodBroken && !ctx.rodProtected) ? "evilRodProtect" : "evilHaul";
 }
 /* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
    le banc vérifie qu'aucune n'est orpheline de texte. ⚠️ C'est le contrôle qui
@@ -4495,11 +4604,11 @@ export const STAR_GOAL_KEYS = (() => {
   /* 2026-09-13 — même raison : les ÉTAPES du prélude (le rendez-vous pris, la ferme
      qui doit grandir ou patienter, l'avis à lire, la pluie attendue) et les deux
      gestes de la septième sœur une fois vue. Aucune n'est un lieu de la table. */
-  out.push("mayorBooked", "yardGrow", "yardCalm", "warnRead", "warnWait", "evilHaul", "evilRevive");
+  out.push("mayorBooked", "yardGrow", "yardCalm", "warnRead", "warnWait", "evilHaul", "evilRodProtect", "evilRevive");
   // 2026-09-13 (lot 2) — le budget après le saccage, et la reconstruction (payer / attendre et aider Tristan).
   out.push("budget", "budgetBooked", "rebuildOrder", "rebuildWait");
   // D11 — les trois étapes de l'épilogue (voir `starFinaleGoalKey`).
-  out.push("finaleSummon", "finaleBaptize", "finaleInaugurate");
+  out.push("finaleSummon", "finaleWait", "finaleGo");
   return out;
 })();
 
@@ -4776,8 +4885,14 @@ export function resolveStarTimberTick(e, now) {
    CLAUDE.md. ⚠️ `hullFirst` y est redit pour une pièce DÉJÀ LIVRÉE : une sauvegarde
    d'avant ce jour peut porter une mâture livrée avant la pluie, et le marteau ne
    doit pas la poser avant la réparation. */
+/* ⚠️ 2026-11-07 — AUDIT G13 : LE SAFRAN SE FIXE À LA COQUE. Les deux pièces du
+   prélude se montaient dans n'importe quel ordre : le safran prêt avant la coque
+   se posait sur une carcasse vide, pendant que la plaque du chantier annonce
+   « 1 coque, 2 safran ». `hullBefore` le refuse AVANT le mini-jeu, avec sa
+   raison (`blockWhy`). */
 export function starRaiseBlock(e, key) {
   if (!starTimberReady(e, key)) return "notReady";
+  if (key === "rudder" && !starShipHas(e, "hull")) return "hullBefore";
   if (!starYardPiece(key) && !starHullRepaired(e)) return "hullFirst";
   return null;
 }
@@ -4821,6 +4936,27 @@ export function resolveStarFound(e, id, who, now, withWho) {
      vocabulaire qu'on vient de faire disparaître. Ce qui compte maintenant se
      lit sur le navire, et le navire se lit sur `found`. */
   return { ok: true, crossed: starAdvance(e) };
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-07 — AUDIT B1 : LE GESTE DE LA PLAQUE, ÉCRIT ICI POUR QU'UN BANC LE JOUE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ LE CLIENT CRÉDITAIT TOUJOURS `farmMaterial`, QUEL QUE SOIT LE CRATÈRE
+   REFROIDI — la seconde plaque ne l'était donc jamais, le chapitre `field` ne se
+   fermait pas, et le météore de Valley Town ne tombait jamais. `verify-jalons`
+   restait vert : il appelle `resolveStarFound` sur chaque site, il ne passe pas
+   par le geste. Le geste tient maintenant en deux fonctions pures que
+   `FermeGame.js` appelle (ouvrir le mini-jeu, puis demander à la victoire) et que
+   le banc rejoue — le site VOYAGE avec le mini-jeu, il n'est plus réécrit à la
+   main au moment de la victoire. */
+export function starCoolStart(e, id) {
+  const site = STAR_SITE[id];
+  if (!site || site.content !== "material") return null;
+  if (starHas(e, id)) return { already: true };
+  return { kind: "cool", round: 0, site: id };
+}
+export function starCoolFoundSite(mini) {
+  return mini && mini.kind === "cool" && STAR_SITE[mini.site] ? mini.site : null;
 }
 
 /* ⚠️⚠️ L'ÉTOILE TIMIDE — LE PREMIER VERROU COOPÉRATIF, ET IL N'EN EST PAS UN.
@@ -5240,94 +5376,140 @@ export function resolveStarGift(e, playerIds, now) {
   }
   /* ⚠️ 2026-09-13 (D11) — `scene` VAUT « summon », PLUS « end » : le don ne
      déclenche plus la cinématique finale (étoiles + texte), il déclenche la
-     CONVOCATION du maire. La cinématique elle-même part beaucoup plus tard,
-     à la fin de l'inauguration (voir `starFinaleEndDue`), sur une horloge
-     dérivée de `e.finale.inaugAt` — jamais de ce `doneAt`-ci. */
+     CONVOCATION du maire. La cinématique elle-même est le plan de nuit de la
+     fête (2026-11-08, `fete.js`), sur la chronologie de `e.finale.startAt` —
+     jamais de ce `doneAt`-ci. */
   return { ok: true, granted, scene: "summon" };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   6 bis. D11 — LA FINALE : LE MAIRE, LE BAPTÊME, L'INAUGURATION.
+   6 bis. LA FINALE : LE MAIRE, PUIS LA FÊTE (D11, refaite le 2026-11-08 — G9-G11).
    ───────────────────────────────────────────────────────────────────────────
-   ⚠️⚠️⚠️ TROIS RÉSOLVEURS, TROIS PORTES QUI S'ENCHAÎNENT, AUCUNE JAUGE.
-   `resolveStarGift` (au-dessus) reste LA conclusion de la quête (`doneAt`) ;
-   ce qui suit est un ÉPILOGUE jouable une fois qu'elle l'a déjà accordée —
-   D11 le dit mot pour mot : « la condition de fin reste `starQuestComplete` ».
-   L'ordre est fixe et chaque porte le fait respecter (la leçon du §6 de
-   QUETE.md, « chaque étoile son verbe, et l'arbitre le tient ») :
-     1. `resolveStarFinaleAgree` — le maire et le joueur s'accordent sur la
-        fête. Aucune jauge (D11 : « sans jauge ni rendez-vous ») : une scène
-        COURTE, à prendre ou à laisser, jamais un score.
-     2. `resolveStarBaptize` — le navire reçoit son nom. `e.baptism` existe
-        depuis le lot 1 (`Q.starShipName`) ; ce résolveur est simplement celui
-        qui manquait pour l'écrire.
-     3. `resolveStarFinaleInaugurate` — l'inauguration publique et la mise en
-        mer. Sa date sert D13 (déjà écrite par l'appelant, `FermeGame.js`, qui
-        seul connaît les positions des joueurs — §3 : « ce qui peut se déduire
-        ne se diffuse pas », mais WHO EST LÀ ne se déduit d'aucun champ que ce
-        fichier connaisse) et sert d'horloge à la cinématique finale
-        (`starFinaleEndDue`, plus bas), jamais un quatrième champ pour « a-t-on
-        déjà vu la fin ».
-   Les trois sont IDEMPOTENTS PAR CONSTRUCTION (`already: true`), exactement
-   comme `resolveStarGift` : un essai qui échoue ne coûte rien, ce qui couvre
-   le menu dev ET un double-clic réseau de la même façon (§8 de CLAUDE.md). */
+   `resolveStarGift` (au-dessus) reste LA conclusion de la quête (`doneAt`) ; ce qui suit est l'épilogue jouable :
+     1. `resolveStarFinaleAgree` — le maire convoque, on s'accorde sur la fête, il en FIXE L'HEURE (`feteAt`, le soir) ;
+     2. `resolveFeteStart` — à l'heure, tous les joueurs à la cale : le signal (`startAt`) ;
+     3. la cérémonie (`fete.js`) : les votes (`resolveFeteVote`, clos par l'hôte `resolveFeteClose`), la bouteille
+        (`resolveFeteBottle`), « Recommencer » après un naufrage (`resolveFeteRetry`) ;
+     4. `resolveFeteEnd` — le navire à l'ancre : `inaugAt` et le baptême avec le nom resté.
+   ⚠️⚠️ L'ANCIEN BAPTÊME À LA CALE (un « E » qui imposait le nom, audit G9) ET L'ANCIENNE INAUGURATION DE TRENTE SECONDES (G11)
+   SONT RETIRÉS, pas doublés : le nom se vote devant la foule, et la cinématique de fin est le plan de nuit de la fête.
+   Tous IDEMPOTENTS ou gardés par la chronologie : un double-clic réseau ne rejoue rien (§8 de CLAUDE.md). */
 export function starFinaleAgreed(e) { return !!(e && e.finale && e.finale.agreedAt); }
 export function starFinaleBaptized(e) { return !!(e && e.baptism && e.baptism.at); }
 export function starFinaleInaugurated(e) { return !!(e && e.finale && e.finale.inaugAt); }
 
-export function resolveStarFinaleAgree(e, who, now) {
+/* 2026-11-08 — L'ACCORD FIXE LE RENDEZ-VOUS : `feteAt` est calculé par l'appelant (`FT.feteScheduleAt`, il connaît le début
+   du jour et la tombée de la nuit de la saison) et écrit DANS LE MÊME GESTE que l'accord. */
+export function resolveStarFinaleAgree(e, who, now, feteAt) {
   if (!starDone(e)) return { ok: false, notDone: true };
   if (starFinaleAgreed(e)) return { ok: true, already: true };
   e.finale.agreedAt = now;
+  if (feteAt > 0) e.finale.feteAt = e.finale.firstAt = feteAt;
   return { ok: true };
 }
-
-/* ⚠️ LE BAPTÊME N'A PAS DE PORTE D13 : Guillaume ne le nomme pas dans sa
-   décision (« la convocation et l'inauguration se jouent seul si… ») — seuls
-   ces deux-là exigent le rassemblement. Baptiser reste un geste D'UN joueur,
-   comme monter une pièce sur la cale. */
-export function resolveStarBaptize(e, who, now) {
-  if (!starFinaleAgreed(e)) return { ok: false, needAgree: true };
-  if (starFinaleBaptized(e)) return { ok: true, already: true };
-  e.baptism = { at: now, by: String(who || "?").slice(0, 24) };
+/* Une partie accordée AVANT la fête (D11, sans rendez-vous) en reçoit un : l'hôte l'appelle à son battement. */
+export function resolveFeteSchedule(e, feteAt) {
+  if (!starFinaleAgreed(e) || starFinaleInaugurated(e) || e.finale.feteAt || e.finale.startAt || !(feteAt > 0)) return { ok: false };
+  e.finale.feteAt = e.finale.firstAt = feteAt;
   return { ok: true };
 }
-
-export function resolveStarFinaleInaugurate(e, who, now) {
-  if (!starFinaleBaptized(e)) return { ok: false, needBaptism: true };
-  if (starFinaleInaugurated(e)) return { ok: true, already: true };
-  e.finale.inaugAt = now;
+/* LE REPORT (B5 : le soir) — la nuit est passée sans que personne donne le signal (le jour a tourné depuis l'heure fixée) :
+   la fête est reportée au soir qui vient. `firstAt` garde la première heure : le décor posé ne se défait pas. */
+export function resolveFetePostpone(e, dayStartAt, feteAt) {
+  const f = e && e.finale;
+  if (!f || !starFinaleAgreed(e) || f.startAt || f.inaugAt || !f.feteAt || !(dayStartAt > f.feteAt) || !(feteAt > f.feteAt)) return { ok: false };
+  if (!f.firstAt) f.firstAt = f.feteAt;
+  f.feteAt = feteAt;
   return { ok: true };
 }
-
-/* ⚠️⚠️ LA FENÊTRE DE L'INAUGURATION, EN TROIS PALIERS DÉRIVÉS D'UNE SEULE DATE
-   (`e.finale.inaugAt`) — la même discipline que la chute (`STAR_FALL_MS`) et
-   la fin d'avant (`STAR_END_MS`) : un paramètre qui doublerait `inaugAt` serait
-   une divergence en attente (§8 de CLAUDE.md), donc tout se lit en écart. */
-export const STAR_FINALE_LAUNCH_AT_MS = 22000;   // le navire quitte le quai
-export const STAR_FINALE_INAUG_MS = 30000;       // fanions, foule, confettis
-export const STAR_FINALE_END_AT_MS = 32000;      // la cinématique (étoiles+texte) part
-
-export function starFinaleInaugActive(e, now) {
-  return !!(e && e.finale && e.finale.inaugAt) && (now - e.finale.inaugAt) >= 0
-      && (now - e.finale.inaugAt) < STAR_FINALE_INAUG_MS;
+export function feteRunning(e) { return !!(e && e.finale && e.finale.startAt && !e.finale.inaugAt); }
+/* LE SIGNAL. ⚠️ « Tous les joueurs à la cale » (B6) se vérifie chez l'appelant, qui seul connaît les positions (D13). */
+export function resolveFeteStart(e, who, now) {
+  if (!starFinaleAgreed(e) || starFinaleInaugurated(e)) return { ok: false };
+  if (e.finale.startAt) return { ok: true, already: true };
+  if (!e.finale.feteAt || now < e.finale.feteAt) return { ok: false, early: true };
+  e.finale.startAt = now; e.finale.ballot = null; e.finale.name = null; e.finale.bottleAt = 0; e.finale.bottleBy = ""; e.finale.rounds = [];
+  return { ok: true };
 }
-/* Progression 0→1 du départ du navire, purement dérivée : `0` avant le départ,
-   `1` une fois parti — l'appelant (`FermeGame.js`) s'en sert pour glisser et
-   estomper le dessin existant du navire, jamais un second dessin. */
-export function starFinaleLaunchK(e, now) {
-  if (!e || !e.finale || !e.finale.inaugAt) return 0;
-  const t = now - e.finale.inaugAt;
-  if (t < STAR_FINALE_LAUNCH_AT_MS) return 0;
-  return Math.max(0, Math.min(1, (t - STAR_FINALE_LAUNCH_AT_MS) / 3000));
+/* LE VOTE OUVERT (dérivé) : { kind, round, t0, deadline } ou null — « name », « c0 », « c1 »… ou le bouton « r0 »… */
+export function feteOpen(e, now) {
+  const tl = FT.feteTimeline(e && e.finale);
+  const o = tl && tl.open;
+  return o && now >= o.t0 ? o : null;
 }
-/* La cinématique finale (étoiles qui montent + texte) est due UNE FOIS,
-   `STAR_FINALE_END_AT_MS` après l'inauguration — jamais reliée à `doneAt`,
-   qui a pu être accordé une soirée entière avant que l'inauguration ne soit
-   jouée. `FermeGame.js` compare ce booléen à sa propre marque locale « déjà
-   vue » (même patron que `starFallSeen` pour « fall »/« townFall »). */
-export function starFinaleEndDue(e, now) {
-  return !!(e && e.finale && e.finale.inaugAt) && (now - e.finale.inaugAt) >= STAR_FINALE_END_AT_MS;
+export function resolveFeteVote(e, voterId, round, k, now) {
+  const o = feteOpen(e, now);
+  if (!o || o.kind === "retry" || o.round !== round || !Number.isInteger(k) || k < 0 || k > (o.kind === "name" ? 2 : 1)) return { ok: false };
+  const b = e.finale.ballot && e.finale.ballot.round === round ? e.finale.ballot : (e.finale.ballot = { round, v: {} });
+  b.v[String(voterId).slice(0, 64)] = k;
+  return { ok: true };
+}
+/* LA CLÔTURE (l'hôte, à son battement) : quand tout le monde a voté, ou au délai. `rnd` : le pile ou face, `rnd2` : la foudre
+   (3 fois sur 4 elle coule le navire, D5) — tirés par l'hôte, une fois, ICI ; jamais retirés par un client. */
+export function resolveFeteClose(e, voters, now, rnd, rnd2) {
+  const o = feteOpen(e, now);
+  if (!o || o.kind === "retry") return { ok: false };
+  const b = e.finale.ballot && e.finale.ballot.round === o.round ? e.finale.ballot.v : {};
+  if (!FT.feteAllVoted(b, voters) && now < o.deadline) return { ok: false, waiting: true };
+  if (o.kind === "name") {
+    const r = FT.feteTally(b, voters, 3, "draw", rnd);
+    e.finale.name = { at: now, k: r.pick, draw: r.tie };
+    e.finale.ballot = null;
+    return { ok: true, kind: "name", pick: r.pick, draw: r.tie };
+  }
+  const r = FT.feteTally(b, voters, 2, "first", rnd);   // 0 = écouter, 1 = maintenir ; égalité → écouter (D3)
+  const keep = r.pick === 1;
+  e.finale.rounds.push({ at: now, verdict: keep ? "keep" : "listen", roll: keep ? (rnd2 < 0.75 ? "sink" : "pass") : "sink", retryAt: 0 });
+  e.finale.ballot = null;
+  return { ok: true, kind: "verdict", keep, roll: keep ? e.finale.rounds[e.finale.rounds.length - 1].roll : null };
+}
+/* LA BOUTEILLE — n'importe quel joueur, pendant sa fenêtre ; passé le délai, le maire l'a brisée (dérivé, rien à écrire). */
+export function resolveFeteBottle(e, now) {
+  const tl = FT.feteTimeline(e && e.finale);
+  const g = tl && tl.segs.find(x => x.k === "bottle");
+  if (!g || e.finale.bottleAt || now < g.t0 || now >= g.t1) return { ok: false };
+  e.finale.bottleAt = now;
+  return { ok: true };
+}
+/* « RECOMMENCER » (D6) — après le naufrage ; ramène à la contestation. */
+export function resolveFeteRetry(e, now) {
+  const o = feteOpen(e, now);
+  if (!o || o.kind !== "retry") return { ok: false };
+  const r = e.finale.rounds[e.finale.rounds.length - 1];
+  if (!r || r.verdict !== "keep" || r.roll !== "sink" || r.retryAt) return { ok: false };
+  r.retryAt = now;
+  return { ok: true };
+}
+/* LA FIN — le navire à l'ancre. `inaugAt` = la fin de la chronologie ; le baptême s'écrit avec le nom qui est resté. */
+export function resolveFeteEnd(e, who, now) {
+  if (!feteRunning(e)) return { ok: false };
+  const tl = FT.feteTimeline(e.finale);
+  if (!tl || !tl.end || now < tl.end) return { ok: false };
+  e.finale.inaugAt = tl.end;
+  e.baptism = { at: tl.depart || tl.end, by: String(who || "?").slice(0, 24), k: tl.finalName | 0 };
+  e.finale.ballot = null;
+  return { ok: true, name: tl.finalName | 0 };
+}
+/* Les outils du menu dev : jouer la fête sans attendre son heure, forcer un nom, forcer la foudre, sauter au départ. */
+export function resolveFeteDev(e, op, now) {
+  const f = e && e.finale;
+  if (!f || !starFinaleAgreed(e)) return { ok: false };
+  if (op === "now") { if (f.startAt) return { ok: false }; f.feteAt = now + 25000; return { ok: true }; }
+  if (op === "reset") { Object.assign(f, { feteAt: now + 25000, startAt: 0, ballot: null, name: null, bottleAt: 0, bottleBy: "", rounds: [], inaugAt: 0 }); e.baptism = null; return { ok: true }; }
+  if (!f.startAt) return { ok: false };
+  const tl = FT.feteTimeline(f);
+  if (op === "skipToVote" && !f.name) { f.startAt = Math.min(f.startAt, now - (FT.SEQ.BELL + FT.SEQ.DANCE + FT.SEQ.SPEECH - 1) * 1000); return { ok: true }; }
+  if (/^name[012]$/.test(op) && !f.name) { f.name = { at: now, k: +op[4], draw: false }; f.ballot = null; return { ok: true }; }
+  if ((op === "keepSink" || op === "keepPass" || op === "listen") && tl && tl.open && tl.open.kind === "verdict") {
+    f.rounds.push({ at: now, verdict: op === "listen" ? "listen" : "keep", roll: op === "keepPass" ? "pass" : "sink", retryAt: 0 }); f.ballot = null; return { ok: true };
+  }
+  if (op === "depart" && tl && tl.depart && now < tl.depart) {
+    // on recule le signal pour que le départ soit maintenant : toute la chronologie se décale d'un bloc
+    const dt = tl.depart - now; f.startAt -= dt; if (f.name) f.name.at -= dt; if (f.bottleAt) f.bottleAt -= dt;
+    for (const r of f.rounds) { r.at -= dt; if (r.retryAt) r.retryAt -= dt; }
+    return { ok: true };
+  }
+  return { ok: false };
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -5388,8 +5570,11 @@ export function starFinaleEndDue(e, now) {
    maléfique, puis les raccourcis de chapitre. */
 export const STAR_DEV_OPS = ["reset", "appt", "unslam", "plans", "deliver", "timber", "warn", "start",
   "candy", "dish", "lure", "queen", "shy", "green", "vandal", "evil", "hook", "rescue",
-  "chapter", "skip", "all"];
-export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "end"];
+  "chapter", "skip", "all",
+  // 2026-11-08 — la fête : sans attendre son heure, et chacun de ses chemins sur commande (`resolveFeteDev`)
+  "feteNow", "feteVote", "feteName1", "feteKeepSink", "feteKeepPass", "feteDepart", "feteReset"];
+export const STAR_DEV_SCENES = ["warn", "fall", "townFall"];
+const FETE_DEV_OPS = { feteNow: "now", feteVote: "skipToVote", feteName1: "name1", feteKeepSink: "keepSink", feteKeepPass: "keepPass", feteDepart: "depart", feteReset: "reset" };
 /* ⚠️ 2026-09-13 — `DEV_GATE` (le constat « Eduardo + Tristan + artisans » fabriqué
    pour franchir la porte des habitants) est SUPPRIMÉ : plus aucun bouton ne le
    lisait depuis que la chute se pose directement (`e.fall`). Une constante que
@@ -5500,6 +5685,11 @@ export function devStar(e, op, now, who) {
     MA.migrateMayor(e);
     e.mayor.block = 0; e.mayor.sour = 0;
     return { star: e, ok: true };
+  }
+  /* ⚠️ MÊME RÈGLE QUE TOUS LES BOUTONS (verify-jalons §3) : sans le maire, un bouton ne pose que le rendez-vous. */
+  if (FETE_DEV_OPS[op]) {
+    if (!starDevBoatGate(e, who, t)) return devBlocked(e);
+    return { star: e, ok: !!resolveFeteDev(e, FETE_DEV_OPS[op], t).ok };
   }
   /* ⚠️ 2026-09-13 — « LES PLANS » NE TOUCHENT PLUS AUX ÉTOILES. Ils trouvaient le
      champ ET la reine pour avoir le droit de rendre des plans : c'était l'ancienne
@@ -5739,7 +5929,7 @@ export function devStar(e, op, now, who) {
    Deux exceptions, parce qu'elles SONT des scènes : la pluie (`fall`) et le
    météore (`townFall`) se jouent au clic (la ligne est faite, la scène part).
    La dernière ligne, `done`, n'a rien à jouer : elle valide tout, et la
-   cinématique finale part toute seule (`starFinaleEndDue`).
+   cinématique finale est le plan de nuit de la fête (`fete.js`).
    ⚠️ AUCUNE ÉTAPE NE RECOPIE UNE RÈGLE : chacune écrit avec les résolveurs ou les
    briques du menu (`devYard`, `devTownFall`, `resolveStarFound`…). Une condition
    recopiée à côté du prédicat qui la nomme a déjà divergé (§4 de CLAUDE.md) —
@@ -5836,13 +6026,15 @@ export const STAR_DEV_STEPS = [
      (`x.ids`, fournis par l'hôte) — `resolveStarGift` est idempotent. Jouée, elle
      rend `summon` : l'appelant annonce la convocation comme le jeu le fait. */
   { key: "agree", done: starFinaleAgreed,
-    make: (e, x) => { resolveStarGift(e, x.ids, x.t); resolveStarFinaleAgree(e, DEV_BY, x.t); },
+    make: (e, x) => { resolveStarGift(e, x.ids, x.t); resolveStarFinaleAgree(e, DEV_BY, x.t, x.t + 25000); },
     prep: (e, x) => { if (resolveStarGift(e, x.ids, x.t).ok) x.res.summon = true; } },
-  { key: "baptism", done: starFinaleBaptized, make: (e, x) => resolveStarBaptize(e, DEV_BY, x.t) },
-  /* Faite en passant, l'inauguration est antidatée jusqu'au départ de la
-     cinématique finale : la fête ne se rejoue pas, la fin part tout de suite. */
+  /* 2026-11-08 — LA FÊTE : passée par la frise, elle part tout de suite (l'heure est avancée à maintenant). */
+  { key: "fete", done: (e) => !!(e.finale && (e.finale.startAt || e.finale.inaugAt)),
+    make: (e, x) => { if (!e.finale.feteAt || e.finale.feteAt > x.t) e.finale.feteAt = x.t; resolveFeteStart(e, DEV_BY, x.t); } },
+  /* Faite en passant, la fête se clôt d'un coup : le bon nom, le navire à l'ancre. */
   { key: "inaug", done: starFinaleInaugurated,
-    make: (e, x) => { if (resolveStarFinaleInaugurate(e, DEV_BY, x.t).ok && e.finale) e.finale.inaugAt = x.t - STAR_FINALE_END_AT_MS - 1000; } },
+    make: (e, x) => { if (!e.finale.feteAt) e.finale.feteAt = x.t; if (!e.finale.startAt) resolveFeteStart(e, DEV_BY, x.t);
+      e.finale.inaugAt = x.t; e.baptism = { at: x.t, by: DEV_BY, k: e.finale.name ? e.finale.name.k : 0 }; } },
   // La quête achevée : rien à jouer, la ligne est faite quand tout l'est.
   { key: "done", done: (e) => starFinaleInaugurated(e) },
 ];
@@ -5881,5 +6073,5 @@ export const STAR_DEV_ACTS = [
   ["town", ["townFall", "queen", "shy", "green"]],
   ["wreck", ["vandal", "budget"]],
   ["evil", ["evilSeen", "evilHaul", "evilRevive"]],
-  ["end", ["rebuild", "agree", "baptism", "inaug", "done"]],
+  ["end", ["rebuild", "agree", "fete", "inaug", "done"]],
 ];

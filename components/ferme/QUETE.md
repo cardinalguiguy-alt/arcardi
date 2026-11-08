@@ -1,5 +1,76 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ AUTORITÉ 2026-11-08 — LA FIN (G9 + G10 + G11), TRANCHÉE PAR GUILLAUME
+
+**Fait autorité sur D11 plus bas pour la fête, le baptême et le départ.** Page de décisions du 8 novembre
+(22 points). Ce que Guillaume a changé par rapport à mes recommandations est en **gras**.
+- **A1** une seule cérémonie publique : le baptême se fait PENDANT la fête, devant la foule. **A2 tout d'un bloc,
+  une seule livraison** (la règle « un changement visuel par livraison » est levée pour ce chantier). A3 la beauté
+  du navire (M14) vient juste après : le naufrage se dessine par une ligne d'eau, indépendante du dessin du navire.
+- **B1** tous les habitants, leurs familles, des visiteurs d'un train de la fête. **B2 la foule est DÉJÀ là quand la
+  fête commence — mais il faut un RENDEZ-VOUS** (mot pour mot : « il faut un rdv pour la fête, pas que ça s'enchaîne
+  trop vite. Une date, des préparations pour les décorations, utiliser les ouvriers de manutention pour l'animation ? »).
+  Retenu : le maire fixe la date à l'entretien, l'équipe du chantier de la place (`chantier.js`) pare le quai pendant
+  l'attente, la foule arrive à pied avant l'heure. B3 une chorégraphie dérivée de dates (même scène chez tous, zéro
+  message). B4 tout le décor (guirlandes, lampions, estrade, confettis, fanfare, feu d'artifice, mouchoirs).
+  **B5 le soir** (« je te laisse juger du meilleur choix »). B6 tous les joueurs à la cale, baptême compris.
+- C1 « La Belle Étoile » (jamais traduit), « L'Épave hasardeuse », « Le bout de bois qui flotte mal » (traduits en
+  anglais : ce sont des blagues). C2 vote, majorité, égalité → le maire tire à pile ou face. C3 le nom se peint, reste.
+- **D1 AUCUNE explication au naufrage : la surprise suffit.** D2 les lèche-bottes : Honoré et Philomène. D3 vote
+  « écouter / maintenir », égalité → on écoute. D4 un orage de scène (dix secondes, le quai seul). D5 3 sur 4 à chaque
+  tentative. **D6 un simple « Recommencer » qui ramène à la contestation.** D7 le quart qui passe : la foule revient,
+  penaude, départ en fête.
+- F1 le navire revient jeter l'ancre dans la baie, visible pour toujours. F2 le plan final de D11 (bleu nuit, les
+  sept étoiles dessinent la Brebis, le texte). **F3 environ CINQ minutes, et « des cinématiques vraiment soignées et
+  pro pour cette fin ».**
+
+### Livré le 2026-11-08 — ce qui est construit, et ce qui ne l'est pas
+
+- **Le principe** : l'hôte n'écrit que des DATES dans `e.finale` (`feteAt`/`firstAt` le rendez-vous, `startAt` le signal, `ballot` le vote
+  ouvert, `name` le nom voté, `bottleAt`, `rounds` chaque contestation avec son tirage, `inaugAt` la fin) ; `fete.js` en déduit tout le
+  reste à l'instant (la phase, le navire, la foule, la caméra, les bulles, l'orage, le feu d'artifice, le plan de nuit, le son) — même
+  scène chez chacun, zéro message de plus (§3). L'invité lit l'horloge de l'hôte (`hostNow` à chaque `apply`, le plus petit écart vu).
+- **Le rendez-vous** : la tombée de la nuit + 30 min, au plus tôt 3 min réelles après l'accord, sinon le soir suivant ; passé la nuit
+  sans signal, reporté (`resolveFetePostpone`). Le jour ne tourne pas pendant la cérémonie (elle dure plus de six heures de jeu).
+- **La foule** : habitants de la station + leurs familles + Honoré, Philomène, Tristan + 24 visiteurs ; places en quinconce sur la
+  pelouse du quai et le ponton (même altitude que la cale) ; chacun marche par la recherche de chemin de la ville et arrive avant l'heure.
+  Elle remplace à l'écran les habitants qu'elle appelle. L'équipe de `chantier.js` plante quatre mâts (fanions, lampions), monte
+  l'estrade sur des cases libres, ôte les coins du ber au départ, tire le feu d'artifice du ponton.
+- **La cinématique** : bandes noires, interface tue (`.ferme-cine`), joueur figé, caméra par panoramiques AU ZOOM DU JOUEUR (un zoom
+  glissant recuisait le sol cuit à chaque image : la page s'est figée — `docs/PIEGES.md`). Cartes de vote à boutons (`fete-card`).
+- **Le navire** : `drawStarShip` gagne `afloat`, `rockGain`, `sailK`, `pavois`, `lantern`, `fire` ; `FA.drawFeteShip` le fait virer
+  (le profil se pince puis se retourne) et couler sous une ligne d'eau, sans toucher au dessin (A3, M14 à venir). Mouillage : 17 cases
+  à l'ouest de la cale, en pleine eau, voiles ferlées, lanterne la nuit ; Eduardo l'emprunte toujours (`starShipGone`).
+- **Menu dev** : la frise (« The party (the signal) », « Party over ») et les outils « Party: … » (fête dans 25 s, sauter au vote, nom
+  farfelu, maintenir et couler / tenir, sauter au départ, rejouer).
+- **Vu en jeu** (Chrome sans tête, `tools/cdp.mjs`, captures lues) : le quai paré, la foule qui arrive, la danse, le discours, le vote
+  (à un et à deux, égalité tirée au sort), la bouteille, la contestation, l'orage, la foudre sur le mât et dans l'eau, le naufrage,
+  « Recommencer », le navire halé, la foule écoutée, le départ, le feu d'artifice, le plan de nuit, le mouillage.
+- **Pas vu en jeu** : le son, le geste du tirage au sort (trop bref pour une capture), un iPad.
+
+### M14 — le navire magnifique (2026-11-08, juste après la fête)
+
+Les cinq pièces redessinées dans `fermeArt.js` (la boîte, la quille, la ligne de pont et le ber ne bougent pas) : coque vernie à
+virures qui suivent la tonture, PAVOIS bleu marine semé d'étoiles d'or (huit pixels : la hauteur de la police avec ses accents),
+château de poupe vitré, hublots de laiton, ligne de flottaison crème sur un fond cuivré, beaupré, figure de proue dorée, ancre ;
+gréement à hune, mât de hune, deux vergues, haubans à enfléchures, étai jusqu'au beaupré, flamme ; grand-voile à laizes avec
+l'étoile brodée, hunier, foc ; la cloche dans un clocher ouvert. La nuit, les vitres passent par la lumière du jeu (`shipLights`).
+**Le nom** n'est plus une étiquette : il est peint en lettres d'or de la police pixel, lettre à lettre sur la ligne du pont ; au-delà
+de 100 px, une seconde ligne sur un bandeau assorti. Vu en jeu de jour, de nuit, à l'ancre, au baptême ; `render-navire` mesure le
+nom (planche `tools/out/navire-noms.png`).
+
+### G8 et M7 — faits le 2026-11-08 (suite) ; M13 chiffré
+
+- **G8, le halage** (règle de Guillaume : « s'en sortir techniquement, pas de blocage total ou répété ») : le halage ancre le joueur,
+  donc la lumière de la septième sœur tient les créatures hors de `C.EVIL_HAUL_HALO_R` (4,5 cases) — elles reculent, puis rôdent au
+  bord (`Q.evilHaloStep`, appliquée par l'hôte dans `updateSharedEvilMonsters` ; l'invité la signale par `pub.halo` et la clé de
+  position, zéro message de plus). Une capture coûte `RUN_INJURED_MS` (10 min) tant qu'elle est à sauver (`Q.starEvilInjuryMs`), la
+  pommade est recommandée à l'entrée du monde maléfique, et l'invite du halage le dit (« sa lumière tient les créatures à l'écart »).
+- **M7, les deux chutes** : voir `docs/AUDIT-QUETE-2026-11.md` (le voile du météore borné, le plan en amont de la course —
+  `Q.starFarmCamLead`, `Q.STAR_FARM_ENTRY` —, l'interface qui se tait, la fonte des cratères en boue et paille dans `neige.js`).
+- **M13, le coût** : Guillaume a choisi « plus cher » après le chiffrage — plans à 60 000 or, 100 récoltes, 20 poissons
+  (`C.STAR_ENG_FEE_*`) ; navire entier à 450 000 or (`C.STAR_REBUILD_GOLD`, `verify-jalons` tient la somme). Attentes inchangées.
+
 ## ⚠️⚠️⚠️ AUTORITÉ 2026-09-13 bis — CE QUI RESTE POUR FINIR LA QUÊTE, TRANCHÉ PAR GUILLAUME (D1–D15)
 
 **Cette section fait autorité sur tout ce qui suit.** Guillaume a répondu point par point à la

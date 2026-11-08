@@ -63,6 +63,7 @@ copy("quete");
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const Q = await import(pathToFileURL(path.join(tmp, "quete.js")).href);
+const FTJ = await import(pathToFileURL(path.join(tmp, "fete.js")).href);   // 2026-11-08 — la fête
 const MA = await import(pathToFileURL(path.join(tmp, "maire.js")).href);
 
 let fails = 0, total = 0;
@@ -153,7 +154,7 @@ ok("…un « oui » sans proposition est refusé",
      !Q.starYardOffer(y, DAY, GATE) && Q.resolveStarYardAccept(y, "autre", DAY, now + 5, GATE).already === true && y.yard.by === "banc");
   ok("…le navire n'a pas de nom avant son baptême, et le baptême survit à une migration",
      Q.starShipName(y) === null
-     && Q.starShipName(Q.migrateStar({ ...clone(y), baptism: { at: now, by: "banc" } })) === C.STAR_SHIP_NAME);
+     && Q.starShipName(Q.migrateStar({ ...clone(y), baptism: { at: now, by: "banc", k: 0 } })) === C.STAR_SHIP_NAME);
 }
 ok("⚠️⚠️⚠️ …et le sujet « architecte naval » de la mairie ne propose rien avant le maire",
    !C.HALL_TOPICS.find(t => t.key === "engineer").when({ shared: { star: e } }));
@@ -205,6 +206,10 @@ ok("⚠️⚠️⚠️ …et le sujet « architecte naval » de la mairie ne pro
   now += 10 * 60 * 1000;
   Q.resolveStarTimberTick(e, now);
   ok("…« une pièce t'attend sur la cale »", Q.starGoalKey(e, READY) === "timberRaise");
+  /* 2026-11-07 — AUDIT G13 : le safran prêt avant la coque se posait sur une carcasse vide. */
+  ok("⚠️ …le safran ne se monte pas avant la coque (« hullBefore »), et c'est la coque qu'on propose",
+     Q.starRaiseBlock(e, "rudder") === "hullBefore" && Q.starTimberToRaise(e) === "hull"
+     && Q.resolveStarTimberRaise(clone(e), "rudder", "banc", now).why === "hullBefore");
   for (const k of Q.STAR_YARD_KEYS)
     ok(`…« ${k} » : montée au marteau`, Q.resolveStarTimberRaise(e, k, "banc", now).ok === true);
   ok("prélude 3b — coque et gouvernail posés, et rien d'autre",
@@ -232,7 +237,24 @@ ok("⚠️⚠️⚠️ …et le sujet « architecte naval » de la mairie ne pro
 //    la chute à la nuit tombée ; `resolveStarFall` et son tampon sont tenus par
 //    `verify-quete.mjs`.)
 e.fall = now;
-for (const site of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e, site.id, "banc", now);
+/* ⚠️⚠️⚠️ 2026-11-07 — AUDIT B1 : LES PLAQUES PASSENT PAR LE GESTE, PAS PAR LE RÉSOLVEUR.
+   Ce banc appelait `resolveStarFound` sur les huit sites : il était vert pendant
+   que le jeu créditait toujours la même plaque (le client réécrivait le site à la
+   victoire du mini-jeu), donc que la quête s'arrêtait au chapitre 1. Les deux
+   plaques se jouent maintenant comme le client les joue — `starCoolStart` puis
+   `starCoolFoundSite` — et la SECONDE d'abord, l'ordre qui cassait. */
+{
+  const mats = Q.STAR_FARM_IMPACTS.filter(s => s.content === "material").map(s => s.id).reverse();
+  ok("chapitre 1 — deux plaques à refroidir", mats.length === 2, mats.join(","));
+  for (const id of mats) {
+    const mini = Q.starCoolStart(e, id);
+    ok(`…« ${id} » : le mini-jeu s'ouvre sur CE cratère`, !!mini && mini.kind === "cool" && mini.site === id, JSON.stringify(mini));
+    const got = Q.starCoolFoundSite(mini);
+    ok(`…« ${id} » : la victoire crédite CE cratère`, got === id && Q.resolveStarFound(e, got, "banc", now).ok === true && Q.starHas(e, id), String(got));
+    ok(`…« ${id} » : refroidie, elle ne rouvre plus le mini-jeu`, Q.starCoolStart(e, id).already === true);
+  }
+}
+for (const site of Q.STAR_FARM_IMPACTS) if (site.content !== "material") Q.resolveStarFound(e, site.id, "banc", now);
 ok("chapitre 1 clos — chapitre « crater » ouvert", Q.starChapterKey(e) === "crater", `e.ch=${e.ch}`);
 ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête avant la reine",
    !Q.starShipComplete(e) && Q.resolveStarGift(clone(e), ["banc"], now).ok === false
@@ -275,8 +297,8 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
      signBudgetForReal(e, now) === "mayorSigned" && MA.mayorBudgetSigned(e) && MA.mayorSigned(e));
   ok("…la mairie prend une part : le prix payé est inférieur au prix plein",
      Q.starBudgetShare(e) > 0 && Q.starRebuildPrice(e, "hull") < C.STAR_REBUILD_GOLD.hull, `${Q.starRebuildPrice(e, "hull")} / ${C.STAR_REBUILD_GOLD.hull}`);
-  ok("⚠️ …et le prix plein du navire reste 300 000 or",
-     Object.values(C.STAR_REBUILD_GOLD).reduce((a, b) => a + b, 0) === 300000);
+  ok("⚠️ …et le prix plein du navire est de 450 000 or (300 000 jusqu'au 2026-11-08, « plus cher » : audit M13)",
+     Object.values(C.STAR_REBUILD_GOLD).reduce((a, b) => a + b, 0) === 450000);
   now += 1000;
   for (const k of Q.STAR_SHIP_KEYS)
     ok(`chapitre 3b — « ${k} » se recommande une fois le budget voté`, Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "commandable");
@@ -305,6 +327,11 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
   Q.resolveStarEvilFound(e, now);
   ok("chapitre 3d — vue : « hale-la jusqu'à la rive »", Q.starGoalKey(e, { ...READY, now: now + LATER }) === "evilHaul"
      && Q.starTargetSite(e, { ...READY, now: now + LATER }) === "evilLake");
+  /* 2026-11-07 — AUDIT G7 : la canne cassée a sa phrase (et son chaudron), après la casse seulement. */
+  ok("⚠️ …la canne cassée : « protège-la au chaudron » ; protégée : on relance",
+     Q.starGoalKey(e, { ...READY, now: now + LATER, rodBroken: true }) === "evilRodProtect"
+     && Q.starTargetSite(e, { ...READY, now: now + LATER, rodBroken: true }) === "cauldron"
+     && Q.starGoalKey(e, { ...READY, now: now + LATER, rodBroken: true, rodProtected: true }) === "evilHaul");
   Q.resolveStarEvilRescue(e, now);
   ok("…halée : « porte-la et réanime-la »", Q.starGoalKey(e, { ...READY, now: now + LATER }) === "evilRevive");
   Q.resolveStarFound(e, Q.STAR_EVIL_ID, "banc", now);
@@ -319,30 +346,25 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   D11 — L'ÉPILOGUE : LE MAIRE, LE BAPTÊME, L'INAUGURATION, PUIS LA FIN RÉELLE.
+   D11 — L'ÉPILOGUE : LE MAIRE, LA FÊTE (refaite le 2026-11-08, G9-G11), PUIS LA FIN RÉELLE.
    ───────────────────────────────────────────────────────────────────────────
-   ⚠️⚠️⚠️ CE BANC REJOUE TOUTE LA TRAME, FINALE COMPRISE (consigne du chantier) :
-   sans cette section, `starDone(e)` marquerait la fin pour ce banc alors que le
-   joueur, lui, a encore trois portes à ouvrir avant l'écran final. */
+   ⚠️⚠️⚠️ CE BANC REJOUE TOUTE LA TRAME, FINALE COMPRISE (consigne du chantier) : sans cette section, `starDone(e)` marquerait
+   la fin pour ce banc alors que le joueur, lui, a encore le maire et la fête avant l'écran final. Les chemins de la cérémonie
+   (contestation, naufrage, « Recommencer ») sont joués par `verify-fete`. */
 {
   now += 1000;
-  const ra = Q.resolveStarFinaleAgree(e, "banc", now);
-  ok("D11a — le maire accorde la fête (sans jauge ni rendez-vous)",
-     ra.ok === true && Q.starFinaleAgreed(e) && Q.starGoalKey(e, {}) === "finaleBaptize");
-  now += 1000;
-  const rb = Q.resolveStarBaptize(e, "banc", now);
-  ok("D11b — le baptême : `starShipName` rend enfin le nom",
-     rb.ok === true && Q.starShipName(e) === C.STAR_SHIP_NAME && Q.starGoalKey(e, {}) === "finaleInaugurate");
-  now += 1000;
-  const ri = Q.resolveStarFinaleInaugurate(e, "banc", now);
-  ok("D11c — l'inauguration publique : la mise en mer est lancée",
-     ri.ok === true && Q.starFinaleInaugurated(e) && Q.starGoalKey(e, {}) === null);
-  ok("⚠️ …la fenêtre de cérémonie est active tout de suite après",
-     Q.starFinaleInaugActive(e, now + 1));
-  ok("⚠️⚠️ D11d — LA CINÉMATIQUE FINALE (étoiles + texte) EST DUE, PAS AVANT",
-     !Q.starFinaleEndDue(e, now + Q.STAR_FINALE_END_AT_MS - 1)
-     && Q.starFinaleEndDue(e, now + Q.STAR_FINALE_END_AT_MS + 1));
-  ok("⚠️⚠️⚠️ LA FIN RÉELLE : LES TROIS PORTES DE L'ÉPILOGUE SONT TOUTES FRANCHIES",
+  const ra = Q.resolveStarFinaleAgree(e, "banc", now, now + 200000);
+  ok("D11a — le maire accorde la fête et en fixe l'heure",
+     ra.ok === true && Q.starFinaleAgreed(e) && e.finale.feteAt === now + 200000 && Q.starGoalKey(e, {}) === "finaleWait");
+  now += 200000;
+  ok("D11b — à l'heure, le signal", Q.resolveFeteStart(e, "banc", now).ok === true && Q.feteRunning(e) && Q.starGoalKey(e, { feteReady: true }) === null);
+  const tl0 = FTJ.feteTimeline(e.finale);
+  Q.resolveFeteVote(e, "banc", "name", 0, tl0.open.t0 + 500);
+  ok("D11c — le nom voté (le seul joueur a voté : clos sur-le-champ)", Q.resolveFeteClose(e, ["banc"], tl0.open.t0 + 600, 0, 0).pick === 0);
+  const tl1 = FTJ.feteTimeline(e.finale);
+  now = tl1.end;
+  ok("D11d — la fin : le navire à l'ancre, le baptême écrit", Q.resolveFeteEnd(e, "banc", now).ok && Q.starShipName(e) === C.STAR_SHIP_NAME && Q.starFinaleInaugurated(e) && Q.starGoalKey(e, {}) === null);
+  ok("⚠️⚠️⚠️ LA FIN RÉELLE : LES PORTES DE L'ÉPILOGUE SONT TOUTES FRANCHIES",
      Q.starFinaleAgreed(e) && Q.starFinaleBaptized(e) && Q.starFinaleInaugurated(e) && Q.starDone(e));
 }
 
