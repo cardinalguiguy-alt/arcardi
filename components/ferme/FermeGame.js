@@ -3053,6 +3053,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ Le client lit `skatesUntil` dans SON sac (diffusé par l'hôte à la location) et le compare à sa
      propre horloge, comme `injuredUntil` : à quelques secondes d'écart d'horloge près, sur dix minutes. */
   const [skateClock, setSkateClock] = useState(0);
+  /* 2026-11-12 — L'ALERTE ROUGE DE LA FIN DE LOCATION (`E.skatesOverdueMs`) : { fined, s } — `s`, les secondes avant la pénalité
+     (tant qu'elle n'est pas prélevée) — ou null. Posée par le contrôle d'une seconde ci-dessous, seulement quand elle CHANGE. */
+  const [skateDue, setSkateDue] = useState(null);
   useEffect(() => {
     if (!parkShopOpen) return undefined;   // 2026-10-11 : la cabane du park relit le temps restant, comme le chalet
     setSkateClock(Date.now());
@@ -3067,10 +3070,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }, [skateShopOpen]);
   useEffect(() => {
     const warned = { on: false, a: false, b: false };
+    let autoAt = 0;
     const id = setInterval(() => {
       const inv = invRef.current;
       if (!inv) return;
-      const left = E.skatesLeftMs(inv, Date.now());
+      const now = Date.now(), left = E.skatesLeftMs(inv, now);
       if (left > 0) {
         warned.on = true;
         if (left > C.SKATES_WARN_MS) { warned.a = false; warned.b = false; }
@@ -3078,7 +3082,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (!warned.a) { warned.a = true; pushToast(L.skatesWarnToast); }
       } else if (warned.on) {
         warned.on = false; warned.a = false; warned.b = false;
-        pushToast(L.skatesEndedToast);
+        pushToast(inv.skatesOut === 1 ? L.skatesDueToast : L.skatesEndedToast);   // 2026-11-12 : à rapporter (un sac d'avant : rendus seuls)
+      }
+      /* 2026-11-12 — LE RETARD : l'alerte rouge, et le décompte avant la pénalité (`SKATES_GRACE_MS`) tant qu'elle n'est pas
+         prélevée (c'est l'hôte qui la prélève, `hostSkatesTick`). Une fois pénalisé, on n'est plus tenu d'aller au comptoir : dès
+         qu'on n'est plus sur la glace (ou qu'on a quitté la ville), le client demande lui-même le retour (`auto`, toutes les 3 s au
+         plus, jusqu'à ce que l'hôte l'ait fait). Sur la glace, on garde la paire : jamais de chute pour une horloge. */
+      /* Hors de l'hiver, plus de comptoir ni de pénalité : pas d'alerte, et la paire se rend seule dès qu'on n'est plus sur la
+         glace (le lundi du printemps, la patinoire tient jusqu'au chantier : on y patine encore). */
+      const winterNow = E.seasonOf().key === "winter";
+      const due = winterNow ? E.skatesOverdueMs(inv, now) : 0;
+      const nd = due > 0 ? (inv.skatesFined === 1 ? { fined: true, s: 0 } : { fined: false, s: Math.max(0, Math.ceil((C.SKATES_GRACE_MS - due) / 1000)) }) : null;
+      setSkateDue((p) => (!p && !nd) || (p && nd && p.fined === nd.fined && p.s === nd.s) ? p : nd);
+      if (((nd && nd.fined) || (!winterNow && inv.skatesOut === 1)) && now - autoAt > 3000) {
+        const m = meRef.current, tw = townWorldNow();
+        const onIce = !!(m && (m.zone || "farm") === "town" && tw && townIceWalkable(tw, C.footX(m.x), C.footY(m.y)));
+        if (!onIce) { autoAt = now; sendReq({ kind: "returnSkates", auto: 1 }); }
       }
     }, 1000);
     return () => clearInterval(id);
@@ -6852,7 +6871,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          quel) ; le prix en dépend, et le toast le dit. */
       const r = E.resolveRentSkates(f, s.money, E.seasonOf().key, nearS, Date.now(), req.kit);
       if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
-      out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: r.price || C.SKATES_RENT_PRICE };
+      out.toast = { id: f.id, key: r.ok ? "skatesBought" : "skates_" + r.reason, n: r.reason === "banned" ? r.banMs : (r.price || C.SKATES_RENT_PRICE) };
+    } else if (req.kind === "returnSkates") {
+      /* 2026-11-12 — RENDRE LES PATINS (`E.resolveReturnSkates`) : au comptoir de n'importe quel chalet (la portée, comme la
+         location, sur la dernière position connue ET la zone de la requête — une position de ferme ne passe jamais pour le
+         comptoir) ; `auto` : le client d'un joueur déjà pénalisé, sorti de la glace ; hors de l'hiver, sans comptoir. Un retour
+         automatique refusé ne dit rien (le client réessaie seul). */
+      const twS = getTownWorldCached(E);
+      const nearS = req.pz === "town" && E.townSkateChaletDist(twS, C.footX(f.x || 0), C.footY(f.y || 0)) <= C.TOWN_SKATE_CHALET_REACH + 1;
+      const r = E.resolveReturnSkates(f, nearS, Date.now(), { auto: !!req.auto, closed: E.seasonOf().key !== "winter" });
+      if (r.ok) { out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; out.toast = { id: f.id, key: r.late ? "skatesBackLate" : "skatesBack", n: r.banMs }; }
+      else if (!req.auto) out.toast = { id: f.id, key: "skatesBack_" + r.reason };
     } else if (req.kind === "rentRide") {
       /* 2026-10-11 — UNE MONTURE DU SKATEPARK SE LOUE à la cabane du park (`E.resolveRentRide`) : même contrat que les patins — la
          portée sur la dernière position connue (une case de marge pour la latence), l'ouverture sur le monde de la ville de l'HÔTE
@@ -10351,7 +10380,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // 2026-10-04 — leurs patins, pour la pose qu'on leur voit sur la glace (`remoteHasSkates`).
     if (p.farmer && p.farmer.id !== me.id && p.farmer.inv) {
       const rs = playersRef.current.get(p.farmer.id);
-      if (rs) { rs.skatesUntil = +p.farmer.inv.skatesUntil || 0; rs.skateKit = PT.skateKitNorm(p.farmer.inv.skateKit); }   // 2026-10-05 (fin quater) : le matériel se voit aussi
+      if (rs) { rs.skatesUntil = +p.farmer.inv.skatesUntil || 0; rs.skatesOut = p.farmer.inv.skatesOut === 1 ? 1 : 0; rs.skateKit = PT.skateKitNorm(p.farmer.inv.skateKit); }   // 2026-10-05 (fin quater) : le matériel se voit aussi ; 2026-11-12 : la paire pas encore rendue aussi (`skatesOut`)
     }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
@@ -10730,6 +10759,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "skates_closed") return L.skatesClosedToast;
     if (key === "skates_far") return L.skatesFarToast;
     if (key === "skates_noGold") return L.skatesNoGoldToast(n | 0);
+    /* 2026-11-12 — le retour des patins, la pénalité, l'interdiction (`n` : des ms pour l'interdiction, de l'or pour la pénalité). */
+    if (key === "skates_banned") return L.skatesBannedToast(Math.max(1, Math.ceil((+n || 0) / 1000)));
+    if (key === "skatesBack") return L.skatesBackToast;
+    if (key === "skatesBackLate") return L.skatesBackLateToast(Math.round((+n || 0) / 60000));
+    if (key === "skatesBack_none") return L.skatesBackNoneToast;
+    if (key === "skatesBack_far") return L.skatesFarToast;
+    if (key === "skatesFined") return L.skatesFinedToast(n | 0);
     if (key === "netBought") return L.netBoughtToast(n | 0);
     if (key === "net_have") return L.netHaveToast;
     if (key === "net_noGold") return L.netNoGoldToast(n | 0);
@@ -11222,6 +11258,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-11-08 — ⚠️ LE JOUR NE TOURNE PAS PENDANT LA CÉRÉMONIE : elle dure cinq minutes réelles, plus de six heures de jeu ;
          commencée le soir, elle franchirait deux heures du matin et le ciel sauterait au matin en plein feu d'artifice. L'heure
          reste figée à deux heures (`gameTimeMin` borne à la fin du jour) ; le jour tourne dès que le navire a jeté l'ancre. */
+      hostSkatesTick(Date.now());   // 2026-11-12 — la pénalité de retard des patins, et leur retour hors de l'hiver
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS && !Q.feteRunning(s.star)) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
@@ -23919,7 +23956,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-10-05 (fin quater) — LA BANDE DE LA PATINOIRE SE LIT AU POINT PRÈS (`C.rinkBandSolid`), pas à la case : les cases
          de son dallage (`tw.rinkBand`) ne bloquent que l'épaisseur de la planche — plus de mur invisible tout autour, plus de
          trou aux coins que l'arrondi traverse. `townNav` (les résidents) garde la case entière, plus pessimiste. */
-      if (tw.rinkBand && tw.rinkBand[i]) return C.rinkBandSolid(x, y);
+      /* ⚠️ 2026-11-12 — AU CHANTIER, LA BANDE EST FERMÉE COMME LE RESTE DE LA PLACE : ses cases (les coins arrondis de la glace
+         compris) se lisaient au point près AVANT la place close (`solid`) — un patineur pris dans un coin y restait « debout », donc
+         la règle d'évasion de `townStepOk` ne s'ouvrait pas, et il butait au bord du coin (vu en jeu, `chantierEvacAim`). */
+      if (tw.rinkBand && tw.rinkBand[i]) return tw.chantier ? true : C.rinkBandSolid(x, y);
       /* 2026-10-11 — LE SKATEPARK SE LIT AU POINT PRÈS (`SPK.walkBlocked` : les garde-corps, les rails, les pentes trop raides
          pour un piéton) ; le dénivelé, qui dépend d'où l'on vient, est dans `townStepOk`. `townNav` garde l'emprise pleine. */
       if (tw.parkCell && tw.parkCell[i]) return SPK.walkBlocked(x, y);
@@ -24232,6 +24272,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function townStepOk(tw, m, nx, ny, fromE) {
       return (canStandTown(tw, nx, ny, fromE) && parkStepOk(tw, m, nx, ny))
         || (!canStandTown(tw, m.x, m.y) && (!tw.skatepark || SPK.walkFenceStep(C.footX(m.x), C.footY(m.y), C.footX(nx), C.footY(ny))));
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-11-12 — LE CHANTIER FAIT SORTIR LES PATINEURS (verdict de Guillaume du 2026-10-23 : « les patineurs sortent quand la
+       ║ barrière arrive » — « au vrai chantier, personne n'est évacué de la glace »).
+       ╚══════════════════════════════════════════════════════════════════════════
+       Au chantier, toute la place devient pleine (`townSeasonWorld`) : qui s'y trouve n'y est plus « debout » (`canStandTown`), et
+       la règle d'évasion de `townStepOk` le laisse aller n'importe où — il n'était pas coincé, mais rien ne le faisait sortir, et il
+       serait passé au travers de la bande et de la barrière. On le RAMÈNE AU BORD EN MARCHANT (jamais un téléport : la règle des
+       changements de position) : une paire de touches simulée, comme « la reine mène » — le pas ordinaire (patin compris) fait le
+       reste. Le trajet est FIXE, par les seules portes : le portillon est de la bande (y 86-87, au pied du chalet), le couloir entre
+       la bande et la barrière, la porte est du chantier (y 92-95, en face de l'allée pavée), l'allée. Hors de la patinoire (le
+       couloir), on prend le trajet au couloir. La moindre touche reprend la main (la place reste traversable en sortant) ; un toast,
+       une fois par évacuation. Rend la direction { dx, dy } à pousser, ou null. Les coordonnées sont celles de la SEMELLE. */
+    const CHANTIER_EXIT = CH.EVAC_ROUTE;   // dérivé de la bande et de la barrière (chantier.js), tenu par `verify-chantier` §6
+    const chantierEvac = { on: false, i: 0, toastAt: -1e9 };   // vit le temps de la boucle (cet effet), comme ses autres états
+    function chantierEvacAim(tw, m) {
+      const ev = chantierEvac, F = CH.FENCE, fx = C.footX(m.x), fy = C.footY(m.y);
+      const inside = !!tw.chantier && fx > F.xW && fx < F.xE && fy > F.yN && fy < F.yS && !canStandTown(tw, m.x, m.y);
+      /* Une fois partie, la sortie va jusqu'au dernier point (l'allée), pas jusqu'à la ligne de la barrière : vu en jeu, elle
+         s'arrêtait PILE dans la porte (la semelle à x = 61,2, la ligne même). */
+      const last = CHANTIER_EXIT[CHANTIER_EXIT.length - 1];
+      if (ev.on && tw.chantier && !inside && Math.hypot(last[0] - fx, last[1] - fy) < 0.45) { ev.on = false; return null; }
+      if (!inside && !(ev.on && tw.chantier)) { ev.on = false; return null; }
+      if (!ev.on) {
+        ev.on = true; ev.i = C.rinkInside(fx, fy) ? 0 : 2;
+        if (performance.now() - ev.toastAt > 20000) { ev.toastAt = performance.now(); pushToast(L.chantierEvacToast); }
+      }
+      while (ev.i < CHANTIER_EXIT.length - 1 && Math.hypot(CHANTIER_EXIT[ev.i][0] - fx, CHANTIER_EXIT[ev.i][1] - fy) < 0.45) ev.i++;
+      const [tx, ty] = CHANTIER_EXIT[ev.i], ax = tx - fx, ay = ty - fy, ad = Math.hypot(ax, ay);
+      return ad > 0.05 ? { dx: ax / ad, dy: ay / ad } : null;
     }
     /* 2026-10-11 — LE PAS SUR LE RELIEF DU SKATEPARK : chaque point de la semelle d'arrivée doit tenir dans une marche de la
        hauteur sous les pieds d'où l'on part (`SPK.walkStepOk`) — on monte l'escalier et les tremplins, pas une plateforme ;
@@ -24550,7 +24620,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️⚠️ ET LA MOINDRE TOUCHE REPREND LA MAIN : on ne se bat pas avec le
          pilote, on le lâche. Reprendre se fait avec E, comme l'arrêter (le mode,
          lui, reste armé). */
-      if (!dx && !dy && starGreenWalking() && !uiBlocked) {
+      /* 2026-11-12 — au chantier, qui est resté sur la place fermée est ramené au bord par les portes (`chantierEvacAim`) ; une
+         touche reprend la main. Avant la reine : sortir d'un chantier passe avant tout guidage. */
+      const evacAim = !dx && !dy && !uiBlocked ? chantierEvacAim(tw, m) : null;
+      if (evacAim) { dx = evacAim.dx; dy = evacAim.dy; }
+      else if (!dx && !dy && starGreenWalking() && !uiBlocked) {
         const aim = starGuideAim("town", m.x, m.y);
         if (aim) {
           const ax = aim.x - m.x, ay = aim.y - m.y, ad = Math.hypot(ax, ay);
@@ -30462,7 +30536,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
       else if (starNearby()) tpk = "star:" + starNearby().p;   // zip 444 — même ordre que la touche E
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
-      else if (nearSkateChalet()) tpk = "townSkates";                    // 2026-10-04 — le chalet des patins
+      else if (nearSkateChalet()) tpk = E.skatesOverdueMs(invRef.current, Date.now()) > 0 ? "townSkatesBack" : "townSkates";   // 2026-10-04 — le chalet des patins ; 2026-11-12 : en retard, E les rend
       else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
       else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
       else if (nearTownRect(C.TOWN_BELVEDERE.x, C.TOWN_BELVEDERE.y, C.TOWN_BELVEDERE.w, C.TOWN_BELVEDERE.h)) tpk = "townView";
@@ -34073,7 +34147,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          reflète), et les pieds s'enfoncent (un bourrelet, plus bas). */
       /* 2026-09-29 — la neige de la carte QU'ON REGARDE (la ville ou, depuis ce jour, la ferme). */
       const snowFeet = charSnowAt && (meRef.current && (meRef.current.zone || "farm")) === charSnowZone && !inBoat ? charSnowAt(p) : 0;
-      if (!swimmingHere) { const airK = Math.min(1, (p.skAir || 0) / 14); ctx.fillStyle = snowFeet > 1 ? `rgba(36,54,104,${(0.32 * (1 - 0.8 * airK)).toFixed(3)})` : `rgba(0,0,0,${(0.25 * (1 - 0.8 * airK)).toFixed(3)})`; fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6 - Math.min(2, Math.round((p.skAir || 0) / 8)), riding ? 3 : C.CHAR_SHADOW_RY); }   // FIX-003 ; 2026-10-05 : l'ombre rétrécit sous un patineur qui saute
+      /* FIX-003 ; 2026-10-05 : l'ombre sous un patineur qui saute. ⚠️ 2026-11-12 — ELLE RÉTRÉCIT VRAIMENT (verdict de Guillaume du
+         2026-10-23 : « elle rétrécit avec la hauteur — c'est ce qui donne la hauteur du saut au premier coup d'œil ») : avant, elle
+         pâlissait de 80 % et ne perdait que deux pixels de large, par crans — vue en jeu au zoom 3, la tache gardait sa largeur et
+         s'effaçait. Désormais la largeur suit la hauteur sans cran (moitié au plus haut, 14 px de saut), la profondeur aussi (−40 %),
+         et elle reste lisible (−35 % au plus). Le rider du park de même (9 → 5 px). */
+      if (!swimmingHere) {
+        const airK = Math.min(1, (p.skAir || 0) / 14), shK = 1 - 0.35 * airK;
+        ctx.fillStyle = snowFeet > 1 ? `rgba(36,54,104,${(0.32 * shK).toFixed(3)})` : `rgba(0,0,0,${(0.25 * shK).toFixed(3)})`;
+        fillPixEllipse(ctx, px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, (riding ? 9 : 6) * (1 - 0.45 * airK), (riding ? 3 : C.CHAR_SHADOW_RY) * (1 - 0.4 * airK));
+      }
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
          encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
@@ -34427,7 +34510,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.restore();
       }
       // 2026-10-15 : au HANDPLANT, le corps renversé monte de 27 px au-dessus du coping (les bottines en haut) — le nom passe au-dessus d'elles
-      queueNameTag(p, isSelf, px + 8, py - 10 - (p.ride ? Math.round(p.skAir || 0) + (p.ride.pose === "hand" ? 6 : 0) : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
+      // 2026-11-12 : le PATINEUR aussi (vu en jeu au zoom 3 : au sommet du saut, la tête passait à travers son nom resté au sol)
+      queueNameTag(p, isSelf, px + 8, py - 10 - Math.round(p.skAir || 0) - (p.ride && p.ride.pose === "hand" ? 6 : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
       // ⚠️ L'état du contexte que laissait l'ancienne écriture du nom : les
       // icônes ci-dessous (🩹, 🏆) comptaient sur son `textAlign` centré.
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
@@ -36680,7 +36764,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'instantané d'arrivée (`farmersRef`). */
   function remoteHasSkates(id) {
     const r = playersRef.current.get(id);
-    if (r && typeof r.skatesUntil === "number") return r.skatesUntil > Date.now();
+    // 2026-11-12 : LE MÊME prédicat que pour soi (`E.skatesActive`) — en retard, la paire pas rendue se voit encore aux pieds.
+    if (r && typeof r.skatesUntil === "number") return E.skatesActive({ skatesUntil: r.skatesUntil, skatesOut: r.skatesOut }, Date.now());
     const f = farmersRef.current && farmersRef.current[id];
     return !!(f && f.inv && E.skatesActive(f.inv, Date.now()));
   }
@@ -36962,6 +37047,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current, tw = townWorldNow();
     if (!m || !tw || m.zone !== "town") return false;
     return E.townSkateChaletDist(tw, C.footX(m.x), C.footY(m.y)) <= C.TOWN_SKATE_CHALET_REACH;
+  }
+  /* 2026-11-12 — LE BATTEMENT DES PATINS, CHEZ L'HÔTE (une fois par seconde, avec le jour) : `SKATES_GRACE_MS` après la fin d'une
+     location pas rendue, la pénalité (le prix payé, encore — `E.resolveSkatesLate`, une seule fois). Tous les fermiers de la
+     sauvegarde, connectés ou non : un joueur parti avec la paire est pénalisé à l'heure, et son client la rend à son retour.
+     ⚠️ HORS DE L'HIVER, NI PÉNALITÉ NI RETOUR ICI : le lundi du printemps, la patinoire reste ouverte jusqu'au chantier de 14 h —
+     reprendre la paire depuis l'hôte ferait tomber qui est encore sur la glace. C'est le CLIENT qui la rend (`closed`), une fois
+     hors de la glace (le contrôle d'une seconde, plus haut). ⚠️ On ne diffuse QUE si quelque chose a changé (§3). */
+  function hostSkatesTick(now) {
+    const fs = farmersRef.current, s = sharedRef.current;
+    if (!fs || E.seasonOf().key !== "winter") return;
+    const day = BL.jourDeParis(now, CH.parisOffsetMin(now));
+    for (const id of Object.keys(fs)) {
+      const f = fs[id];
+      if (!f || !f.inv || f.inv.skatesOut !== 1) continue;
+      const r = E.resolveSkatesLate(f, s.money, now, day);
+      if (!r.ok) continue;
+      s.money += r.moneyDelta;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { state: shareState(), farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }, toast: { id: f.id, key: "skatesFined", n: r.fine }, hostNow: now } });
+    }
   }
   function nearTownProp(kind, r) {
     const m = meRef.current, tw = townWorldNow();
@@ -41634,7 +41739,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          d'un mode « je ne pilote plus », et il se paie d'un appui. */
       if (starGreenGuideOn()) { starGreenWalkToggle(); return; }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
-      if (nearSkateChalet()) { setSkateShopOpen(true); return; }        // 2026-10-04 — le chalet des patins
+      if (nearSkateChalet()) {                                          // 2026-10-04 — le chalet des patins
+        /* 2026-11-12 — en retard, E rend la paire tout de suite (c'est ce que l'alerte rouge demande) ; sinon, le panneau (qui
+           propose aussi de la rendre avant l'heure). */
+        if (E.skatesOverdueMs(invRef.current, Date.now()) > 0) { sendReq({ kind: "returnSkates" }); return; }
+        setSkateShopOpen(true); return;
+      }
       if (!rideRef.current && nearParkShed()) { setParkShopOpen(true); return; }   // 2026-10-11 — la cabane du skatepark
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
@@ -42812,7 +42922,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "bouloOpen" ? L.bouloPromptOpen : promptKey.startsWith("bouloDefi:") ? L.bouloPromptDefi(promptKey.slice(10)) : promptKey.startsWith("bouloBusyHab:") ? L.bouloHabBusy(promptKey.slice(13)) : promptKey.startsWith("bouloJoin:") ? L.bouloPromptJoin(promptKey.slice(10)) : promptKey === "bouloSnow" ? L.bouloSnow : promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "bouloOpen" ? L.bouloPromptOpen : promptKey.startsWith("bouloDefi:") ? L.bouloPromptDefi(promptKey.slice(10)) : promptKey.startsWith("bouloBusyHab:") ? L.bouloHabBusy(promptKey.slice(13)) : promptKey.startsWith("bouloJoin:") ? L.bouloPromptJoin(promptKey.slice(10)) : promptKey === "bouloSnow" ? L.bouloSnow : promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "parkMount" ? L.promptParkMount(parkMountReady(meRef.current)) : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townBoutiqueOff" ? L.promptTownBoutiqueOff : promptKey === "townBoutiqueWorks" ? L.promptTownBoutiqueWorks : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townSalonShut" ? L.promptTownSalonShut : promptKey === "townSalonWorks" ? L.promptTownSalonWorks : promptKey === "townSalonOff" ? L.promptTownSalonOff : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townSkates" ? L.promptTownSkates : promptKey === "townSkatesBack" ? L.promptTownSkatesBack : promptKey === "snowStart" ? L.promptSnowStart : promptKey === "snowDropCarry" ? L.promptSnowDropCarry : promptKey === "snowStackCarry" ? L.promptSnowStackCarry : promptKey === "snowTooBigCarry" ? L.promptSnowTooBigCarry : promptKey === "snowDrop" ? L.promptSnowDrop : promptKey === "snowStack" ? L.promptSnowStack : promptKey === "snowTooBig" ? L.promptSnowTooBig : promptKey === "snowTakeTop" ? L.promptSnowTakeTop : promptKey === "snowDeco" ? L.promptSnowDeco : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townHome" ? L.promptTownHome : promptKey === "homeExit" ? L.promptHomeExit : promptKey === "homeCatalog" ? L.promptHomeCatalog : promptKey === "homeUnbox" ? L.promptHomeUnbox : promptKey === "homeSwitchOn" ? L.promptHomeSwitchOn : promptKey === "homeSwitchOff" ? L.promptHomeSwitchOff : promptKey === "homeLampOn" ? L.promptHomeLampOn : promptKey === "homeLampOff" ? L.promptHomeLampOff : promptKey === "homeFireOn" ? L.promptHomeFireOn : promptKey === "homeFireOff" ? L.promptHomeFireOff : promptKey === "homeFireRevive" ? L.promptHomeFireRevive : promptKey === "homeDrapeClose" ? L.promptHomeDrapeClose : promptKey === "homeDrapeOpen" ? L.promptHomeDrapeOpen : promptKey === "homeSit" ? L.promptHomeSit : promptKey === "homeStand" ? L.promptHomeStand : promptKey === "homeKeysHook" ? L.promptHomeKeysHook : promptKey.startsWith("homeRing:") ? L.promptHomeRing(promptKey.slice(9)) : promptKey.startsWith("homeKeyDoor:") ? L.promptHomeKeyDoor(promptKey.slice(12)) : promptKey === "homeBed" ? L.promptHomeBed : promptKey === "homeBedFull" ? L.promptHomeBedFull : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -45182,8 +45292,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {skateShopOpen && (() => {
         /* 2026-10-05 — LA LOCATION : le panneau dit combien de temps il reste (re-lu chaque seconde,
            `skateClock`), et propose de louer SEULEMENT quand la précédente est finie. */
-        const leftMs = E.skatesLeftMs(myInv, Math.max(skateClock, 0) || Date.now()), owned = leftMs > 0, winter = E.seasonOf().key === "winter";
+        /* 2026-11-12 — la paire se RAPPORTE : `owned` tant qu'elle n'est pas rendue (le temps fini compris : en retard, la ligne
+           le dit en rouge), un bouton pour la rendre, et l'interdiction de relouer qui reste après un retard pénalisé. */
+        const nowS = Math.max(skateClock, 0) || Date.now();
+        const leftMs = E.skatesLeftMs(myInv, nowS), owned = E.skatesActive(myInv, nowS), winter = E.seasonOf().key === "winter";
+        const dueMs = E.skatesOverdueMs(myInv, nowS), banMs = owned ? 0 : E.skatesBanLeftMs(myInv, nowS), out1 = !!(myInv && myInv.skatesOut === 1);
         const mm = Math.floor(leftMs / 60000), ss = Math.floor((leftMs % 60000) / 1000);
+        const mmD = Math.floor(dueMs / 60000), ssD = Math.floor((dueMs % 60000) / 1000);
+        const banS = Math.ceil(banMs / 1000), banTxt = `${Math.floor(banS / 60)}:${String(banS % 60).padStart(2, "0")}`;
         const close = () => { setSkateShopOpen(false); setSkateKitDraft(null); };
         /* 2026-10-05 (nuit, fin quater) — LE MATÉRIEL : le choix se fait ici (la paire, la combinaison, la couleur), l'aperçu se
            dessine avec LA MÊME `boot` que le jeu (`A.drawSkateKitPreview`), le total se relit du résolveur de prix
@@ -45211,8 +45327,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <b>{L.skatesTitle}</b>
                 <span>{owned ? L.skatesOwnedDesc : L.skatesDesc(C.SKATES_RENT_MS / 60000)}</span>
               </div>
-              {owned && <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesRentedLeft(mm, ss)}</span>}
+              {owned && dueMs <= 0 && <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesRentedLeft(mm, ss)}</span>}
+              {owned && dueMs > 0 && <span className="ferme-hint ferme-hint-due" style={{ margin: 0 }}>{L.skatesLateLabel(mmD, ssD)}</span>}
             </div>
+            {owned && out1 && (
+              <div className="ferme-shop-row" style={{ justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
+                {dueMs <= 0 && <span className="ferme-hint" style={{ margin: 0 }}>{L.skatesReturnEarlyHint}</span>}
+                <button onClick={() => sendReq({ kind: "returnSkates" })}>{L.skatesReturnBtn}</button>
+              </div>
+            )}
+            {!owned && banMs > 0 && <div className="ferme-hint ferme-hint-due">{L.skatesBanLabel(banTxt)}</div>}
             {!owned && winter && (
               <div className="ferme-skate-kit" style={{ margin: "6px 0 4px" }}>
                 <b>{L.skateKitTitle}</b>
@@ -45243,7 +45367,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {!owned && (
               <div className="ferme-shop-row" style={{ justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
                 {winter && <span className="ferme-hint" style={{ margin: 0 }}>{L.skateKitTotal(total)}</span>}
-                <button disabled={!winter || (hud.money | 0) < total} onClick={() => sendReq({ kind: "rentSkates", kit: dk })}>{L.skatesRent(total, C.SKATES_RENT_MS / 60000)}</button>
+                <button disabled={!winter || banMs > 0 || (hud.money | 0) < total} onClick={() => sendReq({ kind: "rentSkates", kit: dk })}>{L.skatesRent(total, C.SKATES_RENT_MS / 60000)}</button>
               </div>
             )}
             {/* 2026-10-06 — L'ENTRETIEN DE LA GLACE : l'état d'usure (quatre niveaux, partagés) et la demande de la surfaceuse —
@@ -48393,6 +48517,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
 
+      {/* 2026-11-12 — L'ALERTE ROUGE DE LA FIN DE LOCATION (verdict de Guillaume : « une alerte en rouge : veuillez rapporter les
+          patins au stand »). En haut au centre, permanente tant que la paire n'est pas rendue : d'abord le décompte avant la
+          pénalité, puis, la pénalité prélevée, la suite (en quittant la glace, ils sont rendus d'eux-mêmes). Jamais un clic de jeu
+          intercepté (`pointer-events:none`). */}
+      {skateDue && (
+        <div className="ferme-due-alert" role="status">
+          {skateDue.fined ? L.skatesDueFinedAlert : L.skatesDueAlert(skateDue.s)}
+        </div>
+      )}
       {/* Carte plein écran (nouveauté) : positions live, fermeture au clic/Échap/M */}
       {mapOpen && (
         <div className="ferme-map-ov" onClick={() => setMapOpen(false)}>

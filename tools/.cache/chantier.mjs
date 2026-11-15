@@ -151,6 +151,19 @@ export const FENCE = {
   xW: P.x0 - 0.15, xE: P.x0 + P.w + 0.2, yN: 73.95, yS: P.y0 + P.h + 0.15, PW: 2.2,
   gateN: [P.x0 + 13.1, P.x0 + 15.3], gateE: [P.y0 + SP.EAST_GATE.v0 + 0.2, P.y0 + SP.EAST_GATE.v1],
 };
+/* 2026-11-12 — LA SORTIE DES PATINEURS (`chantierEvacAim`, FermeGame.js ; verdict de Guillaume : « les patineurs sortent quand la
+   barrière arrive ») : quatre points de SEMELLE, par les seules portes — le portillon est de la bande, le couloir entre la bande et
+   la barrière, la porte est du chantier, l'allée pavée. DÉRIVÉS de la bande (`TOWN_RINK`, `TOWN_RINK_GATES`) et de la barrière
+   (`FENCE`), jamais recopiés : `verify-chantier` §6 vérifie qu'aucune jambe ne traverse la planche ni la barrière hors d'une porte. */
+export const EVAC_ROUTE = (() => {
+  const R = C.TOWN_RINK, g = C.TOWN_RINK_GATES.find((q) => q.side === "e");
+  const gy = (g.a + g.b + 1) / 2;                          // le milieu du portillon est (cases 86-87 → 87,0)
+  /* Le couloir, à une demi-semelle de la barrière (60,8) : à mi-chemin de la bande (60,6, premier jet), la moitié du corps passait
+     sous la planche de la bande, peinte devant lui (vu en jeu, capture agrandie). */
+  const cx = FENCE.xE - 0.4;
+  const ey = (FENCE.gateE[0] + FENCE.gateE[1]) / 2;        // le milieu de la porte est du chantier (93,6)
+  return [[R.x1 + 0.3, gy], [cx, gy], [cx, ey], [FENCE.xE + 1.8, ey]];
+})();
 export const PALLET = [P.x0 + 5.6, 72.85];   // à l'ouest du sapin de l'accotement (premier jet : sous l'arbre de l'est)
 /* Le point de livraison des feuilles (le chariot y dépose ses piles) et celui des barrières. */
 const DEPOT = [P.x0 + P.w - 5.5, P.y0 + P.h - 4.8];   // au nord de la caisse, à l'ouest de la colonne du quarter de l'est

@@ -67,11 +67,13 @@ export const SKATE = {
      · la COULEUR : de l'apparence, rien d'autre (jamais un avantage).
    ⚠️ LE PRIX DE BASE EST UNE CONSTANTE DE `fermeConstants.js` (`SKATES_RENT_PRICE`) : ce fichier-ci est pur et n'importe
    rien (le banc le copie seul) — il ne porte donc que les SUPPLÉMENTS, et `skateKitPrice(kit, base)` reçoit la base. */
+/* 2026-11-12 — les suppléments TRIPLÉS avec la base (60 → 180, 45 → 135 : « le prix du matos doit être plus cher. Triplé »,
+   Guillaume, 2026-10-23) : 180 / 360 / 495 or au lieu de 60 / 120 / 165. */
 export const SKATE_KITS = {
-  classic: { extra: 0,  vmaxK: 1,    accK: 1,    turnK: 1,   carry: 0,   glideK: 1,    brakeK: 1,    blade: 6 },
-  race:    { extra: 60, vmaxK: 1.10, accK: 1.07, turnK: 1.4, carry: 0.5, glideK: 0.82, brakeK: 0.88, blade: 10 },
+  classic: { extra: 0,   vmaxK: 1,    accK: 1,    turnK: 1,   carry: 0,   glideK: 1,    brakeK: 1,    blade: 6 },
+  race:    { extra: 180, vmaxK: 1.10, accK: 1.07, turnK: 1.4, carry: 0.5, glideK: 0.82, brakeK: 0.88, blade: 10 },
 };
-export const SKATE_SUIT = { extra: 45, vmaxK: 1.05, accK: 1.03, glideK: 0.92 };
+export const SKATE_SUIT = { extra: 135, vmaxK: 1.05, accK: 1.03, glideK: 0.92 };
 export const SKATE_TYPES = ["classic", "race"];
 /* Les huit couleurs : la bottine (clair, moyen, ombre) et la combinaison (le même ton). L'indice voyage, pas le nom. */
 export const SKATE_COLORS = [

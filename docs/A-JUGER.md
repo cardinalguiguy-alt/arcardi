@@ -20,10 +20,7 @@ du soleil, la neige et la glace, la faune, Valley Town de septembre à début oc
   12 h de jeu (≈ 10 min) ; fondu court (0,25 s) au changement d'étage ;
 - le catalogue : table, chaises et commode — « avec le même soin que les précédents, si ce n'est un plus haut degré de finition et de luxe » ;
 - la façade du salon : vitrines blanchies pendant les travaux de Froufrou ; le miroir de la cabine : le personnage marche sur place ;
-- la patinoire : le meilleur résident vers 26,5 s (+8 %) ; le matériel de patin TROIS FOIS plus cher ; la fin de location : on finit la
-  glissade sans tomber, PUIS une alerte rouge « rapporte les patins au stand », une pénalité si l'on tarde trop, et une interdiction de
-  relouer de 1 min, 3 min puis 5 min à la récidive ; le chantier fait sortir les patineurs quand la barrière arrive ;
-- le saut : l'ombre rétrécit avec la hauteur ;
+- la patinoire : FAITE le 2026-11-12 (résident à 26,5 s, matériel triplé, fin de location, sortie au chantier, ombre du saut) — à jouer, voir plus bas ;
 - le park (ses notes en jouant) : des faiblesses AU PASSAGE D'UN GROS MODULE À L'AUTRE, et on reste parfois COINCÉ en descendant de sa monture
   sur un module. « La méca, les figures sont super, très agréables et exactement ce que je voulais. »
 - les dettes : la potence de la trottinette en haut de paroi ; `f.injuredUntil | 0` (`resolveStarCandy`, piège « x | 0 sur un horodatage ») ;
@@ -83,6 +80,13 @@ physique (racines, creux, ornière, plombées, tassé des cercles), les madriers
 couronne), les bancs de planches (s'y asseoir), la guirlande en zigzag le jour (discrète) et la nuit (le boulodrome baigne dans une lueur
 chaude), la pluie (les flaques dans les vrais creux) et la neige (au banc `render-boulodrome` seulement). Vu en jeu en automne, de jour, au
 soir, la nuit, sous la pluie ; **pas vu : l'été, le printemps, l'hiver en jeu, l'iPad.**
+
+**À JOUER — LA PATINOIRE DU 2026-11-12** (README de la ferme, journal du jour) : louer au chalet (180 / 360 / 495 or), patiner au-delà des
+quinze minutes : plus de chute, l'alerte rouge en haut au centre et son décompte, « E : rendre les patins » au comptoir ; une minute de
+retard → la pénalité (le prix payé, encore), puis l'interdiction de relouer (1, 3, 5 min). À juger : la place et le ton de l'alerte, la
+minute de tolérance, la course contre le meilleur résident (26,5 s). Et la SORTIE AU CHANTIER : sur la glace au lundi du printemps à 14 h
+(ou menu dev, `__chantier(0.5)` à la console), on est raccompagné par le portillon est jusqu'à l'allée. Et L'OMBRE DU SAUT, qui rétrécit au sommet (le nom suit la tête). **Pas vu** : la pose de l'hôte en
+retard chez l'invitée, la sortie à deux, l'iPad.
 
 **À JOUER** : la séance À DEUX (visite, course, bonhomme, pigeons, scierie, navire, cratère) — Guillaume est seul pour l'instant, **le lui
 RAPPELER** quand un second joueur est là ; la séance iPad, plus tard (Xcode à mettre à jour).

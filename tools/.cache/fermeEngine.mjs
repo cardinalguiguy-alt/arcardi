@@ -1187,6 +1187,16 @@ export function normalizeFarmer(f) {
      2026-10-04) n'existe plus : toute ancienne paire est remise à zéro. */
   if (typeof f.inv.skatesUntil !== "number") f.inv.skatesUntil = 0;
   f.inv.skates = 0;
+  /* 2026-11-12 — ON RAPPORTE LES PATINS AU STAND (voir `resolveReturnSkates`) : `skatesOut` = 1 tant que la paire louée n'est pas
+     rendue (absent sur un sac ancien : la location d'avant finit seule, comme avant) ; `skatesPaid`, ce qu'elle a coûté (la pénalité
+     de retard le reprend) ; `skatesFined` = 1 une fois la pénalité prélevée (une seule par location) ; `skatesBanUntil`, la fin de
+     l'interdiction de relouer (ms, horloge de l'hôte) ; `skatesLateDay` / `skatesLateN`, les retards du jour (heure de Paris). */
+  if (f.inv.skatesOut !== 1) f.inv.skatesOut = 0;
+  if (typeof f.inv.skatesPaid !== "number") f.inv.skatesPaid = 0;
+  if (f.inv.skatesFined !== 1) f.inv.skatesFined = 0;
+  if (typeof f.inv.skatesBanUntil !== "number") f.inv.skatesBanUntil = 0;
+  if (typeof f.inv.skatesLateDay !== "number") f.inv.skatesLateDay = -1;
+  if (typeof f.inv.skatesLateN !== "number") f.inv.skatesLateN = 0;
   /* 2026-10-05 (nuit, fin quater) — le MATÉRIEL choisi au chalet (`patin.js` : la paire, la combinaison, la couleur) :
      le dernier choix, gardé après la location (le panneau le propose de nouveau), diffusé avec le sac pour que les
      autres le VOIENT. Toujours normalisé : un sac ancien ou un paquet tronqué retombe sur le patin ordinaire blanc. */
@@ -1520,20 +1530,75 @@ export function resolveBuyNet(f, money) {
    négatif) : l'ancienne garde `(inv.skatesUntil | 0) > 0` refusait des patins loués pendant la moitié de chaque cycle de 49,7
    jours, et le sac des autres, copié avec le même `| 0`, n'était jamais comparable à `Date.now()` — un invité ne voyait pas les
    patins de l'hôte. On compare des nombres entiers de 64 bits, point. */
-export function skatesActive(inv, now) { return !!inv && +inv.skatesUntil > 0 && inv.skatesUntil > now; }
-export function skatesLeftMs(inv, now) { return skatesActive(inv, now) ? inv.skatesUntil - now : 0; }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-12 — LA FIN DE LOCATION : ON RAPPORTE LES PATINS AU STAND.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Avant : à la fin des quinze minutes, les patins disparaissaient — sur la glace, on tombait (blessure). Verdicts de Guillaume
+   (2026-10-23 : « on finit la glissade sans tomber » + « une alerte en rouge : veuillez rapporter les patins au stand ; si on
+   dépasse trop, on paie une pénalité ; et interdiction temporaire de réemprunter, 1 min / 3 / 5 pour la récidive » ; 2026-11-12 :
+   une minute de délai, la pénalité = le prix payé, encore ; le compteur repart chaque jour à Paris ; les patins seulement) :
+     · louer pose `skatesOut` : la paire est À SOI jusqu'à ce qu'on la RENDE (`resolveReturnSkates`, E au comptoir de n'importe
+       quel chalet) — le temps fini, elle marche toujours (plus de chute), l'alerte rouge le dit ;
+     · `SKATES_GRACE_MS` après la fin, l'hôte prélève la pénalité, une fois (`resolveSkatesLate`, son battement) et compte un retard
+       du jour ; rendre ENSUITE pose l'interdiction de relouer (`SKATES_BAN_MS` : 1, 3 puis 5 min selon les retards du jour) ;
+     · une fois pénalisé, on n'est plus tenu d'aller au comptoir : dès qu'on n'est plus sur la glace, le client demande le retour
+       (`auto`) — c'est ce qui empêche de garder les patins hors de la ville, ou d'une session à l'autre, pour une seule pénalité ;
+     · hors de l'hiver (`closed`), les patins se rendent seuls, sans pénalité ni interdiction : il n'y a plus de comptoir.
+   ⚠️ Un sac d'avant n'a pas `skatesOut` : sa location finit seule à l'heure, comme avant (aucune pénalité tombée du ciel). */
+export function skatesActive(inv, now) { return !!inv && +inv.skatesUntil > 0 && (inv.skatesUntil > now || inv.skatesOut === 1); }
+export function skatesLeftMs(inv, now) { return !!inv && +inv.skatesUntil > now ? inv.skatesUntil - now : 0; }
+/** Le retard (ms) d'une paire pas encore rendue, 0 avant la fin. */
+export function skatesOverdueMs(inv, now) { return inv && inv.skatesOut === 1 && +inv.skatesUntil > 0 && now >= inv.skatesUntil ? now - inv.skatesUntil : 0; }
+/** Ce qui reste de l'interdiction de relouer (ms). */
+export function skatesBanLeftMs(inv, now) { return inv && +inv.skatesBanUntil > now ? inv.skatesBanUntil - now : 0; }
+/** Ce que la location en cours a coûté — la pénalité le reprend. Un sac sans `skatesPaid` retombe sur le prix de son matériel. */
+export function skatesPaidOf(inv) { return inv && inv.skatesPaid > 0 ? inv.skatesPaid : PT.skateKitPrice(inv && inv.skateKit, C.SKATES_RENT_PRICE); }
 export function resolveRentSkates(f, money, season, near, now, kit) {
   normalizeFarmer(f);
   if (skatesActive(f.inv, now)) return { ok: false, reason: "have", moneyDelta: 0 };
   if (season !== "winter") return { ok: false, reason: "closed", moneyDelta: 0 };
   if (!near) return { ok: false, reason: "far", moneyDelta: 0 };
+  const banMs = skatesBanLeftMs(f.inv, now);
+  if (banMs > 0) return { ok: false, reason: "banned", moneyDelta: 0, banMs };
   /* Le matériel demandé (2026-10-05, fin quater) : normalisé ICI, par l'hôte — jamais cru tel quel. Le prix en dépend
      (`PT.skateKitPrice`) ; sans `kit`, c'est le dernier choix du sac, donc un appelant ancien loue comme avant. */
   const k = PT.skateKitNorm(kit || f.inv.skateKit), price = PT.skateKitPrice(k, C.SKATES_RENT_PRICE);
   if ((money | 0) < price) return { ok: false, reason: "noGold", moneyDelta: 0, price };
   f.inv.skatesUntil = now + C.SKATES_RENT_MS;
   f.inv.skateKit = k;
+  f.inv.skatesOut = 1; f.inv.skatesPaid = price; f.inv.skatesFined = 0;
   return { ok: true, moneyDelta: -price, until: f.inv.skatesUntil, price, kit: k };
+}
+/** La pénalité de retard, prélevée par l'hôte une fois, `SKATES_GRACE_MS` après la fin. `day` : le jour de Paris (entier) — le
+    compteur de retards repart à zéro chaque jour. La pénalité ne dépasse jamais la caisse (`money`) : elle ne la rend pas négative. */
+export function resolveSkatesLate(f, money, now, day) {
+  normalizeFarmer(f);
+  const inv = f.inv;
+  if (inv.skatesOut !== 1 || inv.skatesFined === 1) return { ok: false, moneyDelta: 0 };
+  if (skatesOverdueMs(inv, now) < C.SKATES_GRACE_MS) return { ok: false, moneyDelta: 0 };
+  const price = skatesPaidOf(inv), fine = Math.max(0, Math.min(price, Math.floor(+money || 0)));
+  inv.skatesFined = 1;
+  if (inv.skatesLateDay !== day) { inv.skatesLateDay = day; inv.skatesLateN = 0; }
+  inv.skatesLateN += 1;
+  return { ok: true, moneyDelta: -fine, fine, price, n: inv.skatesLateN };
+}
+/** Rendre la paire. `near` : au comptoir d'un chalet (l'hôte le mesure) ; `opt.auto` : le retour demandé tout seul par le client
+    d'un joueur pénalisé qui a quitté la glace ; `opt.closed` : hors de l'hiver, il n'y a plus de comptoir. Rendue après la
+    pénalité, elle pose l'interdiction de relouer (1, 3 puis 5 min selon les retards du jour). */
+export function resolveReturnSkates(f, near, now, opt) {
+  normalizeFarmer(f);
+  const inv = f.inv, auto = !!(opt && opt.auto), closed = !!(opt && opt.closed);
+  if (inv.skatesOut !== 1 || !(+inv.skatesUntil > 0)) return { ok: false, reason: "none" };
+  if (!near && !closed && !(auto && inv.skatesFined === 1)) return { ok: false, reason: "far" };
+  const late = inv.skatesFined === 1 && !closed, early = now < inv.skatesUntil;
+  let banMs = 0;
+  if (late) {
+    const n = Math.max(1, inv.skatesLateN | 0);
+    banMs = C.SKATES_BAN_MS[Math.min(n, C.SKATES_BAN_MS.length) - 1];
+    inv.skatesBanUntil = now + banMs;
+  }
+  inv.skatesOut = 0; inv.skatesUntil = 0; inv.skatesFined = 0;
+  return { ok: true, late, early, banMs };
 }
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-10-11 — LA LOCATION D'UNE MONTURE À LA CABANE DU SKATEPARK. Même contrat que `resolveRentSkates` : l'hôte tient la portée

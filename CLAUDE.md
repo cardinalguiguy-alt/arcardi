@@ -11,21 +11,20 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-11-08 (suite) — LA FÊTE ET LE NAVIRE (G9-G11, M14) ; PUIS G8, M7, M13 — RIEN N'EST COMMITTÉ
+### 2026-11-15 — PAUSE APRÈS LA PATINOIRE ET LE LOT 2 DU TRI. ⚠️ RIEN N'EST COMMITÉ DEPUIS `34175af`
 
-1. **La fête** (G9-G11, `fete.js` pur, `feteArt.js`, `sonFete.js`, autorité en tête de `components/ferme/QUETE.md`) et **le navire
-   magnifique** (M14, nom peint en lettres d'or) : vus en jeu, à un et à deux. **Pas vu** : le son, le geste du tirage au sort, un iPad.
-2. **G8** (halage de la septième sœur) : sa lumière écarte les créatures pendant le halage (`Q.evilHaloStep`, `pub.halo` porté par la
-   position) ; capture = 10 min au lieu de 30 tant qu'elle est à sauver (`Q.starEvilInjuryMs`) ; toast qui recommande la pommade.
-3. **M7** (les deux chutes) : voile du météore borné (il montait à 1,6 → écran noir) ; plan de la ferme en amont de la course
-   (`Q.starFarmCamLead`, 68 % du vol à l'écran) ; interface masquée pendant les plans ; fonte des cratères = boue et paille (`neige.js`).
-   **Pas fait** : les feuillus de la FERME gardent leurs feuilles en hiver (dette du zip 232, chantier graphique à part).
-4. **M13** : chiffré (45 min à 1 h 50 d'attentes imposées), puis **« plus cher »** (Guillaume) : plans 60 000 or + 100 récoltes +
-   20 poissons, navire 450 000 or ; attentes inchangées. Montants groupés à l'affichage (« 60 000 »). **Pas vu en jeu** : le guichet.
-5. ⚠️ `app/audit-*`, `app/api/audit-cap` : **à supprimer avant déploiement**. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.
-   En attente aussi : boulodrome lots 3-4 (`docs/A-JUGER.md`) ; succession d'hôte à deux ; M17 (le rendez-vous chez le maire à plusieurs).
+0. **Comment on travaille maintenant** : par LOTS DE DEUX À QUATRE QUESTIONS (une question à choix, la recommandation en premier), jamais
+   une page de 69 décisions. **La file décidée est en tête de `docs/PROJETS.md` (§0)** : c'est elle qui dit quoi faire, dans l'ordre.
+1. **Arbre de travail** : la patinoire du 2026-11-12 (fin de location `inv.skatesOut`, matériel ×3, résident à 26,5 s, sortie au chantier
+   `CH.EVAC_ROUTE`, ombre du saut), vue en jeu, bancs verts — journal du README de la ferme, quatre entrées du 2026-11-12. `git status`
+   d'abord ; commits et push restent à Guillaume.
+2. **La séance à deux** : sa marche à suivre (7 séquences, sur une ferme d'ESSAI : les forçages du menu dev sont sauvegardés pour tous)
+   est sur https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE. Quand il dit « c'est fait », lire ses verdicts (collection `seance`,
+   `meta/general`) — à défaut d'outil, les lui demander — et en tirer le lot suivant.
+3. **Pas vu, toujours** : la pose de l'hôte en retard chez l'invitée, la sortie au chantier à deux, le son de la fête, l'iPad ; les
+   feuillus de la FERME gardent leurs feuilles en hiver. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.
 
-### ⏭️ ACTION SUIVANTE — GUILLAUME JOUE LA FÊTE, LE NAVIRE ET LE HALAGE (À DEUX SI POSSIBLE)
+### ⏭️ ACTION SUIVANTE — LA FILE DE `docs/PROJETS.md` §0 : (1) GOOGLE CLOUD AVEC GUILLAUME, (2) PAGES DE TEST COUPÉES EN PRODUCTION, (3) SKATEPARK ET DETTES, (4) LES COMMISSIONS (CONCEPTION D'ABORD)
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 

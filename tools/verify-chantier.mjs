@@ -135,5 +135,32 @@ const iso = (ms) => new Date(ms).toISOString().slice(0, 16).replace("T", " ");
   ok(F.every((f) => f.on >= 0 && f.on < 12), "posée dans les douze premières minutes", `dernier à ${Math.max(...F.map((f) => f.on)).toFixed(1)} min`);
   ok(F.every((f) => f.off != null && f.off > CH.PHASE.UNFENCE[0] && f.off < CH.PHASE.VAN_OUT[0] + 1), "retirée à la fin", `${F.filter((f) => f.off == null).length} jamais retirés`);
 }
+// ── 6. LA SORTIE DES PATINEURS (2026-11-12) : par le portillon est, le couloir, la porte est — jamais au travers de la planche ni
+//       de la barrière. Le client y pousse le joueur (`chantierEvacAim`) ; la place close le laisse aller partout (règle d'évasion) :
+//       c'est CE trajet qui fait qu'on ne le voit pas traverser une planche.
+{
+  const Rt = CH.EVAC_ROUTE, F = CH.FENCE, Pk = SP.PARK;
+  const seg = (a, b, f) => { const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 40); for (let k = 0; k <= n; k++) { const t = k / n; if (f(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)) return true; } return false; };
+  ok(C.rinkInside(Rt[0][0], Rt[0][1]), "le premier point est sur la glace, devant le portillon est", Rt[0].join(", "));
+  let band = 0;
+  for (let k = 0; k + 1 < Rt.length; k++) if (seg(Rt[k], Rt[k + 1], (x, y) => C.rinkBandSolid(x, y))) band++;
+  ok(band === 0, "aucune jambe ne traverse la planche de la bande (on passe le portillon)", `${band} jambe(s)`);
+  // de n'importe quel point de la glace jusqu'au premier point : la glace est convexe, la planche n'est jamais touchée
+  let fromIce = 0, tried = 0;
+  for (let y = C.TOWN_RINK.y0 + 0.2; y < C.TOWN_RINK.y1 + 1; y += 0.7) for (let x = C.TOWN_RINK.x0 + 0.2; x < C.TOWN_RINK.x1 + 1; x += 0.7) {
+    if (!C.rinkInside(x, y) || C.rinkSignedDist(x, y) > -0.1) continue;
+    tried++; if (seg([x, y], Rt[0], (u, v) => C.rinkBandSolid(u, v))) fromIce++;
+  }
+  ok(tried > 300 && fromIce === 0, "de partout sur la glace, la première jambe reste sur la glace", `${fromIce} sur ${tried} départs`);
+  let fence = 0;
+  for (let k = 0; k + 1 < Rt.length; k++) {
+    const [a, b] = [Rt[k], Rt[k + 1]];
+    if ((a[0] - F.xE) * (b[0] - F.xE) < 0) { const y = a[1] + (b[1] - a[1]) * (F.xE - a[0]) / (b[0] - a[0]); if (!(y > F.gateE[0] && y < F.gateE[1])) fence++; }
+    if ((a[0] - F.xW) * (b[0] - F.xW) < 0 || (a[1] - F.yN) * (b[1] - F.yN) < 0 || (a[1] - F.yS) * (b[1] - F.yS) < 0) fence++;
+  }
+  ok(fence === 0, "la barrière ne se passe que par la porte de l'est", `${fence} passage(s) hors porte`);
+  const L = Rt[Rt.length - 1];
+  ok(L[0] > F.xE + 1 && !(L[0] >= Pk.x0 && L[0] < Pk.x0 + Pk.w && L[1] >= Pk.y0 && L[1] < Pk.y0 + Pk.h), "on finit dehors, sur l'allée", L.join(", "));
+}
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC` : `\n${nOk}/${nOk} — tout passe`);
 process.exit(fail ? 1 : 0);

@@ -52,10 +52,14 @@ export const COURSE = {
   PRICE: 40,                                       // la privatisation (or de la caisse commune)
   /* Les trois résidents-coureurs : croisière, poussée, la ligne qu'ils prennent (écart au bord de l'îlot), une
      chute possible. Réglés au banc sur le patineur simulé (`verify-course` § 4). */
+  /* ⚠️ 2026-11-12 — LE MEILLEUR RALENTI À ~26,5 s (verdict de Guillaume du 2026-10-23 : « le meilleur vers 26,5 s, +8 % »). À 8,6
+     il bouclait en 24,55 s, à 0,2 % de la ligne idéale du patineur simulé : il fallait une course presque parfaite pour le battre.
+     À 8,0 : 26,6 s en moyenne sur 160 courses (40 graines × 4 couloirs ; 25,4 à 27,7), 26,25 s au banc. Il reste devant le
+     second (même croisière, mais il pousse plus fort et serre la corde : 27,7 s). */
   BOTS: [
     { vmax: 7.4, acc: 4.8, line: 1.9, stumble: true },
     { vmax: 8.0, acc: 5.4, line: 1.6, stumble: false },
-    { vmax: 8.6, acc: 6.0, line: 1.35, stumble: false },
+    { vmax: 8.0, acc: 6.0, line: 1.35, stumble: false },
   ],
 };
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);

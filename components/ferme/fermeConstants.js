@@ -8930,13 +8930,21 @@ export const NET_PRICE = 300;            // l'épuisette, au marché (or de la c
    toujours) à `SKATES_RENT_PRICE` : un tarif de location, pas un équipement — à juger en
    jouant, comme tout nombre neuf. La location s'arrête sans rien demander (`E.skatesActive`) ;
    on est prévenu à `SKATES_WARN_MS` puis à `SKATES_WARN2_MS` de la fin. */
-export const SKATES_RENT_PRICE = 60;
+/* ⚠️ 2026-11-12 — TRIPLÉ (verdict de Guillaume du 2026-10-23 sur « prix 60 / 120 / 165 » : « le prix du matos doit être plus
+   cher. Triplé ») : la base passe de 60 à 180, les suppléments aussi (`SKATE_KITS.race.extra`, `SKATE_SUIT.extra`, patin.js) →
+   180 / 360 / 495 or. Le retard se paie au même prix (`resolveSkatesLate`). */
+export const SKATES_RENT_PRICE = 180;
 /* ⚠️ 2026-10-06 — QUINZE MINUTES (Guillaume : « augmenter le temps de location de patins et combi et tout à 15 minutes ») : la
    location couvre tout le matériel du chalet (les patins, les longues lames, la combinaison). Le chiffre de dix minutes plus haut
    est celui de la première demande ; celui-ci le remplace. */
 export const SKATES_RENT_MS = 15 * 60 * 1000;
 export const SKATES_WARN_MS = 60 * 1000;
 export const SKATES_WARN2_MS = 15 * 1000;
+/* 2026-11-12 — ON RAPPORTE LES PATINS (`resolveReturnSkates`, fermeEngine.js) : une minute de retard tolérée (le chalet est à trois
+   cases de la patinoire : une minute suffit de partout, même depuis le lac), puis la pénalité (le prix payé, encore) ; rendus après
+   elle, une interdiction de relouer de 1, 3 puis 5 min selon les retards du jour (Paris). Réponses de Guillaume du 2026-11-12. */
+export const SKATES_GRACE_MS = 60 * 1000;
+export const SKATES_BAN_MS = [60 * 1000, 3 * 60 * 1000, 5 * 60 * 1000];
 /* 2026-10-11 — LES MONTURES DU SKATEPARK SE LOUENT à la cabane du park, comme les patins au chalet (même durée, même mécanique :
    un bail daté dans le sac, `rideUntil`). Le prix de BASE ici ; l'écart par monture (le BMX coûte plus, la trottinette moins) est
    dans `RIDE_KIT` (monture.js), avec elle. */

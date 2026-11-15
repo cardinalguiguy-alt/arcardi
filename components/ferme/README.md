@@ -1,4 +1,56 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-01
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-12
+
+## 2026-11-12 (fin) — L'OMBRE DU SAUT RÉTRÉCIT, LE NOM SUIT LE PATINEUR
+
+Verdict du 2026-10-23 (« le corps monte, l'ombre reste au sol mais ne rétrécit pas » → « elle rétrécit avec la hauteur : c'est ce qui donne
+la hauteur du saut au premier coup d'œil »). Vu en jeu d'abord (zoom 3, midi, planche au repos puis à 120, 260 et 400 ms du saut) :
+l'ellipse de contact (`drawCharacter`) pâlissait de 80 % et ne perdait que deux pixels de large, par crans — la tache gardait sa largeur
+et s'effaçait. Désormais sa largeur suit la hauteur sans cran (la moitié au sommet, 14 px de saut ; 6 → 3 px à pied, 9 → 5 en monture),
+sa profondeur aussi (−40 %), et elle ne pâlit que de 35 % au plus. **Trouvé en passant** : le NOM restait au sol pendant le saut du
+patineur — au sommet, la tête passait à travers ; il suit maintenant `skAir` pour tous (il le faisait déjà pour les riders). L'ombre du
+soleil n'a pas changé (le corps levé y jette déjà son ombre plus loin). **Vu en jeu** : avant / après sur la même planche (le
+rétrécissement se lit au sommet), le rider du park en l'air sans erreur. **Pas vu** : l'ombre d'un rider sur les pavés (illisible à la
+capture, avant comme après), la nuit, à deux. Aucun banc ne regarde ce dessin.
+
+## 2026-11-12 (suite) — LE CHANTIER FAIT SORTIR LES PATINEURS
+
+Verdict du 2026-10-23 (« au vrai chantier, personne n'est évacué de la glace » → « les patineurs sortent quand la barrière arrive »).
+Au chantier, toute la place devient pleine (`townSeasonWorld`) ; qui s'y trouve n'est plus « debout », et la règle d'évasion de
+`townStepOk` le laissait aller partout — au travers de la bande et de la barrière — sans que rien ne le fasse sortir. Désormais
+`chantierEvacAim` (dans la boucle, à côté de `townStepOk`) le ramène au bord EN MARCHANT (une paire de touches simulée, comme « la reine
+mène » : le pas ordinaire, patin compris, fait le reste ; jamais un téléport), par les seules portes : le trajet `CH.EVAC_ROUTE`
+(chantier.js), DÉRIVÉ de la bande et de la barrière — le portillon est de la bande, le couloir au ras de la barrière, la porte est du
+chantier, l'allée pavée. Un toast une fois ; une touche reprend la main. **Trouvé en jeu** : les cases de la bande (les coins arrondis de
+la glace) se lisaient au point près AVANT la place close — un patineur pris dans un coin restait « debout » et butait au bord du coin ;
+au chantier, `blockedTown` les ferme comme le reste. Et le couloir à mi-chemin (60,6) faisait passer la moitié du corps sous la planche,
+peinte devant lui : il passe au ras de la barrière (60,8). `verify-chantier` 28/28 (§6, cinq contrôles neufs : le premier point sur la
+glace, aucune jambe dans la planche, la première jambe sur la glace depuis 755 départs, la barrière passée par la seule porte de l'est,
+l'arrivée sur l'allée — faussé, il échoue), `verify-collision`, `verify-vallee` 375/375, `verify-pluie` 34/34. **Vu en jeu** (Chrome sans
+tête, chantier lancé par `__chantier`) : depuis le coin nord-ouest et depuis le sud de la glace, sorti en ~5 s jusqu'à l'allée (62,6 ; 93,5),
+le corps entier visible dans le couloir. **Pas vu** : un joueur pris dans les couloirs nord, ouest ou sud de la place (il prend le trajet
+au couloir de l'est, en coupant la bande — rare : ces couloirs font une case), à deux, sans patins.
+
+## 2026-11-12 — LA PATINOIRE : LES PATINS SE RAPPORTENT, LE MATÉRIEL TRIPLÉ, LE MEILLEUR RÉSIDENT BATTABLE
+
+Trois verdicts du 2026-10-23 (passe de clôture), précisés le 2026-11-12 par quatre réponses. **La fin de location** : avant, à la fin des
+quinze minutes, les patins disparaissaient et l'on tombait sur la glace (blessure). Désormais louer pose `inv.skatesOut` : la paire est à soi
+jusqu'à ce qu'on la RENDE (`E.resolveReturnSkates`, E au comptoir de n'importe quel chalet, ou le bouton « Rendre les patins » du panneau,
+aussi avant l'heure). Le temps fini, on patine toujours ; une alerte ROUGE en haut au centre (`.ferme-due-alert`) dit « veuillez rapporter
+les patins au chalet » avec le décompte ; l'invite du comptoir devient « E : rendre les patins ». `SKATES_GRACE_MS` (1 min) après la fin,
+l'hôte prélève la pénalité — le prix payé, encore (`skatesPaid`), jamais au-delà de la caisse — une fois (`E.resolveSkatesLate`, son
+battement d'une seconde, `hostSkatesTick`) et compte un retard du jour de Paris ; rendue ensuite, la paire pose l'interdiction de relouer
+(`SKATES_BAN_MS` : 1, 3 puis 5 min). Pénalisé, on n'est plus tenu d'aller au comptoir : hors de la glace, le client demande seul le retour
+(`auto`) — ce qui empêche de garder la paire hors de la ville ou d'une session à l'autre. Hors de l'hiver, ni pénalité ni alerte : la paire
+se rend seule une fois hors de la glace (le lundi du printemps, la patinoire tient jusqu'au chantier de 14 h). Les autres voient la paire
+pas encore rendue (`rs.skatesOut`, le même prédicat `E.skatesActive`). Un sac d'avant (sans `skatesOut`) finit sa location seul, comme avant.
+**Le matériel** : 180 / 360 / 495 or au lieu de 60 / 120 / 165. **La course** : le meilleur résident à 8,0 de croisière (26,6 s en moyenne
+sur 160 courses, 26,25 s au banc, contre 24,55 à 0,2 % de la ligne idéale). Aucune migration (tout vit dans le JSON du sac).
+Bancs : `verify-vallee` 375/375 (14 contrôles neufs : retour, pénalité, récidive, lendemain, caisse vide, hors de l'hiver, sac ancien),
+`verify-patin` 82/82, `verify-course` 30/30, `verify-duo` 23/23, `verify-surfaceuse` 60/60, `verify-strings`. **Vu en jeu** (Chrome sans tête,
+harnais) : la location à 180, l'alerte et son décompte, le retour dans la minute sans rien payer, le retard pénalisé (180 or) puis rendu seul
+hors de la glace et l'interdiction d'une minute affichée au comptoir, la glisse en retard sur la glace sans chute, la paire gardée sur la glace
+après la pénalité, le printemps qui la rend sans pénalité ; à deux : l'invitée reçoit `skatesOut`. **Pas vu** : la pose de l'hôte en retard
+sur l'écran de l'invitée (la capture du harnais à deux s'est figée), la récidive à 3 et 5 min en jeu (au banc seulement), l'iPad.
 
 ## 2026-11-01 (suite) — LES BOULES : LE LÂCHER SE LIT SUR LA PISTE (LA JAUGE SUR LA TÊTE N'EXISTE PLUS)
 

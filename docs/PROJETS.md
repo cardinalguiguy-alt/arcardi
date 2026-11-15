@@ -7,6 +7,36 @@
 
 ---
 
+## 0. L'ORDRE DES CHANTIERS — LE TRI PAR LOTS (depuis le 2026-11-12)
+
+L'état des lieux complet (69 chantiers, chacun avec ce qu'il change en jeu et une recommandation) est sur la page
+https://claude.ai/artifact/C21vcsoeoEkTKKaSDjFrzq — **trop gros pour Guillaume d'un bloc** (sa phrase : « y a 69 réponses à fournir.
+Procédons petit à petit »). On avance donc par **lots de deux à quatre questions** (une question à choix, la recommandation en premier),
+et l'ordre retenu s'écrit ICI. Un chantier fait sort de la file (son récit va en tête du README de la ferme).
+
+**Lot 1 (2026-11-12)** : la patinoire d'abord — FAITE (fin de location, matériel ×3, résident à 26,5 s, sortie au chantier, ombre du
+saut ; README de la ferme, journal du 2026-11-12). La séance à deux « dans les jours qui viennent » : sa marche à suivre est sur
+https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE (verdicts dans la collection `seance`, notes `meta/general`, fin `meta/fin`).
+
+**Lot 2 (2026-11-15)** — toutes ses réponses sur la recommandation. **LA FILE, DANS L'ORDRE** :
+1. **La dette Google Cloud d'Où's That, au début de la prochaine session, avec Guillaume devant la console** (30 min ; il se connecte
+   lui-même, on ne saisit rien) : facturation dans l'EEE ; une clé dédiée ; restreinte à Maps Embed API seule ; référents limités aux
+   domaines d'Arcardi ; aucune API payante sur ce projet ; rapport de facturation à zéro. Close seulement après lecture des vrais écrans
+   (`docs/A-JUGER.md`, « Gardé en attente »).
+2. **Couper les pages de test EN PRODUCTION** (`app/audit-duo`, `app/audit-riders`, `app/audit-tmp`, `app/api/audit-cap`) : en ligne,
+   « page introuvable » (`process.env.NODE_ENV === "production"` → `notFound()` ; la route d'API répond 404) ; en local elles restent le
+   harnais à deux clients (`docs/VERIFICATION.md` §10). Pas de suppression.
+3. **Skatepark et petites dettes** : les deux défauts relevés en jouant (« des faiblesses au passage d'un gros module à l'autre », « on
+   reste parfois coincé en descendant de sa monture sur un module »), la potence de la trottinette en haut de paroi ; `f.injuredUntil | 0`
+   (`resolveStarCandy`, FermeGame.js — piège « x | 0 sur un horodatage »), l'avertissement `C.G_SOIL` (`docs/VERIFICATION.md`), la constante
+   morte `TOWN_SPEED_MULT`. Reproduire chaque défaut en jeu AVANT de corriger.
+4. **Les commissions** (le premier gros chantier, « une raison de jouer ensemble chaque soir ») : d'abord une séance de conception —
+   qui demande quoi, à quel rythme, contre quelle paie, à deux comment — puis le code sur le patron de `quete.js` (tables, résolveurs purs,
+   état dans un `apply` qui part déjà). Voir `docs/A-JUGER.md` §13 (« les commissions »).
+Ensuite : le lot 3 du tri (boulodrome lot 5, quête M17, réseau R0, chez soi lot 5, l'été, l'automne… : la page des 69).
+
+---
+
 ## 1. Le catalogue de la Maison Garfield : mieux le présenter — FAIT le 2026-10-21, à juger
 
 La cabine d'essayage (miroir, essais combinés, bustes) : récit en tête du README de la ferme, jugement dans `docs/A-JUGER.md`. Reste ouvert : de

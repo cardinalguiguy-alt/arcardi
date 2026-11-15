@@ -55,6 +55,7 @@ copy("fermeEngine");
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
+const PT = await import(pathToFileURL(path.join(tmp, "patin.js")).href);   // 2026-11-12 : les suppléments du matériel, lus et non recopiés
 
 let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
@@ -2264,10 +2265,13 @@ section("Valley Town — le chalet des patins");
   ok("sans or, pas de location", E.resolveRentSkates(f, C.SKATES_RENT_PRICE - 1, "winter", true, NOW).reason === "noGold" && f.inv.skatesUntil === 0);
   const b = E.resolveRentSkates(f, C.SKATES_RENT_PRICE, "winter", true, NOW);
   ok("la location coûte le prix affiché, bien moins que l'ancienne paire (450 or)", b.ok && b.moneyDelta === -C.SKATES_RENT_PRICE && C.SKATES_RENT_PRICE < 450, `${C.SKATES_RENT_PRICE} or`);
-  ok("elle dure quinze minutes RÉELLES, pas une de plus (2026-10-06 : patins, longues lames et combinaison ensemble)", f.inv.skatesUntil === NOW + 15 * 60 * 1000 && C.SKATES_RENT_MS === 900000 && E.skatesActive(f.inv, NOW + 899999) && !E.skatesActive(f.inv, NOW + 900000));
+  ok("elle dure quinze minutes RÉELLES (2026-10-06 : patins, longues lames et combinaison ensemble)", f.inv.skatesUntil === NOW + 15 * 60 * 1000 && C.SKATES_RENT_MS === 900000 && E.skatesLeftMs(f.inv, NOW + 899999) === 1 && E.skatesLeftMs(f.inv, NOW + 900000) === 0);
+  /* 2026-11-12 — ON RAPPORTE LES PATINS : la fin du temps ne les reprend plus (on tombait sur la glace) ; on les garde, en retard,
+     jusqu'à les rendre au comptoir. */
+  ok("à la fin du temps, on GARDE les patins (plus de chute), en retard", f.inv.skatesOut === 1 && E.skatesActive(f.inv, NOW + 900000) && E.skatesActive(f.inv, NOW + 9e6) && E.skatesOverdueMs(f.inv, NOW + 930000) === 30000 && E.skatesOverdueMs(f.inv, NOW + 1000) === 0);
   ok("le temps restant décroît, jamais négatif", E.skatesLeftMs(f.inv, NOW + 1000) === 899000 && E.skatesLeftMs(f.inv, NOW + 9e6) === 0);
-  ok("on ne loue pas deux fois de suite", E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000).reason === "have");
-  ok("la location finie, on peut en reprendre une (elle repart de zéro)", (() => { const r = E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000000); return r.ok && f.inv.skatesUntil === NOW + 1000000 + 900000; })());
+  ok("on ne loue pas deux fois de suite (ni pendant, ni en retard)", E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000).reason === "have" && E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000000).reason === "have");
+  ok("rendue au comptoir, on peut en reprendre une (elle repart de zéro)", (() => { const b = E.resolveReturnSkates(f, true, NOW + 930000); const r = E.resolveRentSkates(f, 1e9, "winter", true, NOW + 1000000); return b.ok && !b.late && b.banMs === 0 && r.ok && f.inv.skatesUntil === NOW + 1000000 + 900000; })());
   ok("une ancienne paire achetée (2026-10-04) est remise à zéro", (() => { const g = { inv: { skates: 1 }, tools: {} }; E.normalizeFarmer(g); return g.inv.skates === 0 && !E.skatesActive(g.inv, NOW); })());
   ok("les avertissements tombent dans la location (60 s puis 15 s avant la fin)", C.SKATES_WARN_MS < C.SKATES_RENT_MS && C.SKATES_WARN2_MS < C.SKATES_WARN_MS);
   /* 2026-10-05 (nuit, fin quater) — LE MATÉRIEL : le prix suit la paire et la combinaison, l'hôte NORMALISE le choix, le dernier
@@ -2275,24 +2279,64 @@ section("Valley Town — le chalet des patins");
   {
     const g = mkS();
     ok("un fermier neuf a le patin ordinaire blanc sans combinaison", g.inv.skateKit && g.inv.skateKit.type === "classic" && g.inv.skateKit.suit === 0 && g.inv.skateKit.color === 0);
-    const lowP = C.SKATES_RENT_PRICE + 59;
+    const lowP = C.SKATES_RENT_PRICE + PT.SKATE_KITS.race.extra - 1;
     ok("des longues lames sans l'or suffisant : refus, rien de loué", E.resolveRentSkates(g, lowP, "winter", true, NOW, { type: "race" }).reason === "noGold" && g.inv.skatesUntil === 0);
     const r1 = E.resolveRentSkates(g, 1e9, "winter", true, NOW, { type: "race", suit: 1, color: 3 });
-    ok("longues lames + combinaison : le prix de base + les deux suppléments", r1.ok && r1.moneyDelta === -(C.SKATES_RENT_PRICE + 60 + 45) && r1.price === C.SKATES_RENT_PRICE + 105, `${r1.price} or`);
+    const both = PT.SKATE_KITS.race.extra + PT.SKATE_SUIT.extra;
+    ok("longues lames + combinaison : le prix de base + les deux suppléments", r1.ok && r1.moneyDelta === -(C.SKATES_RENT_PRICE + both) && r1.price === C.SKATES_RENT_PRICE + both, `${r1.price} or`);
+    ok("le matériel triplé le 2026-11-12 : 180 / 360 / 495 or", C.SKATES_RENT_PRICE === 180 && C.SKATES_RENT_PRICE + PT.SKATE_KITS.race.extra === 360 && C.SKATES_RENT_PRICE + both === 495);
     ok("le choix reste dans le sac (couleur comprise), pour les autres et pour la prochaine location", g.inv.skateKit.type === "race" && g.inv.skateKit.suit === 1 && g.inv.skateKit.color === 3);
     const h = mkS(); const r2 = E.resolveRentSkates(h, 1e9, "winter", true, NOW, { type: "mégapatin", suit: "x", color: 99 });
-    ok("un choix invalide est ramené au patin ordinaire blanc (l'hôte ne croit jamais le client)", r2.ok && h.inv.skateKit.type === "classic" && h.inv.skateKit.color === 0 && r2.price === C.SKATES_RENT_PRICE + 45);
+    ok("un choix invalide est ramené au patin ordinaire blanc (l'hôte ne croit jamais le client)", r2.ok && h.inv.skateKit.type === "classic" && h.inv.skateKit.color === 0 && r2.price === C.SKATES_RENT_PRICE + PT.SKATE_SUIT.extra);
     const k = mkS(); k.inv.skateKit = { type: "race", suit: 0, color: 5 };
     const r3 = E.resolveRentSkates(k, 1e9, "winter", true, NOW);
-    ok("sans matériel demandé, on reprend le dernier choix du sac", r3.ok && r3.price === C.SKATES_RENT_PRICE + 60 && k.inv.skateKit.color === 5);
+    ok("sans matériel demandé, on reprend le dernier choix du sac", r3.ok && r3.price === C.SKATES_RENT_PRICE + PT.SKATE_KITS.race.extra && k.inv.skateKit.color === 5);
     /* ⚠️ L'HORODATAGE EN ms NE SE TRONQUE PAS (`| 0` le rendait négatif une moitié de chaque cycle de 49,7 jours) : on joue la
        location à une VRAIE heure d'horloge, et à une heure dont les 32 bits bas sont négatifs. */
     for (const real of [1791235991701, 1791235991701 + 2.2e9]) {
       const w = mkS(); const rr = E.resolveRentSkates(w, 1e9, "winter", true, real);
-      ok(`une location à l'heure ${real} est active (32 bits ${(real | 0) < 0 ? "négatifs" : "positifs"})`, rr.ok && E.skatesActive(w.inv, real + 1000) && E.skatesLeftMs(w.inv, real + 1000) === C.SKATES_RENT_MS - 1000 && !E.skatesActive(w.inv, real + C.SKATES_RENT_MS));
+      ok(`une location à l'heure ${real} est active (32 bits ${(real | 0) < 0 ? "négatifs" : "positifs"})`, rr.ok && E.skatesActive(w.inv, real + 1000) && E.skatesLeftMs(w.inv, real + 1000) === C.SKATES_RENT_MS - 1000 && E.skatesLeftMs(w.inv, real + C.SKATES_RENT_MS) === 0 && E.skatesOverdueMs(w.inv, real + C.SKATES_RENT_MS + 5000) === 5000);
     }
     const m2 = { inv: { skateKit: { type: "race", suit: 1, color: 7 } }, tools: {} }; E.normalizeFarmer(m2);
     ok("un matériel déjà rangé survit à la normalisation du sac", m2.inv.skateKit.type === "race" && m2.inv.skateKit.suit === 1 && m2.inv.skateKit.color === 7);
+  }
+  /* 2026-11-12 — LE RETOUR AU STAND, LA PÉNALITÉ, L'INTERDICTION (réponses de Guillaume du 2026-11-12 : une minute de délai, la
+     pénalité = le prix payé encore, l'interdiction 1 / 3 / 5 min selon les retards du jour de Paris, les patins seulement). */
+  {
+    const D = 20500, END = NOW + C.SKATES_RENT_MS;
+    const g = mkS();
+    ok("un sac neuf déclare les champs du retour (aucun reste d'une ancienne sauvegarde)", g.inv.skatesOut === 0 && g.inv.skatesPaid === 0 && g.inv.skatesFined === 0 && g.inv.skatesBanUntil === 0 && g.inv.skatesLateDay === -1 && g.inv.skatesLateN === 0);
+    const r0 = E.resolveRentSkates(g, 1e9, "winter", true, NOW, { type: "race" });
+    ok("louer pose la paire « dehors » et retient ce qu'elle a coûté", r0.ok && g.inv.skatesOut === 1 && g.inv.skatesPaid === r0.price && E.skatesPaidOf(g.inv) === r0.price);
+    ok("pas de pénalité pendant la location, ni dans la minute qui suit la fin", !E.resolveSkatesLate(g, 1e9, NOW + 1000, D).ok && !E.resolveSkatesLate(g, 1e9, END + C.SKATES_GRACE_MS - 1, D).ok && g.inv.skatesFined === 0);
+    ok("loin du comptoir, on ne rend rien (ni en retard, ni avant)", E.resolveReturnSkates(g, false, END + 1000).reason === "far" && E.resolveReturnSkates(g, false, END + 1000, { auto: true }).reason === "far" && g.inv.skatesOut === 1);
+    const late = E.resolveSkatesLate(g, 1e9, END + C.SKATES_GRACE_MS, D);
+    ok("une minute après la fin : la pénalité, le prix payé encore, une seule fois", late.ok && late.fine === r0.price && late.moneyDelta === -r0.price && g.inv.skatesFined === 1 && !E.resolveSkatesLate(g, 1e9, END + 9e5, D).ok, `${late.fine} or`);
+    ok("pénalisé et sorti de la glace, le retour automatique est accepté hors du comptoir", (() => { const b = E.resolveReturnSkates(g, false, END + 70000, { auto: true }); return b.ok && b.late && b.banMs === C.SKATES_BAN_MS[0] && !E.skatesActive(g.inv, END + 70000); })());
+    ok("puis une minute sans relouer, et la location reprend ensuite", E.resolveRentSkates(g, 1e9, "winter", true, END + 70000 + 59999).reason === "banned" && E.resolveRentSkates(g, 1e9, "winter", true, END + 70000 + 60000).ok);
+    const bans = [];
+    let t = END + 200000;
+    for (let i = 0; i < 4; i++) {
+      t += C.SKATES_RENT_MS + C.SKATES_GRACE_MS;
+      E.resolveSkatesLate(g, 1e9, t, D);
+      bans.push(E.resolveReturnSkates(g, true, t + 1).banMs);
+      t += 6 * 60000;
+      E.resolveRentSkates(g, 1e9, "winter", true, t);
+    }
+    ok("la récidive du jour : 3 min, puis 5, puis 5 (le premier retard du jour en valait 1)", bans[0] === 180000 && bans[1] === 300000 && bans[2] === 300000 && bans[3] === 300000, bans.map((b) => b / 60000).join(" / ") + " min");
+    const tt = t + C.SKATES_RENT_MS + C.SKATES_GRACE_MS;
+    E.resolveSkatesLate(g, 1e9, tt, D + 1);
+    ok("le lendemain (Paris), le compteur repart : 1 min", E.resolveReturnSkates(g, true, tt + 1).banMs === 60000 && g.inv.skatesLateN === 1);
+    const h = mkS(); E.resolveRentSkates(h, 1e9, "winter", true, NOW);
+    const poor = E.resolveSkatesLate(h, 50, NOW + C.SKATES_RENT_MS + C.SKATES_GRACE_MS, D);
+    ok("la pénalité ne rend jamais la caisse négative", poor.ok && poor.fine === 50 && poor.moneyDelta === -50);
+    const k = mkS(); E.resolveRentSkates(k, 1e9, "winter", true, NOW);
+    ok("rendue avant l'heure : rien à payer, pas d'interdiction", (() => { const b = E.resolveReturnSkates(k, true, NOW + 60000); return b.ok && b.early && !b.late && b.banMs === 0 && k.inv.skatesBanUntil === 0; })());
+    const q = mkS(); E.resolveRentSkates(q, 1e9, "winter", true, NOW); E.resolveSkatesLate(q, 1e9, NOW + C.SKATES_RENT_MS + C.SKATES_GRACE_MS, D);
+    ok("hors de l'hiver, la paire se rend seule, sans interdiction (plus de comptoir)", (() => { const b = E.resolveReturnSkates(q, false, NOW + 2e6, { closed: true }); return b.ok && !b.late && b.banMs === 0 && q.inv.skatesOut === 0; })());
+    ok("rien à rendre : refusé", E.resolveReturnSkates(mkS(), true, NOW).reason === "none");
+    const old = { inv: { skatesUntil: NOW + 1000 }, tools: {} }; E.normalizeFarmer(old);
+    ok("une location d'AVANT (sans `skatesOut`) finit seule à l'heure, sans pénalité tombée du ciel", E.skatesActive(old.inv, NOW) && !E.skatesActive(old.inv, NOW + 1000) && E.skatesOverdueMs(old.inv, NOW + 9e5) === 0 && !E.resolveSkatesLate(old, 1e9, NOW + 9e5, D).ok);
   }
 }
 
