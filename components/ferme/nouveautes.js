@@ -119,4 +119,6 @@ export const NOUVEAUTES = [
     en: { t: "Morning dew", s: "After a clear night the grass is silvered with dew, droplets sparkle in the sun, and walking leaves a darker trail of steps — until the sun dries it all, first in the open, then in the shade. Steps also mark the white frost." } },
   { date: "2026-11-21", fr: { t: "Les parapluies", s: "Quand il pleut, chacun ouvre son parapluie, dans sa couleur, à son seuil : une bruine n'en ouvre que quelques-uns, une averse presque tous — un habitant sur cinq marche tête nue." },
     en: { t: "Umbrellas", s: "When it rains, everyone opens their umbrella, in their own colour, at their own threshold: a drizzle opens only a few, a downpour nearly all — one townsperson in five walks bareheaded." } },
+  { date: "2026-11-21", fr: { t: "Les reflets dans les flaques", s: "En ville, après la pluie, on se reflète dans les flaques : son image retournée sous ses pieds, plus sombre, bleutée, découpée par le bord de l'eau, qui ondule quand il pleut — parapluie compris." },
+    en: { t: "Reflections in puddles", s: "In town, after the rain, you are reflected in the puddles: your upside-down image under your feet, darker and bluish, cut by the water's edge, rippling while it rains — umbrella included." } },
 ];

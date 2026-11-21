@@ -13,16 +13,15 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ### 2026-11-21 — LA NUIT AUTONOME EST LIVRÉE. ⚠️ RIEN N'EST COMMITÉ (arbre au-dessus de `c5d0e72`)
 
-1. **Compte rendu pour Guillaume** (captures avant / après, trois questions) : https://claude.ai/artifact/SugLyrNxiciUHQZDDGFhQC ;
-   le récit au journal du README de la ferme (2026-11-21). **Chaque ajout a son interrupteur** (menu dev, « Ajouts de la nuit du
-   21 novembre », `AJOUTS` dans FermeGame.js, local) : ombres des nuages (`nuages.js`, `nuagesArt.js`), façades mouillées
-   (`tools/build-wet-facades.mjs`, calques `-wet-`), pas de côté sur les plateaux du park (`SPK.dismountSpot`), potence redressée
-   (`MA.STEM_UP`), grues cendrées en migration (`oiseaux.js`, `oiseauxArt.js` ; `verify-oiseaux` 11/11) et leur cri (`sonGrues.js`,
-   interrupteur à part, JAMAIS ÉCOUTÉ : à juger à l'oreille) ; chez soi, fondu de 0,25 s au changement d'étage (`HOME_FADE`) et feu de 12 h ; vitrines du salon
-   blanchies pendant les travaux (`salonWash`) ; on marche sur place dans le miroir de la cabine (`WalkMirror`) ; porte de la
-   cuisine ouverte à droite (`vantauxDroite`) ; personnages « soignés » (frange, bras : `soigneFine`) et vêtements Garfield en deux tons
-   (`flatRamp`) ; buée (`buee.js`) ; rosée et pas dans la rosée et la gelée (`rosee.js`, `surfacePrints`) ; parapluies (`parapluie.js`). « À CODER » d'`A-JUGER` : restent rideaux Blender et catalogue ; cran 3 ÉTUDIÉ (`PROJETS` §0 bis : A ou B). Hors interrupteur : pages de test 404 en production (vérifié sur `next build` + `next start`), `+f.injuredUntil || 0`,
-   `TOWN_SPEED_MULT` retirée. Bancs : `verify-nuages` 27/27, `verify-skatepark` 20/20, `verify-densite`, `verify-vallee` 375/375.
+1. **Compte rendu pour Guillaume** : https://claude.ai/artifact/SugLyrNxiciUHQZDDGFhQC ; le récit au journal du README de la ferme
+   (2026-11-21). **Chaque ajout a son interrupteur** (menu dev, « Ajouts de la nuit du 21 novembre », `AJOUTS` de FermeGame.js, local) :
+   ombres des nuages (`nuages.js`), façades mouillées (calques `-wet-`), pas de côté au park (`SPK.dismountSpot`), potence (`MA.STEM_UP`),
+   grues (`oiseaux.js`) et leur cri (`sonGrues.js`, JAMAIS ÉCOUTÉ) ; chez soi, fondu d'étage (`HOME_FADE`) et feu de 12 h ; salon blanchi
+   (`salonWash`) ; miroir qui marche (`WalkMirror`) ; porte de cuisine à droite (`vantauxDroite`) ; personnages « soignés » (`soigneFine`)
+   et vêtements Garfield en deux tons (`flatRamp`) ; buée (`buee.js`) ; rosée et pas dans la rosée et la gelée (`rosee.js`,
+   `surfacePrints`) ; parapluies (`parapluie.js`) ; reflets dans les flaques (`reflet.js`). « À CODER » d'`A-JUGER` : rideaux Blender et
+   catalogue ; cran 3 ÉTUDIÉ (`PROJETS` §0 bis : A ou B). Hors interrupteur : pages de test 404 en production, `+f.injuredUntil || 0`,
+   `TOWN_SPEED_MULT` retirée. Un banc par ajout (`tools/README.md`), tous verts.
 2. **Tranché au matin** : la PENTE remplace les deux marches galerie → quarter (faite, `GRAMP`, sans interrupteur : géométrie bâtie au
    chargement). **Attendu** : le réglage des nuages, les chênes de la ferme l'hiver (laissés au lot Gemini B). **Pas vu** : à deux, iPad, un monument en pleine pluie.
 3. **Séance à deux** : https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.

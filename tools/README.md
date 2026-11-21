@@ -386,6 +386,9 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 - **`tools/verify-parapluie.mjs` (2026-11-21)** : les parapluies (`components/ferme/parapluie.js`) — qui l'ouvre (seuils, un sur cinq tête
   nue, jamais fermé quand la pluie forcit, huit couleurs), le dôme (symétrique, demi-ellipse, quatre pans, baleines), la place (jamais sur
   le visage, jusqu'à la main, au-dessus de la tête, de profil sans traverser la tête), au pixel d'écran entier. 20/20 ; `FALSIFY=visage|boite`.
+- **`tools/verify-reflet.mjs` (2026-11-21)** : le reflet dans les flaques (`components/ferme/reflet.js`) — la figure (sprite, miroir
+  du profil ouest, dôme du parapluie), le reflet retourné autour des pieds, plus sombre et bleuté, qui s'efface en s'éloignant, rien hors
+  de la flaque, immobile sans pluie et ondulant d'un pixel sous elle, le tamis `anyPuddle`. 12/12 ; `FALSIFY=endroit|debord`.
 - **`tools/render-perso-simple.mjs` (2026-10-30, mis à jour le 2026-10-31)** : le TRAIT SIMPLE contre l'ancien et le détaillé →
   `perso-simple-spectre.png` (neuf colonnes, le détaillé ramené facteur par facteur), `perso-simple-visages.png`, `perso-simple-pnj.png`,
   `perso-simple-ecran-{rue,herbe}[-loupe].png` (au cran 3, sur la capture `maison-cartons-rue.png`, le fin cuit comme `drawCharHD`),

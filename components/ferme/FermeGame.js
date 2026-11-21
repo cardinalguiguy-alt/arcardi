@@ -122,7 +122,8 @@ import * as GRA from "./oiseauxArt"; // 2026-11-21 — leur dessin et leur ombre
 import { cranesSoundUpdate } from "./sonGrues";   // 2026-11-21 — leur cri, synthétisé (même interrupteur)
 import * as HM from "./maison";        // 2026-10-16 — l'intérieur des maisons des joueurs : le plan, la carte « home », la collision, l'escalier (pur)
 import { PERSO_SOIGNE, PERSO_SIMPLE_WALK } from "./persoSimpleArt";   // 2026-11-21 — le trait simple « soigné » (frange de côté, bras détachés), un ajout désactivable
-import * as UM from "./parapluie";   // 2026-11-21 — les parapluies sous la pluie (un ajout désactivable, `AJOUTS.umbrella`)
+import * as UM from "./parapluie";
+import * as RF from "./reflet";   // 2026-11-21 — les personnages se reflètent dans les flaques (pur ; `AJOUTS.puddleRefl`)   // 2026-11-21 — les parapluies sous la pluie (un ajout désactivable, `AJOUTS.umbrella`)
 import * as RS from "./rosee";   // 2026-11-21 — la rosée du matin et les chemins qu'on y laisse (pur ; dessinée par neige.js ; `AJOUTS.dew`)
 import * as BUE from "./buee";   // 2026-11-21 — la buée du souffle par temps froid (un ajout désactivable, `AJOUTS.breath`) — ⚠️ `BU`, ce sont les buis
 import * as HMA from "./maisonArt";    // 2026-10-16 — son dessin : sols et murs au canevas, faces coupées, la liste triée d'un niveau
@@ -978,7 +979,28 @@ const SMALL_FOLK = { on: false };
    (cet écran, retenu par machine comme le cran de zoom ; rien ne part sur le réseau), lu par la boucle de rendu et par le menu dev
    (section « Ajouts de la nuit du 21 novembre »). Éteint, l'ajout ne dessine RIEN et ne touche à rien : le jeu est celui d'avant.
    Un objet de MODULE, pas un ref (même raison que `SMALL_FOLK`). Les clés : voir `AJOUTS_KEYS` et leurs textes (`devAjoutBtn`). */
-const AJOUTS = { clouds: true, stepOff: true, stemUp: true, wetFacades: true, cranes: true, cranesCall: true, homeFade: true, salonWash: true, mirrorWalk: true, doorFlip: true, persoSoigne: true, wardrobeFlat: true, breath: true, dew: true, umbrella: true };
+const AJOUTS = { clouds: true, stepOff: true, stemUp: true, wetFacades: true, cranes: true, cranesCall: true, homeFade: true, salonWash: true, mirrorWalk: true, doorFlip: true, persoSoigne: true, wardrobeFlat: true, breath: true, dew: true, umbrella: true, puddleRefl: true };
+/* 2026-11-21 — le reflet dans les flaques : les pixels d'une feuille de personnage, lus une fois (une feuille ne change jamais), et le
+   petit canevas où l'on compose le reflet (48 × 60 pixels fins, réutilisé par tous). */
+const SHEET_PX = new WeakMap();
+function sheetPixels(sh) {
+  if (!sh) return null;
+  let d = SHEET_PX.get(sh);
+  if (d === undefined) {
+    try { d = sh.__px || sh.getContext("2d").getImageData(0, 0, sh.width, sh.height).data; } catch (e) { d = null; }
+    SHEET_PX.set(sh, d);
+  }
+  return d;
+}
+let REFL_BUF = null;
+function reflBuf() {
+  if (!REFL_BUF) {
+    const c = document.createElement("canvas"); c.width = RF.REFLET.W; c.height = RF.REFLET.H;
+    const g = c.getContext("2d");
+    REFL_BUF = { canvas: c, ctx: g, img: g.createImageData(RF.REFLET.W, RF.REFLET.H), fig: new Uint8ClampedArray(RF.REFLET.W * RF.REFLET.H * 4) };
+  }
+  return REFL_BUF;
+}
 // 2026-11-21 — la force de la buée (`BUE.breathK` de la température du lieu, lue par l'horloge du HUD à 1 Hz) et le vent du moment
 const BREATH = { k: 0, wind: 0, force: null, n: 0 };   // `force` : le harnais impose une force (un nombre), le temps d'un test
 const AJOUTS_KEYS = Object.keys(AJOUTS);
@@ -26103,6 +26125,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!snowF) sfw.evict();
       }
       wetFrameRef.current = wetF ? { layer: wetF, pud: wetP.pud, wet: wetP.wet } : null;
+      if (typeof window !== "undefined") window.__arcardiWetFrame = wetFrameRef.current;   // 2026-11-21 : le harnais y cherche une flaque (le reflet, `reflet.js`)
       /* 2026-11-21 — LES FAÇADES PEINTES SE MOUILLENT AVEC LE SOL (`tools/build-wet-facades.mjs`) : un mur sèche un peu plus vite qu'un
          pavé (il s'égoutte), mais il prend l'eau dès les premières gouttes — d'où ×1,2, borné ; la neige au sol la retire déjà (`wetSnowK`). */
       facadeWetFrame = AJOUTS.wetFacades ? Math.min(1, wetP.wet * 1.2) : 0;
@@ -34454,6 +34477,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           claspF = still < CLASP_AFTER_MS + CLASP_PASS_MS ? 1 : 0;
         }
       }
+      /* 2026-11-21 — DEBOUT OU EN MARCHE, LE CORPS LIBRE (`plainStand`) : ce que supposent le parapluie et le reflet dans les flaques — un
+         dessin qui part du corps debout. ⚠️ UN SEUL PRÉDICAT pour les deux (§4 : une condition recopiée à la main a déjà divergé).
+         Ni dans une POSE (le lancer d'un bouliste au cercle, la fouille, la canne, le halage, l'outil du joueur en main : accroupi pour
+         pointer, Fernand tenait un parapluie flottant six pixels au-dessus de lui — vu en jeu), ni assis, à cheval, au patin, sur une
+         monture du park, en barque, dans l'eau, à la pêche, ni un enfant (sa main n'est pas à cette hauteur) ; jamais dans la passe des
+         ombres du soleil ni dans un reflet de l'eau (`reflecting`). */
+      const carryingTorchUm = isSelf ? torchOnRef.current : !!p.torch;
+      const poseUm = !!(p.dig || p.cast || p.haul || (isSelf && actAnimRef.current > 0) || bouloPoseOf(p, isSelf));
+      const plainStand = !reflecting && !poseUm && !riding && !swimmingHere && !p.sit && !p.sitOn && !p.skate && !p.ride && !p.slip && !inBoat && !p.fishing && !(p.scale && p.scale !== 1);
+      const outZone = (meRef.current && meRef.current.zone) || "farm";
+      const umFace = p.dir === 0 ? "down" : p.dir === 1 ? "up" : p.dir === 2 ? "left" : "right";
+      /* LE PARAPLUIE : sous une pluie franche, chacun à son seuil et dans sa couleur (un hachage de son identifiant : les deux joueurs voient
+         les mêmes) ; pas la torche à la main. Dessiné après le personnage (plus bas) ; décidé ici parce que le reflet le montre aussi. */
+      const umNow = AJOUTS.umbrella && plainStand && !carryingTorchUm && (outZone === "farm" || outZone === "town")
+        ? UM.umbrellaOf(BUE.idSeed(p.id || p.name), PL.groundRain(wxFrame()), isPlayerP) : null;
+      /* 2026-11-21 — LE REFLET DANS LES FLAQUES (`reflet.js`, `AJOUTS.puddleRefl`) : en ville, au-dessus d'une flaque de `pluie.js`, la
+         figure (la case en cours de la feuille fine, son parapluie) retournée sous les pieds, découpée au pixel par la flaque. Posé AVANT
+         le personnage : ce qui est au sud (dessiné après) le recouvre, comme il se doit. Feuilles fines seulement (32 × 48). */
+      if (AJOUTS.puddleRefl && plainStand && hdSheet && outZone === "town") {
+        const wfr = wetFrameRef.current;
+        if (wfr && wfr.layer && wfr.pud > 0.05) {
+          const mask = (wx, wy) => wfr.layer.puddleAt(wx, wy), feetY = py + 16 - lift;
+          if (RF.anyPuddle(mask, px, feetY)) {
+            const hdR = claspSheet || hdSheet, fR = claspSheet ? claspF : frameHD, srcR = sheetPixels(hdR);
+            if (srcR) {
+              const RB = reflBuf();
+              RF.buildFigure(RB.fig, srcR, hdR.width, fR * 32, row * 48, flip, umNow, umFace);
+              if (RF.reflectInto(RB.img.data, RB.fig, mask, px, feetY, PL.groundRain(wxFrame()), performance.now() / 1000)) {
+                RB.ctx.putImageData(RB.img, 0, 0);
+                ctx.drawImage(RB.canvas, px - 4, feetY, 24, 30);
+              }
+            }
+          }
+        }
+      }
       if (inBoat && isPilot && sprites.drawBoatBack) sprites.drawBoatBack(ctx, basePx + 8, py + 14, T, p.dir);
       ctx.save();
       if (invisibleNow) ctx.globalAlpha = 0.35;
@@ -34709,20 +34767,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-11-21 — LE PARAPLUIE (`parapluie.js`, `AJOUTS.umbrella`) : sous une pluie franche, debout ou en marche, à pied, dehors ;
          chacun à son seuil et dans sa couleur (un hachage de son identifiant : les deux joueurs voient les mêmes). Ni assis, ni à cheval,
          ni au patin, ni sur une monture du park, ni à la pêche, ni la torche à la main, ni un enfant (sa main n'est pas à cette hauteur). */
-      const carryingTorchUm = isSelf ? torchOnRef.current : !!p.torch;
+      /* 2026-11-21 — LE PARAPLUIE (`parapluie.js`, `AJOUTS.umbrella`) : décidé plus haut (`umNow`, avec le reflet dans les flaques), dessiné
+         ici, par-dessus le personnage. */
       let umOpen = false;   // le nom monte au-dessus du dôme (voir `queueNameTag`, plus bas)
-      if (AJOUTS.umbrella && !reflecting && !riding && !swimmingHere && !p.sit && !p.sitOn && !p.skate && !p.ride && !p.slip && !inBoat && !p.fishing && !carryingTorchUm && !(p.scale && p.scale !== 1)) {
-        const zu = (meRef.current && meRef.current.zone) || "farm";
-        if (zu === "farm" || zu === "town") {
-          const um = UM.umbrellaOf(BUE.idSeed(p.id || p.name), PL.groundRain(wxFrame()), isPlayerP);
-          if (um) {
-            const face = p.dir === 0 ? "down" : p.dir === 1 ? "up" : p.dir === 2 ? "left" : "right";
-            // la descente du pas (px d'art) : celle de la feuille fine (huit images au demi-pas), ou de l'ancien (un pixel aux images 1 et 3)
-            const wb = !p.moving ? 0 : hdSheet ? (frameHD ? PERSO_SIMPLE_WALK[frameHD - 1].bob : 0) : (frame % 2 ? 1 : 0);
-            UM.drawUmbrella(ctx, { ox: px, oy: py - 8 - lift, face, side: um.side, col: um.col, dark: um.dark, bob: wb });
-            umOpen = true;
-          }
-        }
+      if (umNow) {
+        // la descente du pas (px d'art) : celle de la feuille fine (huit images au demi-pas), ou de l'ancien (un pixel aux images 1 et 3)
+        const wb = !p.moving ? 0 : hdSheet ? (frameHD ? PERSO_SIMPLE_WALK[frameHD - 1].bob : 0) : (frame % 2 ? 1 : 0);
+        UM.drawUmbrella(ctx, { ox: px, oy: py - 8 - lift, face: umFace, side: umNow.side, col: umNow.col, dark: umNow.dark, bob: wb });
+        umOpen = true;
       }
       if (AJOUTS.breath && BREATH.k > 0.01 && !reflecting && !swimmingHere && !p.sit && !p.sitOn && !p.skate && !p.ride && !p.slip && !inBoat) {
         const zb = (meRef.current && meRef.current.zone) || "farm";

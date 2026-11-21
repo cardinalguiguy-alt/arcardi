@@ -87,8 +87,17 @@ en autonomie (« tout doit être removable »). **Chaque ajout a son interrupteu
   30 pixels fins en demi-ellipse à quatre fuseaux (le premier, aux flancs droits, était une boîte), bord UN PIXEL AU-DESSUS de la tête
   (posé dessus, il se lisait comme un chapeau de paille) ; de face, le manche à côté du visage jusqu'à la main ; de profil, seulement
   entre le dôme et les cheveux (descendu à l'épaule, il traversait la tête) ; de dos, le dôme seul. Le NOM monte de 5 px quand il est
-  ouvert (il le cachait). Au pixel d'écran entier. Interrupteur `AJOUTS.umbrella`. Vu en jeu (face, profil en marche) ; les habitants
-  sur planche seulement (aucun dans la ville du jour 1 du harnais). `verify-parapluie` 20/20.
+  ouvert (il le cachait). Au pixel d'écran entier. Interrupteur `AJOUTS.umbrella`. Vu en jeu (face, profil en marche) et sur les
+  boulistes du club : Mireille en violet, Fernand en noir — et SANS parapluie pendant une POSE (accroupi pour pointer, son dôme flottait
+  six pixels au-dessus de lui). `verify-parapluie` 20/20.
+- **LE REFLET DANS LES FLAQUES** (`reflet.js`) : en ville, au-dessus d'une flaque de `pluie.js` (`puddleAt`, le masque au pixel d'art),
+  la « figure » du personnage (la case en cours de la feuille fine, son parapluie posé à la même place qu'à l'écran) retournée autour
+  des pieds, × 0,66 + un bleu de ciel sombre, opacité 0,74 qui baisse de 70 % en s'éloignant des pieds, ondulant d'un pixel fin sous la
+  pluie. Posé AVANT le personnage (ce qui est au sud le recouvre). Le parapluie et le reflet partagent UN prédicat (`plainStand`,
+  « debout ou en marche, le corps libre ») et une décision (`umNow`). Feuilles fines seulement. Interrupteur `AJOUTS.puddleRefl`. Vu
+  en jeu sur la grande flaque de la place, à 17 h et au crépuscule (premier réglage 0,62 / 0,58 : perdu dans l'eau sombre de l'orage).
+  ⚠️ Pour avoir des flaques au harnais : commander l'orage, ATTENDRE sa montée (une à deux minutes RÉELLES), puis avancer l'heure — l'heure
+  avancée avant la montée n'accumule rien. `verify-reflet` 12/12.
 Bancs : `verify-nuages` 27/27 (neuf, falsifié deux fois ; il tient aussi les calques mouillés), `verify-skatepark` 20/20 (4 contrôles neufs, falsifié), `render-skatepark`
 23/23, `verify-monture` 50/50, `verify-quete` 977/977, `verify-maison` 225/225, `verify-vallee` 375/375, `verify-densite`, `verify-docs` ; `next build` compilé, les
 pages de test 404 en production (vérifié). **Supabase : rien.**
