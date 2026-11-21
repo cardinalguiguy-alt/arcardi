@@ -196,5 +196,71 @@ ok(W.climb.length === 0, "à pied, jamais une marche plus haute que le pas", W.c
   }
 }
 
+/* ── 2026-11-21 — DESCENDRE SUR UN PLATEAU : LE PAS DE CÔTÉ (`SP.dismountSpot`, `parkStepOffAim` dans FermeGame.js). Guillaume, en
+   jouant : « on reste parfois coincé en descendant de sa monture sur un module ». MESURÉ avant : depuis aucun point où l'on peut
+   descendre on ne reste bloqué à pied — mais sur les PLATEAUX, la descente était refusée sur 54 à 74 % de la surface plate où une
+   planche peut s'arrêter (le coping : la semelle déborde sur la courbe). Ici, depuis CHAQUE point plat et en hauteur où une planche
+   tient à l'arrêt et où la semelle ne tient pas : un point sûr existe, assez près pour un ou deux pas ; et le piéton qui y marche
+   (la vraie règle du pas, axe par axe, à la vitesse de la marche, comme `parkStepOffAim`) y ARRIVE, sans tube dans le corps, sans
+   gravir de marche, sans descendre la courbe. FALSIFY=pasdecote : `dismountSpot` ne rend plus rien — le premier contrôle rougit. */
+{
+  const DS = process.env.FALSIFY === "pasdecote" ? () => null : SP.dismountSpot;
+  let refused = 0, rescued = 0, far = 0, arrived = 0, maxT = 0, noneNear = 0;
+  const bad = { none: [], late: [], through: [], climb: [], fall: [] };
+  for (const pr of SP.PARK_PRIMS) {
+    const b = pr.bb;
+    for (let u = b[0]; u <= b[2] + 1e-9; u += 0.1) for (let v = b[1]; v <= b[3] + 1e-9; v += 0.1) {
+      const fx = P.x0 + u, fy = P.y0 + v, h = SP.heightAt(fx, fy), sf = SP.parkSurf(fx, fy, {});
+      if (!(h > 0.05) || !sf || Math.hypot(sf.gu, sf.gv) > 0.05) continue;
+      const ax = fx - C.footX(0), ay = fy - C.footY(0);
+      if (SP.walkStandOk(ax, ay)) continue;
+      let can = false;
+      for (let k = 0; k < 8 && !can; k++) can = SP.rideClear(fx, fy, h, k * Math.PI / 4, MO.RIDE_HALF.skate, true, null, MO.RIDE_TALL.skate).c >= 0 && SP.sideWallDepth(fx, fy, h, SP.RIDE_TORSO_R) === 0;
+      if (!can) continue;
+      refused++;
+      const tag = `(${u.toFixed(1)}, ${v.toFixed(1)}) ${pr.kind || ""}`;
+      const sp = DS(ax, ay);
+      if (!sp) { first(bad.none, tag); noneNear = Math.max(noneNear, SP.fenceNear(fx, fy, null).d); continue; }
+      rescued++; far = Math.max(far, Math.hypot(sp.x - ax, sp.y - ay));
+      const m = { x: ax, y: ay };
+      let t = 0, hPrev = h, done = false;
+      const thr0 = (() => { const q = C.bodyPoints(m.x, m.y); return through(q[0][0] - P.x0 + 0.06, q[0][1] - P.y0 + 0.03, q[3][0] - P.x0 - 0.06, q[3][1] - P.y0 - 0.03); })();
+      for (; t < 1.2; t += DT) {
+        const ddx = sp.x - m.x, ddy = sp.y - m.y, dd = Math.hypot(ddx, ddy);
+        if (dd < 0.01 || SP.walkStandOk(m.x, m.y)) { done = true; break; }   // comme `parkStepOffAim` : fini dès que la semelle tient
+        const sx = ddx / dd * 5.2 * DT, sy = ddy / dd * 5.2 * DT;
+        if (stepOk(m, m.x + sx, m.y)) m.x += sx;
+        if (stepOk(m, m.x, m.y + sy)) m.y += sy;
+        const hf = SP.heightAt(C.footX(m.x), C.footY(m.y));
+        if (hf - hPrev > SP.WALK.STEP + 0.02) first(bad.climb, tag);
+        if (h - hf > 0.15) first(bad.fall, tag + ` −${(h - hf).toFixed(2)}`);
+        hPrev = hf;
+        const pts = C.bodyPoints(m.x, m.y);
+        // un tube DANS le corps qui n'y était pas au départ (arrêté contre une rambarde, la planche y collait déjà le corps)
+        if (!thr0 && through(pts[0][0] - P.x0 + 0.06, pts[0][1] - P.y0 + 0.03, pts[3][0] - P.x0 - 0.06, pts[3][1] - P.y0 - 0.03)) first(bad.through, tag);
+      }
+      if (done && SP.walkStandOk(m.x, m.y)) { arrived++; maxT = Math.max(maxT, t); } else first(bad.late, tag + ` à ${Math.hypot(sp.x - m.x, sp.y - m.y).toFixed(2)} case`);
+    }
+  }
+  const cnt = (a) => a.filter(Boolean).length + (a.length > 3 ? a.length - 3 : 0);
+  // la règle du pas du module (`parkWalkStep`, que `dismountSpot` rejoue) est celle que ce banc reconstruit depuis le 2026-10-13
+  let same = 0, diff = 0;
+  for (let k = 0; k < 4000; k++) {
+    const a = { x: P.x0 - 1 + rnd() * (P.w + 2), y: P.y0 - 3 + rnd() * (P.h + 4) }, an = rnd() * 6.28, d = 0.03 + rnd() * 0.1;
+    if (stepOk(a, a.x + Math.cos(an) * d, a.y + Math.sin(an) * d) === SP.parkWalkStep(a, a.x + Math.cos(an) * d, a.y + Math.sin(an) * d)) same++; else diff++;
+  }
+  ok(diff === 0, "la règle du pas que rejoue le pas de côté (`parkWalkStep`) est celle de la marche (4 000 pas tirés au hasard)", `${same} identiques, ${diff} différents`);
+  /* ⚠️ PAS 100 % : arrêté la planche CONTRE la rambarde du fond d'un plateau, la semelle du piéton déborde au-dessus du vide et la règle
+     du pas refuse tout pas (y compris celui qui rentrerait sur le plateau) — on y refuse comme avant (« à l'écart des barrières »), et
+     le banc vérifie que c'est bien le seul cas : tout point sans pas de côté est à moins de 0,3 case d'un tube. */
+  ok(refused > 400 && rescued >= 0.7 * refused, "sur un plateau, là où la semelle ne tient pas, un point sûr où faire un pas de côté (≥ 70 %)",
+    `${rescued}/${refused} points (${(100 * rescued / refused).toFixed(0)} %) ; le plus loin à ${far.toFixed(2)} case`);
+  ok(noneNear < 0.3, "  et le reste (où l'on refuse comme avant) est contre une rambarde (< 0,3 case d'un tube)", `le plus loin d'un tube : ${noneNear.toFixed(2)} case — ${show(bad.none)}`);
+  ok(far <= 0.45, "le pas de côté reste un pas (≤ 0,45 case)", `${far.toFixed(2)} case`);
+  ok(arrived === rescued, "le piéton y arrive en marchant, debout (≤ 1,2 s)", `${arrived}/${rescued}, au plus ${(maxT * 1000).toFixed(0)} ms` + (bad.late.length ? ` ; ${show(bad.late)}` : ""));
+  ok(!bad.through.length && !bad.climb.length && !bad.fall.length, "  sans tube dans le corps, sans gravir de marche, sans descendre la courbe",
+    [bad.through.length && `tube ${cnt(bad.through)} : ${show(bad.through)}`, bad.climb.length && `marche ${show(bad.climb)}`, bad.fall.length && `chute ${show(bad.fall)}`].filter(Boolean).join(" ; ") || "0");
+}
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${nOk}/${nOk + fail} contrôles\n`);
 process.exit(fail === 0 ? 0 : 1);

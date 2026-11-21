@@ -1,4 +1,97 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-12
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-11-21
+
+## 2026-11-21 (nuit) — LES OMBRES DES NUAGES ; LE PAS DE CÔTÉ ET LA POTENCE DU PARK ; LES PAGES DE TEST HORS PRODUCTION
+
+Guillaume : « rendre les maisons moins gemini like, et plus intégrées au reste du paysage, sans forcément y toucher », puis une nuit
+en autonomie (« tout doit être removable »). **Chaque ajout a son interrupteur** : menu dev, « Ajouts de la nuit du 21 novembre »
+(`AJOUTS`, FermeGame.js — local, retenu par machine ; éteint, l'ajout ne dessine rien).
+- **Les maisons — ce qui a été MESURÉ avant de choisir.** Les ombres des peintures sont pourpres (10 % les plus sombres : ~[40, 25, 34])
+  et leurs noirs plus profonds que ceux du décor (2e centile de luminance 0,05-0,11 contre 0,13-0,24) ; le décor tire vers le vert-gris.
+  Trois traitements essayés en jeu (crans 2 et 3, images interceptées dans le harnais, rien d'écrit) : l'étalonnage (ombres ramenées au
+  vert-gris, noirs relevés), la palette réduite à 48 couleurs, la grille de l'art (le cran 1 agrandi au plus proche). **Aucun ne change
+  grand-chose à l'œil** : ce qui colle une image sur un fond, c'est qu'elle ne reçoit pas la même lumière. D'où :
+- **LES OMBRES DES NUAGES** (`nuages.js` pur, `nuagesArt.js`) : des cumulus de beau temps certains après-midi (plus souvent l'été), des
+  nuages fragmentés quand le ciel se charge ; leur ombre a la force de celle d'un mur au même instant (nulle la nuit, sous la pluie) et
+  passe sur TOUT ce qui est dehors, maisons peintes comprises ; sous un nuage, l'ombre portée du soleil s'efface (une ombre, pas une
+  somme). Le champ : des grappes de bulles étirées d'ouest en est, périodique sur 128 cases (⚠️ premier jet, un bruit fractal seuillé :
+  un RÉSEAU de filaments, pas des nuages — `verify-nuages` le refuse). Dérive vers l'est comme la fumée, plus vite au vent. Coût mesuré :
+  3,7 → 3,8 ms par image (ville, cran 1). **Vu en jeu** : ville (cran 1, 2) et ferme (cran 2), 14 h 30, avec et sans.
+- **LES FAÇADES MOUILLÉES** (le matin, même demande) : sous la pluie la rue fonçait, les maisons peintes et leur trottoir restaient secs.
+  Un calque par bâtiment peint et par cran (`tools/build-wet-facades.mjs`, 115 PNG, 2,3 Mo, chargés à la première goutte), dosé par le
+  mouillé du sol (`facadeWetFrame` = `wetP.wet` × 1,2) : toit et mur foncent, bande sèche sous l'égout, pied éclaboussé, trottoir peint
+  comme un pavé mouillé, coulures sous les appuis et l'égout ; posé avant la lueur des vitres. Rien n'est recopié : le toit se lit dans le
+  calque de neige épaisse, les vitres dans celui de nuit, le pied dans le modèle. **Vu en jeu** : rue des maisons sous averse (crans 2 et 3,
+  midi et 21 h 30), l'hôtel de ville en fin d'averse (sans défaut, effet faible). **Pas vu** : un monument en pleine pluie.
+- **LE PAS DE CÔTÉ** (« on reste parfois coincé en descendant de sa monture sur un module ») : sondé, aucun point d'où l'on reste bloqué
+  à pied ; mais sur les plateaux la descente était REFUSÉE sur 54 à 74 % du plat où une planche s'arrête (contre le coping, la semelle
+  déborde sur la courbe). Désormais on descend et l'on marche un ou deux pas jusqu'au bois sûr (`SPK.dismountSpot`, qui rejoue la vraie
+  règle du pas, `parkWalkStep`, à 60 et 30 images/s ; `parkStepOffAim` dans la boucle). ⚠️ Premier jet (un point sûr et un trajet droit) :
+  le banc a rejoué la marche — 1 105 descentes sur 1 844 n'arrivaient pas (corps au-dessus du vide contre la rambarde : tout pas refusé ;
+  le pas de 8 cm passait le point et butait). Reste refusé : contre la rambarde du fond (26 %). **Vu en jeu** : quarter nord-est.
+- **LA POTENCE DE LA TROTTINETTE** (dette du 2026-10-13) : en haut d'une paroi, elle suivait la normale du plateau et pendait sous les
+  pieds ; pour le tube, le guidon et les mains, l'axe se redresse avec la paroi, ancré à la hauteur des pieds (`MA.STEM_UP`). Vu en jeu, cran 4.
+- **LES GRUES CENDRÉES** (la journée libre : « vole comme un oiseau ») — `oiseaux.js` pur, `oiseauxArt.js`, interrupteur `AJOUTS.cranes` : aux
+  migrations seulement (l'automne avancé vers le sud-ouest ; la fin de l'hiver et le début du printemps vers le nord-est), de jour, jamais
+  sous la pluie, la neige ou l'orage, un V de 7 à 15 grues traverse la carte à 4,2 cases/s — environ quatre vols par heure réelle au plus
+  fort, tirés du créneau de six minutes (deux joueurs voient le même vol, rien ne circule). Battements lents, planés collectifs, cou tendu
+  devant, pattes derrière, rémiges noires ; leur ombre au sol au soleil, jamais sous un nuage (`NA.cloudAt`) — ⚠️ premier jet invisible (un
+  pixel à 12 %, vu en jeu), épaissie (deux pixels, ≤ 32 %) : revue en jeu (cran 2, midi d'automne), de petites silhouettes sur l'herbe. ⚠️ Premier jet : un cerne
+  sombre — en croix noires au cran 4 ; éclairci. **Vu en jeu** (crans 2, 3, 4, vol forcé : `window.__arcardiCranes.GRUES.ODDS = 1`).
+  **Leur cri** (`sonGrues.js`, interrupteur À PART : `AJOUTS.cranesCall`) : un « krrou » roulé synthétisé (dent de scie 520-700 Hz, modulée
+  à ~28 Hz, hauteur qui monte puis retombe, parfois redoublé), le vol le plus proche, à gauche ou à droite ; ⚠️ **jamais écouté** (Chrome sans
+  tête : pas de contexte audio) — à juger à l'oreille, coupable d'un clic. Banc `verify-oiseaux` 11/11 (falsifié).
+- **CHEZ SOI, DEUX POINTS DE LA LISTE « À CODER » DU 2026-10-23** : le FEU brûle 12 h de jeu (≈ 9 min 36 s ; `HOME_FEU_MIN` 240 → 720 ;
+  ⚠️ `verify-maison` écrivait 240 en dur — il lit désormais la constante) ; le FONDU au changement d'étage (`HOME_FADE`, 0,25 s, le niveau
+  d'arrivée sort du sombre ; interrupteur `AJOUTS.homeFade`). Vu en jeu (montée de l'escalier : noir à la coupe, net 0,4 s après).
+- **LE SALON EN TRAVAUX** (même liste « À CODER ») : pendant les deux jours de travaux de Froufrou (`salonStageNow`), ses deux vitrines et
+  sa porte vitrée passent au BLANC D'ESPAGNE (peint au pixel d'écran sur l'image de jour, `whitewashCanvas` : crayeux, un peu transparent
+  aux bords, des volutes de chiffon ; cuit par taille de vitre) ; elles ne s'allument plus et ne posent plus de nappe sur le pavé.
+  ⚠️ Premier jet, avec les petits bois reposés comme sous un rideau : ils ramassaient le doré des miroirs et des fauteuils — la boutique
+  transparaissait ; retirés. Interrupteur `AJOUTS.salonWash`. Vu en jeu (cran 3, 11 h et 20 h 30, Froufrou posé à la main).
+- **LE MIROIR DE LA CABINE** (même liste) : le personnage y MARCHE SUR PLACE (`WalkMirror`, composant de MODULE — jamais déclaré dans le
+  rendu, §4 — qui repeint son canevas à chaque changement d'image : la foulée du jeu, 9 pas de `animT` par seconde, 4 images ou 8 sur la
+  feuille fine). Interrupteur `AJOUTS.mirrorWalk` (éteint : l'image 0, comme avant). Vu en jeu (Carla posée à la main, jour de boutique).
+- **LA PORTE DE LA CUISINE S'OUVRE À DROITE** (même liste ; verdict « inverser » lu sur la page du 2026-10-23) : vue de l'entrée, son vantail
+  entrouvert était peint contre le jambage gauche, là où sont l'applique, le crochet à clés et l'interrupteur. Le plan nomme les portes à
+  charnière droite (`vantauxDroite`), `paintWallDoor` peint alors le vantail en miroir ; rien d'autre ne bouge (ni le plan, ni les
+  positions). Interrupteur `AJOUTS.doorFlip` (pris en rentrant chez soi : les murs sont cuits). Vu en jeu.
+- **Hors interrupteur** : les pages de test (`audit-tmp`, `audit-duo`, `audit-riders`) répondent « page introuvable » en production (un
+  `layout.js` serveur chacune), `api/audit-cap` un 404 ; `+f.injuredUntil || 0` au lieu de `| 0` (la sortie de piste d'un blessé) ;
+  `TOWN_SPEED_MULT` retirée (`verify-quete` mesurait les trajets 45 % trop vite).
+- **LA PENTE DE LA GALERIE** (« les faiblesses au passage d'un gros module à l'autre » ; tranché par Guillaume au matin : « oui, la pente ») :
+  les deux marches de 11 cm entre la galerie et le plateau du quarter arrêtaient les quatre montures (sonde à la vraie physique). À leur
+  place, une pente de bois de 34 cm sur 1,2 case (`GRAMP`, `addWedge` gagne une `base`), sommet arrondi ; la lisse du nord la suit.
+  Sondé : avec deux cases d'élan, les quatre montures montent jusqu'au bout du plateau, sans décoller au sommet ; vu en jeu, à pied de la
+  galerie au plateau en 1,2 s. ⚠️ Pas d'interrupteur (la géométrie du park est bâtie au chargement) : pour revenir aux marches, le bloc
+  `GRAMP` de `skatepark.js` et les deux `addBox("gallery", …, "step")` d'avant (git).
+  **Pas fait** : les chênes de la ferme gardent leurs feuilles l'hiver (au lot Gemini B : le seul arbre nu dispo a été jugé faible).
+- **LES PERSONNAGES « SOIGNÉS »** (l'après-midi : « améliorer le look des personnages, sans le rendre trop détaillé ; c'est toujours
+  simple ») : un niveau 4 du trait simple (`soigneFine`, persoSimpleArt.js) — la FRANGE DE CÔTÉ (le front n'est plus tiré à la règle ;
+  les garçons changent de côté d'une tenue à l'autre, `persoSweep` ; un couvre-chef ne bouge pas, le front garde une rangée nue au-dessus
+  des yeux) et les BRAS DÉTACHÉS DU BUSTE (un trait à −30 quand manche et buste ont le même ton). Interrupteur `AJOUTS.persoSoigne`
+  (→ `PERSO_SOIGNE.on`, deux clés de cache `s:` / `s4:`), vu en jeu au cran 3 et basculé en direct. `verify-perso-simple` 15/15.
+- **LES VÊTEMENTS DE GARFIELD AU TRAIT SIMPLE** (le « pas fait » du §12 de `docs/PROJETS.md` : leur drapé à quatre tons jurait) : au trait
+  simple, `flatRamp` (garderobeArt.js) ramène lumière et éclat à la base, creux et ombre à la base −30 ; plis d'un trait, or, blanc et
+  doublures intacts, la couronne aussi. Interrupteur `AJOUTS.wardrobeFlat` (→ `PERSO_SOIGNE.plat`, clé de cache `persoSimpleKey`).
+- **LA BUÉE** (`buee.js`) : sous 7 °C (pleine à −1), chacun souffle un nuage blanc toutes les ~3,4 s (2,2 en marche), chacun à sa phase ;
+  de face il part de côté et monte (posé sur le vêtement, il se lisait comme une tache — vu en jeu), de dos il sort de derrière la tête,
+  de profil devant la bouche ; au PIXEL D'ÉCRAN ENTIER (des demi-pixels d'art à 1,5 px d'écran étaient flous). Jamais dans la passe des
+  ombres du soleil (`reflecting`). Température lue à 1 Hz par l'horloge du HUD. Interrupteur `AJOUTS.breath`. `verify-buee` 22/22.
+- **LA ROSÉE DU MATIN** (`rosee.js`, dessinée par `neige.js`) : après une nuit claire, voile argenté sur toute l'herbe (plus franc sur
+  les brins hauts), gouttes au soleil, séchée d'abord au soleil puis à l'ombre (vers 9 h – 10 h 30) ; les MARCHEURS DE LA NEIGE y posent
+  leurs pas (`surfacePrints` : sans neige, une rosée OU UNE GELÉE prend le pas) — le chemin reparaît en vert franc. La carte des pas
+  s'efface quand le sol n'a plus rien à marquer. Interrupteur `AJOUTS.dew` (la couche ne se bâtit pas pour elle, éteinte). Vu en jeu
+  sur la ferme à 6 h 45 et 7 h 45 (premier jet invisible : seuls 8 % des brins voilés) ; la ville seulement au banc. `verify-rosee` 18/18.
+- **LES PARAPLUIES** (`parapluie.js`) : sous la pluie (`PL.groundRain`), chacun ouvre le sien à SON seuil (0,10 à 0,42 ; un joueur dès
+  0,12 ; un habitant sur cinq n'en a pas), dans SA couleur (huit), de SA main — un hachage de l'identifiant, rien ne circule. Dôme de
+  30 pixels fins en demi-ellipse à quatre fuseaux (le premier, aux flancs droits, était une boîte), bord UN PIXEL AU-DESSUS de la tête
+  (posé dessus, il se lisait comme un chapeau de paille) ; de face, le manche à côté du visage jusqu'à la main ; de profil, seulement
+  entre le dôme et les cheveux (descendu à l'épaule, il traversait la tête) ; de dos, le dôme seul. Le NOM monte de 5 px quand il est
+  ouvert (il le cachait). Au pixel d'écran entier. Interrupteur `AJOUTS.umbrella`. Vu en jeu (face, profil en marche) ; les habitants
+  sur planche seulement (aucun dans la ville du jour 1 du harnais). `verify-parapluie` 20/20.
+Bancs : `verify-nuages` 27/27 (neuf, falsifié deux fois ; il tient aussi les calques mouillés), `verify-skatepark` 20/20 (4 contrôles neufs, falsifié), `render-skatepark`
+23/23, `verify-monture` 50/50, `verify-quete` 977/977, `verify-maison` 225/225, `verify-vallee` 375/375, `verify-densite`, `verify-docs` ; `next build` compilé, les
+pages de test 404 en production (vérifié). **Supabase : rien.**
 
 ## 2026-11-12 (fin) — L'OMBRE DU SAUT RÉTRÉCIT, LE NOM SUIT LE PATINEUR
 

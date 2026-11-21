@@ -400,7 +400,13 @@ export function paintSlopeFace(ctx, x0, yFoot, w, kneePx, hPx, lx = 0) {
    d'à côté (on devine le noir de la pièce éteinte). 0,90 × 2,10 m.
    2026-10-17 (64 px) : le chambranle mouluré, le vantail à deux panneaux, la
    poignée en laiton sur sa platine, le jour du palier qui lèche le seuil. */
-export function paintWallDoor(ctx, x0, yFoot, ouverte = true, w = pxOfM(0.90)) {
+/* 2026-11-21 — LE VANTAIL OUVERT DE L'AUTRE CÔTÉ (verdict de Guillaume, passe du 2026-10-23 : « ouvrir la porte de l'autre côté », pour la
+   porte de la cuisine vue de l'entrée — le crochet, l'interrupteur et l'applique sont peints contre son jambage gauche, et le vantail
+   entrouvert à gauche les recouvrait). `droite` : la charnière à droite, le vantail peint dans la part droite de l'ouverture, la poignée
+   de son côté gauche. Les portes à charnière droite se nomment dans le plan (`vantauxDroite` d'un niveau : l'abscisse de leur bord
+   gauche). Interrupteur : `VANTAIL.inverse` (`AJOUTS.doorFlip`, FermeGame.js ; pris à la prochaine cuisson des murs — en rentrant). */
+export const VANTAIL = { inverse: true };
+export function paintWallDoor(ctx, x0, yFoot, ouverte = true, w = pxOfM(0.90), droite = false) {
   const hh = pxOfM(2.10);
   const top = yFoot - hh;
   rect(ctx, x0 - 4, top - 4, w + 8, hh + 4, "#f1e9d6");          // chambranle
@@ -411,7 +417,17 @@ export function paintWallDoor(ctx, x0, yFoot, ouverte = true, w = pxOfM(0.90)) {
   rect(ctx, x0 + w + 1, top - 2, 1, hh + 2, "#d8cdb4");
   rect(ctx, x0, top, w, hh, "#1a1512");                          // la pièce voisine, éteinte
   ctx.globalAlpha = 0.35; rect(ctx, x0, yFoot - 6, w, 5, "#3a2e24"); ctx.globalAlpha = 1;
-  if (ouverte) {
+  if (ouverte && droite) {
+    // le même vantail, en miroir : contre le jambage droit, la poignée à gauche
+    ctx.save(); ctx.translate(2 * x0 + w, 0); ctx.scale(-1, 1);
+    paintWallDoorLeaf(ctx, x0, top, hh, w, yFoot);
+    ctx.restore();
+  } else if (ouverte) paintWallDoorLeaf(ctx, x0, top, hh, w, yFoot);
+  rect(ctx, x0 - 4, yFoot - 2, w + 8, 2, "#8a7a5e");             // le seuil
+  rect(ctx, x0 - 4, yFoot - 2, w + 8, 1, "#a89878");
+}
+function paintWallDoorLeaf(ctx, x0, top, hh, w, yFoot) {
+  {
     const vw = Math.round(w * 0.38);
     rect(ctx, x0, top, vw, hh, "#d8cdb4");                        // le vantail, vu de biais
     rect(ctx, x0, top, 1, hh, "#e8dfca");
@@ -429,8 +445,6 @@ export function paintWallDoor(ctx, x0, yFoot, ouverte = true, w = pxOfM(0.90)) {
     rect(ctx, x0 + vw - 9, yp, 4, 2, "#d9b553");                   // la poignée
     rect(ctx, x0 + vw - 9, yp, 4, 1, "#f0d488");
   }
-  rect(ctx, x0 - 4, yFoot - 2, w + 8, 2, "#8a7a5e");             // le seuil
-  rect(ctx, x0 - 4, yFoot - 2, w + 8, 1, "#a89878");
 }
 
 /* L'ARASE D'UN MUR COUPÉ, vue de dessus : la tranche sombre du mur (brique et
@@ -814,7 +828,8 @@ export function bakeHomeFace(mk, plan, L, f) {
   else paintWallFace(g, 0, Hh, W, piece.murs, lx, wallPx);
   for (const [a, b] of f.portes || []) {
     const pa = Math.round((Math.max(a, f.x0) - f.x0) * MPX), pb = Math.round((Math.min(b, f.x1) - f.x0) * MPX);
-    if (pb - pa > pxOfM(0.2)) paintWallDoor(g, pa, Hh, true, pb - pa);
+    const droite = VANTAIL.inverse && (lv.vantauxDroite || []).some((x) => Math.abs(x - a) < 1e-6);
+    if (pb - pa > pxOfM(0.2)) paintWallDoor(g, pa, Hh, true, pb - pa, droite);
   }
   const glass = [];
   for (const [a, b] of f.fenetres || []) {

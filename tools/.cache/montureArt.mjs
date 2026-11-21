@@ -182,8 +182,37 @@ function drawScooterDeck(ctx, r, F) {
    24, les épaules à 13 px du sol) ; à 0,78 case (son vrai 90 cm), le guidon arrivait aux épaules — le bras restait caché devant le
    buste, la main ne se lisait pas sur la poignée. À la taille (`SCOOT_BAR_H`), le bras se tend vers l'avant et vers le bas. */
 export const SCOOT_BAR_H = 0.62, BMX_BAR_H = 0.6;
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-21 — LA POTENCE SE REDRESSE SUR UNE PAROI RAIDE (dette notée le 2026-10-13 : « tout en haut de la paroi, la trottinette
+   ║ couchée sur le bois pointe sa potence VERS le bas de l'écran pendant que le corps reste droit — les mains quittent le guidon »).
+   ╚════════════════════════════════════════════════════════════════════════════
+   Vu en jeu (cran 4, quarter nord, arrêtée de travers à 15 cm du coping) : la potence suit la NORMALE du plateau, qui regarde le sud
+   sur une paroi presque verticale — elle pendait sous les pieds, le guidon 0,6 case plus bas que le bassin. Le corps, lui, est un
+   sprite DEBOUT. Pour le seul tube et le guidon (et les mains qui le tiennent), l'axe se redresse vers la verticale à mesure que la
+   paroi se dresse (`STEM_UP` : rien jusqu'à 22° de pente, tout à ~70°) : ce qui se lit à l'écran est un rider debout sur sa
+   trottinette, le guidon devant la poitrine. Le plateau et les roues restent couchés sur le bois. Le BMX n'est pas touché (sa
+   fourche porte la roue avant : redresser son guidon le décrocherait du cadre). `STEM_UP.on` : l'interrupteur du menu dev
+   (« Ajouts de la nuit du 21 novembre », FermeGame.js). */
+export const STEM_UP = { on: true, A: 0.07, B: 0.66 };
+function stemFrame(F) {
+  if (!STEM_UP.on) return F;
+  const steep = 1 - F.n[2], t = Math.max(0, Math.min(1, (steep - STEM_UP.A) / (STEM_UP.B - STEM_UP.A))), w = t * t * (3 - 2 * t);
+  if (w <= 0) return F;
+  const n = [F.n[0] * (1 - w), F.n[1] * (1 - w), F.n[2] * (1 - w) + w], L = Math.hypot(n[0], n[1], n[2]) || 1;
+  return { f: F.f, l: F.l, n: [n[0] / L, n[1] / L, n[2] / L] };
+}
+/* Le projecteur de la potence : ancrée AU PLATEAU tel qu'il est couché (`F`, à la hauteur des pieds `H0`), elle monte le long de l'axe
+   redressé. ⚠️ Premier jet, tout dans le repère redressé : le guidon montait à l'épaule (vu en jeu, cran 4) — les pieds sont posés à
+   `deckH` le long de la vraie normale (vers le bas de l'écran sur la paroi), la potence partait de plus haut. Sur le plat, c'est
+   exactement le projecteur d'avant. */
+function stemProjector(r, F, H0) {
+  const S = stemFrame(F), pf = projector(r, F);
+  if (S === F) return pf;
+  const ps = projector(r, S);
+  return (a, b, h) => { const q = pf(a, b, H0), s0 = ps(a, b, H0), s1 = ps(a, b, h); return [q[0] + s1[0] - s0[0], q[1] + s1[1] - s0[1]]; };
+}
 function drawScooterBar(ctx, r, F) {
-  const pr = projector(r, F), col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length].deck, H = SCOOT_BAR_H;
+  const pr = stemProjector(r, F, 0.1), col = BOARD_COLORS[(r.color | 0) % BOARD_COLORS.length].deck, H = SCOOT_BAR_H;
   line3(ctx, pr, 0.25, 0, 0.08, 0.3, 0, H, "#c9ced6");
   line3(ctx, pr, 0.255, 0.01, 0.08, 0.305, 0.01, H, "#6e747e");
   const pb = spun(pr, 0.3, r.bar || 0);   // le barspin : le guidon tourne sur le tube
@@ -522,7 +551,8 @@ export function drawRide(ctx, sheet, px, py, p, skirt) {
        les bras se croisent) — ce n'est pas un barspin ; le NO-HANDER : les mains quittent le guidon au milieu de la figure. */
     const spinning = !r.xup && r.bar && Math.abs(Math.sin(r.bar / 2)) > 0.35;
     if (!spinning && !(r.nohand > 0.3) && row !== 1) {   // de dos, le guidon est caché par le corps : les bras restent le long (tendus, ils se levaient vers lui)
-      const gs = [pr(bA, -bB, bH), pr(bA, bB, bH)].map(mir);
+      const prB = r.kind === "scooter" ? stemProjector(R, F, deckH) : pr;   // 2026-11-21 : les mains suivent la potence redressée
+      const gs = [prB(bA, -bB, bH), prB(bA, bB, bH)].map(mir);
       const sideView = row === 2;
       // de profil, les deux poignées, la lointaine (plus haut à l'écran) d'abord : son bras passe DERRIÈRE le buste
       o.hands = sideView ? [...gs].sort((p, q) => p[1] - q[1]) : gs;

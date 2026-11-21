@@ -4,6 +4,8 @@ import path from "path";
 const ROOT = path.join(process.cwd(), "tools/out/audit-2026-10");
 const SCR = "/private/tmp/claude-501/-Users-guillaume-Documents-GitHub-arcardi/4e571a69-c61f-4444-a690-f74bbdfae763/scratchpad/cap";
 export async function POST(req) {
+  // 2026-11-21 — pas en production (docs/PROJETS.md §0, lot 2, point 2) : la route répond 404, comme si elle n'existait pas.
+  if (process.env.NODE_ENV === "production") return new Response("Not Found", { status: 404 });
   const { name, data, scratch } = await req.json();
   if (!/^[\w.-]+$/.test(name)) return new Response("bad", { status: 400 });
   const dir = scratch ? SCR : ROOT;

@@ -929,7 +929,7 @@ const PX_CM = 7.4;                           // un pixel d'art ≈ 7,4 cm (13,5 
    s'ombre même pas elle-même, et c'est l'ombre au fond d'un pas qui le fait lire. */
 const TAN_D = 0.38 * Math.SQRT2 * PX_CM;      // la montée d'un rayon par pas diagonal (cm)
 /* `pack` : le manteau (§2), `P` : les réglages de l'image — { winter, frost
-   (0..1, la gelée blanche du matin), wetRoad (0..1), sun (0..1) }. `imp` : les
+   (0..1, la gelée blanche du matin), dew, dewShade (0..1, la rosée : `rosee.js`), wetRoad (0..1), sun (0..1) }. `imp` : les
    empreintes (§7, ou null). Écrit les pixels RGBA de la parcelle dans `out`
    (CH × CH × 4) et rend la liste des éclats possibles (les « paillettes » qui
    scintillent au soleil, dessinées à part, à chaque image). */
@@ -1084,7 +1084,28 @@ export function renderChunk(st, pack, P, imp, out) {
            reste que dans les ombres bleues des murs, des haies et des arbres. */
         const shK = Math.max(st.shade[o] / 255, st.cast[o] / 255);
         const fr = P.frostShade == null ? P.frost : P.frost + (P.frostShade - P.frost) * Math.min(1, shK * 1.25);
-        if (fr > 0.02 && st.fine[o] / 127 > 0.55 - fr * 0.9 && (c !== CL.TILLED || !st.aux[o])) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, fr * 1.4)); }
+        /* 2026-11-21 — LA ROSÉE (`rosee.js`, `P.dew` / `P.dewShade`, comme la gelée : d'abord séchée au soleil) ET LES PAS QU'ON Y LAISSE.
+           Une empreinte (`imp`, la même carte que dans la neige, posée par les mêmes marcheurs) essuie la gelée ou la rosée de ses brins :
+           l'herbe couchée, mouillée, reparaît PLUS SOMBRE — c'est elle qui trace le chemin, pas un dessin de pas. Ni sur la terre
+           labourée (rien à essuyer), ni sur la neige (ce chemin-là est plus haut). */
+        const dw = P.dew > 0 || P.dewShade > 0 ? (P.dewShade == null ? P.dew : P.dew + (P.dewShade - P.dew) * Math.min(1, shK * 1.25)) : 0;
+        const kp = imp && c !== CL.TILLED && (fr > 0.02 || dw > 0.02) ? imp(x, y) : 0;
+        if (kp >= 25) {
+          const wk = Math.min(1, Math.max(fr, dw) * 1.4);
+          if (P.winter) { dout[q] = 92; dout[q + 1] = 92; dout[q + 2] = 56; dout[q + 3] = Math.round(92 + 40 * wk); }
+          else { dout[q] = 22; dout[q + 1] = 52; dout[q + 2] = 26; dout[q + 3] = Math.round(34 * wk); }   // sans voile, à peine plus sombre : le vert franc de l'herbe couchée
+        }
+        else if (fr > 0.02 && st.fine[o] / 127 > 0.55 - fr * 0.9 && (c !== CL.TILLED || !st.aux[o])) { dout[q] = 226; dout[q + 1] = 234; dout[q + 2] = 242; dout[q + 3] = Math.round(150 * Math.min(1, fr * 1.4)); }
+        else if (dw > 0.02 && c !== CL.TILLED) {
+          /* LE VOILE DE LA ROSÉE : l'herbe trempée se lit GRISE-ARGENT, froide — un voile léger sur tous les brins (c'est lui qui fait
+             ressortir, par contraste, le vert franc des chemins essuyés), plus franc sur les brins les plus hauts (le bruit fin du sol,
+             comme la gelée : des FORMES, pas un sel) ; et quelques gouttes qui s'allumeront au soleil (les éclats de la neige).
+             ⚠️ Un premier jet ne voilait que les brins hauts : sur l'herbe de la ferme (son bruit fin est plus bas qu'en ville), 8 % des
+             pixels à peine, invisible à l'écran. */
+          const f = st.fine[o] / 127, top = f > 0.62 - dw * 0.3, k = Math.min(1, dw * 1.15);
+          dout[q] = 200; dout[q + 1] = 220; dout[q + 2] = 230; dout[q + 3] = Math.round((top ? 72 : 26) * k);   // vu en jeu : 104 / 46, puis 88 / 36, grisaient tout le pré (comparé à 11 h)
+          if (top && f > 0.7 && dw > 0.35 && (h32(wx, wy, 31) % 23) === 0) glints.push([wx, wy, h32(x, y, 32) % 1000, 1]);
+        }
         else if (P.winter && c !== CL.TILLED) { dout[q] = WINTER_GRASS[0]; dout[q + 1] = WINTER_GRASS[1]; dout[q + 2] = WINTER_GRASS[2]; dout[q + 3] = 96; }
       } else if (c === CL.STREET && P.wetRoad > 0.02) {
         /* La chaussée mouillée, plus sombre dans les ornières où l'eau de fonte
@@ -1583,10 +1604,15 @@ export function makeSnowField(tw, env) {
          et la fonte doivent être PROGRESSIFS (Guillaume). */
       const fineQ = (v) => (v < 4 ? q(v, 0.04) : 100 + q(v, 0.2));
       // 2026-10-05 : + la gelée de l'ombre (`frostShade`, meteo.js § 10), au même pas que celle du soleil.
-      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), q(p.frostShade == null ? -1 : p.frostShade, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25), p.castLight == null ? 1 : p.castLight].join(",");
+      const k = [fineQ(pk.g), fineQ(pk.s), p.falling ? 1 : 0, q(pk.r, 0.2), q(pk.berm, 0.5), q(p.frost, 0.1), q(p.frostShade == null ? -1 : p.frostShade, 0.1), q(p.dew || 0, 0.1), q(p.dewShade || 0, 0.1), p.winter ? 1 : 0, q(p.wetRoad, 0.1), q(p.sun == null ? 1 : p.sun, 0.1), q(pk.tl + pk.tc, 0.25), p.castLight == null ? 1 : p.castLight].join(",");
       if (k !== pkey) { pkey = k; ver++; }
-      if (pk.g + pk.s + pk.berm < 0.05 && prints.size) { prints.clear(); printCum.clear(); }
+      /* 2026-11-21 : une gelée ou une rosée garde ses pas (`surfacePrints`) — on n'efface la carte que quand le sol n'a plus rien à marquer
+         (la rosée sèche vers 9 h : les chemins du matin partent avec elle, et ne reviennent pas le lendemain). */
+      if (pk.g + pk.s + pk.berm < 0.05 && !api.surfacePrints() && prints.size) { prints.clear(); printCum.clear(); }
     },
+    /* 2026-11-21 — le sol garde-t-il un pas SANS neige ? Oui sous une gelée ou une rosée (`P.frost`, `P.dew`, au soleil ou à l'ombre) :
+       un pied y essuie les brins (`renderChunk`), et les marcheurs posent alors leurs pas (`makeWalkers`) même à 0 cm. */
+    surfacePrints() { return (P.frost || 0) > 0.02 || (P.frostShade || 0) > 0.02 || (P.dew || 0) > 0.02 || (P.dewShade || 0) > 0.02; },
     /* Ce qui vient de tomber (cm) : comble les traces. */
     addFall(cm) { if (cm > 0) cum += cm; },
     fallCum() { return cum; },
@@ -1778,7 +1804,9 @@ export function makeWalkers() {
         const back = w.acc;
         const cx = wx - (dx / d) * back, cy = wy - (dy / d) * back;
         const depth = field.depthAt(cx, cy);
-        const frac = footSink(depth, p.k * (sinkK || 1));
+        let frac = footSink(depth, p.k * (sinkK || 1));
+        // 2026-11-21 — sans neige, une gelée ou une rosée prend le pas (le pied essuie les brins : `renderChunk` le lit à 25 % et plus)
+        if (!(frac > 0) && field.surfacePrints && field.surfacePrints()) frac = 0.9 * p.k * (sinkK || 1);
         if (frac > 0) {
           const off = p.gap * 0.5 * w.side;
           field.stamp(p, cx - w.uy * off, cy + w.ux * off, w.ux, w.uy, frac);

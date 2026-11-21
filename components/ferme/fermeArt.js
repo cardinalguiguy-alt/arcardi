@@ -19611,7 +19611,8 @@ export function buildSprites() {
       // ---- 2. LA TENUE, L'ÉCHARPE, LE CHAPEAU : `garderobeArt.js` (2026-10-21 — redessinés : drapé éclairé, plis, matières, trois
       // vues, au pas ; le zip 427 les posait en aplats, les mêmes dans les trois vues).
       habit();
-      paintWardrobe(g, P, x, { gender, dir, step, stepI, bob, skin, skinD, hair, wd, clr: CLR, hairOver: () => {
+      // `plat` (2026-11-21) : au trait simple, la garde-robe en deux tons par matière (`flatRamp`), tant que l'ajout est allumé
+      paintWardrobe(g, P, x, { gender, dir, step, stepI, bob, skin, skinD, hair, wd, clr: CLR, plat: !!(fine && fine.habit && fine.plat), hairOver: () => {
         // ce qui retombe sur les épaules repasse devant le col (les mèches d'origine, une coupe du catalogue, la barbe fournie)
         if (legacy === "f") { P(g, x + 3, 9 + bob, 2, 4, hair); P(g, x + 11, 9 + bob, 2, 4, hair); }
         else if (!legacy) paintHair(g, P, x, { cut: cutId, col: hair, dir, bob, step: stepI, minY: 9 });
@@ -22804,7 +22805,7 @@ house: house(),
        pour un habitant sans costume. Un PNJ prend le visage d'un PNJ (`persoHdArt`, `faceStyleOf`), jamais le sourire d'un joueur. */
     const fl = npc && typeof npc === "object" ? npc : {};
     const simple = S.persoStyle === "simple";
-    const key = (simple ? "s:" : "") + gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
+    const key = (simple ? PS.persoSimpleKey() : "") + gender + ":" + outfit + ":" + (look || "") + (naked ? ":nue" : "") + (expr && expr !== "neutre" ? ":" + expr : "")
       + (npc ? ":pnj" + ["overalls", "cap", "beeSuit", "plaid", "cheeseHat", "sugarWorker"].map((k) => (fl[k] ? k[0] + k[1] : "")).join("") : "")
       + (variant ? ":" + variant : "");
     if (!(key in S.charsHD)) S.charsHD[key] = simple ? makeCharSimple(gender, outfit, look, naked, expr, npc, fl, variant) : makeCharHD(gender, outfit, look, naked, expr, npc, fl, variant);
@@ -22827,10 +22828,11 @@ house: house(),
     const [tc, tg] = cv(W, H);
     for (let dir = 0; dir < 3; dir++) for (let f = 0; f < NF; f++) {
       const ph = naked ? { step: f === 1 ? 1 : f === 3 ? -1 : 0 } : f === 0 ? { step: 0 } : PS.PERSO_SIMPLE_WALK[f - 1];
-      const fine = { step: ph.step, bob: Math.abs(ph.step), stepI: ph.stepI != null ? ph.stepI : ph.step, habit: true };
+      const fine = { step: ph.step, bob: Math.abs(ph.step), stepI: ph.stepI != null ? ph.stepI : ph.step, habit: true, plat: PS.PERSO_SOIGNE.plat };
       tg.clearRect(0, 0, W, H);
       drawCharFrame(tg, 0, gender, outfit, dir, 0, !!fl.overalls, !!fl.cap, !!fl.beeSuit, !!fl.plaid, !!fl.cheeseHat, !!fl.sugarWorker, look || null, fine);
-      const px = PS.persoSimplePx(PS.persoSimpleGridFine(tg.getImageData(0, 0, W, H).data, { dir, bobF: Math.round(fine.bob * 2), niveau: 3, expr: expr || "neutre", pnj: !!npc }));
+      // 2026-11-21 : niveau 4, « soigné » (la frange de côté, les bras détachés du buste), tant que l'ajout est allumé (`PS.PERSO_SOIGNE`)
+      const px = PS.persoSimplePx(PS.persoSimpleGridFine(tg.getImageData(0, 0, W, H).data, { dir, bobF: Math.round(fine.bob * 2), niveau: PS.PERSO_SOIGNE.on ? 4 : 3, expr: expr || "neutre", pnj: !!npc, sweep: PS.persoSweep(gender, outfit, look) }));
       const im = g.createImageData ? g.createImageData(W, H) : { data: new Uint8ClampedArray(W * H * 4), width: W, height: H };
       im.data.set(px);
       g.putImageData(im, f * W, dir * H);
@@ -22920,9 +22922,9 @@ house: house(),
   S.getCharFitting = (gender, outfit, look, hd) => {
     const key = gender + ":" + outfit + (look ? ":" + look : "");
     // 2026-10-31 — la feuille déjà portée se cherche sous la clé de `getCharHD`, celle du style courant (le trait simple a son préfixe)
-    const hk = (S.persoStyle === "simple" ? "s:" : "") + gender + ":" + outfit + ":" + (look || "");
+    const hk = (S.persoStyle === "simple" ? PS.persoSimpleKey() : "") + gender + ":" + outfit + ":" + (look || "");
     if (hd ? S.charsHD[hk] : S.chars[key]) return hd ? S.charsHD[hk] : S.chars[key];
-    const fk = (hd ? "hd:" + S.persoStyle + ":" : "") + key;
+    const fk = (hd ? "hd:" + S.persoStyle + (S.persoStyle === "simple" ? PS.persoSimpleKey() : "") + ":" : "") + key;
     let c = fitCache.get(fk);
     if (c) { fitCache.delete(fk); fitCache.set(fk, c); return c; }   // la plus récente en dernier
     c = (hd && (S.persoStyle === "simple" ? makeCharSimple : makeCharHD)(gender, outfit, look || null, false, "neutre", null, {})) || charSheet(gender, outfit, false, false, false, false, false, false, look || null);

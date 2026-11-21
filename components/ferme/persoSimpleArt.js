@@ -31,7 +31,21 @@
    `paintHabitFine` peint par le `P` qu'on lui tend, comme `garderobeArt.js`. */
 
 export const PERSO_SIMPLE_W = 32, PERSO_SIMPLE_H = 48;
-export const PERSO_SIMPLE_NIVEAUX = ["ancien", "net", "visage", "habit"];
+export const PERSO_SIMPLE_NIVEAUX = ["ancien", "net", "visage", "habit", "soigne"];   // 2026-11-21 : « soigné » (niveau 4), voir plus bas
+/* 2026-11-21 — le jeu fabrique ses feuilles au niveau 4 (« soigné ») tant que `on` : un AJOUT désactivable (menu dev, « Ajouts de la nuit
+   du 21 novembre », `AJOUTS.persoSoigne` de FermeGame.js, local) ; éteint, le niveau 3 du 31 octobre. Les deux ont leur clé de cache. */
+export const PERSO_SOIGNE = { on: true, plat: true };   // `plat` : la garde-robe en deux tons (`flatRamp`, garderobeArt.js), son propre ajout
+// le préfixe de cache des feuilles au trait simple : un par combinaison des ajouts (basculer ne refabrique rien qu'on a déjà vu)
+export const persoSimpleKey = () => "s" + (PERSO_SOIGNE.on ? "4" : "") + (PERSO_SOIGNE.plat ? "p" : "") + ":";
+/* Le côté de la frange d'un personnage (+1 depuis la gauche de l'écran, −1 depuis la droite) : les garçons alternent d'une tenue à
+   l'autre (la couleur des cheveux suit déjà la tenue : changer de tenue, c'est changer de tête) ; les filles la balaient loin de leur
+   barrette, toujours à droite. Un habitant à costume (`look`) prend son côté de son nom. */
+export function persoSweep(gender, outfit, look) {
+  if (gender === "f") return 1;
+  let h = outfit | 0;
+  if (look) for (let i = 0; i < look.length; i++) h = (h * 31 + look.charCodeAt(i)) | 0;
+  return (h & 1) ? -1 : 1;
+}
 export const PERSO_SIMPLE_EXPRESSIONS = ["neutre", "joie", "rire", "surprise", "colere", "tristesse", "gene", "sommeil", "clin", "amour", "cligne"];
 /* LA MARCHE À HUIT IMAGES (images 1 à 8 de la feuille de marche ; l'image 0 est l'ancienne image 0, debout). L'ancien cycle — 0 droit,
    1 pas à droite et corps baissé, 2 droit, 3 pas à gauche et corps baissé — avec ses demi-pas : le pied avance d'un pixel fin, le corps
@@ -89,7 +103,7 @@ const FACE = {
 /* La retouche d'une image FINE (32 × 48, RGBA) : `px32` vient de `drawCharFrame(…, fine)` ou d'un 16 × 24 agrandi au plus proche.
    `dir` 0 face, 1 dos, 2 profil (vers la droite) ; `bobF` : de combien de pixels fins le corps est descendu (0, 1 ou 2) ; `niveau` 0-3
    (PERSO_SIMPLE_NIVEAUX) ; `expr` ; `pnj` : la bouche droite de l'habitant au repos. Rend un Int32Array 32 × 48 de couleurs. */
-export function persoSimpleGridFine(px32, { dir = 0, bobF = 0, niveau = 3, expr = "neutre", pnj = false } = {}) {
+export function persoSimpleGridFine(px32, { dir = 0, bobF = 0, niveau = 3, expr = "neutre", pnj = false, sweep = 1 } = {}) {
   const W = PERSO_SIMPLE_W, H = PERSO_SIMPLE_H;
   const src = new Int32Array(W * H);
   for (let i = 0; i < src.length; i++) src[i] = keyAt(px32, i * 4);
@@ -139,7 +153,87 @@ export function persoSimpleGridFine(px32, { dir = 0, bobF = 0, niveau = 3, expr 
   if (niveau < 3) return o;
   // ── la semelle : la dernière rangée (les pieds touchent toujours le bas du cadre), un ton plus sombre
   for (let x = 0; x < W; x++) { const k = at(x, H - 1); if (k) set(x, H - 1, adjust(k, -30)); }
+  if (niveau < 4) return o;
+  soigneFine(a, at, set, dir, Y, skin, sweep);
   return o;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-21 — « SOIGNÉ » (niveau 4, le style partagé "soigne") : Guillaume, « on va améliorer le look des personnages, sans le rendre
+   ║ trop détaillé pour autant. C'est toujours simple. »
+   ╚══════════════════════════════════════════════════════════════════════════
+   Deux retouches, et seulement deux, dans la règle du trait simple (aplats, traits d'un pixel fin dans des couleurs QUE LE DESSIN A DÉJÀ,
+   rien hors de la silhouette, ni contour, ni modelé, ni reflet ; le visage d'encre du 2026-10-31 n'est pas touché) :
+   · LA FRANGE DE CÔTÉ : l'ancien posait les cheveux en casque, l'arête du front tirée à la règle — tout le monde avait la même coupe au
+     bol. La frange descend d'un pixel fin sur ~40 % du front et de deux sur ~18 %, du côté `sweep` (+1 : depuis la gauche de l'écran ;
+     −1 : depuis la droite) : un coup de peigne, à la couleur EXACTE des cheveux. De profil, une mèche vient sur le front (deux pixels, puis
+     un). Elle ne se pose que sur des CHEVEUX qui encadrent un front nu : la couleur au-dessus du front doit être celle des pattes (de
+     face) ou de la nuque (de profil) — un chapeau, une casquette, un bonnet ne bougent pas ; le front doit garder une rangée nue au-dessus
+     des yeux (les yeux étonnés montent d'un cran : la frange recule d'autant).
+   · LES BRAS DÉTACHÉS DU BUSTE : de face et de dos, la manche et le buste d'un même vêtement étaient un seul bloc (les bras n'existaient
+     qu'aux poignets) ; un trait fin dans le vêtement à −30 (le ton de ses poignets) les sépare, de l'aisselle au poignet. De profil, le
+     bras qui pend devant le corps reçoit les deux traits. Seulement là où manche et buste sont DU MÊME TON (un gilet, une salopette, une
+     robe à manches d'une autre couleur ont déjà leur frontière : rien n'est ajouté).
+   ⚠️ Écarté, essayé sur planche : des sourcils (même couleur que les cheveux, ou à l'encre) — le visage changeait d'expression pour tout le
+   monde, l'air sévère ; le visage du 31 octobre est son choix. Une mèche qui dépasse au sommet du crâne : une FORME de plus, hors règle. */
+function soigneFine(a, at, set, dir, Y, skin, sweep) {   // `a` lit l'entrée (la coupe), `at` la sortie (les yeux de l'expression)
+  const W = PERSO_SIMPLE_W;
+  // ── la frange
+  if (skin && dir === 0) {
+    let hb = -1;
+    for (let y = 4; y < 12; y++) if (a(15, Y(y)) === skin && a(16, Y(y)) === skin) { hb = y; break; }
+    if (hb > 0) {
+      let xL = -1, xR = -1;
+      for (let x = 4; x < 28; x++) if (a(x, Y(hb)) === skin) { if (xL < 0) xL = x; xR = x; }
+      const hair = a(15, Y(hb - 1)), wv = xR - xL + 1;
+      const framed = hair && hair !== skin && a(xL - 1, Y(hb)) === hair && a(xR + 1, Y(hb)) === hair && a(xL, Y(hb - 1)) === hair && a(xR, Y(hb - 1)) === hair;
+      let eyeTop = 99;
+      for (let y = hb; y < hb + 6; y++) for (let x = xL; x <= xR; x++) if (at(x, Y(y)) !== a(x, Y(y)) && at(x, Y(y)) !== skin && y < eyeTop) eyeTop = y;
+      for (let y = hb; y < hb + 6; y++) for (let x = xL; x <= xR; x++) if (at(x, Y(y)) === EYE && y < eyeTop) eyeTop = y;
+      if (framed && wv >= 10 && eyeTop - hb >= 3) {
+        // la seconde rangée ne vient jamais au-dessus d'un œil, ni à côté : une colonne de front nu l'en sépare
+        let eyeX0 = 99, eyeX1 = -1;
+        for (let x = xL; x <= xR; x++) if (at(x, Y(eyeTop)) === EYE) { eyeX0 = Math.min(eyeX0, x); eyeX1 = x; }
+        const n1 = Math.round(wv * 0.38), n2 = Math.round(wv * 0.18);
+        for (let i = 0; i < n1; i++) { const x = sweep > 0 ? xL + i : xR - i; if (a(x, Y(hb)) === skin) set(x, Y(hb), hair); }
+        for (let i = 0; i < n2; i++) {
+          const x = sweep > 0 ? xL + i : xR - i;
+          if (sweep > 0 ? x >= eyeX0 - 1 : x <= eyeX1 + 1) break;
+          if (a(x, Y(hb + 1)) === skin) set(x, Y(hb + 1), hair);
+        }
+      }
+    }
+  } else if (skin && dir === 2) {
+    // de profil (vers la droite) : le bord avant des cheveux sur le front, au-dessus de l'œil
+    for (let y = 6; y < 12; y++) {
+      let xe = -1;
+      for (let x = 4; x < 28; x++) if (a(x, Y(y)) === skin) { xe = x; break; }
+      if (xe < 0) continue;
+      const hair = a(xe - 1, Y(y));
+      if (!hair || hair === skin || a(xe - 1, Y(y - 1)) !== hair || a(xe, Y(y - 1)) !== hair || a(xe - 2, Y(y + 3)) !== hair) break;
+      let eyeTop = 99;
+      for (let yy = y; yy < y + 6; yy++) for (let x = xe; x < xe + 6; x++) if (at(x, Y(yy)) === EYE && yy < eyeTop) eyeTop = yy;
+      if (eyeTop - y < 3) break;
+      set(xe, Y(y), hair); set(xe + 1, Y(y), hair);
+      if (eyeTop - y >= 4) set(xe, Y(y + 1), hair);
+      break;
+    }
+  }
+  // ── les bras détachés du buste (le torse x 10-21, les manches x 6-9 et 22-25 de face et de dos ; de profil, le bras x 14-17)
+  const seams = dir === 2 ? [[13, 14], [18, 17]] : [[10, 9], [21, 22]];   // [colonne du trait, colonne de la manche à côté]
+  for (const [xs, xa] of seams) {
+    let run = [];
+    for (let y = 20; y < 34; y++) {
+      const g = a(xs, Y(y));
+      const same = g && g !== skin && at(xs, Y(y)) === g && a(xa, Y(y)) === g && a(xs + (xs < xa ? -1 : 1), Y(y)) === g;
+      // la même couleur doit continuer : la bande claire de l'épaule (une ou deux rangées, devenue liseré) fait repartir le compte
+      if (same && (!run.length || a(xs, Y(run[run.length - 1])) === g)) run.push(y);
+      else if (run.length >= 4) break;
+      else run = same ? [y] : [];
+    }
+    // l'aisselle : on laisse la rangée de l'épaule ; il faut au moins trois rangées de manche pour que le trait dise « bras »
+    if (run.length >= 4) for (const y of run.slice(1)) set(xs, Y(y), adjust(a(xs, Y(y)), -30));
+  }
 }
 
 /* L'image fine d'une image 16 × 24 agrandie au plus proche (les planches : ancien, net, visage). `frame` 0-3 comme `drawCharFrame`. */

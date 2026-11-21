@@ -11,20 +11,23 @@ journal chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-11-15 — PAUSE APRÈS LA PATINOIRE ET LE LOT 2 DU TRI. ⚠️ RIEN N'EST COMMITÉ DEPUIS `34175af`
+### 2026-11-21 — LA NUIT AUTONOME EST LIVRÉE. ⚠️ RIEN N'EST COMMITÉ (arbre au-dessus de `c5d0e72`)
 
-0. **Comment on travaille maintenant** : par LOTS DE DEUX À QUATRE QUESTIONS (une question à choix, la recommandation en premier), jamais
-   une page de 69 décisions. **La file décidée est en tête de `docs/PROJETS.md` (§0)** : c'est elle qui dit quoi faire, dans l'ordre.
-1. **Arbre de travail** : la patinoire du 2026-11-12 (fin de location `inv.skatesOut`, matériel ×3, résident à 26,5 s, sortie au chantier
-   `CH.EVAC_ROUTE`, ombre du saut), vue en jeu, bancs verts — journal du README de la ferme, quatre entrées du 2026-11-12. `git status`
-   d'abord ; commits et push restent à Guillaume.
-2. **La séance à deux** : sa marche à suivre (7 séquences, sur une ferme d'ESSAI : les forçages du menu dev sont sauvegardés pour tous)
-   est sur https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE. Quand il dit « c'est fait », lire ses verdicts (collection `seance`,
-   `meta/general`) — à défaut d'outil, les lui demander — et en tirer le lot suivant.
-3. **Pas vu, toujours** : la pose de l'hôte en retard chez l'invitée, la sortie au chantier à deux, le son de la fête, l'iPad ; les
-   feuillus de la FERME gardent leurs feuilles en hiver. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.
+1. **Compte rendu pour Guillaume** (captures avant / après, trois questions) : https://claude.ai/artifact/SugLyrNxiciUHQZDDGFhQC ;
+   le récit au journal du README de la ferme (2026-11-21). **Chaque ajout a son interrupteur** (menu dev, « Ajouts de la nuit du
+   21 novembre », `AJOUTS` dans FermeGame.js, local) : ombres des nuages (`nuages.js`, `nuagesArt.js`), façades mouillées
+   (`tools/build-wet-facades.mjs`, calques `-wet-`), pas de côté sur les plateaux du park (`SPK.dismountSpot`), potence redressée
+   (`MA.STEM_UP`), grues cendrées en migration (`oiseaux.js`, `oiseauxArt.js` ; `verify-oiseaux` 11/11) et leur cri (`sonGrues.js`,
+   interrupteur à part, JAMAIS ÉCOUTÉ : à juger à l'oreille) ; chez soi, fondu de 0,25 s au changement d'étage (`HOME_FADE`) et feu de 12 h ; vitrines du salon
+   blanchies pendant les travaux (`salonWash`) ; on marche sur place dans le miroir de la cabine (`WalkMirror`) ; porte de la
+   cuisine ouverte à droite (`vantauxDroite`) ; personnages « soignés » (frange, bras : `soigneFine`) et vêtements Garfield en deux tons
+   (`flatRamp`) ; buée (`buee.js`) ; rosée et pas dans la rosée et la gelée (`rosee.js`, `surfacePrints`) ; parapluies (`parapluie.js`). « À CODER » d'`A-JUGER` : restent rideaux Blender et catalogue ; cran 3 ÉTUDIÉ (`PROJETS` §0 bis : A ou B). Hors interrupteur : pages de test 404 en production (vérifié sur `next build` + `next start`), `+f.injuredUntil || 0`,
+   `TOWN_SPEED_MULT` retirée. Bancs : `verify-nuages` 27/27, `verify-skatepark` 20/20, `verify-densite`, `verify-vallee` 375/375.
+2. **Tranché au matin** : la PENTE remplace les deux marches galerie → quarter (faite, `GRAMP`, sans interrupteur : géométrie bâtie au
+   chargement). **Attendu** : le réglage des nuages, les chênes de la ferme l'hiver (laissés au lot Gemini B). **Pas vu** : à deux, iPad, un monument en pleine pluie.
+3. **Séance à deux** : https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE. ⚠️ Tout crochet React neuf se déclare APRÈS `sharedRef`.
 
-### ⏭️ ACTION SUIVANTE — LA FILE DE `docs/PROJETS.md` §0 : (1) GOOGLE CLOUD AVEC GUILLAUME, (2) PAGES DE TEST COUPÉES EN PRODUCTION, (3) SKATEPARK ET DETTES, (4) LES COMMISSIONS (CONCEPTION D'ABORD)
+### ⏭️ ACTION SUIVANTE — SES RÉPONSES AUX TROIS QUESTIONS DU COMPTE RENDU, PUIS LA FILE DE `docs/PROJETS.md` §0 : (1) GOOGLE CLOUD AVEC GUILLAUME, (4) LES COMMISSIONS (CONCEPTION D'ABORD)
 
 ## 🧭 ROUTEUR — QUOI LIRE SELON LA TÂCHE (2026-10-03)
 
@@ -48,7 +51,7 @@ démarrer. Les titres du §4 sont des **déclencheurs** : si l'un « sonne » av
 <!-- routeur:début -->
 | Tâche | Lire, dans l'ordre | Bancs à relancer |
 |---|---|---|
-| Neige, hiver, glace, feuilles mortes | `components/ferme/neige.js`, `glace.js`, `feuilles.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles` |
+| Neige, hiver, glace, feuilles mortes, rosée | `components/ferme/neige.js`, `glace.js`, `feuilles.js`, `rosee.js` ; README ferme (journal 12a, 2026-09-29, 2026-09-30) | `verify-neige`, `render-neige`, `render-neige-ferme`, `render-glace`, `verify-feuilles`, `verify-rosee` |
 | Patin, matériel (paires, combinaison, couleurs), figures (vrille emballée, freinage brut, FIGURES À DEUX : `components/ferme/duo.js`), gerbe, aide « ? », glace du lac, chalets, collision de la bande, chute sans patins | `components/ferme/patin.js`, `SkateHelp.js`, `glace.js` (le lac : `lakeIceEq`, `frozenAt`), `neige.js` (`lakeCold`) ; README ferme (journaux 2026-10-06 et 2026-10-05 « fin quater ») ; `C.rinkBandSolid` (fermeConstants.js) | `verify-patin`, `verify-duo`, `verify-surfaceuse` (§7), `render-patin`, `render-glace`, `verify-vallee` |
 | Usure de la glace (quatre états), surfaceuse, lissage demandé au chalet, guirlandes de la patinoire | `components/ferme/surfaceuse.js` (pur) ; `rinkWearCanvas`, `drawRinkWearAt`, `drawRinkSurfacer`, `drawRinkGarland` dans fermeArt.js ; `iceApply`, `hostIceTick`, `hostRinkSmooth` dans FermeGame.js (`node tools/doc-index.mjs components/ferme/FermeGame.js Ice`) ; README ferme (journal 2026-10-06) | `verify-surfaceuse`, `render-patinoire` ; à deux : `app/audit-duo` |
 | Bonhomme de neige (coups de pied, boule portée, chapeaux) | `components/ferme/bonhomme.js` ; `drawSnowman` dans fermeArt.js ; README ferme (journal 2026-10-05) | `verify-bonhomme`, `render-bonhomme` |

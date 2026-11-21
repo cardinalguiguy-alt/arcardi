@@ -15,16 +15,16 @@ escalier et bains, plan de 9 cases, mode déco), la cabine Garfield, le salon et
 du soleil, la neige et la glace, la faune, Valley Town de septembre à début octobre, la météo. Les blocs d'origine sont dans l'historique git.
 
 **À CODER (décidé, rien n'est encore fait)** — un changement visuel par livraison (§2) :
-- chez soi : ÉTUDIER un cran de zoom 3 (images cuites à 48 px par case ; proposer avant de coder) ; ouvrir la porte de la cuisine de
-  l'autre côté (crochet, interrupteur et applique sur un pan libre) ; RENDRE LES RIDEAUX DANS BLENDER avec la teinture par passes ; feu de
-  12 h de jeu (≈ 10 min) ; fondu court (0,25 s) au changement d'étage ;
+- chez soi : ~~ÉTUDIER un cran de zoom 3~~ (étude faite le 2026-11-21 : `docs/PROJETS.md` §0 bis, à trancher A ou B) ; ~~ouvrir la porte de la cuisine de
+  l'autre côté (crochet, interrupteur et applique sur un pan libre)~~ (fait le 2026-11-21, interrupteur `doorFlip`) ; RENDRE LES RIDEAUX DANS BLENDER avec la teinture par passes ; ~~feu de
+  12 h de jeu (≈ 10 min) ; fondu court (0,25 s) au changement d'étage~~ (faits le 2026-11-21 ; le fondu a son interrupteur) ;
 - le catalogue : table, chaises et commode — « avec le même soin que les précédents, si ce n'est un plus haut degré de finition et de luxe » ;
-- la façade du salon : vitrines blanchies pendant les travaux de Froufrou ; le miroir de la cabine : le personnage marche sur place ;
+- ~~la façade du salon : vitrines blanchies pendant les travaux de Froufrou~~ (fait le 2026-11-21, interrupteur `salonWash`) ; ~~le miroir de la cabine : le personnage marche sur place~~ (fait le 2026-11-21, interrupteur `mirrorWalk`) ;
 - la patinoire : FAITE le 2026-11-12 (résident à 26,5 s, matériel triplé, fin de location, sortie au chantier, ombre du saut) — à jouer, voir plus bas ;
-- le park (ses notes en jouant) : des faiblesses AU PASSAGE D'UN GROS MODULE À L'AUTRE, et on reste parfois COINCÉ en descendant de sa monture
-  sur un module. « La méca, les figures sont super, très agréables et exactement ce que je voulais. »
-- les dettes : la potence de la trottinette en haut de paroi ; `f.injuredUntil | 0` (`resolveStarCandy`, piège « x | 0 sur un horodatage ») ;
-  l'avertissement `C.G_SOIL` ; `TOWN_SPEED_MULT`, constante morte.
+- le park : FAIT le 2026-11-21 — à JUGER en jouant : le pas de côté en descendant sur un plateau, la potence de la trottinette en haut
+  de paroi ; la pente qui remplace les marches galerie → quarter (tranchée par lui le 2026-11-21, faite le jour même) ;
+- les ombres des nuages et les façades mouillées (2026-11-21, menu dev « Ajouts de la nuit du 21 novembre », compte rendu :
+  https://claude.ai/artifact/SugLyrNxiciUHQZDDGFhQC) : la force, la vitesse et la fréquence des nuages ; le mouillé des façades ; les grues (fréquence, taille, cri à ajouter ?) ;
 
 **GARDÉ TEL QUEL, MAIS PAS CLOS DÉFINITIVEMENT (« nous réviserons peut-être »)** : la palette de Colette ; les couleurs de fantaisie du salon ;
 l'interrupteur (allumage seul la nuit tant qu'on n'y a pas touché) ; le lot 1 ; le mode déco ; les ombres et lampes de chez soi — « notamment

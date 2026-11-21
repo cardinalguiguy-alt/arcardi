@@ -23,19 +23,44 @@ https://claude.ai/artifact/5yHFuERevSQQbaZfVzoEwE (verdicts dans la collection `
    lui-même, on ne saisit rien) : facturation dans l'EEE ; une clé dédiée ; restreinte à Maps Embed API seule ; référents limités aux
    domaines d'Arcardi ; aucune API payante sur ce projet ; rapport de facturation à zéro. Close seulement après lecture des vrais écrans
    (`docs/A-JUGER.md`, « Gardé en attente »).
-2. **Couper les pages de test EN PRODUCTION** (`app/audit-duo`, `app/audit-riders`, `app/audit-tmp`, `app/api/audit-cap`) : en ligne,
-   « page introuvable » (`process.env.NODE_ENV === "production"` → `notFound()` ; la route d'API répond 404) ; en local elles restent le
-   harnais à deux clients (`docs/VERIFICATION.md` §10). Pas de suppression.
-3. **Skatepark et petites dettes** : les deux défauts relevés en jouant (« des faiblesses au passage d'un gros module à l'autre », « on
-   reste parfois coincé en descendant de sa monture sur un module »), la potence de la trottinette en haut de paroi ; `f.injuredUntil | 0`
-   (`resolveStarCandy`, FermeGame.js — piège « x | 0 sur un horodatage »), l'avertissement `C.G_SOIL` (`docs/VERIFICATION.md`), la constante
-   morte `TOWN_SPEED_MULT`. Reproduire chaque défaut en jeu AVANT de corriger.
+2. ~~**Couper les pages de test EN PRODUCTION**~~ — FAIT le 2026-11-21 (un `layout.js` serveur par page, 404 pour `api/audit-cap` ;
+   vérifié sur `next build` + `next start` : 404 / 404 / 404 / 404, l'accueil 200).
+3. ~~**Skatepark et petites dettes**~~ — FAIT le 2026-11-21 (journal du README de la ferme) : le pas de côté sur les plateaux, la potence
+   redressée, `+f.injuredUntil || 0`, `TOWN_SPEED_MULT` retirée, `G_SOIL` (déjà corrigé le 2026-11-01), et la pente qui remplace les deux
+   marches galerie → quarter (« les faiblesses au passage d'un gros module à l'autre », tranché par Guillaume).
 4. **Les commissions** (le premier gros chantier, « une raison de jouer ensemble chaque soir ») : d'abord une séance de conception —
    qui demande quoi, à quel rythme, contre quelle paie, à deux comment — puis le code sur le patron de `quete.js` (tables, résolveurs purs,
    état dans un `apply` qui part déjà). Voir `docs/A-JUGER.md` §13 (« les commissions »).
 Ensuite : le lot 3 du tri (boulodrome lot 5, quête M17, réseau R0, chez soi lot 5, l'été, l'automne… : la page des 69).
 
 ---
+
+## 0 bis. Chez soi : un CRAN 3 — L'ÉTUDE (2026-11-21, décidée « étudier » le 2026-10-23 ; rien n'est codé)
+
+**Le constat, mesuré** (`homeCadreBox` × `homeFitZoom`, barre d'outils de 100 px déduite ; % = la part de l'écran que la pièce occupe) :
+
+| Cadre | 1024 × 768 | 1280 × 800 | iPad 1180 × 820 | 1440 × 900 | 1920 × 1080 |
+|---|---|---|---|---|---|
+| séjour | 2 : 19 % → **3 : 38 %** | 2 : 14 % → 3 : 31 % | 2 : 15 % → 3 : 33 % | 2 : 11 % → 3 : 25 % | 4 : 27 % |
+| cuisine | 2 : 24 % → **3 : 50 %** | 2 : 18 % → 3 : 40 % | 2 : 19 % → 3 : 43 % | 2 : 14 % → 3 : 31 % | 4 : 34 % |
+| bains | 2 : 16 % → 3 : 37 % | 2 : 12 % → 3 : 28 % | 2 : 13 % → 3 : 29 % | 4 : 38 % | 4 : 24 % |
+| chambre | 2 : 28 % → **3 : 64 %** | 2 : 22 % → 3 : 49 % | 2 : 23 % → 3 : 51 % | 4 : 62 % | 4 : 41 % |
+| entrée (+ cage), palier, dressing | déjà au cran 4 | | | | |
+
+Les pièces où l'on VIT (séjour, cuisine, chambre, bains) sont précisément celles qui tombent au cran 2 sur un portable et sur l'iPad :
+un quart de l'écran. Un cran 3 doublerait leur taille.
+
+**Pourquoi il n'existe pas** : un pixel de dessin de la maison vaut un demi-pixel du monde (64 px par case du plan, `MPX`, deux cases
+du monde) : au cran 3 il ferait 1,5 px d'écran — des pixels inégaux qui grouillent (§4, « à échelle non entière… »).
+
+**Trois façons** : (A) **RECOMMANDÉE** — cuire une seconde série à **96 px par case** (48 px par case du monde), posée à 1:1 au cran 3 :
+plus fine que le cran 4 actuel (×1,5 de détail), nette. Coût : `MPX` devient un paramètre de la cuisson (sols, murs, faces, peints,
+objets de mur, ombres `ombresMaison.js` — il est aujourd'hui une constante de module lue partout) ; les 63 meubles Blender rendus une
+seconde fois à 96 px (`tools/blender/rendre_meubles.py`, ~0,6 Mo → ~1,3 Mo, teintures comprises) ; une série de canevas de plus par
+niveau (§10 : le nombre compte sur iPad — n'en garder qu'une à la fois). Une séance entière. (B) cuire à **48 px par case**, posée ×2 :
+nette mais plus GROSSIÈRE que l'actuelle (−25 % de détail) — même plomberie, moins beau. (C) poser l'actuelle à ×1,5 : floue ou
+grouillante — écartée.
+**À trancher avec lui** : A ou B ; et si le cran 3 vaut aussi en ville (aujourd'hui permis, la ville est en pixels d'art).
 
 ## 1. Le catalogue de la Maison Garfield : mieux le présenter — FAIT le 2026-10-21, à juger
 
@@ -516,6 +541,15 @@ le bras des riders redessiné le long de l'os (ils recopient le bras par cases, 
 gardent leur drapé à quatre tons du 2026-10-21 (plus modelés que le reste : à reprendre au trait simple si ça détonne en jeu) ; Léo, Froufrou,
 l'apiculteur et le vandale n'ont pas de signes neufs ; pas vu sous la pluie ni au cran 3 sur une capture du jeu (le cran 3 sur une capture
 fixe : `perso-simple-ecran-*`). ⚠️ Écarté : le Scale2x complet (il arrondit aussi les frontières intérieures et fait bouder toutes les bouches).
+
+**2026-11-21 — « SOIGNÉ » (niveau 4)** (« on va améliorer le look des personnages, sans le rendre trop détaillé ; c'est toujours simple ») :
+la frange de côté (de face : ~40 % du front sur une rangée, ~18 % sur la suivante ; de profil : une mèche sur la tempe) et les bras
+détachés du buste (un trait du vêtement à −30, de l'aisselle au poignet, seulement là où manche et buste sont du même ton). `soigneFine`
+(persoSimpleArt.js), le côté par `persoSweep`. Ajout désactivable LOCAL (`AJOUTS.persoSoigne` → `PERSO_SOIGNE.on`), pas un quatrième
+style partagé : une ferme qui a sauvegardé « simple » n'aurait rien vu changer. Écartés sur planche : les sourcils (l'air sévère), une
+mèche au sommet (une forme de plus). Vu en jeu au cran 3 (face, profil en marche, bascule en direct) ; pas vu à deux ni sur iPad.
+Le même jour : les vêtements de Garfield en deux tons au trait simple (`flatRamp`, `AJOUTS.wardrobeFlat` — le « pas fait » ci-dessus est
+donc levé pour eux), et la buée du souffle par temps froid (`buee.js`, `AJOUTS.breath`).
 
 ## 13. Le réseau : jouer « à l'instant », sans se soucier des messages (proposé le 2026-11-01 — « pour plus tard », rien de codé)
 

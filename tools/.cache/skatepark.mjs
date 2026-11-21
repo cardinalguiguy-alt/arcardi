@@ -91,8 +91,14 @@ const QT = transition(QUARTER.R, QUARTER.Ht);
 QUARTER.d = QT.d;
 
 export const GALLERY = { u0: MINI.u1, u1: QUARTER.u0, v0: 0, v1: 2, h: MINI.top, stairU0: 8.2, stairU1: 9.4, stairV0: -2, steps: 7 };
-/* Les deux marches de la galerie vers la plateforme du quarter (1,03 → 1,37 : deux contremarches de 11 cm). */
-const GSTEP_U = [9.4, 9.7, QUARTER.u0];
+/* ⚠️ 2026-11-21 — DE LA GALERIE À LA PLATEFORME DU QUARTER, UNE PENTE ET NON PLUS DEUX MARCHES (décision de Guillaume, le 2026-11-21 :
+   « oui, la pente »). Les deux contremarches de 11 cm (1,03 → 1,37) arrêtaient les QUATRE montures — sondé à la vraie physique : le
+   skate, les rollers, la trottinette et le BMX rebondissaient sur la première ; on ne passait du haut de la mini-rampe au quarter que d'un
+   ollie, ce que personne ne devine (la même faute que la marche de 14 cm du U, corrigée le 2026-10-14). C'étaient « les faiblesses au
+   passage d'un gros module à l'autre ». Une pente de bois de 34 cm sur 1,2 case (pente 0,36 : sous `WALK.SLOPE`, on la monte à pied),
+   son sommet arrondi (`top`) pour qu'on ne décolle pas en arrivant sur la plateforme, son pied posé SUR la galerie (`base`). Son pied
+   commence dans la sortie de l'escalier du nord : qui monte l'escalier y pose le pied à moins d'une marche. */
+const GRAMP = { u0: QUARTER.u0 - 1.2, u1: QUARTER.u0, v0: 0, v1: 1.0, top: 0.25 };
 
 /* ⚠️ 2026-10-11 — LA TABLE FAIT 2,5 CASES (2,9 m), PAS 4 : un ollie lâché à la lèvre à bonne vitesse la passe, comme sur une
    vraie funbox ; à 4,6 m (premier jet), on retombait toujours dessus. */
@@ -128,14 +134,14 @@ function addCorner(mod, cu, cv, u1, v0, base, R, Ht) {
 }
 /* `top` (facultatif, cases) : l'arrondi du HAUT de la pente — 0, une lèvre vive (on décolle des tremplins de la funbox) ; une entrée
    (2026-10-14, le U de la mini-rampe) s'arrondit des deux bouts, sans quoi la cassure du haut fait décoller qui la monte à fond. */
-function addWedge(mod, dir, s0, a, b, H, L, D, top) {
+function addWedge(mod, dir, s0, a, b, H, L, D, top, base) {   // `base` (2026-11-21) : la hauteur où la pente prend pied (0 : le sol)
   const Lt = L + D, tp = top || 0;
   let bb;
   if (dir === "e") bb = [s0 - Lt, a, s0, b];
   else if (dir === "w") bb = [s0, a, s0 + Lt, b];
   else if (dir === "s") bb = [a, s0 - Lt, b, s0];
   else bb = [a, s0, b, s0 + Lt];
-  PRIMS.push({ kind: "wedge", mod, dir, s0, a, b, H, L, D, top: tp, m: H / (L - TOE / 2 - tp / 2), bb });
+  PRIMS.push({ kind: "wedge", mod, dir, s0, a, b, H, L, D, top: tp, base: base || 0, m: H / (L - TOE / 2 - tp / 2), bb });
 }
 function addBox(mod, u0, v0, u1, v1, h, mat, edges) {
   PRIMS.push({ kind: "box", mod, h, mat: mat || "deck", edges: edges || null, bb: [u0, v0, u1, v1] });
@@ -157,8 +163,7 @@ const MINI_LIP = 0.7;
 addWedge("mini", "s", MINI.v1 + MINI_LIP, MINI.uTW, MINI.uTE, MINI.base, MINI_LIP, 0, 0.25);
 // La galerie, ses deux marches vers le quarter, et l'escalier qui y monte depuis le boulevard.
 addBox("gallery", GALLERY.u0, GALLERY.v0, GALLERY.u1, GALLERY.v1, GALLERY.h, "deck");
-addBox("gallery", GSTEP_U[0], 0, GSTEP_U[1], 1.0, GALLERY.h + (QUARTER.Ht - GALLERY.h) / 3, "step");
-addBox("gallery", GSTEP_U[1], 0, GSTEP_U[2], 1.0, GALLERY.h + 2 * (QUARTER.Ht - GALLERY.h) / 3, "step");
+addWedge("gallery", "w", GRAMP.u0, GRAMP.v0, GRAMP.v1, QUARTER.Ht - GALLERY.h, GRAMP.u1 - GRAMP.u0, 0, GRAMP.top, GALLERY.h);
 addStairs("stairN", GALLERY.stairU0, GALLERY.stairV0, GALLERY.stairU1, 0, "s", GALLERY.steps, 0, GALLERY.h);
 // L'escalier de la plateforme ouest de la mini-rampe (depuis le sol du park, il monte vers le nord).
 addStairs("stairW", WSTAIR.u0, WSTAIR.v0, WSTAIR.u1, WSTAIR.v1, "n", WSTAIR.steps, 0, MINI.top);
@@ -220,7 +225,7 @@ function evalPrim(p, u, v, o) {
     else if (s < p.L - p.top) { h = p.m * (s - TOE / 2); dh = p.m; }
     else if (s < p.L) { const w = p.L - s; h = p.H - p.m * w * w / (2 * p.top); dh = p.m * w / p.top; }
     else { h = p.H; dh = 0; }
-    o.h = h; o.gu = dh * su; o.gv = dh * sv; o.sig = s < p.L ? s * Math.hypot(1, p.m) : p.L * Math.hypot(1, p.m) + (s - p.L);
+    o.h = h + (p.base || 0); o.gu = dh * su; o.gv = dh * sv; o.sig = s < p.L ? s * Math.hypot(1, p.m) : p.L * Math.hypot(1, p.m) + (s - p.L);
     o.lat = lat; o.mat = s < p.L ? "wood" : (s - p.L < EDGE_W ? "coping" : "deck"); o.s = s; o.d = p.L;
     return true;
   }
@@ -325,7 +330,9 @@ fence("rail", MINI.u1, GALLERY.v1, MINI.u1, MINI.v1, MINI.top, MINI.top, RAIL_TO
 fence("rail", MINI.u1 - MINI.D, MINI.v1, MINI.u1, MINI.v1, MINI.top, MINI.top, RAIL_TOP);
 // La galerie : son bord nord de part et d'autre de l'escalier, son bord sud, son bord est (au flanc du quarter).
 fence("rail", GALLERY.u0, 0, GALLERY.stairU0, 0, GALLERY.h, GALLERY.h, RAIL_TOP);
-fence("rail", GALLERY.stairU1, 0, GALLERY.u1, 0, GALLERY.h + 0.2, GALLERY.h + 0.2, RAIL_TOP);
+// 2026-11-21 : au-dessus de la pente, la lisse en suit le bois (deux segments : le plan, puis l'arrondi du sommet)
+for (const [a, b] of [[GALLERY.stairU1, GRAMP.u1 - GRAMP.top], [GRAMP.u1 - GRAMP.top, GALLERY.u1]])
+  fence("rail", a, 0, b, 0, heightAt(PARK.x0 + a, PARK.y0 + 0.01), heightAt(PARK.x0 + b - 0.001, PARK.y0 + 0.01), RAIL_TOP);
 fence("rail", GALLERY.u0, GALLERY.v1, GALLERY.u1, GALLERY.v1, GALLERY.h, GALLERY.h, RAIL_TOP);
 fence("rail", GALLERY.u1, 1.0, GALLERY.u1, GALLERY.v1, GALLERY.h, GALLERY.h, RAIL_TOP);
 // L'escalier du nord : une main courante de chaque côté, qui monte avec lui.
@@ -572,6 +579,82 @@ export function walkStandOk(ax, ay) {
     if (!walkStepOk(h0, px, py)) return false;
   }
   return fenceNear(fx, fy, null).d >= WALK.FENCE_R;
+}
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-21 — DESCENDRE SUR UN PLATEAU : LE PAS DE CÔTÉ (Guillaume, en jouant : « on reste parfois coincé en descendant de sa
+   ║ monture sur un module »).
+   ╚════════════════════════════════════════════════════════════════════════════
+   MESURÉ (sonde du 2026-11-21, une grille de 5 cm sur chaque module) : depuis AUCUN point où l'on peut descendre on ne reste bloqué
+   à pied — mais sur les plateaux, la descente était REFUSÉE sur 54 à 74 % de la surface plate (mini-rampe, grand quarter, plan
+   incliné) : le plateau du quarter ne laisse que 0,4 case où la semelle entière tient, entre le coping (la semelle déborde sur la
+   courbe : `walkBlocked`) et la barrière du fond. On s'y arrête tout naturellement contre le coping, F répondait « pas ici », et l'on
+   restait sur sa planche sans savoir où aller. Plutôt que de refuser : le point sûr le plus proche (`walkStandOk`), à moins de
+   `maxR` cases, AU MÊME NIVEAU (aucun échantillon du trajet ne monte ni ne descend de plus de `LEVEL` : on ne descend pas la
+   courbe à pied) et sans approcher un tube à moins de `FENCE_R` en chemin — le jeu y mène le piéton EN MARCHANT (`parkStepOffAim`,
+   FermeGame.js), un ou deux pas, jamais un saut de position. Rend l'ANCRE { x, y } (ville), ou null (sur la pente : on refuse,
+   comme avant). Pur. `verify-skatepark` le joue depuis chaque point refusé des plateaux, avec la vraie règle de marche. */
+/* ⚠️ Le jeu s'ARRÊTE dès que la semelle tient (`parkStepOffAim`), pas au point visé : c'est la marche qui décide où l'on pose le pied. */
+const STEP_OFF = { LEVEL: 0.12, RINGS: 15, ANGLES: 24, SPEED: 5.2, T: 1.0 };
+/* LA RÈGLE DU PAS DU PIÉTON DANS LE PARK, PURE — celle de la boucle (`townStepOk` : `canStandTown` sur les cases du park, qui y lit
+   `walkBlocked` au point près ; `parkStepOk` ; la trappe de dégagement) restreinte au park, où elle n'a rien d'autre à lire (les cases
+   du park sont pleines pour tout le reste, `townSeasonWorld`). Écrite ICI pour `dismountSpot` (appelé au niveau du composant, où
+   la boucle n'existe pas, §4) ; `verify-skatepark` la reconstruisait déjà à l'identique et compare désormais les deux. */
+export function parkCellAt(x, y) {
+  const u = Math.floor(x) - PARK.x0, v = Math.floor(y) - PARK.y0;
+  return (u >= 0 && v >= 0 && u < PARK.w && v < PARK.h)
+    || (v >= Math.floor(GALLERY.stairV0) && v < 0 && u >= Math.floor(GALLERY.stairU0) && u < Math.ceil(GALLERY.stairU1));
+}
+export const parkCanStand = (ax, ay) => C.bodyPoints(ax, ay).every(([qx, qy]) => !(parkCellAt(qx, qy) && walkBlocked(qx, qy)));
+export function parkWalkStep(m, nx, ny) {
+  const fx0 = C.footX(m.x), fy0 = C.footY(m.y), fx1 = C.footX(nx), fy1 = C.footY(ny);
+  const fence = walkFenceStep(fx0, fy0, fx1, fy1);
+  if (parkCanStand(nx, ny) && fence) {
+    if (!inPark(fx1, fy1) && !inPark(fx0, fy0)) return true;
+    const h0 = heightAt(fx0, fy0);
+    if (C.bodyPoints(nx, ny).every(([qx, qy]) => walkStepOk(h0, qx, qy))) return true;
+  }
+  return !parkCanStand(m.x, m.y) && fence;
+}
+/* Le piéton qui marche de (ax, ay) vers (tx, ty), comme le jeu le mène (`parkStepOffAim` : la direction du point, axe par axe, à
+   la vitesse de la marche), jusqu'à tenir debout (`walkStandOk`) — rend le temps, ou -1 s'il n'y arrive pas en `T` s, s'il descend
+   ou monte de plus de `LEVEL` (on ne marche pas dans la courbe), ou s'il s'éloigne de plus de 0,15 case du segment visé. */
+export function stepOffWalk(ax, ay, tx, ty, dt) {
+  const m = { x: ax, y: ay }, h0 = heightAt(C.footX(ax), C.footY(ay)), L = Math.hypot(tx - ax, ty - ay) || 1;
+  for (let t = 0; t <= STEP_OFF.T; t += dt) {
+    if (walkStandOk(m.x, m.y)) return t;
+    const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+    if (d < 0.01) return -1;   // au point (à 1 cm : le jeu s'y arrête aussi) sans tenir debout : ce point ne vaut rien
+    const sx = dx / d * STEP_OFF.SPEED * dt, sy = dy / d * STEP_OFF.SPEED * dt;
+    if (parkWalkStep(m, m.x + sx, m.y)) m.x += sx;
+    if (parkWalkStep(m, m.x, m.y + sy)) m.y += sy;
+    if (Math.abs(heightAt(C.footX(m.x), C.footY(m.y)) - h0) > STEP_OFF.LEVEL) return -1;
+    const cr = Math.abs((m.x - ax) * (ty - ay) - (m.y - ay) * (tx - ax)) / L;
+    if (cr > 0.15) return -1;
+  }
+  return -1;
+}
+export function dismountSpot(ax, ay, maxR = 0.75) {
+  if (walkStandOk(ax, ay)) return { x: ax, y: ay };
+  for (let r = 1; r <= STEP_OFF.RINGS; r++) {
+    const R = maxR * r / STEP_OFF.RINGS;
+    let best = null;
+    for (let k = 0; k < STEP_OFF.ANGLES; k++) {
+      const a = (k / STEP_OFF.ANGLES) * Math.PI * 2, tx = ax + Math.cos(a) * R, ty = ay + Math.sin(a) * R;
+      if (!walkStandOk(tx, ty)) continue;
+      /* ⚠️ LE POINT NE SUFFIT PAS, IL FAUT Y ARRIVER (premier jet : un point sûr et un trajet droit « au même niveau, sans
+         tube ») — `verify-skatepark` a rejoué la marche : 1 105 descentes sur 1 844 n'arrivaient pas. Contre la rambarde du fond, la
+         semelle déborde du plateau et la règle du pas refuse TOUT pas (le piéton restait figé) ; ailleurs le pas de 8 cm passait
+         le point et butait contre le coping en marchant sur place. On rejoue donc la marche elle-même, aux cadences de 60 et 30
+         images par seconde (les pas n'y ont pas la même longueur), et l'on s'arrête dès que la semelle tient. */
+      const t60 = stepOffWalk(ax, ay, tx, ty, 1 / 60), t30 = t60 >= 0 ? stepOffWalk(ax, ay, tx, ty, 1 / 30) : -1;
+      if (t30 < 0) continue;
+      // à égal rayon, l'arrivée la plus rapide (le moins de pas), puis la plus loin d'un tube — départage stable
+      const clear = fenceNear(C.footX(tx), C.footY(ty), null).d, score = Math.max(t60, t30) - clear * 0.01;
+      if (!best || score < best.s - 1e-9) best = { x: tx, y: ty, s: score };
+    }
+    if (best) return { x: best.x, y: best.y };
+  }
+  return null;
 }
 function footAxisDist(f, fx, fy) { return tubeAxis(f, fx, fy).d; }
 /* Les pieds (ville) par rapport à l'AXE d'un tube : la distance, et la direction (unitaire) de l'axe vers les pieds — pieds sur

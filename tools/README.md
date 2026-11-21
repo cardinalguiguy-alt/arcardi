@@ -374,7 +374,18 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   image ×2 au pixel près pour 88 tenues (tenues, peaux, coupes, barbes, Maison Garfield, PNJ, ouvriers) × 3 vues × 4 images ; (2) les coins au
   pixel fin = Scale2x « contre le vide » ; (3) aucun signe du vêtement hors de la silhouette, à toutes les images de marche ; (4) la feuille —
   jamais nulle, 9 + 4 images, `__hdK` 2, `__simple`, pas de mains jointes, un cache par style ; (5) la marche : pieds au sol, tête descendue de
-  2 × bob pixels fins. 10/10 au 2026-10-31.
+  2 × bob pixels fins. 10/10 au 2026-10-31. (6, 2026-11-21) « soigné », le niveau 4 : silhouette inchangée, aucune teinte inventée (une couleur
+  de l'image ou la sienne à −30), rien contre un œil à aucune expression, chaque tenue de joueur a sa frange et ses bras, l'interrupteur
+  `PERSO_SOIGNE.on` a son cache — 10 032 images ; la garde-robe en deux tons (même silhouette, jamais plus de couleurs). 17/17, falsifié.
+- **`tools/verify-buee.mjs` (2026-11-21)** : la buée du souffle (`components/ferme/buee.js`) — le froid (rien au-dessus de 7 °C), le rythme
+  (pas en chœur, plus vite en marche), la forme (bornée, pleine, ne grouille pas), le sens (de face de côté, de dos de derrière la tête,
+  le vent), le dessin au pixel d'écran entier aux crans 2 à 4. 22/22 ; `FALSIFY=choeur|grouille`.
+- **`tools/verify-rosee.mjs` (2026-11-21)** : la rosée (`components/ferme/rosee.js`, dessinée par `neige.js`) — le modèle (l'aube claire,
+  séchée au soleil avant l'ombre, ni pluie ni neige), le voile sur la seule herbe, les gouttes, les pas dans la rosée et la gelée (rien
+  sur sol sec), le chemin plus sombre, la carte effacée une fois sèche. 18/18 ; `FALSIFY=sec|clair`.
+- **`tools/verify-parapluie.mjs` (2026-11-21)** : les parapluies (`components/ferme/parapluie.js`) — qui l'ouvre (seuils, un sur cinq tête
+  nue, jamais fermé quand la pluie forcit, huit couleurs), le dôme (symétrique, demi-ellipse, quatre pans, baleines), la place (jamais sur
+  le visage, jusqu'à la main, au-dessus de la tête, de profil sans traverser la tête), au pixel d'écran entier. 20/20 ; `FALSIFY=visage|boite`.
 - **`tools/render-perso-simple.mjs` (2026-10-30, mis à jour le 2026-10-31)** : le TRAIT SIMPLE contre l'ancien et le détaillé →
   `perso-simple-spectre.png` (neuf colonnes, le détaillé ramené facteur par facteur), `perso-simple-visages.png`, `perso-simple-pnj.png`,
   `perso-simple-ecran-{rue,herbe}[-loupe].png` (au cran 3, sur la capture `maison-cartons-rue.png`, le fin cuit comme `drawCharHD`),
@@ -1918,6 +1929,28 @@ et la neige qui tombe l'éteignent ; aucune minute ne la fait sauter (glissement
 matrice de cisaillement pose bien un point à h px de haut. Il vérifie aussi que sa copie de `C.SUN_HOURS` est celle
 du ciel. **Falsifié** : `FALSIFY=lean` (midi sans pente) rougit quatre contrôles. ⚠️ Ce qu'il ne voit pas : le dessin
 des ombres (la passe `sunShadowPass` vit dans la closure de `FermeGame.js`) — il se juge en jeu.
+
+## `verify-nuages.mjs` — LES OMBRES DES NUAGES, LES FAÇADES MOUILLÉES (2026-11-21, 27 contrôles)
+
+Joue `components/ferme/nuages.js` : les cumulus de beau temps (fréquence par saison sur 2 000 jours, de 10 h à 19 h 30 seulement,
+couverture plafonnée, aucun à-coup d'une minute à l'autre, plateau de 13 h à 17 h) ; le ciel qui se charge (`dark` → couverture,
+monotone ; l'union avec les cumulus, jamais leur somme) ; l'ombre suit le soleil d'`ombres.js` (nulle la nuit, presque nulle sous la
+pluie, celle d'un mur au même instant par beau temps) ; le champ (déterministe, périodique sans couture, la couverture demandée est
+celle qu'on obtient à ±0,04, et à 20 % ce sont des NUAGES — ≥ 25 taches, aucune au quart du total) ; la dérive (vers l'est, comme la
+fumée ; plus vite au vent) ; le menu dev (chaque clé de `AJOUTS` a son nom en français et en anglais) ; et, par lecture du source,
+les trois appels aux bons endroits de la boucle. **Falsifié** : `FALSIFY=reseau` (le premier jet, un bruit fractal seuillé) rougit
+« des nuages séparés » ; `FALSIFY=nuit` (l'ombre ne suit plus le soleil) en rougit quatre. ⚠️ Ce qu'il ne voit pas : le dessin
+(`nuagesArt.js`, posé dans la closure) — il se juge en jeu (`window.__arcardiClouds()` donne l'état). Trois contrôles de plus tiennent
+les FAÇADES MOUILLÉES (`build-wet-facades.mjs`) : un calque par bâtiment et par cran, à la taille du jour, rien hors du bâtiment, posé
+avant la lueur des vitres.
+
+## `verify-oiseaux.mjs` — LES GRUES CENDRÉES QUI PASSENT (2026-11-21, 11 contrôles)
+
+Joue `components/ferme/oiseaux.js` : jamais l'été ni au cœur de l'hiver ; 2 à 6 vols par heure réelle à l'automne avancé et au retour
+(mesuré : 4,3) ; rien de nuit, sous la pluie, la neige ou l'orage ; le cap (sud-ouest à l'automne, nord-est au retour, 172/172) ;
+déterministe ; le V (la tête devant, deux branches derrière elle, sur 40 vols) ; le vol entre, traverse et sort ; l'interrupteur nommé dans
+les deux langues. **Falsifié** : `FALSIFY=ete` (des grues toute l'année) rougit deux contrôles. Ce qu'il ne voit pas : le dessin
+(`oiseauxArt.js`) — en jeu, `window.__arcardiCranes.GRUES.ODDS = 1` force un vol par créneau.
 
 ## `render-marche-hiver.mjs` — LE MARCHÉ D'HIVER DE LA PRAIRIE (2026-10-05, 3 contrôles)
 

@@ -116,7 +116,15 @@ import { feteSoundUpdate, feteSoundStop } from "./sonFete";   // 2026-11-08 — 
 import * as BN from "./bonhomme";   // 2026-10-05 — le bonhomme de neige : croissance des boules, empilement, décor, dégel (pur)      // 2026-10-04 — le patin à glace : la machine d'état du patineur (pure)      // 2026-09-30 — la glace de l'étang du parc : le seuil de gel au pixel, la cuisson de la couche
 import * as BU from "./buis";       // 2026-09-28 (7b, suite) — les buis en volumes : boule, massif en nuage, topiaire ; taillés ou libres selon le quartier
 import * as HD from "./solHD";      // AUDIT 2026-10 (FIX-004) — prototype : le dallage civique en procédural haute résolution (interrupteur local)
+import * as NA from "./nuagesArt";  // 2026-11-21 — les ombres des nuages sur tout ce qui est dehors (interrupteur local : `AJOUTS.clouds`)
+import * as GR from "./oiseaux";    // 2026-11-21 — les grues cendrées qui passent en V aux migrations (pur ; interrupteur : `AJOUTS.cranes`)
+import * as GRA from "./oiseauxArt"; // 2026-11-21 — leur dessin et leur ombre
+import { cranesSoundUpdate } from "./sonGrues";   // 2026-11-21 — leur cri, synthétisé (même interrupteur)
 import * as HM from "./maison";        // 2026-10-16 — l'intérieur des maisons des joueurs : le plan, la carte « home », la collision, l'escalier (pur)
+import { PERSO_SOIGNE, PERSO_SIMPLE_WALK } from "./persoSimpleArt";   // 2026-11-21 — le trait simple « soigné » (frange de côté, bras détachés), un ajout désactivable
+import * as UM from "./parapluie";   // 2026-11-21 — les parapluies sous la pluie (un ajout désactivable, `AJOUTS.umbrella`)
+import * as RS from "./rosee";   // 2026-11-21 — la rosée du matin et les chemins qu'on y laisse (pur ; dessinée par neige.js ; `AJOUTS.dew`)
+import * as BUE from "./buee";   // 2026-11-21 — la buée du souffle par temps froid (un ajout désactivable, `AJOUTS.breath`) — ⚠️ `BU`, ce sont les buis
 import * as HMA from "./maisonArt";    // 2026-10-16 — son dessin : sols et murs au canevas, faces coupées, la liste triée d'un niveau
 import * as HOM from "./ombresMaison"; // 2026-10-18 — les ombres portées des meubles, depuis les fenêtres, les appliques et les lampes (pur)
 import { MEUBLES as HOME_MEUBLES } from "./maisonSprites";   // 2026-10-16 — les sprites de meubles rendus par Blender (généré)
@@ -545,6 +553,39 @@ function curtainMullions(img, q) {
   MULLIONS.set(k, out);
   return out;
 }
+/* 2026-11-21 — LE BLANC D'ESPAGNE DES VITRINES DU SALON PENDANT LES TRAVAUX DE FROUFROU (décidé à la passe du 2026-10-23 : « vitrines
+   blanchies pendant les travaux », `docs/A-JUGER.md` ; la Maison Garfield a son image peinte de travaux, le salon n'en a qu'une). Peint sur
+   l'image de jour au pixel d'écran, comme les rideaux : un blanc crayeux un peu transparent aux bords (le verre affleure dans les coins),
+   et les volutes du chiffon qui l'a passé — des arcs à peine plus gris ou plus clairs. Cuit une fois par taille de vitre (au plus 12
+   canevas), puis recopié. */
+const WASH = new Map();
+function whitewashCanvas(W, H, seed) {
+  const k = W + "x" + H + ":" + seed;
+  if (WASH.has(k)) return WASH.get(k);
+  if (typeof document === "undefined" || W < 2 || H < 2) return null;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const id = g.createImageData(W, H), d = id.data;
+  let h = (seed * 2654435761) >>> 0;
+  const rnd = () => { h = (Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) >>> 0; return (h >>> 8) / 16777216; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const e = Math.min(x, y, W - 1 - x, H - 1 - y) / Math.max(2, Math.min(W, H) * 0.16);   // 0 au bord, 1 à l'intérieur
+    const a = 0.52 + 0.36 * Math.min(1, e) + (rnd() - 0.5) * 0.06;
+    const v = 228 + (rnd() - 0.5) * 8, o = (y * W + x) * 4;
+    d[o] = v + 4; d[o + 1] = v + 1; d[o + 2] = v - 8; d[o + 3] = Math.round(255 * Math.max(0, Math.min(0.92, a)));
+  }
+  g.putImageData(id, 0, 0);
+  // les volutes du chiffon : des arcs d'un pixel, un peu plus gris, d'autres plus clairs
+  const n = Math.max(3, Math.round(W * H / 260));
+  for (let i = 0; i < n; i++) {
+    const cx = rnd() * W, cy = rnd() * H, r = (0.12 + 0.22 * rnd()) * Math.min(W, H), a0 = rnd() * 6.28, sweep = 1.6 + rnd() * 2.6;
+    g.beginPath(); g.arc(cx, cy, r, a0, a0 + sweep);
+    g.strokeStyle = rnd() < 0.55 ? "rgba(168,160,146,0.28)" : "rgba(255,253,246,0.45)"; g.lineWidth = 1; g.stroke();
+  }
+  if (WASH.size >= 12) WASH.clear();
+  WASH.set(k, c);
+  return c;
+}
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
@@ -569,6 +610,13 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
      calque léger (les rangs d'ardoise), puis l'épais par-dessus, à la force que
      donne l'épaisseur sur les toits (`glowOpts.snow` : { l, h }). Chargés au
      premier flocon seulement. */
+  /* 2026-11-21 — LA FAÇADE MOUILLÉE (`tools/build-wet-facades.mjs`) : sous la neige et les rideaux, avant la lueur des vitres (une
+     fenêtre allumée reste allumée sous la pluie). Chargée à la première goutte seulement. */
+  const wt = glowOpts && glowOpts.wet;
+  if (wt > 0.01 && mip.wet) {
+    const im = loadBitmap(mip.wet);
+    if (im) { const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * Math.min(1, wt); ctx.drawImage(im, left, top, dw, dh); ctx.globalAlpha = a0; }
+  }
   const sn = glowOpts && glowOpts.snow;
   if (sn && (sn.l > 0.01 || sn.h > 0.01)) {
     const a0 = ctx.globalAlpha;
@@ -578,6 +626,16 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   }
   /* 2026-10-22 (lot 2d) — LES RIDEAUX D'UNE MAISON DE JOUEUR, dans ses vitres (`HMA.paintRideauRue`) : sur l'image de jour, AVANT la
      lueur des vitres — une pièce allumée derrière des rideaux tirés luit au travers. Au pixel d'écran, comme la façade. */
+  /* 2026-11-21 — le blanc d'Espagne (`glowOpts.wash` : des vitres en fractions de l'image, comme les rideaux), avant les rideaux. */
+  const wa = glowOpts && glowOpts.wash;
+  if (wa && wa.length) for (const q of wa) {
+    const X = Math.round(left + q.x * dw), Y = Math.round(top + q.y * dh), W = Math.round(q.w * dw), H = Math.round(q.h * dh);
+    const wc = whitewashCanvas(W, H, q.seed || 1);
+    if (wc) ctx.drawImage(wc, X, Y);
+    /* ⚠️ PAS de petits bois reposés ici (premier jet : `curtainMullions`, comme les rideaux) — vu en jeu, sur les vitrines du salon, ils
+       ramassaient les pixels chauds de l'INTÉRIEUR (le cadre doré des miroirs, les fauteuils) : la boutique transparaissait à travers le
+       badigeon. Le badigeon est sur le verre, la vitrine n'a pas de croisillons : rien à reposer. */
+  }
   const cu = glowOpts && glowOpts.curtains;
   if (cu && cu.length) for (const q of cu) {
     const X = Math.round(left + q.x * dw), Y = Math.round(top + q.y * dh), W = Math.round(q.w * dw), H = Math.round(q.h * dh);
@@ -913,6 +971,38 @@ function readSavedZoomLevel() {
    ⚠️ `Math.min` et non un produit : sur le perron (et dans la bande fautive au nord du tribunal), l'essai
    ne rapetisse pas une seconde fois — on reste à la taille qu'il a vue là-bas. */
 const SMALL_FOLK = { on: false };
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-11-21 (nuit) — LES AJOUTS DE LA NUIT DU 21 NOVEMBRE, CHACUN DÉSACTIVABLE D'UN CLIC.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume : « je te laisse libre […] faut que tout soit removable ». Chaque ajout de cette nuit a SON interrupteur ici, LOCAL
+   (cet écran, retenu par machine comme le cran de zoom ; rien ne part sur le réseau), lu par la boucle de rendu et par le menu dev
+   (section « Ajouts de la nuit du 21 novembre »). Éteint, l'ajout ne dessine RIEN et ne touche à rien : le jeu est celui d'avant.
+   Un objet de MODULE, pas un ref (même raison que `SMALL_FOLK`). Les clés : voir `AJOUTS_KEYS` et leurs textes (`devAjoutBtn`). */
+const AJOUTS = { clouds: true, stepOff: true, stemUp: true, wetFacades: true, cranes: true, cranesCall: true, homeFade: true, salonWash: true, mirrorWalk: true, doorFlip: true, persoSoigne: true, wardrobeFlat: true, breath: true, dew: true, umbrella: true };
+// 2026-11-21 — la force de la buée (`BUE.breathK` de la température du lieu, lue par l'horloge du HUD à 1 Hz) et le vent du moment
+const BREATH = { k: 0, wind: 0, force: null, n: 0 };   // `force` : le harnais impose une force (un nombre), le temps d'un test
+const AJOUTS_KEYS = Object.keys(AJOUTS);
+const CRANE_DBG = { n: 0 };
+/* 2026-11-21 — LE FONDU AU CHANGEMENT D'ÉTAGE, CHEZ SOI (décidé à la passe du 2026-10-23 : « fondu court (0,25 s) au changement d'étage »,
+   `docs/A-JUGER.md`) : la caméra coupait d'un niveau à l'autre d'une image à la suivante. `at` : l'instant du changement (local). */
+const HOME_FADE = { at: 0, MS: 250, A0: 0.9 };
+if (typeof window !== "undefined") { window.__arcardiCranes = GR; window.__arcardiCranesDbg = CRANE_DBG; window.__arcardiBreath = BREATH; window.__arcardiBuee = BUE; }   // `__arcardiBreath` : la buée (à 1 Hz, l'horloge du HUD la réécrit)   // la console et le harnais : `GRUES.ODDS = 1` force un vol par créneau, le temps d'un test
+// Les ajouts qui vivent dans un autre module y ont leur drapeau ; on le recopie à chaque lecture et à chaque bascule.
+function syncAjouts() { MA.STEM_UP.on = AJOUTS.stemUp; HMA.VANTAIL.inverse = AJOUTS.doorFlip; PERSO_SOIGNE.on = AJOUTS.persoSoigne; PERSO_SOIGNE.plat = AJOUTS.wardrobeFlat; }
+function readAjouts() {
+  try {
+    const s = JSON.parse(window.localStorage.getItem("ferme_ajouts_2111") || "{}");
+    for (const k of AJOUTS_KEYS) if (typeof s[k] === "boolean") AJOUTS[k] = s[k];
+  } catch (e) { /* localStorage indispo : les valeurs par défaut */ }
+  syncAjouts();
+  return { ...AJOUTS };
+}
+function writeAjout(k, v) {
+  AJOUTS[k] = !!v;
+  syncAjouts();
+  try { window.localStorage.setItem("ferme_ajouts_2111", JSON.stringify(AJOUTS)); } catch (e) { /* localStorage indispo */ }
+  return { ...AJOUTS };
+}
 function readSmallFolk() {
   try { return window.localStorage.getItem("ferme_dev_smallfolk") === "1"; } catch (e) { return false; }
 }
@@ -2867,6 +2957,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // AUDIT 2026-10 (FIX-004) — l'état affiché de l'interrupteur du dallage civique haute résolution (menu dev, local).
   const [civicHdUi, setCivicHdUi] = useState(() => HD.civicHD.on);
   const [smallFolkUi, setSmallFolkUi] = useState(() => (SMALL_FOLK.on = readSmallFolk()));   // 2026-10-05 (soir) : l'essai « petits personnages »
+  const [ajoutsUi, setAjoutsUi] = useState(() => readAjouts());   // 2026-11-21 : les ajouts de la nuit, chacun son interrupteur (`AJOUTS`)
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
   const keysRef = useRef({});
@@ -6415,7 +6506,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          proprement en étant déjà blessé aurait vu sa lumière s'éteindre pendant
          un repos qu'il n'a pas provoqué. `f.injuredUntil` vaut 0 s'il est
          valide, auquel cas rien ne change. */
-      const freshRunE = Q.resolveStarCandy(starRunE, f.id, gainedE, Date.now(), f.injuredUntil | 0).ok;
+      /* ⚠️ 2026-11-21 — `+f.injuredUntil || 0`, PAS `f.injuredUntil | 0` : un horodatage en ms (≈ 1,8 × 10¹²) passé par `| 0` est
+         tronqué à 32 bits — un entier quelconque, souvent négatif (§4, piège « x | 0 sur un horodatage »). `resolveStarCandy` le
+         prenait pour « valide », et les bonbons d'un blessé qui ressortait proprement fanaient pendant sa blessure. */
+      const freshRunE = Q.resolveStarCandy(starRunE, f.id, gainedE, Date.now(), +f.injuredUntil || 0).ok;
       const scE = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
       if (scE > (f.inv.runBest | 0)) f.inv.runBest = scE;
       dirtyRef.current = true;
@@ -10088,6 +10182,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      le ciel de l'instant `W` et celui de l'aube (une gelée posée par une nuit claire ne
      part pas parce qu'un nuage passe). Au niveau du COMPOSANT (et pas dans la boucle) :
      la ville et la ferme la lisent l'une et l'autre. */
+  /* 2026-11-21 — LA ROSÉE À L'INSTANT (`rosee.js`), même geste que `frostNow` : l'heure de jeu, la saison, le ciel de l'instant et celui
+     de l'aube, la neige au sol. Rien quand l'ajout est éteint (`AJOUTS.dew`) : la couche de la neige ne se bâtit alors pas pour elle. */
+  function dewNow(place, W, snowCm) {
+    if (!AJOUTS.dew) return { sun: 0, shade: 0 };
+    const sh = sharedRef.current, now = Date.now(), day = sh.day || 1, ds = sh.dayStartAt || now;
+    const h = (C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+    const tag = E.seasonTagAt(ds);
+    const Wd = WX.weatherAt(day, C.DAY_START_MIN, tag, sh.forcedWeather || null, place);
+    const r = RS.dewOf(h, WX.sunHoursOfTag(tag)[0], tag, W, Wd, snowCm);
+    if (typeof window !== "undefined") (window.__arcardiDew || (window.__arcardiDew = {}))[place] = r;   // le harnais lit la dernière valeur
+    return r;
+  }
   function frostNow(place, W) {
     const sh = sharedRef.current, now = Date.now(), day = sh.day || 1, ds = sh.dayStartAt || now;
     const h = (C.DAY_START_MIN + Math.min(1, Math.max(0, (now - ds) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
@@ -11405,7 +11511,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          refs : l'effet monté une fois la lit à jour. */
       const nowT = Date.now(), tmT = E.gameTimeMin(s.dayStartAt, nowT);
       const plT = WX.placeOf(meRef.current && meRef.current.zone);
-      const tempT = WX.tempRound(WX.temperatureAt(E.seasonPhaseAt(nowT), tmT / 60, weatherNow(nowT, plT), plT, s.day || 1));
+      const wxT = weatherNow(nowT, plT), rawT = WX.temperatureAt(E.seasonPhaseAt(nowT), tmT / 60, wxT, plT, s.day || 1);
+      const tempT = WX.tempRound(rawT);
+      BREATH.k = typeof BREATH.force === "number" ? BREATH.force : BUE.breathK(rawT); BREATH.wind = (wxT && wxT.wind) || 0;   // 2026-11-21 : la buée (`buee.js`), la même seconde
       setHud(h => ({ ...h, timeMin: tmT, temp: tempT }));   // ⚠️ toujours un objet neuf, comme avant : d'autres panneaux vivent de ce rendu à 1 Hz
       // 2026-07 station update: am I near the townhall? (drives the corner
       // notification card for waiting visitors, 1 Hz is plenty)
@@ -19972,8 +20080,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        pas de nom, de bulle, d'escarbille, de dessin au pixel d'écran —, et le tampon devient UNE silhouette posée
        une fois sur le sol. `bitmaps` : des images posées à l'image d'avant (les bâtiments peints de la ville).
        Rend l'ombre du moment (ou null) pour qui voudrait la lire. */
+    /* L'heure du soleil (heures de jeu, 6 à 26) : une seule écriture, lue par les ombres du soleil ET par celles des nuages. */
+    function sunHourNow() {
+      return (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+    }
+    /* 2026-11-21 — LES NUAGES DE CETTE IMAGE (`nuagesArt.js`) : à appeler AVANT `sunShadowPass` (qui efface l'ombre portée sous
+       eux), à la ferme comme en ville. Leur ombre a la force de celle du soleil au même instant (nulle la nuit, sous la pluie…). */
+    function cloudsNow(season) {
+      const hr = sunHourNow(), [rise, set] = WX.sunHoursOfTag(season), W = wxFrame();
+      const sh = OMB.sunShadow(hr, rise, set, season, W);
+      return NA.cloudsFrame({ seed: sharedRef.current.seed || 1, day: sharedRef.current.day || 1, season, hour: hr, W,
+        sunA: sh ? sh.a : 0, rgb: OMB.OMBRE.RGB, on: AJOUTS.clouds });
+    }
+    /* … et leur ombre posée sur tout ce qui est dehors, APRÈS le monde trié, AVANT la lumière : le rectangle monde que voit l'écran. */
+    function cloudsPaint() {
+      if (!NA.cloudsOn()) return;
+      const M = ctx.getTransform();
+      NA.paintClouds(ctx, -M.e / M.a - 32, -M.f / M.d - 32, canvas.width / M.a + 64, canvas.height / M.d + 64);
+    }
+    /* 2026-11-21 — LES GRUES QUI PASSENT (`oiseaux.js`), au-dessus du monde trié et de l'ombre des nuages, avant la lumière : leur
+       ombre d'abord (le soleil de l'instant la jette à `ALT` cases de hauteur, rien sous un nuage), puis les oiseaux. `mapW`, `mapH` :
+       la carte où l'on est (le ciel est le même pour tous ; le trajet se tire sur la carte qu'on regarde). */
+    function cranesPaint(mapW, mapH, season) {
+      if (!AJOUTS.cranes) return;
+      const nowMs = Date.now(), W = wxFrame(), hr = sunHourNow();
+      const list = GR.cranesNow({ nowMs, seed: sharedRef.current.seed || 1, mapW, mapH, phase: E.seasonPhaseAt(nowMs), hour: hr, W });
+      CRANE_DBG.n = list.length; CRANE_DBG.hr = hr; CRANE_DBG.phase = E.seasonPhaseAt(nowMs); CRANE_DBG.W = W;   // `window.__arcardiCranesDbg`
+      /* LEUR CRI : la grue la plus proche du centre de l'écran (l'altitude comptée : on l'entend de plus loin qu'on ne la voit), de
+         quel côté ; à moins de ~12 cases, à plein ; muet au-delà de ~45. */
+      {
+        const M0 = ctx.getTransform(), cx = (canvas.width / 2 - M0.e) / M0.a / T, cy = (canvas.height / 2 - M0.f) / M0.d / T;
+        let best = null;
+        for (const b of list) { const d = Math.hypot(b.gx - cx, b.gy - cy, GR.GRUES.ALT); if (!best || d < best.d) best = { d, dx: b.gx - cx, fid: b.fid }; }
+        try { cranesSoundUpdate(best && AJOUTS.cranesCall ? { k: 1 - Math.max(0, Math.min(1, (best.d - 12) / 33)), pan: best.dx / 20, fid: best.fid, n: list.length } : { k: 0 }); } catch (e) { /* un son en moins, jamais une image en moins */ }
+      }
+      if (!list.length) return;
+      const [rise, set] = WX.sunHoursOfTag(season), sh = OMB.sunShadow(hr, rise, set, season, W);
+      const M = ctx.getTransform(), vx0 = -M.e / M.a - 40, vy0 = -M.f / M.d - 40, vx1 = vx0 + canvas.width / M.a + 80, vy1 = vy0 + canvas.height / M.d + 80;
+      const A = GR.GRUES.ALT * T, inV = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
+      ctx.save();
+      for (const b of list) {
+        if (!sh || sh.a < 0.02) break;
+        const x = b.gx * T + sh.sx * A, y = b.gy * T + sh.sy * A;
+        if (inV(x, y)) GRA.drawCraneShadow(ctx, x, y, b.hx, b.hy, b.flap, b.gliding, Math.min(0.32, sh.a * 1.1) * (1 - NA.cloudAt(x, y)));
+      }
+      for (const b of list) { const x = b.gx * T, y = b.gy * T - A; if (inV(x, y)) GRA.drawCrane(ctx, Math.round(x), Math.round(y), b.hx, b.hy, b.flap, b.gliding); }
+      ctx.restore();
+    }
     function sunShadowPass(drawsL, baseOf, season, bitmaps, extra) {   // `extra(g, sh, ox, oy)` : des ombres dessinées à part (la bande de la patinoire)
-      const hrS = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+      const hrS = sunHourNow();
       const [riseS, setS] = WX.sunHoursOfTag(season);
       if (PERF.tier >= 1) return null;   // 2026-10-11 : machine qui rame, palier 1 (voir PERF)
       const shS = OMB.sunShadow(hrS, riseS, setS, season, wxFrame());
@@ -20013,6 +20168,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       g.globalCompositeOperation = "source-in";
       g.fillStyle = `rgb(${OMB.OMBRE.RGB.join(",")})`; g.fillRect(0, 0, bw, bh);
       g.globalCompositeOperation = "source-over";
+      NA.eraseSunShadow(g, vx0, vy0, bw, bh);   // 2026-11-21 : sous un nuage, plus de soleil direct — plus d'ombre portée (`nuagesArt.js`)
       ctx.save(); ctx.globalAlpha = shS.a; ctx.imageSmoothingEnabled = false;
       ctx.drawImage(sb, 0, 0, bw, bh, vx0, vy0, bw, bh);
       ctx.restore();
@@ -20621,15 +20777,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-10-05 : la gelée de la ferme se lit dans SA température (rase campagne : elle y
          prend mieux qu'en ville, meteo.js § 9-10) ; le champ se bâtit aussi pour elle (fin
          d'automne). Avant : l'hiver seulement, de l'aube à dix heures. */
-      const WsnF = wxFrame(), frF = frostNow("farm", WsnF);
-      if (fSnowPk.g + fSnowPk.s > 0.05 || fSnowSeason === "winter" || frF.shade > 0.02) {
+      const WsnF = wxFrame(), frF = frostNow("farm", WsnF), dwF = dewNow("farm", WsnF, fSnowPk.g);   // 2026-11-21 : + la rosée
+      if (fSnowPk.g + fSnowPk.s > 0.05 || fSnowSeason === "winter" || frF.shade > 0.02 || dwF.shade > 0.02) {
         fSnowRec = farmSnowField(w);
         farmSnowSync(fSnowRec);
         fSnowF = fSnowRec.f;
         const Wsn = WsnF;
         const hr = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
         const sunSn = Math.min(1, NG.sunAt(hr, fSnowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
-        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost: frF.sun, frostShade: frF.shade, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 });   // castLight : voir `sunShadowPass`
+        fSnowF.setParams(fSnowPk, { winter: fSnowSeason === "winter", frost: frF.sun, frostShade: frF.shade, dew: dwF.sun, dewShade: dwF.shade, wetRoad: 0, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 });   // castLight : voir `sunShadowPass`
         fSnowF.addFall(NG.fallRate(Wsn.snow) * Math.min(dt, 0.1) * (C.DAY_END_MIN - C.DAY_START_MIN) / 60 / (C.DAY_REAL_MS / 1000));
         /* Les cratères de la quête sont chauds (leur chaleur ne descend jamais sous
            0,12 sur la ferme, voir leur dessin plus bas) : ils font fondre la neige
@@ -20867,6 +21023,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (zmFracF) ctx.setTransform(zmF, 0, 0, zmF, -camSxF, -camSyF);   // FIX-001 : la transformation commune, rendue
+      /* 2026-11-21 — LES GOUTTES DE ROSÉE AU SOLEIL, sur la ferme (la ville a les siennes avec les paillettes de la neige) : les éclats
+         que la couche a posés (`glints`, quatrième champ à 1), chacun à sa phase — jamais un tirage à chaque image. */
+      if (fSnowF && AJOUTS.dew && dwF.sun + dwF.shade > 0.1) {
+        const Wg = wxFrame(), hrG = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - (sharedRef.current.dayStartAt || Date.now())) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
+        const sunG = NG.sunAt(hrG, fSnowSeason) * Math.max(0, 1 - 1.5 * Wg.dark);
+        if (sunG > 0.08) {
+          const tS = performance.now() / 1000;
+          ctx.fillStyle = "#f2fbff";
+          for (const [gx, gy, ph, dewG] of fSnowF.glints()) if (dewG && ((tS * 0.32 + ph / 1000) % 1) <= 0.08 * Math.min(1, sunG * 1.6)) ctx.fillRect(gx, gy, 1, 1);
+        }
+      }
 
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 454 — LE SILLON, DANS LE PRÉ NORD DE LA FERME.
@@ -22523,6 +22690,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-10-05 (nuit) — LES OMBRES PORTÉES DU SOLEIL (`sunShadowPass`), à la ferme aussi : les dessins debout
          portent `cb`, leur ligne de sol (arbres, maison, boutique, bac, puits, épouvantail, gare, personnages). La
          neige de la ferme ne pose plus son ombre figée (`castLight: 0`). */
+      cloudsNow(fSnowSeason);   // 2026-11-21 : les nuages de cette image, avant l'ombre du soleil qu'ils effacent
       sunShadowPass(draws, (d) => (d.cb != null ? d.cb : null), fSnowSeason, null);
       draws.sort((a, b) => a.y - b.y);
       // Zip 253 (audit) : on isole chaque draw en try/catch, exactement comme
@@ -22534,6 +22702,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openLightFrame();   // 2026-09-25 (phase 3) : les dessins déclarent leurs bâtiments et leurs calques de nuit
       openNameTags();   // 2026-09-25 (phase 2) : les noms passent après tout le décor — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] farm draw ignoré", e); } }
+      cloudsPaint();   // 2026-11-21 : l'ombre des nuages sur le monde trié (avant les « +40 or » et la montgolfière, qui volent au-dessus)
+      cranesPaint(C.MAP_W, C.MAP_H, fSnowSeason);   // 2026-11-21 : les grues qui passent
       const fx = fxRef.current;
       for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i]; f.t += dt;
@@ -24303,6 +24473,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const [tx, ty] = CHANTIER_EXIT[ev.i], ax = tx - fx, ay = ty - fy, ad = Math.hypot(ax, ay);
       return ad > 0.05 ? { dx: ax / ad, dy: ay / ad } : null;
     }
+    /* 2026-11-21 — LE PAS DE CÔTÉ (voir `parkMountToggle` et `SPK.dismountSpot`) : vers le point sûr choisi en descendant, à la
+       vitesse de la marche (un ou deux pas : 0,4 case au plus), par le pas ordinaire (`townStepOk`) — jamais un saut de position.
+       Fini dès que la semelle tient, ou au bout de 1,2 s quoi qu'il arrive (un pas qui buterait ne pousse pas pour toujours). */
+    function parkStepOffAim(m) {
+      const so = parkFxRef.current.stepOff;
+      if (!so) return null;
+      const ax = so.x - m.x, ay = so.y - m.y, ad = Math.hypot(ax, ay);
+      // fini dès que la semelle tient (pas au point visé : le pas de 8 cm le dépasserait, et l'on marcherait sur place contre le coping)
+      if (ad < 0.01 || SPK.walkStandOk(m.x, m.y) || performance.now() > so.until || rideRef.current) { parkFxRef.current.stepOff = null; return null; }
+      return { dx: ax / ad, dy: ay / ad };
+    }
     /* 2026-10-11 — LE PAS SUR LE RELIEF DU SKATEPARK : chaque point de la semelle d'arrivée doit tenir dans une marche de la
        hauteur sous les pieds d'où l'on part (`SPK.walkStepOk`) — on monte l'escalier et les tremplins, pas une plateforme ;
        on saute de la caisse. Hors du park (ou monde sans park) : rien à dire. */
@@ -24622,7 +24803,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          lui, reste armé). */
       /* 2026-11-12 — au chantier, qui est resté sur la place fermée est ramené au bord par les portes (`chantierEvacAim`) ; une
          touche reprend la main. Avant la reine : sortir d'un chantier passe avant tout guidage. */
-      const evacAim = !dx && !dy && !uiBlocked ? chantierEvacAim(tw, m) : null;
+      // 2026-11-21 — le pas de côté après être descendu sur un plateau du park (`parkStepOffAim`) ; la moindre touche reprend la main
+      if ((dx || dy) && parkFxRef.current.stepOff) parkFxRef.current.stepOff = null;
+      const evacAim = !dx && !dy && !uiBlocked ? (parkStepOffAim(m) || chantierEvacAim(tw, m)) : null;
       if (evacAim) { dx = evacAim.dx; dy = evacAim.dy; }
       else if (!dx && !dy && starGreenWalking() && !uiBlocked) {
         const aim = starGuideAim("town", m.x, m.y);
@@ -24764,7 +24947,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
         // Zip 250 (demande Guillaume : "mêmes déplacements qu'à la ferme, on
         // ne fait que marcher en ville") : on retire l'ancien bonus de vitesse
-        // ville (TOWN_SPEED_MULT) pour caler la marche EXACTEMENT sur la ferme
+        // ville (TOWN_SPEED_MULT, constante retirée le 2026-11-21) pour caler la marche EXACTEMENT sur la ferme
         // (PLAYER_SPEED, même bonus bonbon). Le cheval reste absent en ville.
         // Zip 365 : idem ferme — vitesse réelle (bonbon compris) mémorisée en
         // tuiles/seconde pour être diffusée, plutôt que devinée à l'arrivée.
@@ -24982,6 +25165,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `house` (chauffés, `rh`) et `cold` (monuments, `rc`). Écrite par
        `drawTownFrame`, lue par les maisons, les commerces et `monumentGlowOpts`. */
     let roofSnowFrame = null;
+    /* 2026-11-21 — LE MOUILLÉ DES FAÇADES PEINTES DE CETTE IMAGE (0..1), posé par `drawTownFrame` depuis celui du sol (`wetP`), lu par le
+       dessin des maisons, des commerces et des monuments (`drawScreenExactBitmap`, `glowOpts.wet`). 0 si l'ajout est éteint. */
+    let facadeWetFrame = 0;
     /* L'épaisseur de neige sous les pieds d'un personnage (cm), pour `drawCharacter`
        (l'ombre bleue, les pieds enfoncés) — posée par `drawTownFrame`, lue
        seulement quand on regarde la ville (le piège des deux cartes, §4). */
@@ -25176,7 +25362,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          beau temps, gris doux sous un ciel couvert, la nuit, quand il neige. */
       const sunSn = Math.min(1, NG.sunAt(hr, snowSeason) * 1.3) * Math.max(0, 1 - 1.4 * Wsn.dark) * Math.max(0, 1 - 2.5 * Wsn.snow);
       // `castLight: 0` (2026-10-05, nuit) : la ville pose ses ombres portées du soleil elle-même (`OMB`, voir drawTownFrame)
-      return { winter: snowSeason === "winter", frost: fr.sun, frostShade: fr.shade, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 };
+      const dw = dewNow("town", Wsn, snowPk.g);   // 2026-11-21 : la rosée (`rosee.js`)
+      return { winter: snowSeason === "winter", frost: fr.sun, frostShade: fr.shade, dew: dw.sun, dewShade: dw.shade, wetRoad, sun: sunSn, falling: Wsn.snow > 0.05, castLight: 0 };
     }
     /* ╔══════════════════════════════════════════════════════════════════════
        ║ 2026-10-05 — LA NEIGE DE LA VILLE EST PRÊTE QUAND L'ÉCRAN S'ÉCLAIRCIT.
@@ -25208,7 +25395,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!tw) return;
       const snowPk = snowPackNow("town"), snowSeason = E.seasonOf().key, Wtown = weatherNow(Date.now(), "town");
       // 2026-10-05 : + la gelée (fin d'automne) — la même condition que `drawTownFrame`.
-      if (!(snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", Wtown).shade > 0.02)) return;
+      if (!(snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", Wtown).shade > 0.02 || dewNow("town", Wtown, snowPk.g).shade > 0.02)) return;   // 2026-11-21 : + la rosée, même condition que l'image
       const f = townSnowField(tw);
       f.setParams(snowPk, townSnowParams(snowPk, snowSeason, Wtown));
       // Le cadre d'arrivée, large : le zoom le plus serré de la ville est plafonné (`townZoomTarget`), donc le plus ÉLOIGNÉ des deux.
@@ -25870,7 +26057,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* 2026-10-05 : le champ se bâtit aussi pour la GELÉE de la fin d'automne (et du début du
          printemps) — c'est lui qui la dessine (`NG.renderChunk`). Même condition au préchauffage. */
       const WsnT = wxFrame();
-      if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", WsnT).shade > 0.02) {
+      // 2026-11-21 : … et pour la ROSÉE des matins clairs (`dewNow`) — c'est encore lui qui la dessine, et qui garde les pas qu'on y laisse
+      if (snowPk.g + snowPk.s + snowPk.r + snowPk.berm > 0.05 || snowSeason === "winter" || frostNow("town", WsnT).shade > 0.02 || dewNow("town", WsnT, snowPk.g).shade > 0.02) {
         snowF = townSnowField(tw);
         const Wsn = WsnT;
         snowF.setParams(snowPk, townSnowParams(snowPk, snowSeason, Wsn));
@@ -25915,6 +26103,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!snowF) sfw.evict();
       }
       wetFrameRef.current = wetF ? { layer: wetF, pud: wetP.pud, wet: wetP.wet } : null;
+      /* 2026-11-21 — LES FAÇADES PEINTES SE MOUILLENT AVEC LE SOL (`tools/build-wet-facades.mjs`) : un mur sèche un peu plus vite qu'un
+         pavé (il s'égoutte), mais il prend l'eau dès les premières gouttes — d'où ×1,2, borné ; la neige au sol la retire déjà (`wetSnowK`). */
+      facadeWetFrame = AJOUTS.wetFacades ? Math.min(1, wetP.wet * 1.2) : 0;
       /* 2026-10-12 — L'EAU DE LA GLACE FONDUE (chantier de la place) : la même eau que la pluie (`pluie.js` : le dallage assombri, les
          flaques dans les creux et les joints, le ciel qui s'y reflète), mais à elle seule — sa propre couche, son petit atlas, la
          patinoire seule. Elle monte avec la fonte, les raclettes la chassent (34-44), le soleil sèche le reste (jusqu'à 56). */
@@ -26220,14 +26411,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cristaux d'un pixel qui s'allument et s'éteignent, chacun à sa phase (un
          hachage du pixel) — jamais tirés au hasard à chaque image. Le jour, sous
          un ciel dégagé, quand rien ne tombe. */
-      if (snowF && snowPk.g > 1) {
+      /* 2026-11-21 — et LES GOUTTES DE ROSÉE (`rosee.js`), les mêmes éclats posés par la couche (`glints`, quatrième champ à 1) : une
+         goutte s'allume plus rarement et plus longtemps qu'un cristal, d'un blanc à peine bleuté. */
+      if (snowF && (snowPk.g > 1 || (AJOUTS.dew && snowPk.g <= 1))) {
         const Wg = wxFrame(), ds0 = sharedRef.current.dayStartAt || Date.now();
         const hrG = (C.DAY_START_MIN + Math.min(1, Math.max(0, (Date.now() - ds0) / C.DAY_REAL_MS)) * (C.DAY_END_MIN - C.DAY_START_MIN)) / 60;
         const sunG = NG.sunAt(hrG, snowSeason) * Math.max(0, 1 - 1.5 * Wg.dark) * (Wg.snow > 0.02 ? 0 : 1);
         if (sunG > 0.12) {
           const tS = performance.now() / 1000;
           ctx.fillStyle = "#ffffff";
-          for (const [gx, gy, ph] of snowF.glints()) {
+          for (const [gx, gy, ph, dewG] of snowF.glints()) {
+            if (dewG) {
+              if (((tS * 0.32 + ph / 1000) % 1) > 0.08 * sunG) continue;
+              ctx.fillStyle = "#f2fbff"; ctx.fillRect(gx, gy - elAt(gx >> 4, gy >> 4) * EP, 1, 1); ctx.fillStyle = "#ffffff";
+              continue;
+            }
             if (((tS * 0.55 + ph / 1000) % 1) > 0.05 * sunG) continue;
             ctx.fillRect(gx, gy - elAt(gx >> 4, gy >> 4) * EP, 1, 1);
           }
@@ -28673,7 +28871,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         pushE(footWY, houseE, () => {
           drawPaintedGrounding(ctx, baseL, baseR, byW, byW - footWY + C.TOWN_HOUSE_H * T * 0.75);
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY, curtains });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA, { rects, flick: 1, snow: roofSnowFrame && roofSnowFrame.house, foot: footWY, curtains, wet: facadeWetFrame });
           if (r) {
             // L'emprise du MUR (le toit et les étages débordent, le mur non) et la silhouette, pour la lumière.
             lightBuilding(wallL, hsn.y * T, wallR, footWY, r.img, r.left, r.top, r.dw, r.dh, true);
@@ -28801,6 +28999,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           return covered ? { y0, frac: Math.max(0, (w.y + w.h - y0) / w.h), k: 1 } : { y0: w.y, frac: 1, k: 1 - shutP };
         };
         const shopWins = C.townPaintedWins(mk, vk);
+        /* 2026-11-21 — LE SALON EN TRAVAUX (`salonStageNow`, les deux jours après l'emménagement de Froufrou) : ses vitrines et sa porte vitrée
+           passées au blanc d'Espagne (`glowOpts.wash`) ; elles ne s'allument plus et ne posent plus de nappe sur le pavé — on y travaille
+           derrière le badigeon. L'applique et la porte-fenêtre du balcon restent ce qu'elles sont. Interrupteur : `AJOUTS.salonWash`. */
+        const washed = mk === "salon" && AJOUTS.salonWash && salonStageNow() === "travaux" ? shopWins.filter((w) => w.g && (w.show || w.interior)) : null;
         /* La lumière des vitrines SUR LE PAVÉ (Guillaume : « bien travailler
            l'éclairage des vitrines, c'est important »). Une vitrine de trois
            cases n'est pas une fenêtre : un seul anneau devant son milieu faisait
@@ -28813,6 +29015,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const x0 = (doorWX + (w.x - M.door) * k) / T, x1 = (doorWX + (w.x + w.w - M.door) * k) / T;
             if (w.lamp) { townWinLights.push({ x: (x0 + x1) / 2, y: gy, r: 1.6, c: "lamp", k: 0.5 * glowA }); continue; }
             if (!w.g && !w.show) continue;                  // l'imposte, l'enseigne : pas de flaque à elles
+            if (washed && washed.includes(w)) continue;     // 2026-11-21 : derrière le badigeon des travaux, pas de vitrine allumée
             const wp = winPart(w), wk = wp.k * wp.frac * (w.wash ? 0.6 : 1);   // un rideau baissé éteint la flaque qu'il cache ; un badigeon diffuse
             if (wk <= 0.01) continue;
             const far = !w.g, n = Math.max(1, Math.round((x1 - x0) / (far ? 2.2 : 1.1)));
@@ -28837,15 +29040,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           glowOpts = { rects };
         }
+        if (washed) {
+          const rects = [];
+          for (const w of shopWins) if (!washed.includes(w)) rects.push({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch });
+          glowOpts = { rects, wash: washed.map((w, i) => ({ x: (w.x - c0) / cw, y: (w.y - c1) / ch, w: w.w / cw, h: w.h / ch, seed: 17 + i * 31 })) };
+        }
         const SBfrom = st.from ? C.TOWN_BITMAPS[C.townPaintedBitmapKey(mk, st.from === "fermee" && !M.variants.fermee ? "simple" : st.from)] : null;
         pushE(footWY, shopE, () => {
           drawPaintedGrounding(ctx, cxW - (cw / 2 - 12) * k, cxW + (cw / 2 - 12) * k, byW, byW - footWY + b.h * T * 0.6);
           // Le fondu : l'étape d'avant dessous, pleine, la nouvelle par-dessus, qui monte.
           const shopSnow = roofSnowFrame && roofSnowFrame.house;
-          if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0, { snow: shopSnow });
+          if (SBfrom && fadeA < 1) drawScreenExactBitmap(ctx, SBfrom, cxW, byW, 0, { snow: shopSnow, wet: facadeWetFrame });
           const a0 = ctx.globalAlpha;
           if (SBfrom && fadeA < 1) ctx.globalAlpha = a0 * fadeA;
-          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, { ...(glowOpts || {}), snow: shopSnow, foot: footWY });
+          const r = SB && drawScreenExactBitmap(ctx, SB, cxW, byW, glowA * fadeA, { ...(glowOpts || {}), snow: shopSnow, foot: footWY, wet: facadeWetFrame });
           ctx.globalAlpha = a0;
           if (!r) return;
           // L'emprise du MUR (pas du rectangle) et la silhouette, pour la lumière ; puis le calque de nuit.
@@ -30122,6 +30330,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // 2026-10-12 : en chantier, seulement les modules qui ont déjà pris corps (`CH.primsBuiltAt`) — premier jet : aucun, le park fini à plat
         const chS = tw.chantier ? chantierNow() : null, parkBuilt = chS ? CH.primsBuiltAt(chS.type === "demontage" ? CH.demontageMinute(chS.t) : chS.t) : null;
         if (parkNow) { const ct = SPA.parkContactLayer(parkNow, parkBuilt); ctx.drawImage(ct.cv, ct.x0, ct.y0); }
+        cloudsNow(snowSeason);   // 2026-11-21 : les nuages de cette image, avant l'ombre du soleil qu'ils effacent
         const shTown = sunShadowPass(draws, (d) => (d.rb != null ? d.rb - (d.re || 0) * EP : null), snowSeason, SUN_SHADOW.bitmaps,
           (tw.rink || parkNow) ? (g, sh, ox, oy) => {
             if (tw.rink && chS && chS.type === "montage") {
@@ -30178,6 +30387,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
       BITMAP_LOG.fn = null;   // 2026-10-05 : le relevé des bâtiments ne vaut que pour le monde de la ville, cette image
+      cloudsPaint();   // 2026-11-21 : l'ombre des nuages sur la ville triée — maisons peintes comprises (avant le guide des boules)
+      cranesPaint(tw.w, tw.h, snowSeason);   // 2026-11-21 : les grues qui passent
       bouloDrawPost(ctx);   // 2026-10-31 — par-dessus le monde : les boules en vol, mon guide et ma jauge, le « +n »
       /* 2026-10-11 — LA FLÈCHE DE LA GRUE ET SA CHARGE, au-dessus du monde trié (elles passent au-dessus de tout ce qui est au sol) :
          le crochet vise sa cible (`CH.machinesAt`), le chalet ou le conteneur y pend par le toit. */
@@ -30869,6 +31080,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const w = HM.homeToWorld(f.slot, r.aller.level, f.lx, r.aller.ly);
       m.x = w.x - C.BODY_CX; m.y = w.y - C.BODY_FY; m.moving = false;
       homeCutRef.current = new Map();
+      HOME_FADE.at = performance.now();   // 2026-11-21 : le nouveau niveau sort du noir en 0,25 s (`drawHomeFrame`)
       sendPos();
     }
     function updateMeHome(dt) {
@@ -31434,6 +31646,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (deco) homeDecoOverlay(bk, home, fac, lvl, local, world, dt);
       drawStarChevron(cam, zm);
+      /* 2026-11-21 — LE FONDU AU CHANGEMENT D'ÉTAGE (`HOME_FADE`) : le niveau d'arrivée sort du sombre des pièces voisines en 0,25 s, sous
+         le bandeau (qui dit déjà le nom du niveau). Éteint (`AJOUTS.homeFade`) : la coupe franche d'avant. */
+      if (AJOUTS.homeFade && HOME_FADE.at) {
+        const u = (performance.now() - HOME_FADE.at) / HOME_FADE.MS;
+        if (u < 1) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "rgba(16,11,8," + (HOME_FADE.A0 * Math.pow(1 - Math.max(0, u), 1.3)).toFixed(3) + ")"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+        else HOME_FADE.at = 0;
+      }
       // ---- Le bandeau : le niveau et la pièce, en espace ÉCRAN.
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       const fname = (deco ? "🛋️ " : "🏠 ") + L.homeLevelName(P.niveaux[lvl].cle) + (deco ? " · " + L.homeDecoTitle : myRoom ? " · " + L.homeRoomName(myRoom.id) : "");
@@ -34483,6 +34702,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillRect(cx0 - half, yy, half * 2, 1);
         }
       }
+      /* 2026-11-21 — LA BUÉE (`buee.js`, `AJOUTS.breath`) : par temps froid, debout ou en marche, à pied ou à cheval, dehors (la ferme,
+         la ville). La bouche se lit sur le gabarit 16 × 24 (le haut du sprite à `py − 8 − lift`) : de face au milieu, à 8,5 px du haut ; de
+         profil au bord du visage (11,5 px, en miroir vers la gauche). Ni assis, ni sur une monture du park, ni au patin, ni dans l'eau ;
+         jamais dans la passe des ombres du soleil ni dans un reflet (`reflecting` : un souffle ne jette pas d'ombre). */
+      /* 2026-11-21 — LE PARAPLUIE (`parapluie.js`, `AJOUTS.umbrella`) : sous une pluie franche, debout ou en marche, à pied, dehors ;
+         chacun à son seuil et dans sa couleur (un hachage de son identifiant : les deux joueurs voient les mêmes). Ni assis, ni à cheval,
+         ni au patin, ni sur une monture du park, ni à la pêche, ni la torche à la main, ni un enfant (sa main n'est pas à cette hauteur). */
+      const carryingTorchUm = isSelf ? torchOnRef.current : !!p.torch;
+      let umOpen = false;   // le nom monte au-dessus du dôme (voir `queueNameTag`, plus bas)
+      if (AJOUTS.umbrella && !reflecting && !riding && !swimmingHere && !p.sit && !p.sitOn && !p.skate && !p.ride && !p.slip && !inBoat && !p.fishing && !carryingTorchUm && !(p.scale && p.scale !== 1)) {
+        const zu = (meRef.current && meRef.current.zone) || "farm";
+        if (zu === "farm" || zu === "town") {
+          const um = UM.umbrellaOf(BUE.idSeed(p.id || p.name), PL.groundRain(wxFrame()), isPlayerP);
+          if (um) {
+            const face = p.dir === 0 ? "down" : p.dir === 1 ? "up" : p.dir === 2 ? "left" : "right";
+            // la descente du pas (px d'art) : celle de la feuille fine (huit images au demi-pas), ou de l'ancien (un pixel aux images 1 et 3)
+            const wb = !p.moving ? 0 : hdSheet ? (frameHD ? PERSO_SIMPLE_WALK[frameHD - 1].bob : 0) : (frame % 2 ? 1 : 0);
+            UM.drawUmbrella(ctx, { ox: px, oy: py - 8 - lift, face, side: um.side, col: um.col, dark: um.dark, bob: wb });
+            umOpen = true;
+          }
+        }
+      }
+      if (AJOUTS.breath && BREATH.k > 0.01 && !reflecting && !swimmingHere && !p.sit && !p.sitOn && !p.skate && !p.ride && !p.slip && !inBoat) {
+        const zb = (meRef.current && meRef.current.zone) || "farm";
+        BREATH.n++;   // le harnais compte les personnages qui passent ici (`__arcardiBreath.n`)
+        if (zb === "farm" || zb === "town") {
+          const sc = p.scale && p.scale !== 1 ? p.scale : 1;
+          const ox = px + (16 - 16 * sc) / 2, oy = (py - 8 - lift) + (24 - 24 * sc);
+          const face = p.dir === 0 ? "down" : p.dir === 1 ? "up" : p.dir === 2 ? "left" : "right";
+          const mx = ox + (face === "right" ? 12 : face === "left" ? 4 : 8) * sc, my = oy + 8.5 * sc;
+          BUE.drawBreath(ctx, { mx, my, face, tSec: performance.now() / 1000, seed: BUE.idSeed(p.id || p.name), moving: !!p.moving, k: BREATH.k, wind: BREATH.wind });
+        }
+      }
       if (inBoat && isPilot && sprites.drawBoatFront) sprites.drawBoatFront(ctx, basePx + 8, py + 14, T, p.dir);
       // Torche allumée (chantier 2026-07) : dessinée collée à la main côté
       // sens de la marche, flamme qui vacille légèrement.
@@ -34511,7 +34763,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       // 2026-10-15 : au HANDPLANT, le corps renversé monte de 27 px au-dessus du coping (les bottines en haut) — le nom passe au-dessus d'elles
       // 2026-11-12 : le PATINEUR aussi (vu en jeu au zoom 3 : au sommet du saut, la tête passait à travers son nom resté au sol)
-      queueNameTag(p, isSelf, px + 8, py - 10 - Math.round(p.skAir || 0) - (p.ride && p.ride.pose === "hand" ? 6 : 0));   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
+      queueNameTag(p, isSelf, px + 8, py - 10 - Math.round(p.skAir || 0) - (p.ride && p.ride.pose === "hand" ? 6 : 0) - (umOpen ? 5 : 0));   // 2026-11-21 : au-dessus du parapluie ouvert   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité ; 2026-10-11 : le nom suit le rider en l'air
       // ⚠️ L'état du contexte que laissait l'ancienne écriture du nom : les
       // icônes ci-dessous (🩹, 🏆) comptaient sur son `textAlign` centré.
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
@@ -34703,7 +34955,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function monumentGlowOpts(key) {
       const sh = sharedRef.current;
       return { key, tmin: E.gameTimeMin(sh.dayStartAt, Date.now()), day: sh.day || 1,
-        flick: key === "church" ? LUM.candleFlicker(Date.now()) : 1, snow: roofSnowFrame && roofSnowFrame.cold };
+        flick: key === "church" ? LUM.candleFlicker(Date.now()) : 1, snow: roofSnowFrame && roofSnowFrame.cold, wet: facadeWetFrame };
     }
     /* Un monument peint (phase 1 : une image par cran, à 1:1) : son emprise
        (repère courant), sa silhouette et son calque de nuit (ce que
@@ -35866,8 +36118,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (cur) {
       if (cur.mode !== "ground") return true;
       // 2026-10-13 — on ne descend que là où un piéton tient debout (ni sur la pente d'une courbe, ni collé à une lisse)
-      if (!SPK.walkStandOk(m.x, m.y)) { const now = performance.now(); if (now - (parkFxRef.current.dismountAt || 0) > 2500) { parkFxRef.current.dismountAt = now; pushToast(L.parkDismountNo); } return true; }
+      /* 2026-11-21 — SUR UN PLATEAU, LE PAS DE CÔTÉ (`SPK.dismountSpot`) : arrêté contre le coping, la semelle déborde sur la courbe —
+         au lieu de refuser (« coincé », disait Guillaume), on descend et l'on fait un ou deux pas jusqu'au point sûr le plus proche,
+         EN MARCHANT (`parkStepOffAim`, la boucle). Refusé seulement sur la pente, ou quand l'ajout est éteint (`AJOUTS.stepOff`). */
+      let stepTo = null;
+      if (!SPK.walkStandOk(m.x, m.y)) {
+        stepTo = AJOUTS.stepOff ? SPK.dismountSpot(m.x, m.y) : null;
+        if (!stepTo) { const now = performance.now(); if (now - (parkFxRef.current.dismountAt || 0) > 2500) { parkFxRef.current.dismountAt = now; pushToast(L.parkDismountNo); } return true; }
+      }
       rideRef.current = null; m.vx = 0; m.vy = 0; m.moving = false; sendPos(); parkSoundStop();
+      parkFxRef.current.stepOff = stepTo ? { x: stepTo.x, y: stepTo.y, until: performance.now() + 1200 } : null;
       return true;
     }
     const kitM = MO.rideKitNorm(invRef.current && invRef.current.rideKit);
@@ -47585,7 +47845,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <button className="ferme-fit-miroir" onClick={() => setFitView((v) => (v + 1) & 3)} title={L.fitTurn} aria-label={L.fitTurn}>
                     <span className="ferme-fit-verre">
                       <span className="ferme-fit-sol" />
-                      <Sprite img={sheetOf(cand, candSkin)} sx={16} sy={24} ox={0} oy={VIEW.oy} flip={VIEW.flip} w={112} h={168} />
+                      <WalkMirror img={sheetOf(cand, candSkin)} oy={VIEW.oy} flip={VIEW.flip} w={112} h={168} walking={!!ajoutsUi.mirrorWalk} />
                     </span>
                   </button>
                   <div className="ferme-fit-tourner">
@@ -48169,6 +48429,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <button key={"devsmallfolk-" + v} className={"ferme-dev-btn" + (smallFolkUi === v ? " on" : "")} onClick={() => { SMALL_FOLK.on = v; setSmallFolkUi(v); try { window.localStorage.setItem("ferme_dev_smallfolk", v ? "1" : "0"); } catch (e) { /* localStorage indispo */ } }}>{L.devSmallFolkBtn(v)}</button>
                   ))}
                 </div>
+                {/* 2026-11-21 (nuit) — LES AJOUTS DE LA NUIT DU 21 NOVEMBRE (`AJOUTS`) : un interrupteur par ajout, LOCAL, retenu
+                    par machine. Éteint, l'ajout ne dessine rien : le jeu est celui d'avant. */}
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devAjoutsSection}</div>
+                <div className="ferme-dev-hint">{L.devAjoutsHint}</div>
+                <div className="ferme-dev-grid">
+                  {AJOUTS_KEYS.map(k => (
+                    <button key={"devajout-" + k} className={"ferme-dev-btn" + (ajoutsUi[k] ? " on" : "")} onClick={() => setAjoutsUi(writeAjout(k, !ajoutsUi[k]))}>{L.devAjoutBtn(L.devAjoutNames[k], !!ajoutsUi[k])}</button>
+                  ))}
+                </div>
                 {/* 2026-09-28 (phase 12a) — LA NEIGE, LOCALE (`snowDevRef`, lu par `snowPackNow`). */}
                 <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devSnowSection}</div>
                 <div className="ferme-dev-hint">{L.devSnowHint}</div>
@@ -48677,6 +48946,38 @@ function fmtNewsDate(iso, lg) {
   const [, m, d] = iso.split("-").map(Number);
   const MO = { fr: ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."], en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] };
   return lg === "en" ? MO.en[m - 1] + " " + d : d + " " + MO.fr[m - 1];
+}
+/* 2026-11-21 — LE MIROIR DE LA CABINE OÙ L'ON MARCHE SUR PLACE (décidé à la passe du 2026-10-23 : « le miroir de la cabine : le personnage
+   marche sur place », `docs/A-JUGER.md`) : une tenue se juge en mouvement — la robe qui balance, l'écharpe, les jambes. La foulée de la feuille
+   (`getCharFitting`) au rythme du jeu (`animT` gagne 9 par seconde, `drawCharacter` : 4 images, ou 8 sur la feuille fine), sur place.
+   ⚠️ UN COMPOSANT DE MODULE, PAS DÉCLARÉ DANS LE RENDU de la cabine (§4 : ce serait un type neuf à chaque rendu, son canevas recréé) ; ses
+   crochets sont les siens, l'ordre de ceux de `FermeGame` ne bouge pas. Il ne repeint que quand l'image change. `walking` faux : l'image 0,
+   comme `Sprite` (interrupteur `AJOUTS.mirrorWalk`). */
+function WalkMirror({ img, w, h, oy = 0, flip = false, walking }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !img) return undefined;
+    const K = img.__hdK || 1, sw = 16 * K, sh = 24 * K, n = Math.max(1, Math.round(img.width / K / 16));
+    node.width = sw; node.height = sh;
+    const g = node.getContext("2d"); g.imageSmoothingEnabled = false;
+    const t0 = performance.now();
+    let raf = 0, last = -1;
+    const draw = () => {
+      const aT = ((performance.now() - t0) / 1000) * 9;
+      const f = !walking ? 0 : n >= 9 ? 1 + Math.floor((aT % 4) * 2) : Math.floor(aT % 4) % n;
+      if (f !== last) {
+        last = f;
+        g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, sw, sh);
+        if (flip) { g.translate(sw, 0); g.scale(-1, 1); }
+        g.drawImage(img, f * 16 * K, oy * K, sw, sh, 0, 0, sw, sh);
+      }
+      if (walking) raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [img, oy, flip, walking]);
+  return <canvas ref={ref} style={{ width: w, height: h, imageRendering: "pixelated" }} />;
 }
 function Sprite({ img, w = 32, h = 32, sx, sy, ox = 0, oy = 0, flip = false }) {
   const ref = useCallback((node) => {

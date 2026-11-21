@@ -663,8 +663,12 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      à celui qui MARCHE : la course est un bonus, pas une exigence, et une
      fenêtre qu'on tient en flânant ne demande rien. Une seule vitesse pour les
      deux bornes aurait donné un banc qui dit oui aux deux ou non aux deux. */
-  const RUN = C.PLAYER_SPEED * C.TOWN_SPEED_MULT * C.RUN_SPEED_MULT;
-  const WALK = C.PLAYER_SPEED * C.TOWN_SPEED_MULT;
+  /* ⚠️ 2026-11-21 — LA VRAIE VITESSE DE LA VILLE : `PLAYER_SPEED` (× la course), celle de `updateMeTown`. Ces deux lignes
+     multipliaient encore par `TOWN_SPEED_MULT` (×1,45), que le jeu n'applique plus depuis le zip 250 (« mêmes déplacements
+     qu'à la ferme ») : le jour où elles resserviront, elles auraient cru le joueur 45 % plus rapide qu'il n'est — et dit
+     « tenable » une fenêtre qui ne l'est pas. La constante morte est retirée de fermeConstants.js le même jour. */
+  const RUN = C.PLAYER_SPEED * C.RUN_SPEED_MULT;
+  const WALK = C.PLAYER_SPEED;
   /* Le meilleur temps possible d'un trajet, en suivant le VRAI chemin piéton
      case par case. On ne triche pas en diagonale : le chemin est celui que le
      jeu emprunterait. */

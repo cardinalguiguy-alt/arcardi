@@ -674,14 +674,16 @@ console.log("\n=== 15. lot 2c : lumières, feu, objets de mur, revente ===");
   const rNon = H.resolveHomeLamp(h, { u: 1, v: 1 });   // le lit n'est pas une lampe
   check("une lampe jamais touchée suit sa pièce ; allumée à la main, elle brille pièce éteinte ; un lit ne s'allume pas",
     suit[0] && !suit[1] && H.homeLampOn(h.m.at(-1), false) && !rNon.ok);
-  // le feu : 4 h de flammes, 45 min de braises, puis rien ; la cheminée est au rez-de-chaussée seulement ; la fumée suit le plus fort
-  const t0 = H.homeGameMin(3, 20 * 60);
+  // le feu : 12 h de flammes (2026-11-21, décision du 2026-10-23 ; 4 h avant), 45 min de braises, puis rien ; la cheminée est au
+  // rez-de-chaussée seulement ; la fumée suit le plus fort. ⚠️ Les instants se lisent sur la constante (`HOME_FEU_MIN`) : le premier
+  // jet écrivait 240 en dur, et le contrôle rougissait le jour où la durée changeait par décision.
+  const t0 = H.homeGameMin(3, 20 * 60), FM = H.HOME_FEU_MIN;
   H.resolveHomeFire(h, { k: "cheminee", n: 0, v: 1 }, P, t0);
-  const lv = [0, 239, 240 + 20, 240 + 45, 600].map((d) => H.homeFireLevel(h.fe["0:cheminee"], t0 + d));
+  const lv = [0, FM - 1, FM + 20, FM + 45, FM + 360].map((d) => H.homeFireLevel(h.fe["0:cheminee"], t0 + d));
   const rEt = H.resolveHomeFire(h, { k: "cheminee", n: 1, v: 1 }, P, t0);
-  check("le feu : flammes 4 h de jeu, braises 45 min qui baissent, puis éteint ; pas de cheminée à l'étage",
+  check(`le feu : flammes ${FM / 60} h de jeu, braises 45 min qui baissent, puis éteint ; pas de cheminée à l'étage`,
     lv[0] === 1 && lv[1] === 1 && lv[2] > 0 && lv[2] < 0.35 && lv[3] === 0 && lv[4] === 0 && !rEt.ok, lv.map((x) => x.toFixed(2)).join(" → "));
-  check("la fumée du toit suit le feu de la maison (`homeFireOf`)", H.homeFireOf(h, t0 + 10) === 1 && H.homeFireOf(h, t0 + 600) === 0 && H.homeFireOf(H.homeDepart(), t0) === 0);
+  check("la fumée du toit suit le feu de la maison (`homeFireOf`)", H.homeFireOf(h, t0 + 10) === 1 && H.homeFireOf(h, t0 + FM + 360) === 0 && H.homeFireOf(H.homeDepart(), t0) === 0);
   h.m.push({ u: 51, s: "poele", o: "S", n: 1, x: 10, y: 108 });
   H.resolveHomeFire(h, { u: 51, v: 1 }, P, t0);
   H.resolveHomeStore(h, { u: 51 });

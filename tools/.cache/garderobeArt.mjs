@@ -58,6 +58,16 @@ export function wardrobeRamp(hex) {
   return r;
 }
 const GOLD = { g: "#f0cf6a", G: "#a8772a", h: "#fff3b8" };
+/* 2026-11-21 — AU TRAIT SIMPLE, DEUX TONS PAR MATIÈRE (`o.plat`, voir `paintWardrobe`) : la lumière et l'éclat reviennent à la base, le creux et
+   l'ombre à la base −30 (le −30 de l'ancien, celui des poignets et des liserés). Le drapé garde ses deux zones (le bord ombré à droite,
+   comme le pantalon de l'ancien) et ses plis deviennent des traits d'un pixel fin ; l'or, le blanc, la peau, les doublures ne bougent pas.
+   Une palette sans base (`m` : la couronne) reste telle quelle. */
+const minus30 = (hex) => "#" + [1, 3, 5].map((i) => Math.max(0, parseInt(hex.slice(i, i + 2), 16) - 30).toString(16).padStart(2, "0")).join("");
+export function flatRamp(pal) {
+  if (!pal || !pal.m) return pal;
+  const d = minus30(pal.m);
+  return { ...pal, h: pal.m, l: pal.m, d, o: d };
+}
 
 // ─── la couche ───────────────────────────────────────────────────────────────────────────────────────────────────
 const blank = () => Array.from({ length: H }, () => new Array(W).fill(null));
@@ -368,6 +378,7 @@ function layerOf(slot, id, dir, gender, step, bob) {
    tint }, indices décalés de 1) }. `P` est le `fillRect` de fermeArt (aucune transformation : le faux canevas des bancs les ignore). */
 export function paintWardrobe(g, P, x, o) {
   const { gender, dir, step, bob, skin, skinD, wd } = o;
+  const F = o.plat ? flatRamp : (p) => p;   // 2026-11-21 : le trait simple « soigné » (deux tons par matière), voir `flatRamp`
   /* 2026-10-31 — le trait simple peint ce même dessin à ×2, au demi-pas (`drawCharFrame`, `fine`) : `step` et `bob` peuvent valoir 0,5.
      Les grilles de lettres (le balancement d'une jupe, d'une écharpe ; le rebond du tutu) prennent le pas ENTIER (`stepI`, `bobI`) ;
      les rectangles, le pas tel quel. `clr` : le `clearRect` à la même échelle que `P`. */
@@ -379,8 +390,8 @@ export function paintWardrobe(g, P, x, o) {
   // 1. LA TENUE
   const gar = wd.outfit ? C.WARDROBE_OUTFITS[wd.outfit - 1] : null;
   if (gar) {
-    const id = gar.id, R = wardrobeRamp(base || OUTFIT_COL[id]);
-    const pal = wardrobePal("outfit", id, base, skin, skinD);
+    const id = gar.id, R = F(wardrobeRamp(base || OUTFIT_COL[id]));
+    const pal = F(wardrobePal("outfit", id, base, skin, skinD));
     const L = wardrobeLayer("outfit", id, dir, gender, stepI, bobI);
     if (id === "tutu") {
       // les collants et les chaussons : on efface la jupe ou le pantalon de base sous le tulle, puis on repeint les jambes
@@ -403,14 +414,14 @@ export function paintWardrobe(g, P, x, o) {
 
   // 2. L'ÉCHARPE
   const sc = wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1] : null;
-  if (sc) emit(g, P, x, wardrobeLayer("scarf", sc.id, dir, gender, stepI, bobI), wardrobePal("scarf", sc.id, base, skin, skinD), bob, false);
+  if (sc) emit(g, P, x, wardrobeLayer("scarf", sc.id, dir, gender, stepI, bobI), F(wardrobePal("scarf", sc.id, base, skin, skinD)), bob, false);
 
   // 3. CE QUI RETOMBE SUR LES ÉPAULES (cheveux longs, tresses, barbe) repasse devant le col — `drawCharFrame` sait quelle coupe on porte
   if ((gar || sc) && o.hairOver) o.hairOver();
 
   // 4. LE CHAPEAU, tout en haut
   const ht = wd.hat ? C.WARDROBE_HATS[wd.hat - 1] : null;
-  if (ht) emit(g, P, x, wardrobeLayer("hat", ht.id, dir, gender), wardrobePal("hat", ht.id, base, skin, skinD), bob, false);
+  if (ht) emit(g, P, x, wardrobeLayer("hat", ht.id, dir, gender), F(wardrobePal("hat", ht.id, base, skin, skinD)), bob, false);
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════

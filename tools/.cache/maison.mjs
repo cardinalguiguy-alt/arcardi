@@ -171,6 +171,7 @@ export const PLAN_ETROITE = {
       pleins: [{ nom: "placard", rect: [0, 0, 0.9, 2.0] }],      // sous la volée du haut
       fenetresNord: [[2.0, 2.85], [3.75, 4.6]],
       cadres: [["cage", "entree"]],        // 2026-10-17 : les pièces qui se cadrent ENSEMBLE (voir `homeCadreAt`) — la volée s'ouvre sur l'entrée
+      vantauxDroite: [1.25],               // 2026-11-21 : la porte de la cuisine s'ouvre à droite (le crochet, l'interrupteur, l'applique à sa gauche ; `paintWallDoor`)
       // 2026-10-17 — LES ÉQUIPEMENTS (voir « LES ÉQUIPEMENTS DE LA MAISON ») : la cuisine le long
       // du mur nord (l'évier sous la fenêtre de gauche), la cheminée contre le mur nord du séjour.
       fixes: [
@@ -1249,7 +1250,9 @@ export function resolveHomeLamp(home, req) {
 }
 
 // ─── le feu ───
-export const HOME_FEU_MIN = 240;        // quatre heures de jeu de flammes (3 min 12 s réelles : un jour de jeu dure 16 min)
+/* 2026-11-21 — DOUZE HEURES DE JEU DE FLAMMES (≈ 9 min 36 s réelles), décidé par Guillaume à la passe du 2026-10-23 (« feu de 12 h de jeu,
+   ≈ 10 min » : `docs/A-JUGER.md`). Avant : 240 (quatre heures, 3 min 12 s) — on rallumait sans cesse un feu qu'on venait d'allumer. */
+export const HOME_FEU_MIN = 720;
 export const HOME_BRAISES_MIN = 45;     // puis les braises
 export const homeGameMin = (day, tmin) => (day | 0) * 1440 + tmin;
 export const homeFires = (h) => (h && h.fe && typeof h.fe === "object" ? h.fe : {});

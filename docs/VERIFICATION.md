@@ -17,7 +17,7 @@ demi-session perdue au 426 sur un bogue qui n'existait pas. **Remède** : arrêt
 `rm -rf .next`, redémarrer.
 
 **`npx next build`** compile tout : le contrôle le moins cher sur 25 000 lignes.
-⚠️ L'avertissement `'G_SOIL' is not exported` est **PRÉEXISTANT**. ⚠️ **SANS `.env.local`, LE
+(L'avertissement `'G_SOIL' is not exported` a disparu le 2026-11-01 : la constante fautive est corrigée.) ⚠️ **SANS `.env.local`, LE
 BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pré-rendu de
 `/login` et `/signup`) — ce n'est PAS une régression. **Ce qui compte est
 `✓ Compiled successfully` juste avant.**

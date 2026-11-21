@@ -100,7 +100,7 @@ title("1. tout bitmap passe par la table");
   }
   /* `want[key]` (ex-`want.day`, 2026-10-02 : `key` = l'état éteint / allumé d'un lampadaire) / `mip.glow` : les deux appels de `screenBitmapPick` /
      `drawScreenExactBitmap` (FermeGame.js), dont l'URL sort de `townBitmapMip`. */
-  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|want\[key\]|C\.townBitmapMip\(SB, \w+\)\[key\]|mip\.glow|mip\.flood|mip\.snowL|mip\.snowH|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée ; `mip.snowL/H`, la neige des toits (phase 12a)
+  const tableRef = /^(SB\.(day|glow)|C\.TOWN_BITMAPS\.\w+\.(day|glow)|want\.day|want\[key\]|C\.townBitmapMip\(SB, \w+\)\[key\]|mip\.glow|mip\.flood|mip\.snowL|mip\.snowH|mip\.wet|C\.townBitmapMip\(SB, \w+\)\.(day|glow))$/;   // 2026-09-28 : `mip.flood`, la façade éclairée ; `mip.snowL/H`, la neige des toits (phase 12a) ; 2026-11-21 : `mip.wet`, la façade mouillée
   const grassTpl = "`/town/${variant}.png`";
   /* 2026-10-17 — LES MEUBLES DES MAISONS ONT LEUR PROPRE TABLE : `maisonSprites.js`,
      GÉNÉRÉE par Blender (`tools/blender/rendre_meubles.py`), où sont la taille et
@@ -145,6 +145,10 @@ title("1. tout bitmap passe par la table");
     // 2026-10-24 — `fHD`, plus `frame` : la feuille fine a neuf images par vue (la marche à huit images), son index n'est plus celui de l'ancienne
     ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(hd, fHD * 32'],
     ["FermeGame.js", 'ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";\n    ctx.drawImage(cv, b.x, b.y'],
+    /* 2026-11-21 — L'OMBRE DES NUAGES (`nuagesArt.js`) : un champ de 256 cellules de 8 px d'art agrandi ×8×cran ; sa pénombre fait une
+       dizaine de cases — posée en paliers, elle dessinait des courbes de niveau qui glissaient sur l'herbe. Ce n'est pas un sprite. */
+    ["nuagesArt.js", 'g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "low";'],
+    ["nuagesArt.js", 'ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "low";'],
   ];
   let smoothTrue = 0, smoothOk = 0;
   const staleOk = [];
@@ -242,7 +246,7 @@ ok(LB && Object.keys(LB).length === 2, "la table TOWN_LAMP_BITMAPS existe (un ca
 {
   const refd = new Set();
   for (const b of Object.values(T)) {
-    if (b.grid === "screen") for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); if (m.glow) refd.add(m.glow); if (m.flood) refd.add(m.flood); if (m.snowL) refd.add(m.snowL); if (m.snowH) refd.add(m.snowH); }
+    if (b.grid === "screen") for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); if (m.glow) refd.add(m.glow); if (m.flood) refd.add(m.flood); if (m.snowL) refd.add(m.snowL); if (m.snowH) refd.add(m.snowH); if (m.wet) refd.add(m.wet); }
     else if (!b.prefix) { if (b.day) refd.add(b.day); if (b.glow) refd.add(b.glow); }
   }
   for (const b of Object.values(C.TOWN_LAMP_BITMAPS)) for (const z of b.zooms) { const m = C.townBitmapMip(b, z); refd.add(m.day); refd.add(m.glow); }
